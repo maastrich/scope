@@ -32,6 +32,18 @@ final class TerminalHostContainer: NSView {
     private weak var hosted: TerminalView?
     private var didReportLayout = false
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // Opaque terminal background from the very first frame, so nothing light shows before the
+        // hosted `TerminalView` has laid out and drawn.
+        wantsLayer = true
+        layer?.backgroundColor = TerminalAppearance.background.cgColor
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
     override func becomeFirstResponder() -> Bool {

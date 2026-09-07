@@ -32,17 +32,26 @@ struct InspectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Inspector tab", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue.capitalized).tag(tab)
+            // `.inspector` keeps this view alive while collapsed, so its toolbar items would otherwise
+            // leak into the window toolbar; only declare them while the inspector is actually visible.
+            if inspectorVisible {
+                ToolbarItem(placement: .principal) {
+                    Picker("Inspector tab", selection: $model.inspectorTab) {
+                        ForEach(InspectorTab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue.capitalized).tag(tab)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 240)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 240)
             }
         }
+    }
+
+    /// Mirrors `RootView.inspectorPresented`: hidden in the empty state whatever the preference says.
+    private var inspectorVisible: Bool {
+        !model.scopes.isEmpty && model.inspectorShown
     }
 
     private var graphDescription: String {
