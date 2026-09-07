@@ -66,6 +66,12 @@ private struct GeneralSettingsView: View {
                 Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
             }
+            Section("Threads") {
+                Toggle("Close exited threads automatically after 10 s", isOn: preference(\.autoCloseExitedThreads))
+                Text("Off: an exited thread stays in the sidebar until you close it.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
             Section("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
             }

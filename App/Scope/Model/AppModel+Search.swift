@@ -147,15 +147,10 @@ extension AppModel {
 
     // MARK: Rename
 
-    /// Sets a thread's title. The record is persisted; the live session picks the title up through
-    /// `ThreadSession`'s record (owned elsewhere) once it exposes a setter — until then the sidebar shows
-    /// the new title after the next launch.
+    /// Sets a thread's title: the session updates its record (sidebar row, tab and palette follow at once)
+    /// and persists it through the record-save path.
     func renameThread(_ id: ThreadID, to title: String) {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, let session = session(id) else { return }
-        var record = session.record
-        record.title = title
-        Task { await env.threadRecords.save(record) }
+        session(id)?.setTitle(title)
     }
 
     /// "Rename Thread…": an alert with a text field prefilled with the current title.

@@ -123,19 +123,16 @@ struct ScopeCommands: Commands {
     private var threadMenu: some Commands {
         CommandMenu("Thread") {
             Button("New Thread") {
-                if let model, let scope = model.currentScope {
-                    Task { _ = await model.newThread(in: scope.id, taskID: model.currentTask?.id) }
-                }
+                if let model { Task { await model.newThreadInCurrentContext() } }
             }
             .keyboardShortcut("t", modifiers: .command)
             .disabled(model?.currentScope == nil)
+            .help("New Thread \(model?.newThreadTargetDescription ?? "")".trimmingCharacters(in: .whitespaces))
 
             Menu("New Thread With Driver") {
                 ForEach(model?.drivers.profiles ?? []) { profile in
                     Button(profile.name) {
-                        if let model, let scope = model.currentScope {
-                            Task { _ = await model.newThread(in: scope.id, driverID: profile.id, taskID: model.currentTask?.id) }
-                        }
+                        if let model { Task { await model.newThreadInCurrentContext(driverID: profile.id) } }
                     }
                 }
             }

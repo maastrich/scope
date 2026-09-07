@@ -20,7 +20,7 @@ struct TaskEmptyView: View {
                 .frame(maxWidth: 460)
             HStack(spacing: 8) {
                 Button {
-                    Task { _ = await model.newThread(in: task.scopeID, taskID: task.id) }
+                    Task { await model.newThreadInCurrentContext() }
                 } label: {
                     HStack(spacing: 6) {
                         Text("Open a shell here")
@@ -34,7 +34,7 @@ struct TaskEmptyView: View {
                 Menu("Other driver…") {
                     ForEach(model.drivers.profiles) { profile in
                         Button(profile.name) {
-                            Task { _ = await model.newThread(in: task.scopeID, driverID: profile.id, taskID: task.id) }
+                            Task { await model.newThreadInCurrentContext(driverID: profile.id) }
                         }
                     }
                 }

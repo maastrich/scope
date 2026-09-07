@@ -93,12 +93,20 @@ struct RepoCardView: View {
     private func chips(_ items: [String]) -> some View {
         FlowLayout(spacing: 5) {
             ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                let active = model.graph.filter.caseInsensitiveCompare(item) == .orderedSame
+                Button {
+                    model.graph.toggleFilter(item)
+                } label: {
+                    Text(item)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(active ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.06),
+                                    in: RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+                .help(active ? "Clear the stack filter" : "Filter cards by \(item)")
             }
         }
     }

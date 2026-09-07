@@ -39,6 +39,23 @@ final class GraphModel {
     var editingKey: String?
     /// Key the card list should scroll to (set by a related link).
     var highlightedKey: String?
+    /// Header filter: a case-insensitive substring over card key, name and stack; empty shows every card.
+    var filter = ""
+
+    /// `cards` narrowed by `filter`.
+    var filteredCards: [GraphCardEntry] {
+        let needle = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return cards }
+        return cards.filter { entry in
+            entry.key.lowercased().contains(needle) || entry.card.name.lowercased().contains(needle)
+                || entry.card.stack.contains { $0.lowercased().contains(needle) }
+        }
+    }
+
+    /// A stack chip click: filters on `item`, or clears the filter when it is already the filter.
+    func toggleFilter(_ item: String) {
+        filter = filter.caseInsensitiveCompare(item) == .orderedSame ? "" : item
+    }
 
     @ObservationIgnored private let env: AppEnvironment
     @ObservationIgnored private let problems: ProblemCenter
@@ -70,6 +87,7 @@ final class GraphModel {
         scopeID = scope.id
         editingKey = nil
         highlightedKey = nil
+        filter = ""
         isLoading = true
         let slug = scope.declaration.slug
         let (loaded, problem) = await env.graphStore.load(slug: slug)

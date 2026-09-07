@@ -40,6 +40,7 @@ struct ThreadRow: View {
         .frame(height: 28)
         .contentShape(Rectangle())
         .help(session.record.cwd)
+        .onTapGesture(count: 2) { model.promptRenameThread(session.id) }
         .contextMenu { contextMenu }
     }
 
@@ -72,9 +73,9 @@ struct ThreadRow: View {
         .keyboardShortcut(".", modifiers: .command)
         .disabled(!session.isAlive)
         Divider()
-        Button("Rename…") {}
-            .disabled(true)
-            .help("Thread renaming arrives with tasks in M2")
+        Button("Rename…") {
+            model.promptRenameThread(session.id)
+        }
         Button("Open in Editor") {
             model.openInEditor(thread: session.id)
         }

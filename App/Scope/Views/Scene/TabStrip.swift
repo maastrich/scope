@@ -87,11 +87,7 @@ struct TabStrip: View {
         Menu {
             ForEach(model.drivers.profiles) { profile in
                 Button(profile.name) {
-                    Task {
-                        if await model.newThreadInCurrentContext(driverID: profile.id) == nil {
-                            _ = await model.newThread(in: scope.id, driverID: profile.id)
-                        }
-                    }
+                    Task { await model.newThreadInCurrentContext(driverID: profile.id) }
                 }
             }
         } label: {
@@ -101,11 +97,7 @@ struct TabStrip: View {
                 .frame(width: 32, height: 30)
                 .contentShape(Rectangle())
         } primaryAction: {
-            Task {
-                if await model.newThreadInCurrentContext() == nil {
-                    _ = await model.newThread(in: scope.id)
-                }
-            }
+            Task { await model.newThreadInCurrentContext() }
         }
         .menuStyle(.button)
         .buttonStyle(.plain)

@@ -5,6 +5,14 @@ struct ScopeEmptyView: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
 
+    /// The selected repo's base checkout when a repo row is selected, else the scope root.
+    private var threadCwd: URL {
+        if case .repoBase(let scope, let relativePath) = model.newThreadTarget, let repo = scope.repo(relativePath: relativePath) {
+            return repo.url
+        }
+        return scope.url
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "terminal")
@@ -19,7 +27,7 @@ struct ScopeEmptyView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             } else {
-                Text("Threads run in \(scope.url.path) with SCOPE_SCOPE, SCOPE_THREAD and the login-shell environment injected.")
+                Text("Threads run in \(threadCwd.path) with SCOPE_SCOPE, SCOPE_THREAD and the login-shell environment injected.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -27,7 +35,7 @@ struct ScopeEmptyView: View {
             }
             HStack(spacing: 8) {
                 Button {
-                    Task { _ = await model.newThread(in: scope.id) }
+                    Task { await model.newThreadInCurrentContext() }
                 } label: {
                     HStack(spacing: 6) {
                         Text("Open a shell here")
@@ -43,7 +51,7 @@ struct ScopeEmptyView: View {
                 Menu("Other driver…") {
                     ForEach(model.drivers.profiles) { profile in
                         Button(profile.name) {
-                            Task { _ = await model.newThread(in: scope.id, driverID: profile.id) }
+                            Task { await model.newThreadInCurrentContext(driverID: profile.id) }
                         }
                     }
                 }

@@ -75,10 +75,9 @@ final class AppModel {
         didSet { if !isRestoringUIState, inspectorWidth != oldValue { persistUIState() } }
     }
 
-    /// Exited threads close themselves when their toast goes (the pre-audit behaviour). Not in
-    /// `Preferences` yet: read from `UserDefaults` under `autoCloseExitedThreads` until it lands there.
+    /// Exited threads close themselves when their toast goes (Settings ▸ General).
     var autoCloseExitedThreads: Bool {
-        UserDefaults.standard.bool(forKey: "autoCloseExitedThreads")
+        config.preferences.autoCloseExitedThreads
     }
 
     @ObservationIgnored private var lastThreadByScope: [ScopeID: ThreadID] = [:]

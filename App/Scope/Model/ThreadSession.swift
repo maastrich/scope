@@ -64,6 +64,15 @@ final class ThreadSession: Identifiable {
         bridge.session = self
     }
 
+    /// Live rename: the record is updated and persisted through `onRecordChanged`; `title` (and every
+    /// row / tab observing it) follows at once.
+    func setTitle(_ title: String) {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != record.title else { return }
+        record.title = title
+        onRecordChanged?(record)
+    }
+
     // MARK: Derived
 
     var title: String { record.title }

@@ -176,6 +176,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Terminal font size in points, clamped to `terminalFontSizeRange`; 13 by default.
     public var terminalFontSize: Int
     public var terminalAppearance: TerminalAppearanceMode
+    /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
+    /// the tab stays greyed until the user closes it.
+    public var autoCloseExitedThreads: Bool
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -194,7 +197,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         confirmQuitWithRunningThreads: Bool = true,
         showMenuBarExtra: Bool = true,
         terminalFontSize: Int = 13,
-        terminalAppearance: TerminalAppearanceMode = .system
+        terminalAppearance: TerminalAppearanceMode = .system,
+        autoCloseExitedThreads: Bool = false
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -205,13 +209,14 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.showMenuBarExtra = showMenuBarExtra
         self.terminalFontSize = Preferences.clampTerminalFontSize(terminalFontSize)
         self.terminalAppearance = terminalAppearance
+        self.autoCloseExitedThreads = autoCloseExitedThreads
     }
 
     public static let `default` = Preferences()
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance
+             terminalFontSize, terminalAppearance, autoCloseExitedThreads
     }
 
     public init(from decoder: any Decoder) throws {
@@ -230,6 +235,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             try container.decodeIfPresent(Int.self, forKey: .terminalFontSize) ?? defaults.terminalFontSize)
         terminalAppearance = try container.decodeIfPresent(TerminalAppearanceMode.self, forKey: .terminalAppearance)
             ?? defaults.terminalAppearance
+        autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
+            ?? defaults.autoCloseExitedThreads
     }
 }
 
