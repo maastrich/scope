@@ -137,9 +137,10 @@ import Testing
         let path = Self.temporarySocketPath()
         let started = ContinuousClock.now
         await #expect(throws: UnixSocketError.self) {
-            try await UnixSocketClient.send(Data("nobody".utf8), to: path, timeout: .seconds(5))
+            try await UnixSocketClient.send(Data("nobody".utf8), to: path, timeout: .seconds(20))
         }
-        #expect(ContinuousClock.now - started < .seconds(3))
+        // "Fast" = well before the timeout; shared CI runners have shown ~4 s here.
+        #expect(ContinuousClock.now - started < .seconds(10))
     }
 
     @Test func tooLongPathIsRejectedUpFront() {
