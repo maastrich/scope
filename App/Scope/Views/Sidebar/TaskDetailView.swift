@@ -48,7 +48,7 @@ struct TaskDetailView: View {
                 TaskRepoRow(task: task, repo: repo)
             }
         }
-        .padding(.leading, 40)
+        .padding(.leading, 24)
         .padding(.trailing, 8)
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))

@@ -1,12 +1,15 @@
 import Foundation
 import ScopeCore
 
-/// UI-only state that is not worth a place in `config.json`: what is selected, which scopes are
-/// expanded, whether the inspector is open and on which tab.
+/// UI-only state that is not worth a place in `config.json`: what is selected, which scope the sidebar
+/// shows, which scopes list their repositories, whether the inspector is open and on which tab.
 struct UIState: Codable, Sendable, Equatable {
     var selectedItem: SidebarItem?
     var selectedThread: ThreadID?
-    var expandedScopes: Set<ScopeID> = []
+    /// The scope the sidebar shows (`nil` = the first declared).
+    var currentScope: ScopeID?
+    /// Scopes whose Repositories section is expanded (collapsed by default).
+    var reposShown: Set<ScopeID> = []
     var inspectorVisible = false
     var inspectorTab: InspectorTab = .graph
     /// Points; clamped to `inspectorWidthRange` on restore.
@@ -17,7 +20,7 @@ struct UIState: Codable, Sendable, Equatable {
     static let defaultInspectorWidth: Double = 380
 
     private enum CodingKeys: String, CodingKey {
-        case selectedItem, selectedThread, expandedScopes, inspectorVisible, inspectorTab, inspectorWidth
+        case selectedItem, selectedThread, currentScope, reposShown, inspectorVisible, inspectorTab, inspectorWidth
     }
 
     init() {}
@@ -27,7 +30,8 @@ struct UIState: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         selectedItem = try? container.decodeIfPresent(SidebarItem.self, forKey: .selectedItem)
         selectedThread = try? container.decodeIfPresent(ThreadID.self, forKey: .selectedThread)
-        expandedScopes = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .expandedScopes)) ?? []
+        currentScope = try? container.decodeIfPresent(ScopeID.self, forKey: .currentScope)
+        reposShown = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .reposShown)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .graph
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth

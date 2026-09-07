@@ -22,7 +22,7 @@ struct ShortcutGroup: Identifiable {
 enum ShortcutCatalog {
     static let groups: [ShortcutGroup] = [
         ShortcutGroup(title: "Scope", entries: [
-            ShortcutEntry(keys: "⌘O", title: "Add Scope…"),
+            ShortcutEntry(keys: "⌘O", title: "Declare a Scope…"),
             ShortcutEntry(keys: "⌘R", title: "Refresh Scope"),
             ShortcutEntry(keys: "⌘,", title: "Settings…"),
             ShortcutEntry(keys: "⇧⌘W", title: "Close Window"),
@@ -57,6 +57,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⇧⌘P", title: "Pull Requests"),
             ShortcutEntry(keys: "⌥⌘I", title: "Toggle Inspector"),
             ShortcutEntry(keys: "⌃⌘S", title: "Toggle Sidebar"),
+            ShortcutEntry(keys: "⌃⌘R", title: "Show / Hide Repositories", note: "the Repositories section of the sidebar"),
         ]),
         ShortcutGroup(title: "Delta panel", entries: [
             ShortcutEntry(keys: "j / k", title: "Next / previous file", note: "the Delta panel must have focus"),

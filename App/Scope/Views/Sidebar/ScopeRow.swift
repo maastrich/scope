@@ -2,39 +2,41 @@ import AppKit
 import SwiftUI
 import ScopeCore
 
-/// Sidebar row for a scope: chevron, folder icon, name (semibold), caption (`3 repos` / `repo` / `scanning…` /
-/// `missing` / `scan failed`), context menu.
-struct ScopeRow: View {
+/// The sidebar header: the current scope's name as a switcher. The menu lists every declared scope (repo count,
+/// checkmark on the current one), "Declare a Scope… ⌘O" and "Remove Scope…"; the caption shows the scan state.
+/// Right-click keeps the scope actions (Refresh, Analyze Graph, Discovery Depth, Rename…, Reveal, Remove).
+struct ScopeSwitcher: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
     /// Called by the "Rename…" menu item; the sidebar owns the rename dialog.
     var onRename: @MainActor (ScopeState) -> Void
 
     var body: some View {
-        HStack(spacing: 7) {
-            Button {
-                scope.isExpanded.toggle()
+        HStack(spacing: 6) {
+            Menu {
+                switcherMenu
             } label: {
-                Image(systemName: scope.isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12, height: 12)
+                HStack(spacing: 6) {
+                    Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                    Text(scope.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
+            .menuStyle(.button)
             .buttonStyle(.plain)
-            .help(scope.isExpanded ? "Collapse" : "Expand")
-            .accessibilityLabel(scope.isExpanded ? "Collapse \(scope.name)" : "Expand \(scope.name)")
-
-            Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-
-            Text(scope.name)
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
-                .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+            .menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
+            .help("Switch scope — \(scope.url.path)")
+            .accessibilityLabel("Scope: \(scope.name). Switch scope")
 
             Spacer(minLength: 4)
 
@@ -47,12 +49,13 @@ struct ScopeRow: View {
                 .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: 64, alignment: .trailing)
+                .help(scope.url.path)
         }
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .frame(height: 30)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
         .contentShape(Rectangle())
-        .help(scope.url.path)
         .contextMenu { contextMenu }
     }
 
@@ -71,6 +74,46 @@ struct ScopeRow: View {
         if case .failed = scope.discovery { return true }
         return scope.kind == .missing
     }
+
+    // MARK: Switcher menu
+
+    @ViewBuilder
+    private var switcherMenu: some View {
+        ForEach(model.scopes) { other in
+            Button {
+                model.selectScope(other.id)
+            } label: {
+                if other.id == scope.id {
+                    Label(scopeMenuTitle(other), systemImage: "checkmark")
+                } else {
+                    Text(scopeMenuTitle(other))
+                }
+            }
+        }
+        Divider()
+        Button("Declare a Scope…") {
+            Task {
+                let urls = await FolderPicker.chooseFolders()
+                guard !urls.isEmpty else { return }
+                await model.addScopes(urls)
+            }
+        }
+        .keyboardShortcut("o", modifiers: .command)
+        Button("Remove Scope…", role: .destructive) {
+            Task { await ScopeActions.remove(scope, model: model) }
+        }
+    }
+
+    private func scopeMenuTitle(_ other: ScopeState) -> String {
+        let count = other.repos.count
+        switch other.kind {
+        case .missing: return "\(other.name) — missing"
+        case .repo: return "\(other.name) — repo"
+        default: return "\(other.name) — \(count) \(count == 1 ? "repo" : "repos")"
+        }
+    }
+
+    // MARK: Context menu
 
     @ViewBuilder
     private var contextMenu: some View {
@@ -134,7 +177,7 @@ struct ScopeRow: View {
     }
 }
 
-/// Shared scope actions used by the sidebar context menu and by the menu bar.
+/// Shared scope actions used by the sidebar header and by the menu bar.
 @MainActor
 enum ScopeActions {
     /// Confirms with a sheet ("Remove *acme* from Scope? Nothing is deleted on disk.") and removes the scope.

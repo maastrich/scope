@@ -3,7 +3,7 @@ import ScopeCore
 
 /// Sidebar row for a discovered repository: the repo name (never `owner/`), branch chip, dirty dot; the full
 /// `owner/repo` and path live in the hover tooltip.
-/// In M0 repo rows stand in for the task rows of the final design (depth 1).
+/// Lives in the collapsible Repositories section of the sidebar.
 struct RepoRow: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
@@ -45,10 +45,10 @@ struct RepoRow: View {
                     .help("Uncommitted changes")
             }
         }
-        .padding(.leading, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
+        .accessibilityLabel(repo.isDirty ? "\(repo.shortName), uncommitted changes" : repo.shortName)
         .help(repo.displayName == repo.shortName ? repo.url.path : "\(repo.displayName)\n\(repo.url.path)")
         .contextMenu { contextMenu }
     }
@@ -66,6 +66,11 @@ struct RepoRow: View {
         .disabled(model.config.preferences.editor == nil)
         Button("See Base") {
             model.showBase(repo: repo, in: scope)
+        }
+        Button("See Graph") {
+            model.selection = .repo(scope.id, relativePath: repo.id)
+            model.inspectorTab = .graph
+            model.inspectorShown = true
         }
         Divider()
         Button("Reveal in Finder") {

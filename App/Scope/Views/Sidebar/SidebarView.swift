@@ -1,11 +1,11 @@
 import SwiftUI
 import ScopeCore
 
-/// The sidebar: a `List(selection:)` of `SidebarItem`s — one scope row per declared scope, then (when the
-/// scope is expanded) its repo rows and its thread rows — with the New Thread / New Task footer.
-/// Expansion is driven by `ScopeState.isExpanded` (persisted by the model) rather than `DisclosureGroup`,
-/// so indentation and chevrons follow the design spec exactly. The filter field at the top (⌥⌘F, Esc clears)
-/// keeps the scope / task / thread rows whose name fuzzy-matches (subsequence); repo rows follow their scope.
+/// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
+/// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
+/// of `SidebarItem`s in three sections — **Tasks** (task rows with their threads nested), **Threads**
+/// (scope-level threads) and **Repositories** (collapsed by default, `ScopeState.reposShown`) — with the
+/// New Thread / New Task footer. Other scopes are reached through the switcher, ⌘K or ⌘O.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @State private var scopeBeingRenamed: ScopeState?
@@ -24,41 +24,24 @@ struct SidebarView: View {
         Group {
             if model.scopes.isEmpty {
                 SidebarEmptyView()
-            } else {
+            } else if let scope = model.currentScope {
                 List(selection: $model.selection) {
-                    Section {
-                        ForEach(visibleScopes) { scope in
-                            ScopeRow(scope: scope) { scope in
-                                renameText = scope.name
-                                scopeBeingRenamed = scope
-                            }
-                            .tag(SidebarItem.scope(scope.id))
-                            if scope.isExpanded || isFiltering {
-                                scopeChildren(scope)
-                            }
-                        }
-                        .onMove { offsets, destination in
-                            guard !isFiltering else { return }
-                            model.moveScopes(fromOffsets: offsets, toOffset: destination)
-                        }
-                        if isFiltering, visibleScopes.isEmpty {
-                            Text("Nothing matches “\(filter)”")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                                .selectionDisabled()
-                        }
-                    } header: {
-                        Text("Scopes")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                    }
+                    tasksSection(scope)
+                    threadsSection(scope)
+                    repositoriesSection(scope)
                 }
                 .listStyle(.sidebar)
                 .folderDropTarget { urls in
                     Task { await model.addScopes(urls) }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    filterField
+                    VStack(spacing: 0) {
+                        ScopeSwitcher(scope: scope) { scope in
+                            renameText = scope.name
+                            scopeBeingRenamed = scope
+                        }
+                        filterField
+                    }
                 }
             }
         }
@@ -129,8 +112,8 @@ struct SidebarView: View {
         .frame(height: 24)
         .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(filterFocused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.1)))
-        .padding(EdgeInsets(top: 6, leading: 10, bottom: 4, trailing: 10))
-        .help("Filter scopes, tasks and threads by name (⌥⌘F, Esc clears)")
+        .padding(EdgeInsets(top: 2, leading: 10, bottom: 4, trailing: 10))
+        .help("Filter tasks, threads and repositories by name (⌥⌘F, Esc clears)")
     }
 
     private func matches(_ name: String) -> Bool {
@@ -153,20 +136,92 @@ struct SidebarView: View {
         model.scopeLevelThreads(in: scope.id).filter { matches($0.title) }
     }
 
-    private var visibleScopes: [ScopeState] {
-        guard isFiltering else { return model.scopes }
-        return model.scopes.filter { scope in
-            matches(scope.name) || !visibleTasks(in: scope).isEmpty || !visibleScopeThreads(in: scope).isEmpty
+    private func visibleRepos(in scope: ScopeState) -> [RepoState] {
+        scope.repos.filter { matches($0.shortName) }
+    }
+
+    private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+            if let count {
+                Text("· \(count)")
+                    .foregroundStyle(.quaternary)
+            }
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(.tertiary)
+    }
+
+    private func hintRow(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .selectionDisabled()
+    }
+
+    // MARK: Sections
+
+    /// Task rows with their threads nested (and the detail block under the selected task).
+    private func tasksSection(_ scope: ScopeState) -> some View {
+        Section {
+            let tasks = visibleTasks(in: scope)
+            ForEach(tasks) { task in
+                TaskRow(task: task)
+                    .tag(SidebarItem.task(task.id))
+                if model.selection == .task(task.id), !isFiltering {
+                    TaskDetailView(task: task)
+                }
+                if task.isExpanded || isFiltering {
+                    ForEach(visibleThreads(in: task)) { session in
+                        ThreadRow(session: session, depth: 1)
+                            .tag(SidebarItem.thread(session.id))
+                    }
+                }
+            }
+            if tasks.isEmpty {
+                hintRow(isFiltering ? "No task matches “\(filter)”" : (scope.kind == .missing ? "Scope folder is missing" : "No task yet — ⇧⌘T"))
+            }
+        } header: {
+            sectionHeader("Tasks")
         }
     }
 
-    /// Repo rows, the "no repositories" hint, then the root thread rows of one expanded scope.
-    @ViewBuilder
-    private func scopeChildren(_ scope: ScopeState) -> some View {
-        if !isFiltering || matches(scope.name) {
-            ForEach(scope.repos) { repo in
+    /// Scope-level threads (scope root and base shells); exited ones stay listed with their ring dot.
+    private func threadsSection(_ scope: ScopeState) -> some View {
+        Section {
+            let threads = visibleScopeThreads(in: scope)
+            ForEach(threads) { session in
+                ThreadRow(session: session, depth: 0)
+                    .tag(SidebarItem.thread(session.id))
+            }
+            if threads.isEmpty {
+                hintRow(isFiltering ? "No thread matches “\(filter)”" : "No thread yet — ⌘T")
+            }
+        } header: {
+            sectionHeader("Threads")
+        }
+    }
+
+    /// The discovered repositories, collapsed by default (`ScopeState.reposShown`, persisted per scope); a
+    /// filter that matches repo names shows them regardless.
+    private func repositoriesSection(_ scope: ScopeState) -> some View {
+        let repos = visibleRepos(in: scope)
+        let forced = isFiltering && !repos.isEmpty
+        return Section(isExpanded: Binding(
+            get: { scope.reposShown || forced },
+            set: { shown in
+                scope.reposShown = shown
+                model.expansionChanged()
+            }
+        )) {
+            ForEach(repos) { repo in
                 RepoRow(scope: scope, repo: repo)
                     .tag(SidebarItem.repo(scope.id, relativePath: repo.id))
+            }
+            if isFiltering, repos.isEmpty, !scope.repos.isEmpty {
+                hintRow("No repository matches “\(filter)”")
             }
             if scope.repos.isEmpty, scope.discovery != .scanning, scope.kind != .missing {
                 noReposRow(scope)
@@ -174,23 +229,9 @@ struct SidebarView: View {
             if case .failed(let message) = scope.discovery {
                 scanFailedRow(scope, message: message)
             }
-        }
-        ForEach(visibleTasks(in: scope)) { task in
-            TaskRow(task: task)
-                .tag(SidebarItem.task(task.id))
-            if model.selection == .task(task.id), !isFiltering {
-                TaskDetailView(task: task)
-            }
-            if task.isExpanded || isFiltering {
-                ForEach(visibleThreads(in: task)) { session in
-                    ThreadRow(session: session, depth: 2)
-                        .tag(SidebarItem.thread(session.id))
-                }
-            }
-        }
-        ForEach(visibleScopeThreads(in: scope)) { session in
-            ThreadRow(session: session)
-                .tag(SidebarItem.thread(session.id))
+        } header: {
+            sectionHeader("Repositories", count: scope.repos.count)
+                .accessibilityLabel("Repositories, \(scope.repos.count)")
         }
     }
 
@@ -208,7 +249,6 @@ struct SidebarView: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(.tertiary)
-        .padding(.leading, 16)
         .selectionDisabled()
     }
 
@@ -224,7 +264,6 @@ struct SidebarView: View {
         }
         .font(.system(size: 11))
         .help(message)
-        .padding(.leading, 16)
         .selectionDisabled()
     }
 

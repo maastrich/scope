@@ -168,14 +168,12 @@ extension AppModel {
         tasks.append(state)
         state.startWatching()
         state.refresh()
-        scope.isExpanded = true
         selection = .task(record.id)
         scope.refreshFacts()
     }
 
     /// "Switch": selects the task (its last thread comes along, see `syncThreadFromSelection`).
     func switchToTask(_ task: TaskState) {
-        scope(task.scopeID)?.isExpanded = true
         task.isExpanded = true
         selection = .task(task.id)
     }

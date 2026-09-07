@@ -46,9 +46,18 @@ final class AppModel {
     var selection: SidebarItem? {
         didSet {
             guard !isRestoringUIState else { return }
+            if let scopeID = scopeID(of: selection), scopeID != currentScopeID {
+                currentScopeID = scopeID
+            }
             syncThreadFromSelection()
             persistUIState()
         }
+    }
+
+    /// The scope the sidebar shows (its tasks, threads and repositories). Follows the selection — selecting an
+    /// item of another scope switches — and is remembered across launches; `nil` means "the first declared".
+    var currentScopeID: ScopeID? {
+        didSet { if !isRestoringUIState, currentScopeID != oldValue { persistUIState() } }
     }
 
     /// Drives the scene. Kept in sync with `selection`.
@@ -104,16 +113,34 @@ final class AppModel {
     // MARK: Lookup
 
     var currentScope: ScopeState? {
-        switch selection {
+        currentScopeID.flatMap(scope) ?? scopes.first
+    }
+
+    /// The scope a sidebar item belongs to (threads and tasks through the model).
+    func scopeID(of item: SidebarItem?) -> ScopeID? {
+        switch item {
         case .scope(let id), .repo(let id, _):
-            return scope(id)
+            return id
         case .thread(let id):
-            return session(id).flatMap { scope($0.record.scopeID) }
+            return session(id)?.record.scopeID
         case .task(let id):
-            return task(id).flatMap { scope($0.scopeID) }
+            return task(id)?.scopeID
         case nil:
-            return selectedThreadID.flatMap(session).flatMap { scope($0.record.scopeID) }
+            return nil
         }
+    }
+
+    /// The scope switcher: shows `id` in the sidebar with its header row selected.
+    func selectScope(_ id: ScopeID) {
+        guard scope(id) != nil else { return }
+        selection = .scope(id)
+    }
+
+    /// The Repositories section of the current scope (View ▸ Show Repositories).
+    func toggleRepositories() {
+        guard let scope = currentScope else { return }
+        scope.reposShown.toggle()
+        persistUIState()
     }
 
     var currentThread: ThreadSession? {
@@ -393,7 +420,7 @@ final class AppModel {
         isRestoringUIState = true
         defer { isRestoringUIState = false }
         for scope in scopes {
-            scope.isExpanded = state.expandedScopes.isEmpty || state.expandedScopes.contains(scope.id)
+            scope.reposShown = state.reposShown.contains(scope.id)
         }
         inspectorShown = state.inspectorVisible
         inspectorTab = state.inspectorTab
@@ -418,7 +445,8 @@ final class AppModel {
         default:
             selection = nil
         }
-        if selection == nil, let scope = scopes.first {
+        currentScopeID = scopeID(of: selection) ?? state.currentScope.flatMap(scope)?.id ?? scopes.first?.id
+        if selection == nil, let scope = currentScope {
             if let first = threads(in: scope.id).first {
                 selection = .thread(first.id)
                 selectedThreadID = first.id
@@ -432,14 +460,15 @@ final class AppModel {
         var state = UIState()
         state.selectedItem = selection
         state.selectedThread = selectedThreadID
-        state.expandedScopes = Set(scopes.filter(\.isExpanded).map(\.id))
+        state.currentScope = currentScopeID
+        state.reposShown = Set(scopes.filter(\.reposShown).map(\.id))
         state.inspectorVisible = inspectorShown
         state.inspectorTab = inspectorTab
         state.inspectorWidth = inspectorWidth
         env.uiState.save(state)
     }
 
-    /// Called by rows when their scope's expansion changes.
+    /// Called by the sidebar when the Repositories section of a scope is toggled.
     func expansionChanged() {
         persistUIState()
     }
@@ -552,7 +581,8 @@ final class AppModel {
             let url = repo.url
             Task { await env.git.forget(url) }
         }
-        if currentScope?.id == id || currentScope == nil {
+        if currentScopeID == id || scopeID(of: selection) == nil {
+            currentScopeID = scopes.first?.id
             selection = scopes.first.map { .scope($0.id) }
         }
     }

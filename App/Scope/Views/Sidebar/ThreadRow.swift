@@ -6,8 +6,8 @@ import ScopeCore
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     let session: ThreadSession
-    /// 1 for a scope-level thread, 2 under a task.
-    var depth = 1
+    /// 0 for a scope-level thread (Threads section), 1 under a task.
+    var depth = 0
 
     var body: some View {
         HStack(spacing: 7) {
@@ -16,7 +16,7 @@ struct ThreadRow: View {
                 .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .frame(width: 16)
 
-            Text(session.title)
+            Text(model.displayTitle(for: session))
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -52,7 +52,7 @@ struct ThreadRow: View {
         switch session.record.cwdKind {
         case .scopeRoot: "scope root"
         case .repoBase(let relativePath): relativePath
-        case .task: depth == 2 ? nil : (model.task(of: session)?.name ?? "task")
+        case .task: depth >= 1 ? nil : (model.task(of: session)?.name ?? "task")
         }
     }
 

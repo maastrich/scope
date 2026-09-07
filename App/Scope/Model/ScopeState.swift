@@ -20,7 +20,8 @@ final class ScopeState: Identifiable {
     private(set) var repos: [RepoState] = []
     private(set) var kind: ScopeKind
     private(set) var discovery: DiscoveryPhase = .idle
-    var isExpanded = true
+    /// Whether the sidebar lists the repositories of this scope (collapsed by default; persisted in the UI state).
+    var reposShown = false
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private let problems: ProblemCenter

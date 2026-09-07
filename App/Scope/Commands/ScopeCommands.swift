@@ -44,7 +44,7 @@ struct ScopeCommands: Commands {
 
     private var fileMenu: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Add Scope…") {
+            Button("Declare a Scope…") {
                 Task {
                     let urls = await FolderPicker.chooseFolders()
                     guard !urls.isEmpty else { return }
@@ -296,6 +296,12 @@ struct ScopeCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
             .disabled(model == nil)
+
+            Button(model?.currentScope?.reposShown == true ? "Hide Repositories" : "Show Repositories") {
+                model?.toggleRepositories()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .control])
+            .disabled(model?.currentScope == nil)
 
             Button("Clear Scrollback") {
                 currentThread?.terminalView.clearScrollback()

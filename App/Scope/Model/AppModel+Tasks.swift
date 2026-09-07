@@ -29,7 +29,6 @@ extension AppModel {
         tasks.append(state)
         state.startWatching()
         state.refresh()
-        scope.isExpanded = true
         selection = .task(record.id)
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()

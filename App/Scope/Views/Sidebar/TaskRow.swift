@@ -2,7 +2,7 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task (depth 1): chevron, branch icon, name, the `#123` chip of a bound pull request
+/// Sidebar row for a task (Tasks section): chevron, branch icon, name, the `#123` chip of a bound pull request
 /// (dot = live checks state), the `api · web` caption and the aggregated state dot of its threads.
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
@@ -63,7 +63,6 @@ struct TaskRow: View {
                 StateDot(state: state)
             }
         }
-        .padding(.leading, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
