@@ -10,3 +10,15 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
+
+## [0.1.0-rc.1](https://github.com/maastrich/scope/releases/tag/v0.1.0-rc.1) - 2026-09-07
+
+### Added
+
+- bootstrap Scope with the M0 skeleton by @maastrich
+- add Sparkle auto-update and release docs by @maastrich
+
+### New Contributors
+
+- @maastrich made their first contribution
+
