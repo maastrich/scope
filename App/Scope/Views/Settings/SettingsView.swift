@@ -1,0 +1,316 @@
+import AppKit
+import SwiftUI
+import ScopeCore
+import ScopeDrivers
+
+/// Settings window (⌘,): General, Shell environment, Drivers.
+struct SettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralSettingsView()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ShellSettingsView()
+                .tabItem { Label("Shell Environment", systemImage: "terminal") }
+            DriversSettingsView()
+                .tabItem { Label("Drivers", systemImage: "cpu") }
+        }
+        .frame(width: 600)
+        .frame(minHeight: 380)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralSettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            Section("Configuration") {
+                LabeledContent("Config folder") {
+                    HStack(spacing: 8) {
+                        Text(model.env.home.path)
+                            .font(.system(size: 12, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Button("Reveal") { Reveal.inFinder(model.env.home) }
+                            .controlSize(.small)
+                    }
+                }
+                Picker("Default driver", selection: preference(\.defaultDriverID)) {
+                    ForEach(model.drivers.profiles) { profile in
+                        Text(profile.name).tag(profile.id)
+                    }
+                }
+            }
+            Section("Editor") {
+                EditorPicker()
+            }
+            Section("Confirmations") {
+                Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
+                Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func preference<Value>(_ keyPath: WritableKeyPath<Preferences, Value>) -> Binding<Value> {
+        Binding(
+            get: { model.config.preferences[keyPath: keyPath] },
+            set: { value in model.updatePreferences { $0[keyPath: keyPath] = value } }
+        )
+    }
+}
+
+/// Auto-detected editors (by bundle identifier) plus a free argv template.
+private struct EditorPicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var customCommand = ""
+
+    private static let noneTag = "none"
+    private static let customTag = "custom"
+
+    var body: some View {
+        Picker("Editor", selection: selection) {
+            Text("None").tag(Self.noneTag)
+            ForEach(installedEditors, id: \.rawValue) { editor in
+                Text(displayName(editor)).tag(editor.rawValue)
+            }
+            Text("Custom command").tag(Self.customTag)
+        }
+        if selection.wrappedValue == Self.customTag {
+            TextField("Command", text: $customCommand, prompt: Text("code -g {file}:{line}"))
+                .font(.system(size: 12, design: .monospaced))
+                .onSubmit(commitCustomCommand)
+            Text("Arguments separated by spaces. Placeholders: {path} (folder), {file}, {line}. The executable is resolved on your login-shell PATH.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        if let editor = model.config.preferences.editor {
+            LabeledContent("Command") {
+                Text(editor.argv.joined(separator: " "))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var installedEditors: [KnownEditor] {
+        KnownEditor.allCases.filter {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
+        }
+    }
+
+    private var selection: Binding<String> {
+        Binding(
+            get: {
+                guard let editor = model.config.preferences.editor else { return Self.noneTag }
+                if let known = KnownEditor.allCases.first(where: { $0.template == editor }) {
+                    return known.rawValue
+                }
+                return Self.customTag
+            },
+            set: { tag in
+                switch tag {
+                case Self.noneTag:
+                    model.updatePreferences { $0.editor = nil }
+                case Self.customTag:
+                    customCommand = model.config.preferences.editor?.argv.joined(separator: " ") ?? ""
+                    commitCustomCommand()
+                default:
+                    if let known = KnownEditor(rawValue: tag) {
+                        model.updatePreferences { $0.editor = known.template }
+                    }
+                }
+            }
+        )
+    }
+
+    private func commitCustomCommand() {
+        let argv = customCommand.split(whereSeparator: \.isWhitespace).map(String.init)
+        model.updatePreferences { $0.editor = argv.isEmpty ? nil : EditorTemplate(argv: argv) }
+    }
+
+    private func displayName(_ editor: KnownEditor) -> String {
+        switch editor {
+        case .cursor: "Cursor"
+        case .vscode: "Visual Studio Code"
+        case .zed: "Zed"
+        case .sublime: "Sublime Text"
+        case .jetbrains: "JetBrains IDE"
+        case .nova: "Nova"
+        }
+    }
+}
+
+// MARK: - Shell environment
+
+private struct ShellSettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            Section("Login shell") {
+                LabeledContent("Shell") {
+                    Text(ShellEnvironment.loginShell())
+                        .font(.system(size: 12, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                Picker("Probe", selection: probeMode) {
+                    Text("Interactive login (-ilc)").tag(ShellProbeMode.interactiveLogin)
+                    Text("Login (-lc)").tag(ShellProbeMode.login)
+                    Text("None (path_helper only)").tag(ShellProbeMode.none)
+                }
+                Text("Scope runs your shell once at launch to capture PATH and the variables agents need. Change the mode if your PATH is only set in an interactive rc file, or if the probe is slow.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Section("Status") {
+                LabeledContent("State") {
+                    HStack(spacing: 6) {
+                        if model.shellStatus == .probing {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text(statusText)
+                    }
+                }
+                if let warning = resolved?.warning {
+                    LabeledContent("Warning") {
+                        Text(warning)
+                            .foregroundStyle(Color(nsColor: .systemOrange))
+                            .textSelection(.enabled)
+                    }
+                }
+                Button("Re-probe now") {
+                    model.reprobeShell()
+                }
+                .disabled(model.shellStatus == .probing)
+            }
+            Section("PATH") {
+                if let resolved {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(resolved.path.split(separator: ":").enumerated()), id: \.offset) { _, entry in
+                            Text(String(entry))
+                                .font(.system(size: 11, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                } else {
+                    Text("Not resolved yet.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var resolved: ResolvedShellEnvironment? {
+        switch model.shellStatus {
+        case .probing: nil
+        case .ready(let environment), .fallback(let environment): environment
+        }
+    }
+
+    private var statusText: String {
+        switch model.shellStatus {
+        case .probing: "Probing…"
+        case .ready(let environment): "Ready — from \(environment.source.rawValue)"
+        case .fallback(let environment): "Fallback — from \(environment.source.rawValue)"
+        }
+    }
+
+    private var probeMode: Binding<ShellProbeMode> {
+        Binding(
+            get: { model.config.preferences.shellProbe },
+            set: { mode in model.updatePreferences { $0.shellProbe = mode } }
+        )
+    }
+}
+
+// MARK: - Drivers
+
+private struct DriversSettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Table(model.drivers.profiles) {
+                TableColumn("Name") { profile in
+                    HStack(spacing: 6) {
+                        Image(systemName: profile.icon ?? "terminal")
+                            .foregroundStyle(.secondary)
+                        Text(profile.name)
+                        if profile.builtin == true {
+                            Text("built-in")
+                                .font(.system(size: 10, weight: .medium))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                TableColumn("ID") { profile in
+                    Text(profile.id).font(.system(size: 12, design: .monospaced))
+                }
+                TableColumn("Command") { profile in
+                    Text(([profile.command] + profile.args).joined(separator: " "))
+                        .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                TableColumn("Resolved") { profile in
+                    resolvedText(for: profile)
+                }
+            }
+            .frame(minHeight: 180)
+
+            if !model.drivers.problems.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Invalid profiles")
+                        .font(.system(size: 12, weight: .semibold))
+                    ForEach(Array(model.drivers.problems.enumerated()), id: \.offset) { _, problem in
+                        Text("\(problem.file.lastPathComponent): \(problem.message)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color(nsColor: .systemRed))
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
+            HStack {
+                Button("Reveal in Finder") {
+                    Reveal.inFinder(ScopeHome.driversURL(home: model.env.home))
+                }
+                Button("Reload") {
+                    Task { await model.reloadDrivers() }
+                }
+                Spacer()
+                Text("Profiles are JSON files in \(ScopeHome.driversURL(home: model.env.home).path). Edit them with any editor; Reload picks up changes.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(16)
+    }
+
+    @ViewBuilder
+    private func resolvedText(for profile: DriverProfile) -> some View {
+        switch model.shellStatus {
+        case .probing:
+            Text("…").foregroundStyle(.secondary)
+        case .ready(let environment), .fallback(let environment):
+            if let path = ExecutableResolver.resolve(profile.command, path: environment.path, shell: environment.shell) {
+                Text(path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text("not found")
+                    .foregroundStyle(Color(nsColor: .systemRed))
+            }
+        }
+    }
+}

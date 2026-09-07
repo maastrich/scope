@@ -1,0 +1,11 @@
+{
+  "id" : "shell",
+  "name" : "Shell",
+  "command" : "$SHELL",
+  "args" : [],
+  "env" : {},
+  "loginShell" : true,
+  "icon" : "terminal",
+  "builtin" : true,
+  "version" : 1
+}

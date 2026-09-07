@@ -1,0 +1,140 @@
+# Continuous integration: every pull request and every push to main.
+#
+#   scopekit  swift build + swift test (Swift Testing) of the local SwiftPM package
+#   app       xcodegen -> xcodebuild Release build of Scope.app (ad-hoc signed) + app tests when a test target exists
+#
+# Runner: macos-26 (Apple Silicon, free and unlimited for public repositories).
+# Xcode is pinned through DEVELOPER_DIR; bump it here and in release.yml together.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash # bash --noprofile --norc -eo pipefail
+
+env:
+  # macos-26 ships Xcode 26.0.1 … 26.6 (26.6 = image default, Swift 6.3.3, same build as the maintainer's machine).
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+  # Directory that holds ScopeKit's Package.swift ("." = repository root; "ScopeKit" if the package moves).
+  PACKAGE_PATH: .
+
+jobs:
+  scopekit:
+    name: ScopeKit (swift test)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Cache SwiftPM build directory
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.PACKAGE_PATH }}/.build
+          key: spm-build-${{ runner.os }}-${{ runner.arch }}-xcode26.6-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}
+          restore-keys: |
+            spm-build-${{ runner.os }}-${{ runner.arch }}-xcode26.6-
+
+      - name: Build
+        run: swift build --package-path "$PACKAGE_PATH"
+
+      - name: Test (Swift Testing)
+        run: swift test --package-path "$PACKAGE_PATH" --parallel
+
+  app:
+    name: Scope.app (xcodebuild)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          xcodegen --version
+          # SwiftTerm >= 1.12 ships a Metal shader and Xcode 26 does not bundle the Metal compiler.
+          # Idempotent: ~1 s when already installed, ~20 s / 700 MB otherwise.
+          xcodebuild -downloadComponent MetalToolchain
+
+      - name: Cache SwiftPM clones (SourcePackages)
+        uses: actions/cache@v6
+        with:
+          path: SourcePackages
+          key: spm-xcode-${{ runner.os }}-${{ runner.arch }}-xcode26.6-${{ hashFiles('project.yml', '**/Package.swift', '**/Package.resolved') }}
+          restore-keys: |
+            spm-xcode-${{ runner.os }}-${{ runner.arch }}-xcode26.6-
+
+      - name: Generate Scope.xcodeproj
+        run: xcodegen generate --spec project.yml
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Scope.xcodeproj -scheme Scope \
+            -clonedSourcePackagesDirPath SourcePackages \
+            -skipPackagePluginValidation
+
+      - name: Build (Release, ad-hoc signed)
+        run: |
+          mkdir -p build
+          xcodebuild build \
+            -project Scope.xcodeproj -scheme Scope -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -clonedSourcePackagesDirPath SourcePackages \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= \
+            | tee build/xcodebuild.log | { if command -v xcbeautify >/dev/null; then xcbeautify; else cat; fi; }
+
+      - name: Verify the built app
+        run: |
+          app=build/DerivedData/Build/Products/Release/Scope.app
+          codesign --verify --deep --strict --verbose=2 "$app"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"
+          if [ ! -x "$app/Contents/Helpers/scope-hook" ]; then
+            echo "::warning::scope-hook is not embedded at Contents/Helpers/scope-hook"
+          fi
+          # Exit 0 = valid key, 2 = key absent (no auto-update possible), 1 = invalid key (Sparkle shows an error alert at launch).
+          scripts/sparkle-key-check.sh "$app/Contents/Info.plist" \
+            || echo "::warning::SUPublicEDKey is missing or invalid (see README > Releasing > One-time setup). scripts/package.sh refuses to release an invalid key."
+
+      - name: App tests (only when the project has a test target)
+        run: |
+          if xcodebuild -list -project Scope.xcodeproj -json | jq -e '.project.targets[] | select(test("Tests$"))' >/dev/null; then
+            xcodebuild test \
+              -project Scope.xcodeproj -scheme Scope -configuration Debug \
+              -destination 'platform=macOS' \
+              -derivedDataPath build/DerivedData \
+              -clonedSourcePackagesDirPath SourcePackages \
+              -skipPackagePluginValidation -skipMacroValidation \
+              CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= \
+              | tee build/xcodebuild-test.log | { if command -v xcbeautify >/dev/null; then xcbeautify; else cat; fi; }
+          else
+            echo "No *Tests target in Scope.xcodeproj: skipping xcodebuild test (ScopeKit tests run in the scopekit job)."
+          fi
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcodebuild-logs
+          path: build/*.log
+          if-no-files-found: ignore

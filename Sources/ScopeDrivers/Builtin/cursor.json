@@ -1,0 +1,14 @@
+{
+  "id" : "cursor",
+  "name" : "Cursor CLI",
+  "command" : "cursor-agent",
+  "args" : [],
+  "env" : {},
+  "context" : { "file" : "AGENTS.md", "mode" : "file" },
+  "resume" : ["cursor-agent", "--resume", "{resume_id}"],
+  "headless" : ["cursor-agent", "-p", "{prompt}"],
+  "adapter" : { "kind" : "cursor-hooks" },
+  "icon" : "cursorarrow.rays",
+  "builtin" : true,
+  "version" : 1
+}

@@ -1,0 +1,120 @@
+name: Scope
+options:
+  bundleIdPrefix: dev.maastrich.scope
+  deploymentTarget:
+    macOS: "15.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+packages:
+  ScopeKit:
+    path: .
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm.git
+    exactVersion: 1.20.0
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  scope-hook:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/scope-hook
+    dependencies:
+      - package: ScopeKit
+        product: ScopeAdapters
+    settings:
+      base:
+        PRODUCT_NAME: scope-hook
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: YES
+
+  Scope:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Scope
+        excludes:
+          - "*.entitlements"
+    dependencies:
+      - package: ScopeKit
+        product: ScopeCore
+      - package: ScopeKit
+        product: ScopeGit
+      - package: ScopeKit
+        product: ScopeDrivers
+      - package: ScopeKit
+        product: ScopeAdapters
+      - package: SwiftTerm
+        product: SwiftTerm
+      - target: scope-hook
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+    info:
+      path: App/Scope/Info.plist
+      properties:
+        CFBundleDisplayName: Scope
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: "15.0"
+        NSHumanReadableCopyright: "Copyright © 2026 Mathis Pinsault and Scope contributors. MIT License."
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSPrincipalClass: NSApplication
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Folder
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.folder]
+        NSServices:
+          - NSMenuItem: { default: "Open in Scope" }
+            NSMessage: openInScope
+            NSPortName: Scope
+            NSSendFileTypes: [public.folder]
+    entitlements:
+      path: App/Scope/Scope.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope
+        PRODUCT_NAME: Scope
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+        COMBINE_HIDPI_IMAGES: YES
+
+schemes:
+  Scope:
+    build:
+      targets:
+        Scope: all
+        scope-hook: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: ScopeKit/ScopeKitTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

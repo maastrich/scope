@@ -1,0 +1,118 @@
+# git-cliff ~ configuration file
+# https://git-cliff.org/docs/configuration
+#
+# Conventional Commits -> Keep a Changelog style sections.
+# GitHub enrichment (usernames, first-time contributors) is optional: pass a
+# token (GITHUB_TOKEN / --github-token) or run with --offline; the template
+# degrades gracefully when no remote data is available.
+
+[remote.github]
+owner = "maastrich"
+repo = "scope"
+# token comes from --github-token or the GITHUB_TOKEN env var; never commit it.
+
+[changelog]
+# Rendered at the top of a full regeneration (`git cliff -o CHANGELOG.md`). The committed CHANGELOG.md
+# starts with the same text; scripts/release.sh only inserts one "## [x.y.z]" section per release.
+header = """
+# Changelog
+
+All notable changes to Scope are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Entries are generated from [Conventional Commits](https://www.conventionalcommits.org) by [git-cliff](https://git-cliff.org).
+
+"""
+# Rendered for each release.
+# Set CLIFF_NO_HEADING=1 to omit the "## [x.y.z]" heading (GitHub release body,
+# Sparkle release notes) since the version is already shown by the container.
+body = """
+{%- macro remote_url() -%}
+  https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
+{%- endmacro -%}
+
+{% if get_env(name="CLIFF_NO_HEADING", default="") == "" -%}
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}]({{ self::remote_url() }}/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## [Unreleased]
+{% endif -%}
+{% endif -%}
+
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.breaking %}**BREAKING:** {% endif %}\
+  {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+  {{ commit.message | split(pat="\n") | first | trim }}\
+  {% if commit.remote.username and commit.remote.username is not ending_with("[bot]") %} by @{{ commit.remote.username }}{% endif %}
+{%- endfor %}
+{% endfor %}
+
+{%- if github -%}
+{%- set_global first_timers = [] -%}
+{%- for contributor in github.contributors | filter(attribute="is_first_time", value=true) -%}
+  {%- if contributor.username is not ending_with("[bot]") -%}
+    {%- set_global first_timers = first_timers | concat(with=contributor) -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if first_timers | length != 0 %}
+### New Contributors
+{% for contributor in first_timers %}
+- @{{ contributor.username }} made their first contribution\
+  {% if contributor.pr_number %} in [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}){% endif %}
+{%- endfor %}
+{% endif -%}
+{%- endif %}
+
+{%- if version and previous and previous.version %}
+**Full Changelog**: {{ self::remote_url() }}/compare/{{ previous.version }}...{{ version }}
+{% endif %}
+"""
+footer = ""
+trim = true
+# Turn the "(#123)" that GitHub appends to squash-merge titles into a PR link.
+# Done as a postprocessor (on rendered text) so it also works offline.
+postprocessors = [
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/maastrich/scope/pull/${1}))" },
+]
+
+[git]
+conventional_commits = true
+# Non-conventional commits are dropped (PR titles are linted and squash-merged, so main stays clean).
+filter_unconventional = true
+# Flip to true to make git-cliff fail on any unconventional commit instead of dropping it.
+require_conventional = false
+split_commits = false
+commit_preprocessors = []
+# First match wins. The "<!-- N -->" prefixes fix the section order; the template strips them.
+commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^(feat|fix)\\(security\\)", group = "<!-- 7 -->Security" },
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 1 -->Fixed" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Changed" },
+  { message = "^revert", group = "<!-- 4 -->Reverted" },
+  { message = "^docs", group = "<!-- 5 -->Documentation" },
+  { message = "^(chore|build)\\(deps", group = "<!-- 6 -->Dependencies" },
+  { message = "^(ci|test|style|chore|build)", skip = true },
+  { message = ".*", group = "<!-- 8 -->Other" },
+]
+# Breaking changes are never dropped by a `skip = true` parser.
+protect_breaking_commits = true
+filter_commits = false
+# Only vX.Y.Z[-pre] tags are releases; anything else is ignored.
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$"
+topo_order = false
+# Oldest first inside each section, so a release reads chronologically.
+sort_commits = "oldest"
+
+[bump]
+# feat -> minor, fix/perf/... -> patch.
+features_always_bump_minor = true
+# While < 1.0.0 a breaking change bumps minor (0.3.0 -> 0.4.0); from 1.0.0 on it bumps major.
+breaking_always_bump_major = false
+# First tag if the repo has none yet.
+initial_tag = "v0.1.0"

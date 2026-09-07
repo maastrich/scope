@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Keys documented by `xcodebuild -help` (Xcode 26.6), section "Available keys for -exportOptionsPlist".
+	     Used by scripts/package.sh only when a Developer ID certificate is available. -->
+	<!-- developer-id = "Direct Distribution" (outside the Mac App Store). The export re-signs EVERY nested code
+	     item (Contents/Helpers/scope-hook, Contents/Frameworks/Sparkle.framework and its Autoupdate, Updater.app,
+	     XPCServices/*.xpc) with the chosen certificate — the build phase alone leaves Sparkle's helpers ad-hoc signed. -->
+	<key>method</key>
+	<string>developer-id</string>
+	<!-- manual: use the certificate below, never talk to Apple's automatic signing service. -->
+	<key>signingStyle</key>
+	<string>manual</string>
+	<!-- Automatic selector = newest installed certificate of that type; a SHA-1 or the full name also works.
+	     scripts/package.sh rewrites this value from $SIGNING_CERTIFICATE. -->
+	<key>signingCertificate</key>
+	<string>Developer ID Application</string>
+	<!-- 10-character Apple Developer Team ID. scripts/package.sh rewrites this value from $APPLE_TEAM_ID. -->
+	<key>teamID</key>
+	<string>TEAMID0000</string>
+	<!-- export = write the .app to -exportPath (as opposed to "upload" to App Store Connect). -->
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>

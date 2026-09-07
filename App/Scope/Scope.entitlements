@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Deliberately empty: Scope is distributed outside the App Store and spawns PTYs
+	and arbitrary binaries, so com.apple.security.app-sandbox is NOT set.
+	Hardened runtime comes from ENABLE_HARDENED_RUNTIME=YES in project.yml, not from here.
+	Add com.apple.security.cs.* exceptions here only if notarization rejects a build.
+	-->
+</dict>
+</plist>

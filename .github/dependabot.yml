@@ -1,0 +1,36 @@
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+updates:
+  # GitHub Actions used by .github/workflows/*.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Paris"
+    # "ci(deps): bump actions/checkout from 7.0.0 to 7.0.1": passes the PR-title lint, hidden from CHANGELOG.md
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    labels: ["dependencies"]
+
+  # SwiftPM dependencies declared in Package.swift (+ Package.resolved when committed).
+  # NOTE: packages declared only in project.yml (SwiftTerm, Sparkle for the app target) are invisible to
+  # Dependabot unless the generated Scope.xcodeproj is committed; bump those by hand (see README > Releasing).
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Paris"
+    # "chore(deps): bump swift-argument-parser from 1.8.2 to 1.9.0": lands in the "Dependencies" section of CHANGELOG.md
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
