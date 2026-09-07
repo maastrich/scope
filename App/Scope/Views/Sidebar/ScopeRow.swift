@@ -88,6 +88,12 @@ struct ScopeRow: View {
             model.refreshScope(scope.id)
         }
         .keyboardShortcut("r", modifiers: [.command, .option])
+        Button("Analyze Graph") {
+            model.inspectorTab = .graph
+            model.inspectorShown = true
+            Task { await model.analyzeGraph(scope: scope, withAI: false) }
+        }
+        .disabled(scope.repos.isEmpty || model.graph.isGenerating)
         Menu("Discovery Depth") {
             ForEach(0...3, id: \.self) { depth in
                 Button {

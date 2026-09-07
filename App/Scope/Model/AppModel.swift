@@ -22,6 +22,10 @@ final class AppModel {
     var tasks: [TaskState] = []
     /// The Delta inspector's state; follows `currentTask`.
     let delta: DeltaModel
+    /// The Graph inspector's state; follows `currentScope`.
+    let graph: GraphModel
+    /// The Base inspector's state; follows `baseRepo`.
+    let base: BaseModel
     /// Scope the New Task sheet is open for (`nil` = closed).
     var newTaskScopeID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
@@ -70,6 +74,8 @@ final class AppModel {
         self.env = env
         self.launcher = ThreadLauncher(env: env)
         self.delta = DeltaModel(env: env, problems: problems)
+        self.graph = GraphModel(env: env, problems: problems)
+        self.base = BaseModel(env: env, problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
         for problem in env.startupProblems { problems.report(problem) }
@@ -506,7 +512,7 @@ final class AppModel {
     }
 
     @discardableResult
-    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil) async -> ThreadSession? {
+    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil, title customTitle: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -539,6 +545,7 @@ final class AppModel {
             kind = .task(slug: task.record.slug)
             title = "\(profile.name) · \(task.name)"
         }
+        if let customTitle { title = customTitle }
         let record = ThreadRecord(
             scopeID: scopeID,
             scopeRoot: scope.declaration.path,

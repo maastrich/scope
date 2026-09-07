@@ -54,6 +54,15 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(model?.currentScope == nil)
 
+            Button("Analyze Graph") {
+                if let model, let scope = model.currentScope {
+                    model.inspectorTab = .graph
+                    model.inspectorShown = true
+                    Task { await model.analyzeGraph(scope: scope, withAI: false) }
+                }
+            }
+            .disabled(model?.currentScope == nil || model?.currentScope?.repos.isEmpty != false || model?.graph.isGenerating == true)
+
             Button("Remove Scope…") {
                 if let model, let scope = model.currentScope {
                     Task { await ScopeActions.remove(scope, model: model) }

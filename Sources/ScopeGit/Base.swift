@@ -141,13 +141,14 @@ public extension GitClient {
         let current = try await output(["rev-parse", "--abbrev-ref", "HEAD"], timeout: .seconds(10))
         guard current != "HEAD" else { throw BaseError.noBranch }
         let target = branch ?? current
-        let result = try await run(["pull", "--ff-only", "--quiet", remote, target], timeout: timeout, allowFailure: true)
+        // `--no-rebase`: a `pull.rebase` config would otherwise refuse the pull on a dirty tree before trying the fast-forward.
+        let result = try await run(["pull", "--ff-only", "--no-rebase", "--quiet", remote, target], timeout: timeout, allowFailure: true)
         guard !result.succeeded else { return }
         let stderr = result.stderrText.lowercased()
         if stderr.contains("fast-forward") || stderr.contains("diverg") {
             throw BaseError.diverged(branch: current, upstream: "\(remote)/\(target)")
         }
-        throw GitError(arguments: ["pull", "--ff-only", remote, target], result: result)
+        throw GitError(arguments: ["pull", "--ff-only", "--no-rebase", remote, target], result: result)
     }
 
     /// Commits `<remote>/<branch>` has that `HEAD` has not, after an optional `git fetch`.

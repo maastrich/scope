@@ -3,6 +3,7 @@ import ScopeAdapters
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
+import ScopeGraph
 import ScopeTasks
 
 /// Receives adapter events from the hook socket and hands them to whoever registered (the `AppModel`).
@@ -32,6 +33,8 @@ final class AppEnvironment {
     let taskRecords: TaskRecordStore
     /// Rebuilt with `git` by `useGit` (before any task is loaded); `TaskManager.loadAll` runs after that.
     private(set) var tasks: TaskManager
+    /// `<home>/graph/<slug>.json` (spec §4.6).
+    let graphStore: GraphStore
     let hooks: HookSocketServer?
     /// Mirror of the thread ids the app owns; the socket server validates senders against it off main.
     let knownThreads: KnownThreads
@@ -63,6 +66,7 @@ final class AppEnvironment {
         self.git = git
         self.taskRecords = TaskRecordStore(home: home)
         self.tasks = TaskManager(home: home, registry: git, store: taskRecords)
+        self.graphStore = GraphStore(home: home)
         self.hooks = hooks
         self.knownThreads = knownThreads
         self.hookSink = hookSink
@@ -132,5 +136,10 @@ final class AppEnvironment {
         guard path != git.gitPath else { return }
         git = GitClientRegistry(gitPath: path)
         tasks = TaskManager(home: home, registry: git, store: taskRecords)
+    }
+
+    /// A generator over the current git registry; `level1` is the driver-backed pass (`nil` = level 0 only).
+    func makeGraphGenerator(level1: Level1Generator?) -> GraphGenerator {
+        GraphGenerator(store: graphStore, registry: git, level1: level1)
     }
 }

@@ -17,9 +17,10 @@ extension AppModel {
     func createTask(name: String, in scopeID: ScopeID, repos: [String]) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
+        let summaries = await graphSummaries(for: scope)
         let record: TaskRecord
         do {
-            record = try await env.tasks.create(name: name, in: scope.declaration, repos: repos, scopeRepos: scopeRepos)
+            record = try await env.tasks.create(name: name, in: scope.declaration, repos: repos, scopeRepos: scopeRepos, repoSummaries: summaries)
         } catch {
             problems.error("Could not create task “\(name)”", detail: String(describing: error), scope: scopeID)
             throw error
@@ -39,7 +40,8 @@ extension AppModel {
     func addRepo(_ relativePath: String, to taskID: TaskID) async {
         guard let task = task(taskID), let scope = scope(task.scopeID) else { return }
         do {
-            let record = try await env.tasks.addRepo(taskID, repo: relativePath, scopeRepos: scope.repos.map(\.id))
+            let summaries = await graphSummaries(for: scope)
+            let record = try await env.tasks.addRepo(taskID, repo: relativePath, scopeRepos: scope.repos.map(\.id), repoSummaries: summaries)
             task.update(record: record)
             task.stopWatching()
             task.startWatching()

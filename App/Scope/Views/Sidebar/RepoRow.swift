@@ -64,6 +64,9 @@ struct RepoRow: View {
         }
         .keyboardShortcut("e", modifiers: .command)
         .disabled(model.config.preferences.editor == nil)
+        Button("See Base") {
+            model.showBase(repo: repo, in: scope)
+        }
         Divider()
         Button("Reveal in Finder") {
             Reveal.inFinder(repo.url)

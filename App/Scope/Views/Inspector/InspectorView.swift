@@ -21,31 +21,14 @@ struct InspectorView: View {
             Divider()
             switch model.inspectorTab {
             case .graph:
-                ContentUnavailableView {
-                    Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
-                } description: {
-                    Text(graphDescription)
-                }
+                GraphView()
             case .delta:
                 DeltaView()
             case .base:
-                ContentUnavailableView {
-                    Label("Base", systemImage: "square.stack.3d.up")
-                } description: {
-                    Text("Base arrives in M3: browse a repo's base checkout read-only and open a secondary shell in it.")
-                }
+                BaseView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
-    }
-
-    private var graphDescription: String {
-        guard let scope = model.currentScope else {
-            return "Graph arrives in M3: one card per repo with purpose, stack and entry points."
-        }
-        let repos = scope.repos.count
-        let remotes = scope.repos.filter { $0.facts?.remote != nil }.count
-        return "\(scope.name) · \(repos) \(repos == 1 ? "repo" : "repos") · \(remotes) \(remotes == 1 ? "remote" : "remotes")\n\nGraph arrives in M3: one card per repo with purpose, stack and entry points."
     }
 }
