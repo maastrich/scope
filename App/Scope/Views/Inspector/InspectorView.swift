@@ -8,7 +8,8 @@ struct InspectorView: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            VStack(spacing: 4) {
+            // One 30 pt band, same height and ground as the tab strip, so the two read as a single line across the window.
+            HStack(spacing: 8) {
                 Picker("Inspector tab", selection: $model.inspectorTab) {
                     ForEach(InspectorTab.allCases, id: \.self) { tab in
                         Text(tab.title).tag(tab)
@@ -17,19 +18,20 @@ struct InspectorView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .controlSize(.small)
+                .fixedSize()
                 if let context = model.contextDescription {
                     Text(context)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .accessibilityLabel("Inspector context: \(context)")
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .frame(maxWidth: .infinity)
             .background(Color("PanelBackground"))
             Divider()
             Group {
