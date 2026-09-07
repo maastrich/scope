@@ -10,15 +10,27 @@ import ScopeCore
 struct ScopeCommands: Commands {
     @FocusedValue(\.appModel) private var model
 
+    /// Sparkle updater owned by `ScopeApp`; backs "Check for Updates…" in the application menu.
+    let updater: UpdaterController
+
     /// Links shown in the Help menu.
     private static let repositoryURL = URL(string: "https://github.com/maastrich/scope")
 
     var body: some Commands {
+        appMenu
         fileMenu
         threadMenu
         goMenu
         viewMenu
         helpMenu
+    }
+
+    // MARK: Scope (application menu)
+
+    private var appMenu: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesButton(updater: updater)
+        }
     }
 
     // MARK: File

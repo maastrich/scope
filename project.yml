@@ -14,6 +14,9 @@ packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
     exactVersion: 1.20.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.6 # binary xcframework (arm64 + x86_64); bump SPARKLE_VERSION in .github/workflows/release.yml too
 
 settings:
   base:
@@ -58,6 +61,8 @@ targets:
         product: ScopeAdapters
       - package: SwiftTerm
         product: SwiftTerm
+      - package: Sparkle # embeds Sparkle.framework (Autoupdate, Updater.app, Installer.xpc, Downloader.xpc)
+        product: Sparkle
       - target: scope-hook
         embed: true
         codeSign: true
@@ -70,7 +75,7 @@ targets:
         CFBundleDisplayName: Scope
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        LSMinimumSystemVersion: "15.0"
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)" # -> sparkle:minimumSystemVersion in the appcast
         NSHumanReadableCopyright: "Copyright © 2026 Mathis Pinsault and Scope contributors. MIT License."
         LSApplicationCategoryType: public.app-category.developer-tools
         NSPrincipalClass: NSApplication
@@ -86,14 +91,26 @@ targets:
             NSMessage: openInScope
             NSPortName: Scope
             NSSendFileTypes: [public.folder]
+        # --- Sparkle -------------------------------------------------------------------------------
+        # Feed = asset of the LATEST non-draft, non-prerelease GitHub release (302 -> per-tag asset URL).
+        SUFeedURL: https://github.com/maastrich/scope/releases/latest/download/appcast.xml
+        # Public EdDSA key, output of `generate_keys` (README > Releasing > One-time setup). Must stay a real
+        # key: an invalid/empty value makes Sparkle show "Unable to Check For Updates" at every launch
+        # (scripts/package.sh refuses it), and a key can never be added later for already-installed copies.
+        SUPublicEDKey: Ldp4ftmih/ALIvBpr0GLYUKO9ul5SRqGRW+35cK3Goo=
+        # Check daily without asking the user first (default without this key: ask on second launch).
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400 # seconds; Sparkle enforces a 3600 minimum
+        SUAutomaticallyUpdate: false    # notify, do not install silently
+        # Do NOT set SUEnableInstallerLauncherService / SUEnableDownloaderService: Scope is not sandboxed.
     entitlements:
       path: App/Scope/Scope.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope
         PRODUCT_NAME: Scope
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.0.0"   # dev builds; releases: tag without "v" (scripts/package.sh)
+        CURRENT_PROJECT_VERSION: "0" # dev builds; releases: git rev-list --count HEAD (scripts/package.sh)
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: NO
         GENERATE_INFOPLIST_FILE: NO
