@@ -1,5 +1,23 @@
 import Foundation
 
+/// What the graph knows about one repo, for `AGENTS.md` (defined here so ScopeTasks does not depend on ScopeGraph).
+public struct RepoContextSummary: Sendable, Equatable, Hashable {
+    /// Repo path relative to the scope root (`"."` for a repo scope) — the graph key.
+    public var path: String
+    public var purpose: String?
+    public var stack: [String]
+    public var setup: String?
+    public var test: String?
+
+    public init(path: String, purpose: String? = nil, stack: [String] = [], setup: String? = nil, test: String? = nil) {
+        self.path = path
+        self.purpose = purpose
+        self.stack = stack
+        self.setup = setup
+        self.test = test
+    }
+}
+
 /// Renders the files Scope projects into a task root (spec §4.6): `AGENTS.md` and the
 /// `<slug>.code-workspace` multi-root file. Pure functions, testable without git.
 public enum TaskProjection {
@@ -10,9 +28,13 @@ public enum TaskProjection {
     ///
     /// - Parameters:
     ///   - task: the task; its active repos are listed with their sandbox paths.
-    ///   - otherRepos: relative paths of the scope's other repos (names only until the Graph lands in M3).
+    ///   - otherRepos: relative paths of the scope's other repos.
     ///   - scopeName: display name of the scope.
-    public static func agentsMarkdown(task: TaskRecord, otherRepos: [String], scopeName: String) -> String {
+    ///   - repoSummaries: graph cards (purpose / stack / setup / test), keyed by relative path; missing entries fall back to names only.
+    public static func agentsMarkdown(
+        task: TaskRecord, otherRepos: [String], scopeName: String, repoSummaries: [RepoContextSummary] = []
+    ) -> String {
+        let summaries = Dictionary(repoSummaries.map { (TaskRepo.normalize($0.path), $0) }, uniquingKeysWith: { first, _ in first })
         var lines: [String] = [generatedMarker, "# Task: \(task.name)", ""]
         lines.append("- Scope: \(scopeName)")
         lines.append("- Branch: `\(task.branch)`")
@@ -27,6 +49,12 @@ public enum TaskProjection {
         for repo in active {
             let name = repo.isScopeRoot ? scopeName : repo.repoRelativePath
             lines.append("- **\(name)** — sandbox: `\(repo.sandboxPath)` (branch `\(repo.branch)`)")
+            if let summary = summaries[repo.repoRelativePath] {
+                if let purpose = summary.purpose { lines.append("  - Purpose: \(purpose)") }
+                if !summary.stack.isEmpty { lines.append("  - Stack: \(summary.stack.joined(separator: ", "))") }
+                if let setup = summary.setup { lines.append("  - Setup: `\(setup)`") }
+                if let test = summary.test { lines.append("  - Test: `\(test)`") }
+            }
         }
         lines.append("")
         let others = otherRepos.filter { path in !active.contains { $0.repoRelativePath == path } }.sorted()
@@ -35,7 +63,13 @@ public enum TaskProjection {
             lines.append("")
             lines.append("Not part of this task. Ask before adding one to the task.")
             lines.append("")
-            for path in others { lines.append("- \(path)") }
+            for path in others {
+                if let purpose = summaries[path]?.purpose {
+                    lines.append("- **\(path)** — \(purpose)")
+                } else {
+                    lines.append("- \(path)")
+                }
+            }
             lines.append("")
         }
         lines.append("## Rules")

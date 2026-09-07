@@ -82,7 +82,7 @@ public actor TaskManager {
     ///   - repos: relative paths of the repos to sandbox (`["."]` for a repo scope).
     ///   - scopeRepos: relative paths of *all* repos of the scope, for the "other repos" section of `AGENTS.md`.
     /// - Throws: `TaskError`. Worktrees and branches created before a failure are removed again.
-    public func create(name: String, in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = []) async throws -> TaskRecord {
+    public func create(name: String, in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
         if requested.contains("."), requested.count > 1 {
@@ -107,7 +107,7 @@ public actor TaskManager {
                 created.append((repo, isNew))
                 record.repos.append(repo)
             }
-            try await writeProjection(record, scopeRepos: scopeRepos)
+            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
             try await persist(record)
         } catch {
             await rollback(created, task: record)
@@ -118,7 +118,7 @@ public actor TaskManager {
     }
 
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
-    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = []) async throws -> TaskRecord {
+    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard !record.isArchived else { throw TaskError.taskArchived }
         let path = TaskRepo.normalize(repo)
@@ -130,7 +130,7 @@ public actor TaskManager {
         let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
         record.repos.append(sandbox)
         do {
-            try await writeProjection(record, scopeRepos: scopeRepos)
+            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
             try await persist(record)
         } catch {
             await rollback([(sandbox, isNew)], task: record)
@@ -141,9 +141,9 @@ public actor TaskManager {
     }
 
     /// Rewrites `AGENTS.md` and the `.code-workspace` (after a Graph refresh, or a repo list change).
-    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = []) async throws {
+    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws {
         guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await writeProjection(record, scopeRepos: scopeRepos)
+        try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
     }
 
     // MARK: - Archive / close
@@ -299,9 +299,9 @@ public actor TaskManager {
 
     /// Writes `AGENTS.md` and `<slug>.code-workspace` in the task root. Repo scope: no workspace
     /// (single root), and `AGENTS.md` only under `writeContextFileIntoMonoRepoSandbox`.
-    private func writeProjection(_ record: TaskRecord, scopeRepos: [String]) async throws {
+    private func writeProjection(_ record: TaskRecord, scopeRepos: [String], repoSummaries: [RepoContextSummary]) async throws {
         let others = scopeRepos.map(TaskRepo.normalize).filter { $0 != "." }
-        let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName)
+        let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, repoSummaries: repoSummaries)
         do {
             if record.isMonoRepo {
                 guard options.writeContextFileIntoMonoRepoSandbox, let repo = record.activeRepos.first else { return }
