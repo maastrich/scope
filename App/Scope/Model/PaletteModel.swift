@@ -7,6 +7,7 @@ struct PaletteItem: Identifiable {
         case actions = "Actions"
         case editor = "Open in Editor"
         case threads = "Go to Thread"
+        case pullRequests = "Pull Requests"
         case scopes = "Scopes"
     }
 
@@ -102,6 +103,30 @@ enum PaletteModel {
                 model.selection = .thread(session.id)
                 model.selectedThreadID = session.id
             })
+        }
+
+        // Pull Requests: the loaded open PRs of the current repo, then the PR-bound tasks of the scope ("#123").
+        if let scope {
+            var listed: Set<Int> = []
+            if let repo = model.pullRequestsRepo, model.pullRequests.repoURL == repo.url {
+                for pr in model.pullRequests.pullRequests {
+                    listed.insert(pr.number)
+                    let bound = model.task(forPullRequest: pr.number, repo: repo, in: scope.id)
+                    items.append(PaletteItem(id: "pr-\(repo.id)-\(pr.number)", section: .pullRequests, icon: "arrow.triangle.pull",
+                                             label: "#\(pr.number) \(pr.title) · \(repo.shortName)",
+                                             hint: bound.map { "Switch to \($0.name)" } ?? "Open in Scope · \(pr.author)", path: pr.url.absoluteString) {
+                        if let bound { model.switchToTask(bound) } else { Task { await model.openPullRequest(pr, repo: repo, in: scope) } }
+                    })
+                }
+            }
+            for task in model.tasks(in: scope.id) {
+                guard let pr = task.record.pullRequest, !listed.contains(pr.number) else { continue }
+                items.append(PaletteItem(id: "pr-task-\(task.id.rawValue)", section: .pullRequests, icon: "arrow.triangle.pull",
+                                         label: "#\(pr.number) \(pr.title) · \(task.reposCaption)", hint: "Switch to \(task.name)",
+                                         path: pr.url.absoluteString) { model.switchToTask(task) })
+            }
+            items.append(PaletteItem(id: "show-prs", section: .pullRequests, icon: "arrow.triangle.pull", label: "Show Pull Requests",
+                                     hint: model.pullRequestsRepo?.shortName, shortcut: "⌘⇧P") { model.showPullRequests() })
         }
 
         // Scopes

@@ -29,9 +29,19 @@ enum SidebarItem: Hashable, Codable, Sendable {
     }
 }
 
-/// The three inspector panels (Graph / Delta / Base). Only placeholders in M0.
+/// The inspector panels: Graph / Delta / Base / PRs.
 enum InspectorTab: String, CaseIterable, Codable, Sendable, Hashable {
-    case graph, delta, base
+    case graph, delta, base, pullRequests
+
+    /// Segmented-control label.
+    var title: String {
+        switch self {
+        case .graph: "Graph"
+        case .delta: "Delta"
+        case .base: "Base"
+        case .pullRequests: "PRs"
+        }
+    }
 }
 
 /// What `applicationShouldTerminate` does with running threads.

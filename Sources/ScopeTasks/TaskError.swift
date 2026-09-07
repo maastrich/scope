@@ -23,6 +23,8 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case worktree(repo: String, WorktreeError)
     /// The record could not be written.
     case persistence(String)
+    /// `createForPullRequest`: the head of the pull request could not be fetched from `origin`.
+    case pullRequestHeadMissing(repo: String, ref: String)
 
     public var description: String {
         switch self {
@@ -36,6 +38,7 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .git(let repo, let error): "\(repo): \(error.description)"
         case .worktree(let repo, let error): "\(repo): \(error.description)"
         case .persistence(let message): message
+        case .pullRequestHeadMissing(let repo, let ref): "\(repo): \(ref) is not on origin after fetch"
         }
     }
 }

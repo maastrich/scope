@@ -48,12 +48,18 @@ public enum GhError: Error, Sendable, Equatable, CustomStringConvertible {
     case failed(command: String, message: String)
     /// `gh` printed no URL where one was expected.
     case noURL
+    /// `gh auth status` failed: `message` is its trimmed stderr / stdout.
+    case notAuthenticated(message: String)
+    /// `gh` printed JSON Scope could not decode.
+    case invalidJSON(command: String, message: String)
 
     public var description: String {
         switch self {
         case .notInstalled: "gh is not installed"
         case .failed(let command, let message): "\(command) failed: \(message)"
         case .noURL: "gh returned no pull request URL"
+        case .notAuthenticated(let message): "gh is not logged in: \(message)"
+        case .invalidJSON(let command, let message): "\(command) returned unexpected JSON: \(message)"
         }
     }
 }
@@ -101,6 +107,61 @@ public struct GhClient: Sendable {
             throw GhError.failed(command: "gh pr view", message: message)
         }
         return Self.lastURL(in: result.stdoutText)
+    }
+
+    // MARK: Pull requests (list / view / lookup)
+
+    /// `gh auth status`: throws `GhError.notAuthenticated` when no account is logged in.
+    public func checkAuth() async throws {
+        let result = try await Subprocess.run(
+            executable: executable, arguments: ["auth", "status"],
+            environment: mergedEnvironment, timeout: .seconds(30)
+        )
+        guard result.succeeded else {
+            let text = (result.stderrText + "\n" + result.stdoutText).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GhError.notAuthenticated(message: text.isEmpty ? "run `gh auth login`" : text)
+        }
+    }
+
+    /// Open pull requests of the repository at `checkout` (`gh pr list --state open --limit 50`), most
+    /// recently updated first. `repo` (`owner/name`) overrides the remote of the checkout.
+    public func prList(in checkout: URL, repo: String? = nil, limit: Int = 50) async throws -> [PullRequest] {
+        var arguments = ["pr", "list", "--state", "open", "--limit", String(limit), "--json", PullRequest.jsonFields]
+        if let repo { arguments += ["--repo", repo] }
+        return try await runJSON(arguments, in: checkout, parse: PullRequest.parse(json:))
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// One pull request by number (`gh pr view <n> --json …`).
+    public func prView(number: Int, in checkout: URL, repo: String? = nil) async throws -> PullRequest {
+        var arguments = ["pr", "view", String(number), "--json", PullRequest.jsonFields]
+        if let repo { arguments += ["--repo", repo] }
+        return try await runJSON(arguments, in: checkout, parse: PullRequest.parseOne(json:))
+    }
+
+    /// The open pull request whose head is `branch`, `nil` when there is none (`gh pr list --head <branch>`).
+    public func prForBranch(_ branch: String, in checkout: URL, repo: String? = nil) async throws -> PullRequest? {
+        var arguments = ["pr", "list", "--state", "open", "--head", branch, "--limit", "1", "--json", PullRequest.jsonFields]
+        if let repo { arguments += ["--repo", repo] }
+        return try await runJSON(arguments, in: checkout, parse: PullRequest.parse(json:)).first
+    }
+
+    private func runJSON<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
+        let command = "gh " + arguments.prefix(2).joined(separator: " ")
+        let result = try await Subprocess.run(
+            executable: executable, arguments: arguments, currentDirectory: checkout,
+            environment: mergedEnvironment, timeout: .seconds(60)
+        )
+        guard result.succeeded else {
+            let message = result.stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if message.lowercased().contains("gh auth login"), !message.lowercased().contains("none of the git remotes") {
+                throw GhError.notAuthenticated(message: message)
+            }
+            throw GhError.failed(command: command, message: message)
+        }
+        do { return try parse(result.stdout) } catch {
+            throw GhError.invalidJSON(command: command, message: String(describing: error))
+        }
     }
 
     private var mergedEnvironment: [String: String] {

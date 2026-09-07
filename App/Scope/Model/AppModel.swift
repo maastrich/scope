@@ -29,6 +29,8 @@ final class AppModel {
     let graph: GraphModel
     /// The Base inspector's state; follows `baseRepo`.
     let base: BaseModel
+    /// The PRs inspector (`gh pr list` of the picked repo).
+    let pullRequests: PullRequestsModel
     /// Scope the New Task sheet is open for (`nil` = closed).
     var newTaskScopeID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
@@ -80,6 +82,7 @@ final class AppModel {
         self.delta = DeltaModel(env: env, problems: problems)
         self.graph = GraphModel(env: env, problems: problems)
         self.base = BaseModel(env: env, problems: problems)
+        self.pullRequests = PullRequestsModel(problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
         for problem in env.startupProblems { problems.report(problem) }

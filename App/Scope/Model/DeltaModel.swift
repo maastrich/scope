@@ -198,6 +198,12 @@ final class DeltaModel {
             let url = try await gh.prCreate(title: title, body: body, in: repo.sandboxURL)
             await MainActor.run { self.prURLs[key] = url }
         }
+        // Bind the PR to the task so the sidebar chip and the PRs panel know about it.
+        guard let url = prURLs[key], let number = Int(url.lastPathComponent) else { return }
+        let link = LinkedPullRequest(number: number, url: url, title: title)
+        if let record = try? await env.tasks.linkPullRequest(link, to: record.id) {
+            task.update(record: record)
+        }
     }
 
     func openPR(_ url: URL) {

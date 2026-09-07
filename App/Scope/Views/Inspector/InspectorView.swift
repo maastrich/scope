@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Right-hand inspector: a segmented Graph / Delta / Base control in its own header and, for M0, placeholders
+/// Right-hand inspector: a segmented Graph / Delta / Base / PRs control in its own header and, for M0, placeholders
 /// in place of the three panels. ⌘D / ⌘⇧B already switch tabs so the muscle memory exists from day one.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
@@ -10,7 +10,7 @@ struct InspectorView: View {
         VStack(spacing: 0) {
             Picker("Inspector tab", selection: $model.inspectorTab) {
                 ForEach(InspectorTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue.capitalized).tag(tab)
+                    Text(tab.title).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -26,6 +26,8 @@ struct InspectorView: View {
                 DeltaView()
             case .base:
                 BaseView()
+            case .pullRequests:
+                PullRequestsView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

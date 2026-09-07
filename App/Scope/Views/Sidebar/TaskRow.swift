@@ -2,8 +2,8 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task (depth 1): chevron, branch icon, name, branch chip, `api · web` caption and
-/// the aggregated state dot of its threads.
+/// Sidebar row for a task (depth 1): chevron, branch icon, name, the `#123` chip of a bound pull request
+/// (dot = live checks state), the `api · web` caption and the aggregated state dot of its threads.
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -35,6 +35,20 @@ struct TaskRow: View {
 
             if task.isRefreshing {
                 ProgressView().controlSize(.mini)
+            }
+            if let pr = task.record.pullRequest {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(PullRequestStyle.color(model.liveChecks(for: task) ?? .none))
+                        .frame(width: 6, height: 6)
+                    Text(pr.label)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                .help("\(pr.title)\n\(pr.url.absoluteString)")
             }
             Text(task.reposCaption)
                 .font(.system(size: 11))
@@ -100,6 +114,9 @@ struct TaskContextMenu: View {
             model.selection = .task(task.id)
             model.inspectorTab = .delta
             model.inspectorShown = true
+        }
+        if let pr = task.record.pullRequest {
+            Button("Open Pull Request \(pr.label) on GitHub") { model.openOnGitHub(pr.url) }
         }
         Divider()
         Button("Reveal in Finder") {

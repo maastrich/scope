@@ -76,6 +76,29 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     }
 }
 
+/// The pull request a task is bound to: created from it (`TaskManager.createForPullRequest`) or linked
+/// after "Create PR" in the Delta panel. Live state (checks, review) is not stored; `PullRequestsModel` has it.
+public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
+    public var number: Int
+    public var url: URL
+    public var title: String
+    /// Owner of the head repository (the fork owner for a cross-repository PR).
+    public var headOwner: String?
+    /// The head lives in a fork: the sandbox branch tracks `pull/<n>/head`, not a branch of `origin`.
+    public var isCrossRepository: Bool
+
+    public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false) {
+        self.number = number
+        self.url = url
+        self.title = title
+        self.headOwner = headOwner
+        self.isCrossRepository = isCrossRepository
+    }
+
+    /// `#123`
+    public var label: String { "#\(number)" }
+}
+
 /// One `tasks/<id>.json` document (spec §4.3).
 public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Schema version written by this build. Newer documents are refused, never overwritten.
@@ -102,6 +125,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var createdAt: Date
     /// Set by `TaskManager.archive`.
     public var archivedAt: Date?
+    /// The pull request this task was opened from or linked to, if any.
+    public var pullRequest: LinkedPullRequest?
 
     public init(
         id: TaskID = .generate(),
@@ -115,7 +140,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         root: String,
         repos: [TaskRepo] = [],
         createdAt: Date = .now,
-        archivedAt: Date? = nil
+        archivedAt: Date? = nil,
+        pullRequest: LinkedPullRequest? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -130,6 +156,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.repos = repos
         self.createdAt = createdAt
         self.archivedAt = archivedAt
+        self.pullRequest = pullRequest
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -170,7 +197,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt
+        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -189,5 +216,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         repos = try container.decodeIfPresent([TaskRepo].self, forKey: .repos) ?? []
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        pullRequest = try container.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest)
     }
 }

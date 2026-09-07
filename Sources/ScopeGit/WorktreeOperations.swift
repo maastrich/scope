@@ -26,6 +26,11 @@ public extension GitClient {
         try await run(["fetch", "--prune", "--quiet", remote], timeout: timeout)
     }
 
+    /// `git fetch <remote> <refspec>…`, e.g. `+pull/12/head:refs/remotes/origin/pr/12` for a fork's PR head.
+    func fetch(remote: String = "origin", refspecs: [String], timeout: Duration? = .seconds(120)) async throws {
+        try await run(["fetch", "--quiet", remote] + refspecs, timeout: timeout)
+    }
+
     /// `true` when `git remote get-url <remote>` succeeds.
     func hasRemote(_ remote: String = "origin") async -> Bool {
         (try? await run(["remote", "get-url", remote], timeout: .seconds(10), allowFailure: true).succeeded) ?? false

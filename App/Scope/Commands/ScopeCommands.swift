@@ -215,6 +215,9 @@ struct ScopeCommands: Commands {
             Button("Base") { show(.base) }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 .disabled(model == nil)
+            Button("Pull Requests") { show(.pullRequests) }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(model == nil)
         }
     }
 

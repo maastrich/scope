@@ -29,7 +29,7 @@ struct DeltaActionBar: View {
             .disabled(repo == nil || delta.isActing)
             .help("git push -u origin \(task.branch)")
 
-            if let repo, let url = delta.prURLs[repo.repoRelativePath] {
+            if let repo, let url = task.record.pullRequest?.url ?? delta.prURLs[repo.repoRelativePath] {
                 Button {
                     model.delta.openPR(url)
                 } label: {

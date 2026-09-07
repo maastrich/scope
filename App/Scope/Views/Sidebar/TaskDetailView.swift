@@ -1,7 +1,7 @@
 import SwiftUI
 import ScopeTasks
 
-/// The block shown under the selected task row: the branch line and one row per repo with the
+/// The block shown under the selected task row: the branch line, the pull request line (when bound) and one row per repo with the
 /// sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / Show Delta buttons.
 struct TaskDetailView: View {
     @Environment(AppModel.self) private var model
@@ -20,6 +20,29 @@ struct TaskDetailView: View {
                     .truncationMode(.middle)
             }
             .frame(height: 20)
+            if let pr = task.record.pullRequest {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.triangle.pull")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                    Text("\(pr.label) \(pr.title)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Button {
+                        model.openOnGitHub(pr.url)
+                    } label: {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Open on GitHub — \(pr.url.absoluteString)")
+                }
+                .frame(height: 20)
+            }
             ForEach(task.activeRepos) { repo in
                 TaskRepoRow(task: task, repo: repo)
             }
