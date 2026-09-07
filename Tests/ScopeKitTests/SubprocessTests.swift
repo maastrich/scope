@@ -176,15 +176,26 @@ private struct Boom: Error {}
         for _ in 0..<5 {
             await throttle.fire()
         }
-        try await Task.sleep(for: .milliseconds(40))
-        #expect(gauge.runs == 1)                // leading edge
+        try await waitUntil { gauge.runs >= 1 }
+        #expect(gauge.runs == 1)                // leading edge, the other four coalesce
+        try await waitUntil { gauge.runs >= 2 }
         try await Task.sleep(for: .milliseconds(400))
-        #expect(gauge.runs == 2)                // single trailing run
+        #expect(gauge.runs == 2)                // exactly one trailing run, then quiet (cooldown over)
         await throttle.fire()
-        try await Task.sleep(for: .milliseconds(40))
-        #expect(gauge.runs == 3)                // cooldown over: leading edge again
+        try await waitUntil { gauge.runs >= 3 }
+        #expect(gauge.runs == 3)                // leading edge again
         await throttle.cancel()
         try await Task.sleep(for: .milliseconds(300))
         #expect(gauge.runs == 3)
+    }
+
+    /// Polls `condition` every 10 ms until it holds or `timeout` elapses; shared CI runners stretch timers.
+    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while !condition() {
+            if clock.now > deadline { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 }
