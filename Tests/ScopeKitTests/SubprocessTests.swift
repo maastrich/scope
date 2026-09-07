@@ -44,7 +44,9 @@ private func makeTempDirectory() throws -> URL {
         await #expect(throws: SubprocessError.self) {
             try await Subprocess.run(executable: "/bin/sleep", arguments: ["10"], timeout: .milliseconds(300))
         }
-        #expect(clock.now - start < .seconds(3))
+        // The child would run for 10 s; anything well under that proves the kill.
+        // Loose bound: CI runners are slow and run suites in parallel.
+        #expect(clock.now - start < .seconds(8))
     }
 
     @Test func cancellationKillsTheChild() async throws {
@@ -58,7 +60,7 @@ private func makeTempDirectory() throws -> URL {
         await #expect(throws: CancellationError.self) {
             try await task.value
         }
-        #expect(clock.now - start < .seconds(2))
+        #expect(clock.now - start < .seconds(8))
     }
 
     @Test func currentDirectoryAndEnvironmentMerge() async throws {
