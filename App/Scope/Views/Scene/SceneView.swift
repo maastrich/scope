@@ -23,6 +23,12 @@ struct SceneView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            if !model.exitNotices.isEmpty {
+                ExitToastStack()
+                    .padding(.horizontal, 12)
+            }
+        }
         .toolbar(removing: .title)
         .toolbar { toolbar }
     }

@@ -20,6 +20,8 @@ final class AppModel {
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
+    /// Threads that exited live: tab gone, record kept until the toast expires or is dismissed.
+    private(set) var exitNotices: [ThreadExitNotice] = []
 
     /// Drives the sidebar highlight. Selecting a thread selects its tab; selecting a scope or repo shows
     /// the scope's last thread (or its empty state).
@@ -53,6 +55,9 @@ final class AppModel {
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
     @ObservationIgnored private var launcher: ThreadLauncher
+    /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
+    @ObservationIgnored private var closingThreads: Set<ThreadID> = []
+    @ObservationIgnored private var isTerminating = false
 
     init(env: AppEnvironment) {
         self.env = env
@@ -361,6 +366,9 @@ final class AppModel {
         for session in threads(in: id) {
             await close(session.id, force: true)
         }
+        for notice in exitNotices where notice.record.scopeID == id {
+            await dismissExitNotice(notice.id)
+        }
         scopes.remove(at: index)
         config.scopes.removeAll { $0.id == id }
         saveConfig()
@@ -504,34 +512,47 @@ final class AppModel {
             if !force, config.preferences.confirmCloseRunningThread {
                 guard await confirmClose(session) else { return false }
             }
+            closingThreads.insert(id)
+            defer { closingThreads.remove(id) }
             session.stop()
             let deadline = ContinuousClock.now + .seconds(4)
             while session.isAlive, ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
+        detach(session)
+        await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
+        return true
+    }
+
+    /// Removes the tab (and the terminal view with it) and moves the selection to a neighbour or the
+    /// scope's empty view. The record stays on disk.
+    private func detach(_ session: ThreadSession) {
+        let id = session.id
         let wasSelected = selectedThreadID == id
         let siblings = threads(in: session.record.scopeID)
         let position = siblings.firstIndex { $0.id == id } ?? 0
         threads.removeAll { $0.id == id }
-        env.knownThreads.remove(id)
-        AdapterInstaller.remove(profile: session.profile, threadID: id, home: env.home)
-        problems.dismissAll(thread: id)
         if lastThreadByScope[session.record.scopeID] == id {
             lastThreadByScope[session.record.scopeID] = nil
         }
-        await env.threadRecords.delete(id)
-        if wasSelected {
-            let remaining = threads(in: session.record.scopeID)
-            if let neighbour = remaining[safe: min(position, remaining.count - 1)] {
-                selection = .thread(neighbour.id)
-                selectedThreadID = neighbour.id
-            } else {
-                selection = .scope(session.record.scopeID)
-                selectedThreadID = nil
-            }
+        guard wasSelected else { return }
+        let remaining = threads(in: session.record.scopeID)
+        if let neighbour = remaining[safe: min(position, remaining.count - 1)] {
+            selection = .thread(neighbour.id)
+            selectedThreadID = neighbour.id
+        } else {
+            selection = .scope(session.record.scopeID)
+            selectedThreadID = nil
         }
-        return true
+    }
+
+    /// The permanent part of a close: hook files, problems, the persisted record.
+    private func forget(id: ThreadID, scopeID: ScopeID, profile: DriverProfile) async {
+        env.knownThreads.remove(id)
+        AdapterInstaller.remove(profile: profile, threadID: id, home: env.home)
+        problems.dismissAll(thread: id)
+        await env.threadRecords.delete(id)
     }
 
     private func confirmClose(_ session: ThreadSession) async -> Bool {
@@ -551,14 +572,54 @@ final class AppModel {
         return response == .alertFirstButtonReturn
     }
 
+    /// A live exit closes the tab and shows a toast for 10 s (Relaunch / Details); the record is
+    /// deleted when the toast goes. Exits caused by `close` or by quitting keep their own paths.
     private func threadExited(_ session: ThreadSession, status: ExitStatus) {
-        // The tab and terminal stay; the banner tells the story. Nothing auto-closes (spec §4.2).
         if status.isExecFailure {
             problems.error("\(session.profile.name) could not be started (exit 127)",
                            detail: "Check the \"command\" of the \(session.profile.id) driver profile.",
                            scope: session.record.scopeID,
                            actions: [.reveal(ScopeHome.driversURL(home: env.home).path)])
         }
+        guard !isTerminating, !closingThreads.contains(session.id),
+              threads.contains(where: { $0.id == session.id }) else { return }
+        detach(session)
+        let notice = ThreadExitNotice(record: session.record, profile: session.profile,
+                                      status: status, lastTitle: session.terminalTitle)
+        notice.onExpire = { [weak self] notice in
+            Task { await self?.dismissExitNotice(notice.id) }
+        }
+        exitNotices.append(notice)
+        notice.start()
+    }
+
+    /// Explicit dismiss or the 10 s countdown: the thread is closed for good.
+    func dismissExitNotice(_ id: ThreadID) async {
+        guard let notice = takeExitNotice(id) else { return }
+        await forget(id: id, scopeID: notice.record.scopeID, profile: notice.profile)
+    }
+
+    /// Reopens the tab for the same record and starts a fresh process.
+    func relaunchExitNotice(_ id: ThreadID) async {
+        guard let notice = takeExitNotice(id), scope(notice.record.scopeID) != nil else { return }
+        let session = ThreadSession(record: notice.record, profile: notice.profile)
+        register(session)
+        selection = .thread(id)
+        selectedThreadID = id
+        await launch(session, mode: .launch)
+    }
+
+    /// Hovering a toast holds its countdown.
+    func holdExitNotice(_ id: ThreadID, _ held: Bool) {
+        guard let notice = exitNotices.first(where: { $0.id == id }) else { return }
+        held ? notice.pause() : notice.start()
+    }
+
+    private func takeExitNotice(_ id: ThreadID) -> ThreadExitNotice? {
+        guard let index = exitNotices.firstIndex(where: { $0.id == id }) else { return nil }
+        let notice = exitNotices.remove(at: index)
+        notice.cancel()
+        return notice
     }
 
     // MARK: Tab navigation
@@ -666,6 +727,7 @@ final class AppModel {
 
     /// SIGHUP to every alive thread, then flush the stores. Records are already on disk.
     func terminateNow() async {
+        isTerminating = true
         for session in threads where session.isAlive {
             session.stop(escalateAfter: 1.5)
         }
