@@ -16,11 +16,7 @@ struct InspectorView: View {
                     Text(graphDescription)
                 }
             case .delta:
-                ContentUnavailableView {
-                    Label("Delta", systemImage: "plus.forwardslash.minus")
-                } description: {
-                    Text("Delta arrives with tasks in M2: uncommitted changes, the task branch against its base, and commit / push / PR from here.")
-                }
+                DeltaView()
             case .base:
                 ContentUnavailableView {
                     Label("Base", systemImage: "square.stack.3d.up")

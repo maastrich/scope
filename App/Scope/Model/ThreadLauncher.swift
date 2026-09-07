@@ -1,6 +1,7 @@
 import Foundation
 import ScopeCore
 import ScopeDrivers
+import ScopeTasks
 
 /// Turns a `(ThreadRecord, DriverProfile, mode)` into a `LaunchPlan`: waits for the login-shell
 /// environment (cached after the first probe), prepares the profile's event adapter (the Claude Code
@@ -15,7 +16,7 @@ struct ThreadLauncher {
         ScopeHookLocator.locate(bundleURL: Bundle.main.bundleURL, searchPATH: searchPATH)
     }
 
-    func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, mode: LaunchMode) async throws(LaunchError) -> LaunchPlan {
+    func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode) async throws(LaunchError) -> LaunchPlan {
         let shell = await env.shell.environment()
         let scopeHook = scopeHookPath(searchPATH: shell.path)
         let adapterArguments = try AdapterInstaller.prepare(profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook)
@@ -24,7 +25,7 @@ struct ThreadLauncher {
             resumeID: record.resumeID,
             cwd: record.cwd,
             scope: scope.path,
-            task: nil,
+            task: task?.root,
             home: env.home.path,
             scopeHook: scopeHook
         )
@@ -32,11 +33,11 @@ struct ThreadLauncher {
             thread: record.id.rawValue,
             scope: scope.slug,
             scopeRoot: scope.path,
-            task: nil,
+            task: task?.slug,   // SCOPE_TASK = slug (spec §4.3); SCOPE_TASK_ROOT is merged below
             sock: env.socketPath,
             home: env.home.path
         )
-        return try LaunchPlanner.plan(
+        var plan = try LaunchPlanner.plan(
             profile: profile,
             mode: mode,
             values: values,
@@ -45,5 +46,9 @@ struct ThreadLauncher {
             appVersion: env.appVersion,
             adapterArguments: adapterArguments
         )
+        if let task {
+            plan.environment.merge(env.tasks.taskEnvironment(for: task)) { $1 }
+        }
+        return plan
     }
 }

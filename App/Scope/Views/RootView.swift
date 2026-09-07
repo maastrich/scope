@@ -22,8 +22,19 @@ struct RootView: View {
         .folderDropTarget { urls in
             Task { await model.addScopes(urls) }
         }
+        .sheet(item: newTaskScope) { scope in
+            NewTaskSheet(scope: scope)
+                .environment(model)
+        }
         .focusedSceneValue(\.appModel, model)
         .environment(model)
+    }
+
+    private var newTaskScope: Binding<ScopeState?> {
+        Binding(
+            get: { model.newTaskScopeID.flatMap { model.scope($0) } },
+            set: { model.newTaskScopeID = $0?.id }
+        )
     }
 
     /// The inspector is hidden in the empty state (no scope) whatever the persisted preference says.

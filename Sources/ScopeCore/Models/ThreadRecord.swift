@@ -31,6 +31,9 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// Absolute path used at launch.
     public var cwd: String
     public var cwdKind: ThreadCwdKind
+    /// Raw id of the task the thread belongs to (M2); `nil` for scope-level threads. Kept as a string so
+    /// `ScopeCore` does not depend on `ScopeTasks`; old records without the key still decode.
+    public var taskID: String?
     public var createdAt: Date
     public var lastLaunchedAt: Date?
     public var lastExit: ExitStatus?
@@ -50,6 +53,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         title: String,
         cwd: String,
         cwdKind: ThreadCwdKind,
+        taskID: String? = nil,
         createdAt: Date = .now
     ) {
         version = ThreadRecord.currentVersion
@@ -60,6 +64,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         self.title = title
         self.cwd = cwd
         self.cwdKind = cwdKind
+        self.taskID = taskID
         self.createdAt = createdAt
         lastLaunchedAt = nil
         lastExit = nil
@@ -73,7 +78,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     public var fileName: String { "\(id.rawValue).json" }
 
     private enum CodingKeys: String, CodingKey {
-        case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, createdAt
+        case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log
     }
 
@@ -88,6 +93,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         cwd = try container.decode(String.self, forKey: .cwd)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? driverID
         cwdKind = try container.decodeIfPresent(ThreadCwdKind.self, forKey: .cwdKind) ?? .scopeRoot
+        taskID = try container.decodeIfPresent(String.self, forKey: .taskID)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
         lastLaunchedAt = try container.decodeIfPresent(Date.self, forKey: .lastLaunchedAt)
         lastExit = try container.decodeIfPresent(ExitStatus.self, forKey: .lastExit)

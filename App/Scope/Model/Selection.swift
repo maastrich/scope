@@ -1,19 +1,26 @@
 import Foundation
 import ScopeCore
 import ScopeDrivers
+import ScopeTasks
 
 /// What the sidebar highlights. Persisted by `UIStateStore`, so it is `Codable`.
 enum SidebarItem: Hashable, Codable, Sendable {
     case scope(ScopeID)
     case repo(ScopeID, relativePath: String)
     case thread(ThreadID)
+    case task(TaskID)
 
     /// The scope the item belongs to, when it is known from the item alone (threads need the model).
     var scopeID: ScopeID? {
         switch self {
         case .scope(let id), .repo(let id, _): id
-        case .thread: nil
+        case .thread, .task: nil
         }
+    }
+
+    var taskID: TaskID? {
+        if case .task(let id) = self { return id }
+        return nil
     }
 
     var threadID: ThreadID? {

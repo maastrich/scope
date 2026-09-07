@@ -59,6 +59,8 @@ targets:
         product: ScopeDrivers
       - package: ScopeKit
         product: ScopeAdapters
+      - package: ScopeKit
+        product: ScopeTasks
       - package: SwiftTerm
         product: SwiftTerm
       - package: Sparkle # embeds Sparkle.framework (Autoupdate, Updater.app, Installer.xpc, Downloader.xpc)

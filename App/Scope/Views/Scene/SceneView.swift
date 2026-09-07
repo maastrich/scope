@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ScopeCore
 
@@ -15,6 +16,8 @@ struct SceneView: View {
                 }
                 if let session = model.currentThread {
                     ThreadPane(session: session)
+                } else if let task = model.currentTask {
+                    TaskEmptyView(task: task)
                 } else {
                     ScopeEmptyView(scope: scope)
                 }
@@ -48,7 +51,11 @@ struct SceneView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             if model.currentThread != nil || model.currentScope != nil {
                 Button {
-                    model.openInEditor(thread: model.selectedThreadID)
+                    if NSEvent.modifierFlags.contains(.option), let path = model.currentEditorPath {
+                        Pasteboard.copy(path)
+                    } else {
+                        model.openInEditor(thread: model.selectedThreadID)
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
@@ -62,7 +69,7 @@ struct SceneView: View {
                 }
                 .disabled(model.config.preferences.editor == nil)
                 .help(model.config.preferences.editor == nil
-                      ? "Choose an editor in Settings to enable this" : "Open in Editor (⌘E)")
+                      ? "Choose an editor in Settings to enable this" : "Open in Editor (⌘E, ⌥-click copies the path)")
             }
             ProblemPopover()
             Button {

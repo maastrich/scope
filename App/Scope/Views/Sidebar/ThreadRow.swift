@@ -5,6 +5,8 @@ import ScopeCore
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     let session: ThreadSession
+    /// 1 for a scope-level thread, 2 under a task.
+    var depth = 1
 
     var body: some View {
         HStack(spacing: 7) {
@@ -27,7 +29,7 @@ struct ThreadRow: View {
 
             StateDot(state: session.displayState)
         }
-        .padding(.leading, 16)
+        .padding(.leading, CGFloat(depth) * 16)
         .frame(height: 28)
         .contentShape(Rectangle())
         .help(session.record.cwd)
@@ -42,7 +44,7 @@ struct ThreadRow: View {
         switch session.record.cwdKind {
         case .scopeRoot: "scope root"
         case .repoBase(let relativePath): relativePath
-        case .task(let slug): slug
+        case .task: depth == 2 ? "sandbox" : (model.task(of: session)?.name ?? "task")
         }
     }
 
@@ -70,6 +72,12 @@ struct ThreadRow: View {
             model.openInEditor(thread: session.id)
         }
         .disabled(model.config.preferences.editor == nil)
+        if let task = model.task(of: session) {
+            Button("Open Task in Editor") {
+                model.openTaskInEditor(task)
+            }
+            .disabled(model.config.preferences.editor == nil)
+        }
         Button("Reveal cwd in Finder") {
             Reveal.inFinder(URL(fileURLWithPath: session.reportedDirectory ?? session.record.cwd, isDirectory: true))
         }

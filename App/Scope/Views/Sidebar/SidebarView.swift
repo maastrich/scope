@@ -82,7 +82,20 @@ struct SidebarView: View {
         if case .failed(let message) = scope.discovery {
             scanFailedRow(scope, message: message)
         }
-        ForEach(model.threads(in: scope.id)) { session in
+        ForEach(model.tasks(in: scope.id)) { task in
+            TaskRow(task: task)
+                .tag(SidebarItem.task(task.id))
+            if model.selection == .task(task.id) {
+                TaskDetailView(task: task)
+            }
+            if task.isExpanded {
+                ForEach(model.threads(in: task.id)) { session in
+                    ThreadRow(session: session, depth: 2)
+                        .tag(SidebarItem.thread(session.id))
+                }
+            }
+        }
+        ForEach(model.scopeLevelThreads(in: scope.id)) { session in
             ThreadRow(session: session)
                 .tag(SidebarItem.thread(session.id))
         }
@@ -122,14 +135,14 @@ struct SidebarView: View {
         .selectionDisabled()
     }
 
-    /// Two equal-width buttons: New Thread (⌘T) and New Task (⌘⇧T, disabled until M2).
+    /// Two equal-width buttons: New Thread (⌘T, in the current task when one is selected) and New Task (⌘⇧T).
     private var footer: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
                 Button {
                     if let scope = model.currentScope {
-                        Task { _ = await model.newThread(in: scope.id) }
+                        Task { _ = await model.newThread(in: scope.id, taskID: model.currentTask?.id) }
                     }
                 } label: {
                     Label("New Thread", systemImage: "plus")
@@ -139,12 +152,13 @@ struct SidebarView: View {
                 .help("New Thread (⌘T)")
 
                 Button {
+                    model.presentNewTask()
                 } label: {
                     Label("New Task", systemImage: "arrow.triangle.branch")
                         .frame(maxWidth: .infinity)
                 }
-                .disabled(true)
-                .help("Tasks arrive in M2 (⌘⇧T)")
+                .disabled(model.currentScope == nil || model.currentScope?.kind == .missing)
+                .help("New Task (⌘⇧T)")
             }
             .font(.system(size: 12, weight: .medium))
             .controlSize(.regular)

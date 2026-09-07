@@ -3,6 +3,7 @@ import ScopeAdapters
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
+import ScopeTasks
 
 /// Receives adapter events from the hook socket and hands them to whoever registered (the `AppModel`).
 /// Exists because the socket server is built before the model.
@@ -28,6 +29,9 @@ final class AppEnvironment {
     let shell: ShellEnvironmentResolver
     /// Replaced once `GitLocator` has found the right git (bootstrap); `/usr/bin/git` until then.
     private(set) var git: GitClientRegistry
+    let taskRecords: TaskRecordStore
+    /// Rebuilt with `git` by `useGit` (before any task is loaded); `TaskManager.loadAll` runs after that.
+    private(set) var tasks: TaskManager
     let hooks: HookSocketServer?
     /// Mirror of the thread ids the app owns; the socket server validates senders against it off main.
     let knownThreads: KnownThreads
@@ -57,6 +61,8 @@ final class AppEnvironment {
         self.drivers = drivers
         self.shell = shell
         self.git = git
+        self.taskRecords = TaskRecordStore(home: home)
+        self.tasks = TaskManager(home: home, registry: git, store: taskRecords)
         self.hooks = hooks
         self.knownThreads = knownThreads
         self.hookSink = hookSink
@@ -125,5 +131,6 @@ final class AppEnvironment {
     func useGit(at path: String) {
         guard path != git.gitPath else { return }
         git = GitClientRegistry(gitPath: path)
+        tasks = TaskManager(home: home, registry: git, store: taskRecords)
     }
 }

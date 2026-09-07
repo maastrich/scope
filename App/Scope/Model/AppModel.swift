@@ -4,6 +4,7 @@ import ScopeAdapters
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
+import ScopeTasks
 import SwiftUI
 
 /// The root store: scopes, threads, selection, and every user action. One per app.
@@ -17,6 +18,12 @@ final class AppModel {
     private(set) var scopes: [ScopeState] = []
     /// Creation order; tabs filter by scope.
     private(set) var threads: [ThreadSession] = []
+    /// Creation order; the sidebar filters by scope. Mutated by `AppModel+Tasks` only.
+    var tasks: [TaskState] = []
+    /// The Delta inspector's state; follows `currentTask`.
+    let delta: DeltaModel
+    /// Scope the New Task sheet is open for (`nil` = closed).
+    var newTaskScopeID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
@@ -62,6 +69,7 @@ final class AppModel {
     init(env: AppEnvironment) {
         self.env = env
         self.launcher = ThreadLauncher(env: env)
+        self.delta = DeltaModel(env: env, problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
         for problem in env.startupProblems { problems.report(problem) }
@@ -75,6 +83,8 @@ final class AppModel {
             return scope(id)
         case .thread(let id):
             return session(id).flatMap { scope($0.record.scopeID) }
+        case .task(let id):
+            return task(id).flatMap { scope($0.scopeID) }
         case nil:
             return selectedThreadID.flatMap(session).flatMap { scope($0.record.scopeID) }
         }
@@ -97,6 +107,34 @@ final class AppModel {
 
     func threads(in scope: ScopeID) -> [ThreadSession] {
         threads.filter { $0.record.scopeID == scope }
+    }
+
+    func task(_ id: TaskID) -> TaskState? {
+        tasks.first { $0.id == id }
+    }
+
+    /// Non-archived tasks of a scope, creation order.
+    func tasks(in scope: ScopeID) -> [TaskState] {
+        tasks.filter { $0.scopeID == scope && !$0.isArchived }
+    }
+
+    func threads(in task: TaskID) -> [ThreadSession] {
+        threads.filter { $0.record.taskID == task.rawValue }
+    }
+
+    /// Threads whose cwd is not a task sandbox (scope root or a base).
+    func scopeLevelThreads(in scope: ScopeID) -> [ThreadSession] {
+        threads.filter { $0.record.scopeID == scope && $0.record.taskID == nil }
+    }
+
+    func task(of session: ThreadSession) -> TaskState? {
+        session.record.taskID.flatMap(TaskID.init(rawValue:)).flatMap(task)
+    }
+
+    /// The task the Delta inspector follows: the selected task, else the selected thread's task.
+    var currentTask: TaskState? {
+        if case .task(let id) = selection { return task(id) }
+        return currentThread.flatMap(task(of:))
     }
 
     /// The profile for an id, falling back to `shell`, then the first profile.
@@ -155,6 +193,19 @@ final class AppModel {
         for scope in scopes {
             scope.startWatching()
             Task { await scope.rescan() }
+        }
+
+        await env.tasks.setOptions(TaskManagerOptions(branchPrefix: config.preferences.branchPrefix))
+        let taskProblems = await env.tasks.loadAll()
+        if !taskProblems.isEmpty {
+            problems.warn("\(taskProblems.count) task \(taskProblems.count == 1 ? "record" : "records") could not be loaded",
+                          detail: taskProblems.map { "\($0.file.lastPathComponent): \($0.message)" }.joined(separator: "\n"),
+                          actions: [.reveal(env.taskRecords.directory.path)])
+        }
+        tasks = await env.tasks.allTasks.map { TaskState(record: $0, git: env.git) }
+        for task in tasks where !task.isArchived {
+            task.startWatching()
+            task.refresh()
         }
 
         let (records, recordProblems) = await recordsLoad
@@ -251,6 +302,8 @@ final class AppModel {
         case .thread(let id) where session(id) != nil:
             selection = state.selectedItem
             selectedThreadID = id
+        case .task(let id) where task(id) != nil:
+            selection = state.selectedItem
         default:
             selection = nil
         }
@@ -289,6 +342,13 @@ final class AppModel {
             } else {
                 selectedThreadID = threads(in: id).first?.id
             }
+        case .task(let id):
+            let own = threads(in: id)
+            if let scopeID = task(id)?.scopeID, let last = lastThreadByScope[scopeID], own.contains(where: { $0.id == last }) {
+                selectedThreadID = last
+            } else {
+                selectedThreadID = own.first?.id
+            }
         case nil:
             selectedThreadID = nil
         }
@@ -308,6 +368,10 @@ final class AppModel {
         saveConfig()
         if config.preferences.shellProbe != before.shellProbe {
             reprobeShell()
+        }
+        if config.preferences.branchPrefix != before.branchPrefix {
+            let prefix = config.preferences.branchPrefix
+            Task { await env.tasks.setOptions(TaskManagerOptions(branchPrefix: prefix)) }
         }
     }
 
@@ -368,6 +432,9 @@ final class AppModel {
         }
         for notice in exitNotices where notice.record.scopeID == id {
             await dismissExitNotice(notice.id)
+        }
+        for task in tasks where task.scopeID == id {
+            task.stopWatching()
         }
         scopes.remove(at: index)
         config.scopes.removeAll { $0.id == id }
@@ -439,8 +506,9 @@ final class AppModel {
     }
 
     @discardableResult
-    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot) async -> ThreadSession? {
+    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
+        let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
             problems.warn("\(scope.name) is missing", detail: "Threads open once \(scope.url.path) is back.", scope: scopeID)
             return nil
@@ -459,13 +527,26 @@ final class AppModel {
         case .task:
             cwd = scope.url.path
         }
+        var kind = cwdKind
+        var title = "\(profile.name) · \(scope.name)"
+        var resolvedCwd = cwd
+        if let task {
+            guard ScopeState.rootExists(task.record.threadCwd) else {
+                problems.error("Sandbox of \(task.name) is missing", detail: task.record.threadCwd.path, scope: scopeID)
+                return nil
+            }
+            resolvedCwd = env.tasks.threadCwd(for: task.record).path
+            kind = .task(slug: task.record.slug)
+            title = "\(profile.name) · \(task.name)"
+        }
         let record = ThreadRecord(
             scopeID: scopeID,
             scopeRoot: scope.declaration.path,
             driverID: profile.id,
-            title: "\(profile.name) · \(scope.name)",
-            cwd: cwd,
-            cwdKind: cwdKind
+            title: title,
+            cwd: resolvedCwd,
+            cwdKind: kind,
+            taskID: task?.id.rawValue
         )
         let session = ThreadSession(record: record, profile: profile)
         register(session)
@@ -482,7 +563,7 @@ final class AppModel {
         session.markLaunching()
         do {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
-                                               scope: scope.declaration, mode: mode)
+                                               scope: scope.declaration, task: task(of: session)?.record, mode: mode)
             session.launch(plan)
         } catch {
             session.fail(error)
@@ -541,6 +622,9 @@ final class AppModel {
         if let neighbour = remaining[safe: min(position, remaining.count - 1)] {
             selection = .thread(neighbour.id)
             selectedThreadID = neighbour.id
+        } else if let taskID = session.record.taskID.flatMap(TaskID.init(rawValue:)), task(taskID) != nil {
+            selection = .task(taskID)
+            selectedThreadID = nil
         } else {
             selection = .scope(session.record.scopeID)
             selectedThreadID = nil
@@ -653,18 +737,59 @@ final class AppModel {
 
     // MARK: Editor
 
-    /// ⌘E: the thread's cwd, else the selected repo, else the scope root.
+    /// ⌘E: the thread's checkout (the sandbox for a task thread), else the selected repo, the selected
+    /// task's checkout, or the scope root.
     func openInEditor(thread id: ThreadID?) {
-        guard let editor = config.preferences.editor else { return }
         var path: String?
         if let id, let session = session(id) {
             path = session.reportedDirectory ?? session.record.cwd
         } else if case .repo(let scopeID, let relativePath) = selection, let scope = scope(scopeID) {
             path = scope.repo(relativePath: relativePath)?.url.path ?? scope.url.appending(path: relativePath).path
+        } else if case .task(let id) = selection, let task = task(id) {
+            path = task.record.threadCwd.path
         } else if let scope = currentScope {
             path = scope.url.path
         }
         guard let path else { return }
+        openInEditor(path: path)
+    }
+
+    /// What ⌘E would open right now (for ⌥-click copy).
+    var currentEditorPath: String? {
+        if let session = currentThread { return session.reportedDirectory ?? session.record.cwd }
+        if case .repo(let scopeID, let relativePath) = selection, let scope = scope(scopeID) {
+            return scope.repo(relativePath: relativePath)?.url.path ?? scope.url.appending(path: relativePath).path
+        }
+        if let task = currentTask { return task.record.threadCwd.path }
+        return currentScope?.url.path
+    }
+
+    /// ⌘⇧E: the task's `.code-workspace` when it exists, else its root folder.
+    func openTaskInEditor(_ task: TaskState) {
+        let workspace = task.record.workspaceURL
+        if FileManager.default.fileExists(atPath: workspace.path) {
+            openInEditor(path: task.record.rootURL.path, file: workspace.path)
+        } else {
+            openInEditor(path: task.record.threadCwd.path)
+        }
+    }
+
+    /// Every "Open in Editor" affordance: ⌥-click copies the path instead (spec §7).
+    func openInEditorOrCopy(path: String, file: String? = nil, line: Int? = nil) {
+        if NSEvent.modifierFlags.contains(.option) {
+            Pasteboard.copy(file ?? path)
+            return
+        }
+        openInEditor(path: path, file: file, line: line)
+    }
+
+    /// Launches the configured editor on `path` (optionally at `file:line`).
+    func openInEditor(path: String, file: String? = nil, line: Int? = nil) {
+        guard let editor = config.preferences.editor else {
+            problems.warn("No editor configured", detail: "Choose an editor in Settings.",
+                          actions: [ProblemAction(title: "Open Settings", kind: .openSettings)])
+            return
+        }
         let searchPATH: String
         switch shellStatus {
         case .ready(let environment), .fallback(let environment):
@@ -673,7 +798,7 @@ final class AppModel {
             searchPATH = ProcessInfo.processInfo.environment["PATH"] ?? ""
         }
         do {
-            try editor.launch(path: path, searchPATH: searchPATH)
+            try editor.launch(path: path, file: file, line: line, searchPATH: searchPATH)
         } catch {
             problems.error("Could not open the editor", detail: String(describing: error),
                            actions: [ProblemAction(title: "Open Settings", kind: .openSettings)])

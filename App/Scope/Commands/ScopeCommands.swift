@@ -79,7 +79,7 @@ struct ScopeCommands: Commands {
         CommandMenu("Thread") {
             Button("New Thread") {
                 if let model, let scope = model.currentScope {
-                    Task { _ = await model.newThread(in: scope.id) }
+                    Task { _ = await model.newThread(in: scope.id, taskID: model.currentTask?.id) }
                 }
             }
             .keyboardShortcut("t", modifiers: .command)
@@ -89,17 +89,33 @@ struct ScopeCommands: Commands {
                 ForEach(model?.drivers.profiles ?? []) { profile in
                     Button(profile.name) {
                         if let model, let scope = model.currentScope {
-                            Task { _ = await model.newThread(in: scope.id, driverID: profile.id) }
+                            Task { _ = await model.newThread(in: scope.id, driverID: profile.id, taskID: model.currentTask?.id) }
                         }
                     }
                 }
             }
             .disabled(model?.currentScope == nil)
 
-            Button("New Task…") {}
-                .keyboardShortcut("t", modifiers: [.command, .shift])
-                .disabled(true)
-                .help("Tasks arrive in M2")
+            Button("New Task…") {
+                model?.presentNewTask()
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(model?.currentScope == nil || model?.currentScope?.kind == .missing)
+
+            Menu("Task") {
+                Button("Archive Task") {
+                    if let model, let task = model.currentTask { Task { await model.archiveTask(task.id) } }
+                }
+                .disabled(model?.currentTask == nil)
+                Button("Close Task…") {
+                    if let model, let task = model.currentTask { Task { await model.closeTask(task.id, deleteBranch: false) } }
+                }
+                .disabled(model?.currentTask == nil)
+                Button("Reveal Task in Finder") {
+                    if let task = model?.currentTask { Reveal.inFinder(task.record.rootURL) }
+                }
+                .disabled(model?.currentTask == nil)
+            }
 
             Divider()
 
@@ -166,10 +182,11 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("e", modifiers: .command)
             .disabled(!canOpenInEditor)
 
-            Button("Open Task in Editor") {}
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(true)
-                .help("Tasks arrive in M2")
+            Button("Open Task in Editor") {
+                if let model, let task = model.currentTask { model.openTaskInEditor(task) }
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(model?.currentTask == nil || model?.config.preferences.editor == nil)
 
             Divider()
 
