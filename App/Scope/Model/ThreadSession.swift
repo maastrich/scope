@@ -16,7 +16,7 @@ final class ThreadSession: Identifiable {
     let profile: DriverProfile
 
     /// Created on first access (a restored record costs nothing until its tab is shown), with the
-    /// 800 × 480 frame and the fixed dark appearance. Never touched off the main actor.
+    /// 800 × 480 frame and the palette of the current appearance. Never touched off the main actor.
     @ObservationIgnored private var _terminalView: LocalProcessTerminalView?
     var terminalView: LocalProcessTerminalView {
         if let _terminalView { return _terminalView }

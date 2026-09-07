@@ -1,13 +1,24 @@
 import SwiftUI
 
-/// Right-hand inspector: a segmented Graph / Delta / Base control in its toolbar and, for M0, placeholders
+/// Right-hand inspector: a segmented Graph / Delta / Base control in its own header and, for M0, placeholders
 /// in place of the three panels. ⌘D / ⌘⇧B already switch tabs so the muscle memory exists from day one.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        Group {
+        VStack(spacing: 0) {
+            Picker("Inspector tab", selection: $model.inspectorTab) {
+                ForEach(InspectorTab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue.capitalized).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
             switch model.inspectorTab {
             case .graph:
                 ContentUnavailableView {
@@ -27,27 +38,6 @@ struct InspectorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
-        .toolbar {
-            // `.inspector` keeps this view alive while collapsed, so its toolbar items would otherwise
-            // leak into the window toolbar; only declare them while the inspector is actually visible.
-            if inspectorVisible {
-                ToolbarItem(placement: .principal) {
-                    Picker("Inspector tab", selection: $model.inspectorTab) {
-                        ForEach(InspectorTab.allCases, id: \.self) { tab in
-                            Text(tab.rawValue.capitalized).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 240)
-                }
-            }
-        }
-    }
-
-    /// Mirrors `RootView.inspectorPresented`: hidden in the empty state whatever the preference says.
-    private var inspectorVisible: Bool {
-        !model.scopes.isEmpty && model.inspectorShown
     }
 
     private var graphDescription: String {

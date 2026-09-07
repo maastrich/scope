@@ -39,7 +39,7 @@ struct SceneView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         if let session = model.currentThread {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .principal) {
                 ThreadToolbar(session: session, scope: model.currentScope)
             }
         } else {
@@ -72,6 +72,9 @@ struct SceneView: View {
                       ? "Choose an editor in Settings to enable this" : "Open in Editor (⌘E, ⌥-click copies the path)")
             }
             ProblemPopover()
+        }
+        // Its own item, declared last: a separate pill anchored at the far right of the toolbar.
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 model.inspectorShown.toggle()
             } label: {

@@ -19,6 +19,7 @@ struct ThreadRow: View {
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
 
             Spacer(minLength: 4)
 
@@ -26,10 +27,12 @@ struct ThreadRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             StateDot(state: session.displayState)
         }
         .padding(.leading, CGFloat(depth) * 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
         .help(session.record.cwd)

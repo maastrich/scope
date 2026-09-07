@@ -1,7 +1,8 @@
 import SwiftUI
 import ScopeCore
 
-/// Sidebar row for a discovered repository: `owner/repo` (or the folder name), branch chip, dirty dot.
+/// Sidebar row for a discovered repository: the repo name (never `owner/`), branch chip, dirty dot; the full
+/// `owner/repo` and path live in the hover tooltip.
 /// In M0 repo rows stand in for the task rows of the final design (depth 1).
 struct RepoRow: View {
     @Environment(AppModel.self) private var model
@@ -15,10 +16,11 @@ struct RepoRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
-            Text(repo.displayName)
+            Text(repo.shortName)
                 .font(.system(size: 13))
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
+                .layoutPriority(1)
 
             Spacer(minLength: 4)
 
@@ -31,6 +33,7 @@ struct RepoRow: View {
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
@@ -43,9 +46,10 @@ struct RepoRow: View {
             }
         }
         .padding(.leading, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
-        .help(repo.url.path)
+        .help(repo.displayName == repo.shortName ? repo.url.path : "\(repo.displayName)\n\(repo.url.path)")
         .contextMenu { contextMenu }
     }
 

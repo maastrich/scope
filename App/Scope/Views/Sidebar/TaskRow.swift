@@ -29,6 +29,7 @@ struct TaskRow: View {
                 .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
 
             Spacer(minLength: 4)
 
@@ -46,6 +47,7 @@ struct TaskRow: View {
             }
         }
         .padding(.leading, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
         .help("\(task.branch) — \(task.record.root)")

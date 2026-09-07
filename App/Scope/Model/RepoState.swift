@@ -30,6 +30,12 @@ final class RepoState: Identifiable {
         facts?.remote?.fullName ?? url.lastPathComponent
     }
 
+    /// The repo part of `owner/repo` (or the folder name): what the sidebar row shows.
+    var shortName: String {
+        if let remote = facts?.remote?.fullName, let last = remote.split(separator: "/").last { return String(last) }
+        return url.lastPathComponent
+    }
+
     /// Current branch, `detached` when HEAD is detached, `nil` before the first load.
     var branchLabel: String? {
         guard let facts else { return nil }

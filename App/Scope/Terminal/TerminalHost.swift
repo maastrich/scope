@@ -37,7 +37,7 @@ final class TerminalHostContainer: NSView {
         // Opaque terminal background from the very first frame, so nothing light shows before the
         // hosted `TerminalView` has laid out and drawn.
         wantsLayer = true
-        layer?.backgroundColor = TerminalAppearance.background.cgColor
+        layer?.backgroundColor = TerminalAppearance.palette(for: effectiveAppearance).background.cgColor
     }
 
     @available(*, unavailable)
@@ -59,6 +59,7 @@ final class TerminalHostContainer: NSView {
         view.autoresizingMask = [.width, .height]
         addSubview(view)
         hosted = view
+        applyAppearance()          // the view may have been created or last shown under the other appearance
         didReportLayout = false
         needsLayout = true
         focusHostedView()
@@ -83,6 +84,19 @@ final class TerminalHostContainer: NSView {
         if !didReportLayout, bounds.width > 0, bounds.height > 0, hosted != nil {
             didReportLayout = true
             onFirstLayout?()
+        }
+    }
+
+    /// Light/dark switch (system or app): recolour the hosted terminal and the container ground live.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyAppearance()
+    }
+
+    private func applyAppearance() {
+        layer?.backgroundColor = TerminalAppearance.palette(for: effectiveAppearance).background.cgColor
+        if let terminal = hosted as? LocalProcessTerminalView {
+            TerminalAppearance.applyColors(to: terminal, appearance: effectiveAppearance)
         }
     }
 

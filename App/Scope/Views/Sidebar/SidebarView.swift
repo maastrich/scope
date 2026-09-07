@@ -136,35 +136,48 @@ struct SidebarView: View {
     }
 
     /// Two equal-width buttons: New Thread (⌘T, in the current task when one is selected) and New Task (⌘⇧T).
+    /// When the sidebar is too narrow for the titles, the same buttons fall back to icons only.
     private var footer: some View {
         VStack(spacing: 0) {
             Divider()
-            HStack(spacing: 8) {
-                Button {
-                    if let scope = model.currentScope {
-                        Task { _ = await model.newThread(in: scope.id, taskID: model.currentTask?.id) }
-                    }
-                } label: {
-                    Label("New Thread", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(model.currentScope == nil)
-                .help("New Thread (⌘T)")
-
-                Button {
-                    model.presentNewTask()
-                } label: {
-                    Label("New Task", systemImage: "arrow.triangle.branch")
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(model.currentScope == nil || model.currentScope?.kind == .missing)
-                .help("New Task (⌘⇧T)")
+            ViewThatFits(in: .horizontal) {
+                footerButtons(.titleAndIcon)
+                footerButtons(.iconOnly)
             }
             .font(.system(size: 12, weight: .medium))
             .controlSize(.regular)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .clipped()
         }
         .background(.bar)
+    }
+
+    private func footerButtons(_ style: some LabelStyle) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                if let scope = model.currentScope {
+                    Task { _ = await model.newThread(in: scope.id, taskID: model.currentTask?.id) }
+                }
+            } label: {
+                Label("New Thread", systemImage: "plus")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(model.currentScope == nil)
+            .help("New Thread (⌘T)")
+
+            Button {
+                model.presentNewTask()
+            } label: {
+                Label("New Task", systemImage: "arrow.triangle.branch")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(model.currentScope == nil || model.currentScope?.kind == .missing)
+            .help("New Task (⌘⇧T)")
+        }
+        .labelStyle(style)
     }
 }

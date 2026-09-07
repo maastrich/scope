@@ -32,6 +32,7 @@ struct ScopeRow: View {
                 .font(.system(size: 13, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
                 .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
 
             Spacer(minLength: 4)
@@ -44,7 +45,9 @@ struct ScopeRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.tertiary))
                 .lineLimit(1)
+                .truncationMode(.tail)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
         .help(scope.url.path)

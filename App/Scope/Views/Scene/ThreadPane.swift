@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ScopeCore
 
@@ -6,8 +7,8 @@ import ScopeCore
 struct ThreadPane: View {
     let session: ThreadSession
 
-    /// Terminal background `#1e1e21`: the terminal is always dark, independent of the app theme.
-    private static let terminalBackground = Color(red: 0.118, green: 0.118, blue: 0.129)
+    /// The terminal ground of the current appearance, so nothing else shows around the hosted view.
+    private static let terminalBackground = Color(nsColor: TerminalAppearance.background)
 
     var body: some View {
         ZStack(alignment: .top) {
