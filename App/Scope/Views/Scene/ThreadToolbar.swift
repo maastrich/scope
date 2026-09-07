@@ -10,26 +10,35 @@ struct ThreadToolbar: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            // Driver name and state pill never collapse; scope and cwd give way first.
             Image(systemName: session.profile.icon ?? "terminal")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(session.profile.name)
                 .font(.system(size: 13, weight: .semibold))
+                .fixedSize()
+                .layoutPriority(2)
             if let scope {
                 separator
                 Text(scope.name)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             separator
             Text(abbreviatedDirectory)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 320, alignment: .leading)
+                .truncationMode(.head)
+                .frame(maxWidth: 240, alignment: .leading)
                 .help(currentDirectory)
+                .accessibilityLabel("Working directory \(currentDirectory)")
             StatePill(state: session.displayState)
+                .fixedSize()
+                .layoutPriority(2)
         }
         .padding(.leading, 4)
     }
@@ -44,12 +53,15 @@ struct ThreadToolbar: View {
         session.reportedDirectory ?? session.record.cwd
     }
 
-    /// Home-relative form, the way a prompt shows it.
+    /// The last two path components (`…/acme/auth-refresh`); `~` for home and home-relative when shorter.
+    /// The full path lives in the tooltip.
     private var abbreviatedDirectory: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let path = currentDirectory
         if path == home { return "~" }
-        if path.hasPrefix(home + "/") { return "~" + path.dropFirst(home.count) }
-        return path
+        let relative = path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+        let components = relative.split(separator: "/", omittingEmptySubsequences: true)
+        guard components.count > 2 else { return relative }
+        return "…/" + components.suffix(2).joined(separator: "/")
     }
 }

@@ -18,6 +18,14 @@ public enum ShellProbeMode: String, Codable, Sendable, CaseIterable {
     case none
 }
 
+/// Whether the terminal follows the app appearance or stays dark.
+public enum TerminalAppearanceMode: String, Codable, Sendable, CaseIterable {
+    /// Light palette under the light appearance, dark palette under the dark one.
+    case system
+    /// The dark palette and ground in both appearances (UI direction A: agent TUIs assume a dark terminal).
+    case alwaysDark
+}
+
 /// Command template used to open a folder or a file in the user's editor.
 ///
 /// Placeholders: `{path}` (folder), `{file}` (absolute file path), `{line}` (1-based line).
@@ -165,6 +173,17 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var confirmQuitWithRunningThreads: Bool
     /// Menu bar item listing the threads waiting for the user (spec §7). On by default.
     public var showMenuBarExtra: Bool
+    /// Terminal font size in points, clamped to `terminalFontSizeRange`; 13 by default.
+    public var terminalFontSize: Int
+    public var terminalAppearance: TerminalAppearanceMode
+
+    /// Allowed terminal font sizes.
+    public static let terminalFontSizeRange = 10...20
+
+    /// Clamps a size to `terminalFontSizeRange`.
+    public static func clampTerminalFontSize(_ size: Int) -> Int {
+        min(max(size, terminalFontSizeRange.lowerBound), terminalFontSizeRange.upperBound)
+    }
 
     public init(
         defaultDriverID: String = "shell",
@@ -173,7 +192,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         shellProbe: ShellProbeMode = .interactiveLogin,
         confirmCloseRunningThread: Bool = true,
         confirmQuitWithRunningThreads: Bool = true,
-        showMenuBarExtra: Bool = true
+        showMenuBarExtra: Bool = true,
+        terminalFontSize: Int = 13,
+        terminalAppearance: TerminalAppearanceMode = .system
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -182,12 +203,15 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.confirmCloseRunningThread = confirmCloseRunningThread
         self.confirmQuitWithRunningThreads = confirmQuitWithRunningThreads
         self.showMenuBarExtra = showMenuBarExtra
+        self.terminalFontSize = Preferences.clampTerminalFontSize(terminalFontSize)
+        self.terminalAppearance = terminalAppearance
     }
 
     public static let `default` = Preferences()
 
     private enum CodingKeys: String, CodingKey {
-        case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra
+        case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
+             terminalFontSize, terminalAppearance
     }
 
     public init(from decoder: any Decoder) throws {
@@ -202,6 +226,10 @@ public struct Preferences: Codable, Sendable, Equatable {
         confirmQuitWithRunningThreads = try container.decodeIfPresent(Bool.self, forKey: .confirmQuitWithRunningThreads)
             ?? defaults.confirmQuitWithRunningThreads
         showMenuBarExtra = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarExtra) ?? defaults.showMenuBarExtra
+        terminalFontSize = Preferences.clampTerminalFontSize(
+            try container.decodeIfPresent(Int.self, forKey: .terminalFontSize) ?? defaults.terminalFontSize)
+        terminalAppearance = try container.decodeIfPresent(TerminalAppearanceMode.self, forKey: .terminalAppearance)
+            ?? defaults.terminalAppearance
     }
 }
 

@@ -1,7 +1,8 @@
 import SwiftUI
 import ScopeCore
 
-/// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path), state dot.
+/// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path; none under a task,
+/// the indentation already says "sandbox"), state dot. The trailing group has a fixed width so dots line up.
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     let session: ThreadSession
@@ -23,11 +24,14 @@ struct ThreadRow: View {
 
             Spacer(minLength: 4)
 
-            Text(caption)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 64, alignment: .trailing)
+            }
 
             StateDot(state: session.displayState)
         }
@@ -43,11 +47,11 @@ struct ThreadRow: View {
         model.selectedThreadID == session.id
     }
 
-    private var caption: String {
+    private var caption: String? {
         switch session.record.cwdKind {
         case .scopeRoot: "scope root"
         case .repoBase(let relativePath): relativePath
-        case .task: depth == 2 ? "sandbox" : (model.task(of: session)?.name ?? "task")
+        case .task: depth == 2 ? nil : (model.task(of: session)?.name ?? "task")
         }
     }
 

@@ -25,6 +25,7 @@ struct ProblemPopover: View {
                 }
         }
         .help(model.problems.problems.isEmpty ? "No problems" : "\(model.problems.problems.count) problems")
+        .accessibilityLabel(model.problems.unreadCount > 0 ? "Problems, \(model.problems.unreadCount) unread" : "Problems")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ProblemList()
                 .frame(width: 380)
@@ -78,7 +79,7 @@ private struct ProblemRowView: View {
                 Spacer(minLength: 8)
                 Text(problem.createdAt, format: .relative(presentation: .named))
                     .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 Button {
                     model.problems.dismiss(problem.id)
                 } label: {
@@ -86,8 +87,9 @@ private struct ProblemRowView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .help("Dismiss")
+                .accessibilityLabel("Dismiss \(problem.title)")
             }
             if let detail = problem.detail, !detail.isEmpty {
                 Text(detail)
@@ -123,7 +125,7 @@ private struct ProblemRowView: View {
     private var severityColor: Color {
         switch problem.severity {
         case .info: Color(nsColor: .systemBlue)
-        case .warning: Color(nsColor: .systemOrange)
+        case .warning: Color("WarningText")
         case .error: Color(nsColor: .systemRed)
         }
     }

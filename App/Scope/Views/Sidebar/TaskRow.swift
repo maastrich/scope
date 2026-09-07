@@ -19,6 +19,8 @@ struct TaskRow: View {
                     .frame(width: 12, height: 12)
             }
             .buttonStyle(.plain)
+            .help(task.isExpanded ? "Collapse" : "Expand")
+            .accessibilityLabel(task.isExpanded ? "Collapse \(task.name)" : "Expand \(task.name)")
 
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 13))
@@ -52,10 +54,11 @@ struct TaskRow: View {
             }
             Text(task.reposCaption)
                 .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(maxWidth: 90)
+                .frame(width: 64, alignment: .trailing)
+                .help(task.reposCaption)
             if let state = aggregateState {
                 StateDot(state: state)
             }

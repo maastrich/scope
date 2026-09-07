@@ -56,6 +56,7 @@ struct BaseView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Fetch and recount")
+                    .accessibilityLabel("Fetch and recount")
                 }
                 HStack(spacing: 6) {
                     Button {
@@ -84,6 +85,7 @@ struct BaseView: View {
                         Image(systemName: "folder")
                     }
                     .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal in Finder")
                     Spacer(minLength: 0)
                 }
                 .controlSize(.small)
@@ -113,10 +115,10 @@ struct BaseView: View {
         if let behind = model.base.behind {
             Text(behind == 0 ? "up to date" : "behind \(behind)")
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(behind == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Color(nsColor: .systemOrange)))
+                .foregroundStyle(behind == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color("WarningText")))
                 .padding(.horizontal, 6)
                 .frame(height: 18)
-                .background((behind == 0 ? Color.primary : Color(nsColor: .systemOrange)).opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                .background((behind == 0 ? Color.primary : Color("WarningText")).opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
                 .help(behind == 0 ? "Nothing new on origin" : "\(behind) commits on origin not in the base")
         }
     }

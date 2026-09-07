@@ -16,7 +16,7 @@ struct RepoCardEditor: View {
             HStack {
                 Text(entry.card.name).font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Text("Editing").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text("Editing").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             field("Purpose") {
                 TextField("One to three sentences", text: $purpose, axis: .vertical)
@@ -58,7 +58,7 @@ struct RepoCardEditor: View {
 
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 11)).foregroundStyle(.tertiary)
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
             content()
         }
     }

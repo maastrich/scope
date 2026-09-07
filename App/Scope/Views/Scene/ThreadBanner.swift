@@ -7,8 +7,14 @@ import ScopeDrivers
 /// Actions: Relaunch (⌘R), Resume (when the driver and record allow it), Close (⌘W), Show details.
 struct ThreadBanner: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
     let session: ThreadSession
     @State private var showsDetails = false
+
+    /// The banner sits on the terminal ground, so it follows the terminal palette rather than the window.
+    private var terminalIsDark: Bool {
+        model.config.preferences.terminalAppearance == .alwaysDark || colorScheme == .dark
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -39,8 +45,8 @@ struct ThreadBanner: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08)))
-        .environment(\.colorScheme, .dark)
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.08)))
+        .environment(\.colorScheme, terminalIsDark ? .dark : .light)
         .frame(maxWidth: 720)
     }
 
@@ -62,7 +68,7 @@ struct ThreadBanner: View {
                 .foregroundStyle(Color(nsColor: .systemRed))
         case .exited(let status) where !status.isClean:
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(Color(nsColor: .systemOrange))
+                .foregroundStyle(Color("WarningText"))
         default:
             Image(systemName: "moon.zzz")
                 .foregroundStyle(.secondary)

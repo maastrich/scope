@@ -1,4 +1,5 @@
 import AppKit
+import ScopeCore
 import SwiftTerm
 import SwiftUI
 
@@ -6,6 +7,10 @@ import SwiftUI
 /// terminal: `ThreadSession` owns it, so tab switches keep scrollback, selection and the child process.
 struct TerminalHost: NSViewRepresentable {
     let session: ThreadSession
+    /// Read by `ThreadPane` from the preferences so a change re-runs `updateNSView` on every visible host;
+    /// hidden sessions pick the new values up when their view is re-attached.
+    var fontSize: Int = 13
+    var appearance: TerminalAppearanceMode = .system
 
     func makeNSView(context: Context) -> TerminalHostContainer {
         let container = TerminalHostContainer()
@@ -18,6 +23,7 @@ struct TerminalHost: NSViewRepresentable {
         // SwiftUI may hand the same container to another session when `.id` is missing; keep it correct anyway.
         container.onFirstLayout = { [weak session] in session?.viewDidLayout() }
         container.attach(session.terminalView)
+        container.applyPreferences()
     }
 
     static func dismantleNSView(_ container: TerminalHostContainer, coordinator: ()) {
@@ -55,7 +61,7 @@ final class TerminalHostContainer: NSView {
         if hosted === view, view.superview === self { return }
         hosted?.removeFromSuperview()
         view.removeFromSuperview()          // may still sit in a previous container (tab switch)
-        view.frame = bounds
+        view.frame = contentFrame
         view.autoresizingMask = [.width, .height]
         addSubview(view)
         hosted = view
@@ -78,9 +84,25 @@ final class TerminalHostContainer: NSView {
         }
     }
 
+    /// The hosted view's frame: the bounds minus `TerminalAppearance.contentInsets`, never negative.
+    private var contentFrame: NSRect {
+        let insets = TerminalAppearance.contentInsets
+        return NSRect(x: insets.left,
+                      y: insets.bottom,
+                      width: max(0, bounds.width - insets.left - insets.right),
+                      height: max(0, bounds.height - insets.top - insets.bottom))
+    }
+
+    /// Re-applies the font and palette after a preference change (`ThreadPane` already updated `TerminalAppearance`).
+    func applyPreferences() {
+        guard let terminal = hosted as? LocalProcessTerminalView else { return }
+        TerminalAppearance.applyFont(to: terminal)
+        applyAppearance()
+    }
+
     override func layout() {
         super.layout()
-        hosted?.frame = bounds
+        hosted?.frame = contentFrame
         if !didReportLayout, bounds.width > 0, bounds.height > 0, hosted != nil {
             didReportLayout = true
             onFirstLayout?()
@@ -96,6 +118,7 @@ final class TerminalHostContainer: NSView {
     private func applyAppearance() {
         layer?.backgroundColor = TerminalAppearance.palette(for: effectiveAppearance).background.cgColor
         if let terminal = hosted as? LocalProcessTerminalView {
+            TerminalAppearance.applyFont(to: terminal)
             TerminalAppearance.applyColors(to: terminal, appearance: effectiveAppearance)
         }
     }

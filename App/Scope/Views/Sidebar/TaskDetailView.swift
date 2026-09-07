@@ -12,7 +12,7 @@ struct TaskDetailView: View {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 Text(task.branch)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -24,7 +24,7 @@ struct TaskDetailView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "arrow.triangle.pull")
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                     Text("\(pr.label) \(pr.title)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -40,6 +40,7 @@ struct TaskDetailView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .help("Open on GitHub — \(pr.url.absoluteString)")
+                    .accessibilityLabel("Open pull request \(pr.label) on GitHub")
                 }
                 .frame(height: 20)
             }
@@ -65,12 +66,13 @@ private struct TaskRepoRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(repo.isScopeRoot ? task.record.scopeName : repo.name)
+            Text(repoName)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
-            if hovering {
+            // Always in the hierarchy (keyboard focus and VoiceOver reach them); revealed on hover.
+            HStack(spacing: 8) {
                 Button {
                     model.openInEditorOrCopy(path: repo.sandboxPath)
                 } label: {
@@ -80,6 +82,7 @@ private struct TaskRepoRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Open in Editor (⌥-click copies the path)")
+                .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
                     model.selection = .task(task.id)
                     model.inspectorTab = .delta
@@ -92,15 +95,18 @@ private struct TaskRepoRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("See Delta (⌘D)")
+                .accessibilityLabel("See Delta of \(repoName)")
             }
+            .opacity(hovering ? 1 : 0)
             Text(stateCaption)
                 .font(.system(size: 10.5))
-                .foregroundStyle(stateIsWarning ? AnyShapeStyle(ThreadStateStyle.waiting) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(stateIsWarning ? AnyShapeStyle(Color("WarningText")) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
             DeltaCounts(additions: summary?.additions ?? 0, deletions: summary?.deletions ?? 0)
             Circle()
                 .fill(dotColor)
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
+                .accessibilityLabel(stateCaption)
         }
         .padding(.horizontal, 6)
         .frame(height: 24)
@@ -111,6 +117,8 @@ private struct TaskRepoRow: View {
     }
 
     private var summary: RepoDeltaSummary? { task.summary(for: repo) }
+
+    private var repoName: String { repo.isScopeRoot ? task.record.scopeName : repo.name }
 
     private var stateCaption: String {
         switch summary?.sandbox {
@@ -144,8 +152,8 @@ struct DeltaCounts: View {
     let deletions: Int
     var size: CGFloat = 11
 
-    static let added = Color(red: 0.122, green: 0.616, blue: 0.247)
-    static let removed = Color(red: 0.851, green: 0.188, blue: 0.145)
+    static let added = Color("DiffAddedSign")
+    static let removed = Color("DiffRemovedSign")
 
     var body: some View {
         HStack(spacing: 5) {

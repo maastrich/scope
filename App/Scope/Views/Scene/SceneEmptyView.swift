@@ -38,13 +38,22 @@ struct SceneEmptyView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
                 .keyboardShortcut("o", modifiers: .command)
-                HStack(spacing: 8) {
-                    Text("Repos are discovered one level deep")
-                    Text("·")
-                    Text("Agents work in sandboxes, never in your checkout")
+                // One line when it fits, otherwise two centred lines (never a ragged wrap).
+                ViewThatFits {
+                    HStack(spacing: 8) {
+                        Text("Repos are discovered one level deep")
+                        Text("·")
+                        Text("Agents work in sandboxes, never in your checkout")
+                    }
+                    .fixedSize()
+                    VStack(spacing: 4) {
+                        Text("Repos are discovered one level deep")
+                        Text("Agents work in sandboxes, never in your checkout")
+                    }
+                    .multilineTextAlignment(.center)
                 }
                 .font(.system(size: 11.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 40)
             .padding(.vertical, 56)

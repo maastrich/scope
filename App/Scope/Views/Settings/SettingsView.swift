@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ScopeCore
 import ScopeDrivers
+import UserNotifications
 
 /// Settings window (⌘,): General, Shell environment, Drivers.
 struct SettingsView: View {
@@ -14,8 +15,7 @@ struct SettingsView: View {
             DriversSettingsView()
                 .tabItem { Label("Drivers", systemImage: "cpu") }
         }
-        .frame(width: 600)
-        .frame(minHeight: 380)
+        .frame(width: 600, height: 520)
     }
 }
 
@@ -47,6 +47,21 @@ private struct GeneralSettingsView: View {
             Section("Editor") {
                 EditorPicker()
             }
+            Section("Terminal") {
+                Stepper(value: terminalFontSize, in: Preferences.terminalFontSizeRange) {
+                    LabeledContent("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
+                }
+                Picker("Appearance", selection: preference(\.terminalAppearance)) {
+                    Text("Follow system").tag(TerminalAppearanceMode.system)
+                    Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
+                }
+                Text("Changes apply to every open thread. Agent TUIs assume a dark terminal.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Section("Notifications") {
+                NotificationStatusRow()
+            }
             Section("Confirmations") {
                 Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
@@ -63,6 +78,55 @@ private struct GeneralSettingsView: View {
             get: { model.config.preferences[keyPath: keyPath] },
             set: { value in model.updatePreferences { $0[keyPath: keyPath] = value } }
         )
+    }
+
+    private var terminalFontSize: Binding<Int> {
+        Binding(
+            get: { model.config.preferences.terminalFontSize },
+            set: { size in model.updatePreferences { $0.terminalFontSize = Preferences.clampTerminalFontSize(size) } }
+        )
+    }
+}
+
+/// Read-only display of the notification authorization (`getNotificationSettings`, never a new request) with a
+/// shortcut to the Notifications pane of System Settings.
+private struct NotificationStatusRow: View {
+    @State private var status: UNAuthorizationStatus?
+
+    var body: some View {
+        LabeledContent("Status") {
+            HStack(spacing: 8) {
+                Text(statusText)
+                    .foregroundStyle(status == .denied ? AnyShapeStyle(Color("WarningText")) : AnyShapeStyle(.primary))
+                Button("Open System Settings…") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+            }
+        }
+        .task { await refresh() }
+        Text("Scope notifies you when a thread waits for input while the window is in the background.")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+    }
+
+    private var statusText: String {
+        switch status {
+        case nil: "Checking…"
+        case .authorized: "Allowed"
+        case .provisional: "Allowed quietly (provisional)"
+        case .ephemeral: "Allowed for this session"
+        case .denied: "Not allowed"
+        case .notDetermined: "Not asked yet — the first waiting thread will ask"
+        @unknown default: "Unknown"
+        }
+    }
+
+    private func refresh() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        status = settings.authorizationStatus
     }
 }
 
@@ -181,7 +245,7 @@ private struct ShellSettingsView: View {
                 if let warning = resolved?.warning {
                     LabeledContent("Warning") {
                         Text(warning)
-                            .foregroundStyle(Color(nsColor: .systemOrange))
+                            .foregroundStyle(Color("WarningText"))
                             .textSelection(.enabled)
                     }
                 }
@@ -244,6 +308,7 @@ private struct DriversSettingsView: View {
                         Image(systemName: profile.icon ?? "terminal")
                             .foregroundStyle(.secondary)
                         Text(profile.name)
+                            .help("ID: \(profile.id)")
                         if profile.builtin == true {
                             Text("built-in")
                                 .font(.system(size: 10, weight: .medium))
@@ -253,9 +318,6 @@ private struct DriversSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                }
-                TableColumn("ID") { profile in
-                    Text(profile.id).font(.system(size: 12, design: .monospaced))
                 }
                 TableColumn("Command") { profile in
                     Text(([profile.command] + profile.args).joined(separator: " "))
@@ -267,6 +329,7 @@ private struct DriversSettingsView: View {
                     resolvedText(for: profile)
                 }
             }
+            .tableStyle(.inset(alternatesRowBackgrounds: false))
             .frame(minHeight: 180)
 
             if !model.drivers.problems.isEmpty {
@@ -309,7 +372,8 @@ private struct DriversSettingsView: View {
                 Text(path)
                     .font(.system(size: 12, design: .monospaced))
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.head)
+                    .help(path)
             } else {
                 Text("not found")
                     .foregroundStyle(Color(nsColor: .systemRed))

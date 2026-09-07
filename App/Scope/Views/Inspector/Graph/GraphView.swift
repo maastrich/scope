@@ -59,12 +59,12 @@ struct GraphView: View {
                     Text(scope.name).font(.system(size: 12, weight: .semibold))
                     Text("· \(repos) \(repos == 1 ? "repo" : "repos") · \(remotes) \(remotes == 1 ? "remote" : "remotes")")
                         .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
                 .lineLimit(1)
                 Text(generatedCaption)
                     .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)

@@ -20,14 +20,16 @@ struct StateDot: View {
     }
 }
 
-/// Colours of the state legend. Filled states use system colours so dark mode comes for free.
+/// Colours of the state legend: catalogue colours with light/dark variants, every one at least 3:1 on its
+/// ground (WCAG 1.4.11). `done` is pinned to blue rather than the accent so it keeps its meaning under a
+/// graphite or red system accent.
 enum ThreadStateStyle {
-    static let idle = Color(nsColor: .systemGray)
-    static let running = Color(nsColor: .systemGreen)
-    static let waiting = Color(nsColor: .systemOrange)
-    static let done = Color.accentColor
-    /// `#aeaeb2` — the only literal: the ring must read on both the sidebar and the dark terminal.
-    static let exitedRing = Color(red: 0.682, green: 0.682, blue: 0.698)
+    static let idle = Color("StateIdle")
+    static let running = Color("StateRunning")
+    static let waiting = Color("StateWaiting")
+    static let done = Color("StateDone")
+    /// Reads on both the sidebar and the dark terminal.
+    static let exitedRing = Color("ExitedRing")
 }
 
 extension ThreadState {

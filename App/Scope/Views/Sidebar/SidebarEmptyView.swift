@@ -17,7 +17,7 @@ struct SidebarEmptyView: View {
                     .font(.system(size: 11))
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(isTargeted ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+            .foregroundStyle(isTargeted ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
             .padding(.horizontal, 24)
             .padding(.vertical, 60)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

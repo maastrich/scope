@@ -18,85 +18,99 @@ struct NewTaskSheet: View {
     @FocusState private var nameFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("New Task in \(scope.name)")
-                .font(.system(size: 15, weight: .semibold))
-
-            VStack(alignment: .leading, spacing: 6) {
-                TextField("Task name", text: $name, prompt: Text("e.g. Auth refresh"))
-                    .textFieldStyle(.roundedBorder)
-                    .focused($nameFocused)
-                    .onSubmit { if canCreate { create() } }
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                    Text(branchPreview)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Text("\(model.env.tasks.scopeSandboxesURL(scopeSlug: scope.declaration.slug).path)/\(slug)")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    TextField("Name", text: $name, prompt: Text("e.g. Auth refresh"))
+                        .focused($nameFocused)
+                        .onSubmit { if canCreate { create() } }
+                    LabeledContent("Branch") {
+                        Text(branchPreview)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    LabeledContent("Sandbox") {
+                        Text(sandboxPath)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .help(sandboxPath)
+                    }
+                } header: {
+                    Text("New Task in \(scope.name)")
                 }
-            }
 
-            if isRepoScope {
-                Label("Sandbox: a worktree of \(scope.name) on the task branch.", systemImage: "info.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Repositories")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    if scope.repos.isEmpty {
-                        Text(scope.discovery == .scanning ? "Scanning…" : "No git repository found in this scope.")
+                if isRepoScope {
+                    Section {
+                        Label("Sandbox: a worktree of \(scope.name) on the task branch.", systemImage: "info.circle")
                             .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
-                    } else {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 2) {
-                                ForEach(scope.repos) { repo in
-                                    Toggle(isOn: binding(for: repo.id)) {
-                                        HStack(spacing: 6) {
-                                            Text(repo.id)
-                                                .font(.system(size: 12))
-                                            if let branch = repo.branchLabel {
-                                                Text(branch)
-                                                    .font(.system(size: 10.5, design: .monospaced))
-                                                    .foregroundStyle(.tertiary)
-                                            }
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        if scope.repos.isEmpty {
+                            Text(scope.discovery == .scanning ? "Scanning…" : "No git repository found in this scope.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(scope.repos) { repo in
+                                Toggle(isOn: binding(for: repo.id)) {
+                                    HStack(spacing: 6) {
+                                        Text(repo.id)
+                                            .font(.system(size: 12))
+                                        if let branch = repo.branchLabel {
+                                            Text(branch)
+                                                .font(.system(size: 10.5, design: .monospaced))
+                                                .foregroundStyle(.secondary)
                                         }
                                     }
-                                    .toggleStyle(.checkbox)
                                 }
+                                .toggleStyle(.checkbox)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxHeight: 180)
+                    } header: {
+                        HStack {
+                            Text("Repositories")
+                            Spacer()
+                            if scope.repos.count > 1 {
+                                Button("All") { selectedRepos = Set(scope.repos.map(\.id)) }
+                                Button("None") { selectedRepos = [] }
+                            }
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderless)
+                    } footer: {
+                        if !scope.repos.isEmpty, selectedRepos.isEmpty {
+                            Text("Pick at least one repository.")
+                        }
+                    }
+                }
+
+                if let error {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(nsColor: .systemRed))
+                            .lineLimit(4)
+                            .textSelection(.enabled)
                     }
                 }
             }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
-            if let error {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(nsColor: .systemRed))
-                    .lineLimit(4)
-                    .textSelection(.enabled)
-            }
-
+            // Standard trailing button row.
             HStack(spacing: 8) {
                 if isCreating {
                     ProgressView().controlSize(.small)
                     Text("Creating \(repoCount) \(repoCount == 1 ? "sandbox" : "sandboxes") — fetching origin…")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -107,9 +121,10 @@ struct NewTaskSheet: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!canCreate)
             }
+            .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
         }
-        .padding(20)
-        .frame(width: 460)
+        .frame(width: 480)
+        .frame(minHeight: 260, maxHeight: 520)
         .onAppear {
             nameFocused = true
             if !isRepoScope, scope.repos.count == 1, let only = scope.repos.first {
@@ -129,6 +144,10 @@ struct NewTaskSheet: View {
 
     private var branchPreview: String {
         "\(model.config.preferences.branchPrefix)/\(slug)"
+    }
+
+    private var sandboxPath: String {
+        "\(model.env.tasks.scopeSandboxesURL(scopeSlug: scope.declaration.slug).path)/\(slug)"
     }
 
     private var repoCount: Int { isRepoScope ? 1 : selectedRepos.count }

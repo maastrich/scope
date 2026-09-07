@@ -22,6 +22,7 @@ struct ScopeRow: View {
             }
             .buttonStyle(.plain)
             .help(scope.isExpanded ? "Collapse" : "Expand")
+            .accessibilityLabel(scope.isExpanded ? "Collapse \(scope.name)" : "Expand \(scope.name)")
 
             Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
                 .font(.system(size: 13))
@@ -43,9 +44,10 @@ struct ScopeRow: View {
             }
             Text(caption)
                 .font(.system(size: 11))
-                .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(width: 64, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
@@ -136,7 +138,8 @@ struct ScopeRow: View {
 @MainActor
 enum ScopeActions {
     /// Confirms with a sheet ("Remove *acme* from Scope? Nothing is deleted on disk.") and removes the scope.
-    /// Running threads are hung up; the sandbox checkbox stays disabled until M2.
+    /// Running threads are hung up. Sandboxes are never deleted from here (tasks own them), so the alert has no
+    /// accessory.
     static func remove(_ scope: ScopeState, model: AppModel) async {
         let running = model.threads(in: scope.id).filter(\.isAlive).count
         let alert = NSAlert()
@@ -149,10 +152,6 @@ enum ScopeActions {
         alert.informativeText = informative
         alert.addButton(withTitle: "Remove").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        let checkbox = NSButton(checkboxWithTitle: "Also delete its sandboxes (none)", target: nil, action: nil)
-        checkbox.isEnabled = false
-        checkbox.sizeToFit()
-        alert.accessoryView = checkbox
 
         let response: NSApplication.ModalResponse
         if let window = NSApp.keyWindow {

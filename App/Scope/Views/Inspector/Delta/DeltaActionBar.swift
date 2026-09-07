@@ -49,13 +49,13 @@ struct DeltaActionBar: View {
             Spacer(minLength: 4)
             Text(caption(repo))
                 .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
         .controlSize(.small)
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(Color("PanelBackground"))
     }
 
     private func isDirty(_ repo: TaskRepo?) -> Bool {

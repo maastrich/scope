@@ -5,15 +5,17 @@ import ScopeCore
 /// Hosts the thread's terminal view (created once by `ThreadSession`, re-parented here) and overlays the
 /// non-modal `ThreadBanner` whenever the process is not alive.
 struct ThreadPane: View {
+    @Environment(AppModel.self) private var model
     let session: ThreadSession
 
-    /// The terminal ground of the current appearance, so nothing else shows around the hosted view.
-    private static let terminalBackground = Color(nsColor: TerminalAppearance.background)
-
     var body: some View {
-        ZStack(alignment: .top) {
-            Self.terminalBackground
-            TerminalHost(session: session)
+        let preferences = model.config.preferences
+        // Push the preferences before the host reads them; the ground below the insets uses the same palette.
+        TerminalAppearance.configure(preferences)
+        return ZStack(alignment: .top) {
+            Color(nsColor: TerminalAppearance.background)
+                .id(preferences.terminalAppearance)
+            TerminalHost(session: session, fontSize: preferences.terminalFontSize, appearance: preferences.terminalAppearance)
                 .id(session.id)
                 .focusable(false)
             if !session.phase.isAlive {

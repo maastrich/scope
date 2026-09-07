@@ -72,8 +72,14 @@ public enum ShellEnvironment {
 
     static func probeOutcome(shell: String, mode: ShellProbeMode, timeout: Duration) async -> ProbeOutcome {
         guard let flags = shellFlags(for: mode) else { return .skipped }
-        let marker = "__SCOPE_ENV_\(UUID().uuidString)__"
-        let script = "printf '%s' '\(marker)'; /usr/bin/env -0; printf '%s' '\(marker)'"
+        // The marker is printed from two halves so it never appears verbatim on the command line: a shell that
+        // echoes its own command (xtrace, a verbose rc file) cannot fake the opening marker. Nothing here reaches
+        // the interactive session: the probe is a separate child whose output is parsed and discarded.
+        let prefix = "__SCOPE_ENV_"
+        let suffix = "\(UUID().uuidString)__"
+        let marker = prefix + suffix
+        let emit = "printf '%s%s' '\(prefix)' '\(suffix)'"
+        let script = "\(emit); /usr/bin/env -0; \(emit)"
         let result: ProcessResult
         do {
             result = try await Subprocess.run(
