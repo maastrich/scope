@@ -69,12 +69,32 @@ import ScopeCore
 
         let hits = try await client.search(pattern: "needle", tool: .gitGrep)
         #expect(hits == [
-            SearchMatch(path: "src/index.ts", line: 1, text: "export const needle = 1;"),
-            SearchMatch(path: "src/lib/util.ts", line: 1, text: "// needle in a util"),
-            SearchMatch(path: "untracked.txt", line: 1, text: "needle untracked"),
+            SearchMatch(path: "src/index.ts", line: 1, text: "export const needle = 1;", submatches: [13..<19]),
+            SearchMatch(path: "src/lib/util.ts", line: 1, text: "// needle in a util", submatches: [3..<9]),
+            SearchMatch(path: "untracked.txt", line: 1, text: "needle untracked", submatches: [0..<6]),
         ])
         #expect(try await client.search(pattern: "needle", in: "src/lib", tool: .gitGrep).count == 1)
         #expect(try await client.search(pattern: "absent-token", tool: .gitGrep).isEmpty)
+
+        // Case, whole word, literal vs regex — same answers from both tools.
+        let sensitive = try await client.search(pattern: "NEEDLE", options: .init(caseSensitive: true), tool: .gitGrep)
+        #expect(sensitive.isEmpty)
+        let insensitive = try await client.search(pattern: "NEEDLE", options: .init(caseSensitive: false), tool: .gitGrep)
+        #expect(insensitive.map(\.path) == hits.map(\.path) && insensitive.first?.submatches == [13..<19])
+        try scope.write(api, "words.txt", "needles needle (needle) x_needle\n")
+        let whole = try await client.search(pattern: "needle", in: "words.txt", options: .init(wholeWord: true), tool: .gitGrep)
+        #expect(whole.first?.submatches == [8..<14, 16..<22])
+        let literal = try await client.search(pattern: "(needle)", in: "words.txt", options: .init(regex: false), tool: .gitGrep)
+        #expect(literal.first?.submatches == [15..<23])
+        let regex = try await client.search(pattern: "need[a-z]+s", in: "words.txt", options: .init(regex: true), tool: .gitGrep)
+        #expect(regex.first?.submatches == [0..<7])
+        if case .ripgrep = SearchTool.locate() {
+            let rgWhole = try await client.search(pattern: "needle", in: "words.txt", options: .init(wholeWord: true))
+            #expect(rgWhole.first?.submatches == [8..<14, 16..<22])
+            let rgLiteral = try await client.search(pattern: "(needle)", in: "words.txt", options: .init(regex: false))
+            #expect(rgLiteral.first?.submatches == [15..<23])
+            #expect(try await client.search(pattern: "NEEDLE", in: "words.txt", options: .init(caseSensitive: true)).isEmpty)
+        }
         if case .ripgrep = SearchTool.locate() {
             let rg = try await client.search(pattern: "needle")
             #expect(Set(rg.map(\.path)) == Set(hits.map(\.path)))
@@ -94,11 +114,15 @@ import ScopeCore
     @Test func parsersAndTreeBuilder() {
         let rg = """
         {"type":"begin","data":{"path":{"text":"./a.txt"}}}
-        {"type":"match","data":{"path":{"text":"./a.txt"},"lines":{"text":"hello world\\n"},"line_number":3,"absolute_offset":10,"submatches":[]}}
+        {"type":"match","data":{"path":{"text":"./a.txt"},"lines":{"text":"héllo world\\n"},"line_number":3,"absolute_offset":10,"submatches":[{"match":{"text":"world"},"start":7,"end":12}]}}
         {"type":"end","data":{"path":{"text":"./a.txt"}}}
         garbage
         """
-        #expect(GitClient.parseRipgrepJSON(rg) == [SearchMatch(path: "a.txt", line: 3, text: "hello world")])
+        #expect(GitClient.parseRipgrepJSON(rg) == [SearchMatch(path: "a.txt", line: 3, text: "héllo world", submatches: [6..<11])])
+        #expect(SearchMatch.ranges(of: "ab", in: "ab xab ab_ AB", options: .init(caseSensitive: false, regex: false, wholeWord: true)) == [0..<2, 11..<13])
+        #expect(SearchMatch.ranges(of: "a.", in: "ab ac", options: .init(regex: true, wholeWord: true)) == [0..<2, 3..<5])
+        #expect(SearchMatch.ranges(of: "(", in: "f(x)", options: .init(regex: false)) == [1..<2])
+        #expect(SearchMatch.ranges(of: "(", in: "f(x)", options: .init(regex: true)).isEmpty)
         #expect(GitClient.parseGrepLines("a/b.rs:12:let x: i32 = 1;\nbad line\n") == [SearchMatch(path: "a/b.rs", line: 12, text: "let x: i32 = 1;")])
         let tree = FileNode.tree(paths: ["z.txt", "a/b/c.txt", "a/d.txt", "a/b/a.txt"])
         #expect(tree.children.map(\.name) == ["a", "z.txt"])

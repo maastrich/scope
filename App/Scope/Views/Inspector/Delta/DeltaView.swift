@@ -9,6 +9,7 @@ struct DeltaView: View {
     @Environment(AppModel.self) private var model
     @State private var showCommitSheet = false
     @FocusState private var focused: Bool
+    @FocusState private var filterFocused: Bool
 
     var body: some View {
         Group {
@@ -89,8 +90,8 @@ struct DeltaView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                DeltaFileList(task: task)
-                    .frame(maxHeight: 260)
+                DeltaFileList(task: task, filterFocused: $filterFocused)
+                    .frame(maxHeight: 300)
                 Divider()
                 if let ref = delta.selectedFile, let file = delta.file(ref), let repo = delta.taskRepo(ref.repo) {
                     DiffView(task: task, repo: repo, ref: ref, file: file)
@@ -106,6 +107,7 @@ struct DeltaView: View {
         .focused($focused)
         .focusEffectDisabled()
         .onKeyPress(characters: CharacterSet(charactersIn: "jk[]"), phases: .down) { press in
+            guard !filterFocused else { return .ignored }
             switch press.characters {
             case "j": model.delta.selectNextFile(1)
             case "k": model.delta.selectNextFile(-1)
@@ -124,9 +126,10 @@ struct DeltaView: View {
         }
     }
 
+    /// Branch, mode caption and counts. The ring shows when the panel has keyboard focus (j/k/[/] work).
     private func summaryRow(_ task: TaskState) -> some View {
         let delta = model.delta
-        return HStack(spacing: 6) {
+        return keyboardHint(HStack(spacing: 6) {
             Text(task.branch)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -137,6 +140,10 @@ struct DeltaView: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 4)
+            Image(systemName: "keyboard")
+                .font(.system(size: 10))
+                .foregroundStyle(focused ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                .accessibilityLabel(focused ? "Delta panel has keyboard focus" : "Click the panel for keyboard navigation")
             if delta.mode == .baseVsOrigin {
                 Text("↑\(delta.ahead) ↓\(delta.behind)")
                     .font(.system(size: 11, design: .monospaced))
@@ -148,7 +155,19 @@ struct DeltaView: View {
                     .foregroundStyle(.secondary)
                 DeltaCounts(additions: summary.additions, deletions: summary.deletions)
             }
-        }
+        })
+    }
+
+    private func keyboardHint(_ row: some View) -> some View {
+        row
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(focused ? Color.accentColor.opacity(0.55) : .clear, lineWidth: 1))
+            .padding(.horizontal, -6)
+            .padding(.vertical, -3)
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+            .help("Keyboard: j / k next and previous file, ] / [ next and previous hunk (click to focus the panel)")
     }
 
     private var modeCaption: String {

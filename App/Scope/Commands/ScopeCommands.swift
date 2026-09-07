@@ -6,7 +6,8 @@ import ScopeCore
 /// `AppModel` through `@FocusedValue(\.appModel)`; items are disabled when no window is focused.
 ///
 /// ⌘-combinations are menu key equivalents and win over the terminal; nothing an agent TUI needs uses ⌘.
-/// ⌘K opens the command palette, so "clear" is ⌥⌘K.
+/// ⌘K opens the command palette, so "clear" is ⌥⌘K. ⌘R is Refresh Scope (platform meaning), Relaunch is
+/// ⌥⌘R; ⌘W closes the thread, ⇧⌘W the window. The full table is Help ▸ Keyboard Shortcuts… (`ShortcutCatalog`).
 struct ScopeCommands: Commands {
     @FocusedValue(\.appModel) private var model
 
@@ -16,9 +17,15 @@ struct ScopeCommands: Commands {
     /// Links shown in the Help menu.
     private static let repositoryURL = URL(string: "https://github.com/maastrich/scope")
 
+    init(updater: UpdaterController) {
+        self.updater = updater
+        MainActor.assumeIsolated { CommandServices.updater = updater }
+    }
+
     var body: some Commands {
         appMenu
         fileMenu
+        editMenu
         threadMenu
         goMenu
         viewMenu
@@ -51,7 +58,7 @@ struct ScopeCommands: Commands {
                     model.refreshScope(scope.id)
                 }
             }
-            .keyboardShortcut("r", modifiers: [.command, .option])
+            .keyboardShortcut("r", modifiers: .command)
             .disabled(model?.currentScope == nil)
 
             Button("Analyze Graph") {
@@ -79,6 +86,35 @@ struct ScopeCommands: Commands {
             }
             .keyboardShortcut("w", modifiers: .command)
             .disabled(model?.selectedThreadID == nil)
+
+            Button("Undo Close Thread") {
+                model?.undoCloseThread()
+            }
+            .keyboardShortcut(canUndoClose ? KeyboardShortcut("t", modifiers: [.command, .shift]) : nil)
+            .disabled(!canUndoClose)
+
+            Button("Close Window") {
+                CommandServices.closeKeyWindow()
+            }
+            .keyboardShortcut("w", modifiers: [.command, .shift])
+        }
+    }
+
+    // MARK: Edit (terminal find)
+
+    /// SwiftTerm's find bar: the actions reach the terminal view only while it is first responder
+    /// (the focused thread pane); anywhere else they are no-ops.
+    private var editMenu: some Commands {
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Find…") { CommandServices.textFinder(.showFindInterface) }
+                .keyboardShortcut("f", modifiers: .command)
+            Button("Find Next") { CommandServices.textFinder(.nextMatch) }
+                .keyboardShortcut("g", modifiers: .command)
+            Button("Find Previous") { CommandServices.textFinder(.previousMatch) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+            Button("Use Selection for Find") { CommandServices.textFinder(.setSearchString) }
+                .keyboardShortcut("e", modifiers: [.command, .option])
         }
     }
 
@@ -108,7 +144,8 @@ struct ScopeCommands: Commands {
             Button("New Task…") {
                 model?.presentNewTask()
             }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
+            // ⇧⌘T belongs to Undo Close Thread while a close can be undone (Safari-style).
+            .keyboardShortcut(canUndoClose ? nil : KeyboardShortcut("t", modifiers: [.command, .shift]))
             .disabled(model?.currentScope == nil || model?.currentScope?.kind == .missing)
 
             Menu("Task") {
@@ -133,7 +170,7 @@ struct ScopeCommands: Commands {
                     Task { await model.relaunch(id) }
                 }
             }
-            .keyboardShortcut("r", modifiers: .command)
+            .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(currentThread == nil || currentThread?.isAlive == true)
 
             Button("Resume") {
@@ -151,9 +188,10 @@ struct ScopeCommands: Commands {
             .keyboardShortcut(".", modifiers: .command)
             .disabled(currentThread?.isAlive != true)
 
-            Button("Rename…") {}
-                .disabled(true)
-                .help("Thread renaming arrives with tasks in M2")
+            Button("Rename Thread…") {
+                if let model, let id = model.selectedThreadID { model.promptRenameThread(id) }
+            }
+            .disabled(model?.selectedThreadID == nil)
 
             Divider()
 
@@ -200,9 +238,28 @@ struct ScopeCommands: Commands {
             Divider()
 
             Button("Command Palette…") {
-                model?.paletteShown.toggle()
+                model?.showPalette(mode: .all)
             }
             .keyboardShortcut("k", modifiers: .command)
+            .disabled(model == nil)
+
+            Button("Go to File…") {
+                model?.showPalette(mode: .files)
+            }
+            .keyboardShortcut("p", modifiers: .command)
+            .disabled(model == nil)
+
+            // Xcode's "Open Quickly" chord, for muscle memory.
+            Button("Go to File (Open Quickly)…") {
+                model?.showPalette(mode: .files)
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .disabled(model == nil)
+
+            Button("Filter Sidebar") {
+                model?.focusSidebarFilter()
+            }
+            .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(model == nil)
 
             Divider()
@@ -218,6 +275,18 @@ struct ScopeCommands: Commands {
             Button("Pull Requests") { show(.pullRequests) }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(model == nil)
+
+            Divider()
+
+            // Plain-key shortcuts of the Delta panel (they need the panel focused); listed here to be found.
+            Menu("Delta") {
+                Button("Next File (j)") { model?.delta.selectNextFile(1) }
+                Button("Previous File (k)") { model?.delta.selectNextFile(-1) }
+                Divider()
+                Button("Next Hunk (])") { model?.delta.focusHunk(1) }
+                Button("Previous Hunk ([)") { model?.delta.focusHunk(-1) }
+            }
+            .disabled(model?.currentTask == nil)
         }
     }
 
@@ -252,6 +321,13 @@ struct ScopeCommands: Commands {
                 }
             }
             .disabled(model == nil)
+
+            Divider()
+
+            Button("Keyboard Shortcuts…") {
+                ShortcutsWindow.show()
+            }
+            .keyboardShortcut("/", modifiers: .command)
         }
     }
 
@@ -259,6 +335,10 @@ struct ScopeCommands: Commands {
 
     private var currentThread: ThreadSession? {
         model?.currentThread
+    }
+
+    private var canUndoClose: Bool {
+        model?.canUndoCloseThread == true
     }
 
     private var threadCount: Int {

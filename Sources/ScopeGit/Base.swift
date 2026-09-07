@@ -107,11 +107,71 @@ public struct SearchMatch: Sendable, Equatable, Hashable {
     /// 1-based.
     public var line: Int
     public var text: String
+    /// Character ranges of the matched substrings inside `text` (`rg --json` submatches; computed for `git grep`).
+    public var submatches: [Range<Int>]
 
-    public init(path: String, line: Int, text: String) {
+    public init(path: String, line: Int, text: String, submatches: [Range<Int>] = []) {
         self.path = path
         self.line = line
         self.text = text
+        self.submatches = submatches
+    }
+
+    /// Character ranges where `pattern` occurs in `text` (regex or literal, case and whole-word aware).
+    public static func ranges(of pattern: String, in text: String, options: BaseSearchOptions) -> [Range<Int>] {
+        let chars = Array(text)
+        var ranges: [Range<Int>] = []
+        if options.regex {
+            var regexOptions: NSRegularExpression.Options = []
+            if !options.caseSensitive { regexOptions.insert(.caseInsensitive) }
+            let source = options.wholeWord ? "\\b(?:\(pattern))\\b" : pattern
+            guard let regex = try? NSRegularExpression(pattern: source, options: regexOptions) else { return [] }
+            let ns = text as NSString
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) where match.range.length > 0 {
+                guard let range = Range(match.range, in: text) else { continue }
+                let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                ranges.append(start..<end)
+            }
+            return ranges
+        }
+        let needle = Array(options.caseSensitive ? pattern : pattern.lowercased())
+        let hay = options.caseSensitive ? chars : Array(text.lowercased())
+        guard !needle.isEmpty, hay.count >= needle.count else { return [] }
+        var index = 0
+        while index + needle.count <= hay.count {
+            if Array(hay[index..<index + needle.count]) == needle {
+                let end = index + needle.count
+                let boundaryBefore = index == 0 || !Self.isWord(hay[index - 1])
+                let boundaryAfter = end == hay.count || !Self.isWord(hay[end])
+                if !options.wholeWord || (boundaryBefore && boundaryAfter) {
+                    ranges.append(index..<end)
+                    index = end
+                    continue
+                }
+            }
+            index += 1
+        }
+        return ranges
+    }
+
+    private static func isWord(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_"
+    }
+}
+
+/// How `search` interprets its pattern. Defaults match `rg`: case-sensitive, regex, no word boundaries.
+public struct BaseSearchOptions: Sendable, Equatable, Hashable {
+    public var caseSensitive: Bool
+    /// `false` searches the pattern literally (`-F`).
+    public var regex: Bool
+    /// `-w`: matches surrounded by non-word characters only.
+    public var wholeWord: Bool
+
+    public init(caseSensitive: Bool = true, regex: Bool = true, wholeWord: Bool = false) {
+        self.caseSensitive = caseSensitive
+        self.regex = regex
+        self.wholeWord = wholeWord
     }
 }
 
@@ -121,6 +181,14 @@ public enum SearchTool: Sendable, Equatable {
     case ripgrep(String)
     /// `git grep -n` (tracked and untracked files, `.gitignore` respected).
     case gitGrep
+
+    /// Short label for the UI ("rg" / "git grep").
+    public var displayName: String {
+        switch self {
+        case .ripgrep: "rg"
+        case .gitGrep: "git grep"
+        }
+    }
 
     /// `.ripgrep` when `rg` is on `PATH` or at the usual Homebrew locations, else `.gitGrep`.
     public static func locate(environment: [String: String] = ProcessInfo.processInfo.environment) -> SearchTool {
@@ -181,15 +249,17 @@ public extension GitClient {
         return FileNode.tree(paths: paths)
     }
 
-    /// Full-text regex search in the working tree, `.gitignore` respected. `subpath` restricts the search.
+    /// Full-text search in the working tree, `.gitignore` respected. `subpath` restricts the search.
     /// No match is an empty array, not an error. Results are capped at `limit`.
     func search(
-        pattern: String, in subpath: String? = nil, tool: SearchTool = .locate(), limit: Int = 500
+        pattern: String, in subpath: String? = nil, options: BaseSearchOptions = .init(), tool: SearchTool = .locate(), limit: Int = 500
     ) async throws -> [SearchMatch] {
         switch tool {
         case .ripgrep(let executable):
-            var arguments = ["--json", "--max-count", "200", "-e", pattern, "--"]
-            arguments.append(subpath ?? ".")
+            var arguments = ["--json", "--max-count", "200", options.caseSensitive ? "-s" : "-i"]
+            if !options.regex { arguments.append("-F") }
+            if options.wholeWord { arguments.append("-w") }
+            arguments += ["-e", pattern, "--", subpath ?? "."]
             let result = try await Subprocess.run(
                 executable: executable, arguments: arguments, currentDirectory: repository,
                 environment: ["LC_ALL": "C"], timeout: .seconds(60)
@@ -199,11 +269,19 @@ public extension GitClient {
             }
             return Array(Self.parseRipgrepJSON(result.stdoutText).prefix(limit))
         case .gitGrep:
-            var arguments = ["grep", "-n", "-I", "--untracked", "-e", pattern]
+            var arguments = ["grep", "-n", "-I", "--untracked", options.regex ? "-E" : "-F"]
+            if !options.caseSensitive { arguments.append("-i") }
+            if options.wholeWord { arguments.append("-w") }
+            arguments += ["-e", pattern]
             if let subpath { arguments += ["--", subpath] }
             let result = try await run(arguments, timeout: .seconds(60), allowFailure: true)
             guard result.exitCode <= 1 else { throw GitError(arguments: arguments, result: result) }
-            return Array(Self.parseGrepLines(result.stdoutText).prefix(limit))
+            let matches = Self.parseGrepLines(result.stdoutText).prefix(limit).map { match in
+                var match = match
+                match.submatches = SearchMatch.ranges(of: pattern, in: match.text, options: options)
+                return match
+            }
+            return Array(matches)
         }
     }
 
@@ -222,7 +300,16 @@ public extension GitClient {
                   let number = data["line_number"] as? Int,
                   let matched = (data["lines"] as? [String: Any])?["text"] as? String
             else { return nil }
-            return SearchMatch(path: Self.stripDotSlash(path), line: number, text: matched.trimmingCharacters(in: .newlines))
+            let text = matched.trimmingCharacters(in: .newlines)
+            // Submatch offsets are UTF-8 byte offsets in `lines.text`: map them to character offsets.
+            let utf8 = Array(text.utf8)
+            let submatches = ((data["submatches"] as? [[String: Any]]) ?? []).compactMap { sub -> Range<Int>? in
+                guard let start = sub["start"] as? Int, let end = sub["end"] as? Int, start < end, end <= utf8.count else { return nil }
+                let lower = String(decoding: utf8[..<start], as: UTF8.self).count
+                let upper = lower + String(decoding: utf8[start..<end], as: UTF8.self).count
+                return lower..<upper
+            }
+            return SearchMatch(path: Self.stripDotSlash(path), line: number, text: text, submatches: submatches)
         }
     }
 

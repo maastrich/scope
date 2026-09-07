@@ -35,8 +35,17 @@ final class BaseModel {
     var targetLine: Int?
     private(set) var content: BaseFileContent?
     var query = ""
+    /// Search toggles (`Aa`, `.*`, `\b`) and the optional subpath scope of the Search section.
+    var searchOptions = BaseSearchOptions(caseSensitive: false, regex: false, wholeWord: false)
+    var searchSubpath = ""
     private(set) var results: [SearchMatch] = []
     private(set) var isSearching = false
+    /// Inline error of the last search (`nil` when it succeeded).
+    private(set) var searchError: String?
+    /// The pattern the current `results` answer (Return re-runs the search only when the query moved on).
+    private(set) var searchedQuery: String?
+    /// `rg` when installed, else `git grep` — decided once per app run.
+    let searchTool = SearchTool.locate()
     private(set) var commits: [Commit] = []
     private(set) var isLoadingHistory = false
 
@@ -44,6 +53,7 @@ final class BaseModel {
     @ObservationIgnored private let problems: ProblemCenter
     @ObservationIgnored private var lastFetch: [URL: Date] = [:]
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var searchGeneration = 0
 
     static let fetchInterval: TimeInterval = 60
 
@@ -64,6 +74,8 @@ final class BaseModel {
         content = nil
         query = ""
         results = []
+        searchError = nil
+        searchedQuery = nil
         commits = []
         Task { await loadTree() }
         Task { await loadHistory() }
@@ -161,26 +173,58 @@ final class BaseModel {
 
     // MARK: Search
 
+    /// Runs the query with the current options; an empty query clears. A newer search drops this one's result.
     func search() async {
         guard let url = repoURL else { return }
         let pattern = query.trimmingCharacters(in: .whitespaces)
         guard !pattern.isEmpty else {
-            results = []
+            clearSearch()
             return
         }
         let generation = generation
+        searchGeneration += 1
+        let searchGeneration = searchGeneration
         isSearching = true
-        defer { isSearching = false }
+        defer { if searchGeneration == self.searchGeneration { isSearching = false } }
         let git = env.git
+        let options = searchOptions
+        let subpath = searchSubpath.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let tool = searchTool
         let result = await Task.detached(priority: .userInitiated) { () -> Result<[SearchMatch], any Error> in
             let client = await git.client(for: url)
-            do { return .success(try await client.search(pattern: pattern)) } catch { return .failure(error) }
+            do {
+                return .success(try await client.search(pattern: pattern, in: subpath.isEmpty ? nil : subpath, options: options, tool: tool))
+            } catch {
+                return .failure(error)
+            }
         }.value
-        guard generation == self.generation else { return }
+        guard generation == self.generation, searchGeneration == self.searchGeneration else { return }
+        searchedQuery = pattern
         switch result {
-        case .success(let matches): results = matches
-        case .failure(let error): problems.error("Search failed", detail: String(describing: error))
+        case .success(let matches):
+            results = matches
+            searchError = nil
+        case .failure(let error):
+            results = []
+            searchError = Self.searchErrorMessage(error)
         }
+    }
+
+    func clearSearch() {
+        searchGeneration += 1
+        isSearching = false
+        results = []
+        searchError = nil
+        searchedQuery = nil
+    }
+
+    /// The tool's own message (regex syntax errors, unknown paths) rather than the wrapped argument dump.
+    static func searchErrorMessage(_ error: any Error) -> String {
+        if let git = error as? GitError {
+            let stderr = git.result.stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !stderr.isEmpty { return stderr.split(separator: "\n").prefix(3).joined(separator: " ") }
+        }
+        return String(describing: error)
     }
 
     // MARK: History
