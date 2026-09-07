@@ -1,7 +1,8 @@
+import AppKit
 import SwiftUI
 
-/// Read-only viewer: monospace lines with line numbers; scrolls to `BaseModel.targetLine`.
-/// No syntax colouring in this pass.
+/// Read-only viewer on `MonoTextView`: line-number gutter + monospace text, the target line of a search
+/// jump tinted and centred, the search term highlighted wherever it occurs. No syntax colouring in this pass.
 struct BaseFileViewer: View {
     @Environment(AppModel.self) private var model
 
@@ -16,7 +17,8 @@ struct BaseFileViewer: View {
             case .unavailable(let message):
                 placeholder(message)
             case .text(let text):
-                lines(text, path: base.selectedPath ?? "")
+                // The term is highlighted for files opened from a search jump (the jump sets `targetLine`).
+                viewer(text, path: base.selectedPath ?? "", target: base.targetLine, term: base.targetLine == nil ? "" : base.query)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -25,16 +27,26 @@ struct BaseFileViewer: View {
     private func placeholder(_ message: String) -> some View {
         Text(message)
             .font(.system(size: 12))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func lines(_ text: String, path: String) -> some View {
-        let rows = text.split(separator: "\n", omittingEmptySubsequences: false)
-        let width = CGFloat(String(rows.count).count) * 7.5 + 12
-        let target = model.base.targetLine
+    private struct Identity: Hashable {
+        let path: String
+        let text: String
+    }
+
+    private struct Version: Hashable {
+        let path: String
+        let text: String
+        let target: Int?
+        let term: String
+    }
+
+    private func viewer(_ text: String, path: String, target: Int?, term: String) -> some View {
+        let lineCount = text.split(separator: "\n", omittingEmptySubsequences: false).count
         return VStack(spacing: 0) {
             HStack {
                 Text(path)
@@ -43,35 +55,62 @@ struct BaseFileViewer: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Text("\(rows.count) lines").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text("\(lineCount) lines").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
             Divider()
-            ScrollViewReader { proxy in
-                ScrollView([.vertical, .horizontal]) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("\(index + 1)")
-                                    .foregroundStyle(.tertiary)
-                                    .frame(width: width, alignment: .trailing)
-                                Text(String(row))
-                                    .textSelection(.enabled)
-                            }
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .frame(height: 17)
-                            .background(target == index + 1 ? Color.accentColor.opacity(0.14) : .clear)
-                            .id(index + 1)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .onAppear { if let target { proxy.scrollTo(target, anchor: .center) } }
-                .onChange(of: target) { _, line in
-                    if let line { proxy.scrollTo(line, anchor: .center) }
-                }
+            MonoTextView(
+                identity: Identity(path: path, text: text),
+                version: Version(path: path, text: text, target: target, term: term),
+                build: { BaseDocumentBuilder.build(text: text, highlightedLine: target, term: term) },
+                focus: target.map { MonoFocus(anchor: $0 - 1, placement: .center) }
+            )
+        }
+    }
+}
+
+/// `text` as numbered lines; `highlightedLine` (1-based) gets a row tint, every case-insensitive occurrence
+/// of `term` a find-style background. Anchor `i` is line `i + 1`.
+@MainActor
+enum BaseDocumentBuilder {
+    static func build(text: String, highlightedLine: Int?, term: String) -> MonoDocument {
+        let rows = text.split(separator: "\n", omittingEmptySubsequences: false)
+        let width = max(3, String(rows.count).count)
+        let result = NSMutableAttributedString()
+        var anchors: [NSRange] = []
+        anchors.reserveCapacity(rows.count)
+        let gutterAttributes = MonoStyle.base(color: MonoStyle.gutter)
+        let bodyAttributes = MonoStyle.base()
+
+        for (index, row) in rows.enumerated() {
+            let number = index + 1
+            let start = result.length
+            var gutter = gutterAttributes
+            var body = bodyAttributes
+            if number == highlightedLine {
+                gutter[.rowBackground] = MonoStyle.lineHighlight
+                body[.rowBackground] = MonoStyle.lineHighlight
             }
+            result.append(NSAttributedString(string: MonoStyle.gutterText(number, width: width) + "  ", attributes: gutter))
+            result.append(NSAttributedString(string: String(row) + "\n", attributes: body))
+            anchors.append(NSRange(location: start, length: result.length - start - 1))
+        }
+        if !term.isEmpty {
+            highlight(term, in: result)
+        }
+        return MonoDocument(text: result, anchors: anchors)
+    }
+
+    private static func highlight(_ term: String, in text: NSMutableAttributedString) {
+        let string = text.string as NSString
+        var search = NSRange(location: 0, length: string.length)
+        let color = MonoStyle.termHighlight
+        while search.length > 0 {
+            let found = string.range(of: term, options: [.caseInsensitive], range: search)
+            guard found.location != NSNotFound else { break }
+            text.addAttribute(.backgroundColor, value: color, range: found)
+            let next = found.location + max(found.length, 1)
+            search = NSRange(location: next, length: string.length - next)
         }
     }
 }

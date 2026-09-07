@@ -19,7 +19,7 @@ struct ScopeApp: App {
         Window("Scope", id: "main") {
             RootView()
                 .environment(model)
-                .frame(minWidth: 960, minHeight: 600)
+                .frame(minWidth: 1040, minHeight: 600)
                 .task { await model.bootstrap() }
         }
         .defaultSize(width: 1280, height: 800)

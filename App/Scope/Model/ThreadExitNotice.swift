@@ -2,9 +2,10 @@ import Foundation
 import ScopeCore
 import ScopeDrivers
 
-/// A thread whose process exited while the app was running: its tab is already gone, the record is
-/// still on disk. Shown as a toast for `lifetime`, then closed for good unless relaunched. The
-/// countdown pauses while the toast is hovered.
+/// A thread whose process exited while the app was running. Shown as a toast for `lifetime`; the tab
+/// stays (greyed) until the user closes it, unless `closesThread` (the `autoCloseExitedThreads`
+/// preference), in which case the tab is already gone and the record is deleted when the toast goes.
+/// The countdown pauses while the toast is hovered.
 @MainActor
 @Observable
 final class ThreadExitNotice: Identifiable {
@@ -13,6 +14,8 @@ final class ThreadExitNotice: Identifiable {
     let status: ExitStatus
     /// OSC title at the time of the exit, when the process set one.
     let lastTitle: String?
+    /// The notice owns the thread: dismissing it closes the thread for good.
+    let closesThread: Bool
     /// Fires once when the countdown ends; never after `cancel()`.
     @ObservationIgnored var onExpire: (@MainActor (ThreadExitNotice) -> Void)?
 
@@ -22,11 +25,12 @@ final class ThreadExitNotice: Identifiable {
     @ObservationIgnored private var startedAt: ContinuousClock.Instant?
     @ObservationIgnored private var timer: Task<Void, Never>?
 
-    init(record: ThreadRecord, profile: DriverProfile, status: ExitStatus, lastTitle: String?) {
+    init(record: ThreadRecord, profile: DriverProfile, status: ExitStatus, lastTitle: String?, closesThread: Bool = false) {
         self.record = record
         self.profile = profile
         self.status = status
         self.lastTitle = lastTitle
+        self.closesThread = closesThread
     }
 
     nonisolated var id: ThreadID { record.id }

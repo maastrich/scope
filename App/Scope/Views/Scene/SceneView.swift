@@ -2,8 +2,9 @@ import AppKit
 import SwiftUI
 import ScopeCore
 
-/// The centre column. Picks `SceneEmptyView` (no scope), `ScopeEmptyView` (scope without a thread) or the
-/// tab strip + `ThreadPane` of the selected thread, and declares the scene part of the window toolbar.
+/// The centre column. Picks `SceneEmptyView` (no scope), `ScopeEmptyView` (scope or repo row without a thread),
+/// `TaskEmptyView` (task without a thread) or the tab strip + `ThreadPane` of the selected thread, and declares
+/// the scene part of the window toolbar. Exit toasts sit at the bottom so they never cover the tabs.
 struct SceneView: View {
     @Environment(AppModel.self) private var model
 
@@ -26,7 +27,7 @@ struct SceneView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .top) {
+        .overlay(alignment: .bottom) {
             if !model.exitNotices.isEmpty {
                 ExitToastStack()
                     .padding(.horizontal, 12)
@@ -44,8 +45,10 @@ struct SceneView: View {
             }
         } else {
             ToolbarItem(placement: .principal) {
-                Text("Scope")
+                Text(model.contextDescription ?? "Scope")
                     .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
@@ -82,6 +85,7 @@ struct SceneView: View {
             }
             .disabled(model.scopes.isEmpty)
             .help("Toggle Inspector (⌥⌘I)")
+            .accessibilityLabel("Toggle Inspector")
         }
     }
 }

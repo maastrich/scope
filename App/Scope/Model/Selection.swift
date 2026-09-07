@@ -44,6 +44,22 @@ enum InspectorTab: String, CaseIterable, Codable, Sendable, Hashable {
     }
 }
 
+/// Where ⌘T opens the next thread, derived from the sidebar selection (`AppModel.newThreadTarget`).
+enum NewThreadTarget {
+    case scopeRoot(ScopeState)
+    case repoBase(ScopeState, relativePath: String)
+    case task(TaskState)
+}
+
+/// A thread closed by the user, kept for 30 s so ⇧⌘T can bring it back (`AppModel.undoCloseThread`).
+struct ClosedThread: Identifiable {
+    let record: ThreadRecord
+    let profile: DriverProfile
+    /// Sidebar item selected before the close (informational; the undo selects the thread).
+    let selection: SidebarItem?
+    var id: ThreadID { record.id }
+}
+
 /// What `applicationShouldTerminate` does with running threads.
 enum TerminationDecision: Equatable, Sendable {
     case now

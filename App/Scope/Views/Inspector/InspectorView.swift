@@ -1,36 +1,52 @@
 import SwiftUI
 
-/// Right-hand inspector: a segmented Graph / Delta / Base / PRs control in its own header and, for M0, placeholders
-/// in place of the three panels. ⌘D / ⌘⇧B already switch tabs so the muscle memory exists from day one.
+/// Right-hand inspector: a segmented Graph / Delta / Base / PRs control with the context it follows
+/// (`acme · auth-refresh`) in its own header, then the panel pinned to the top. ⌘D / ⌘⇧B switch tabs.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            Picker("Inspector tab", selection: $model.inspectorTab) {
-                ForEach(InspectorTab.allCases, id: \.self) { tab in
-                    Text(tab.title).tag(tab)
+            VStack(spacing: 4) {
+                Picker("Inspector tab", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases, id: \.self) { tab in
+                        Text(tab.title).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                if let context = model.contextDescription {
+                    Text(context)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("Inspector context: \(context)")
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+            .background(Color("PanelBackground"))
             Divider()
-            switch model.inspectorTab {
-            case .graph:
-                GraphView()
-            case .delta:
-                DeltaView()
-            case .base:
-                BaseView()
-            case .pullRequests:
-                PullRequestsView()
+            Group {
+                switch model.inspectorTab {
+                case .graph:
+                    GraphView()
+                case .delta:
+                    DeltaView()
+                case .base:
+                    BaseView()
+                case .pullRequests:
+                    PullRequestsView()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }

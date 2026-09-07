@@ -36,11 +36,13 @@ final class AppModel {
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
-    /// Threads that exited live: tab gone, record kept until the toast expires or is dismissed.
+    /// Threads that exited live: the tab stays (greyed) while the toast shows; see `threadExited`.
     private(set) var exitNotices: [ThreadExitNotice] = []
+    /// Threads closed in the last 30 s, most recent last (⇧⌘T restores the last one).
+    private(set) var recentlyClosed: [ClosedThread] = []
 
-    /// Drives the sidebar highlight. Selecting a thread selects its tab; selecting a scope or repo shows
-    /// the scope's last thread (or its empty state).
+    /// Drives the sidebar highlight and, through `syncThreadFromSelection`, the scene: a thread row selects
+    /// its tab, a task row its last thread, a scope or repo row shows the scope's empty view.
     var selection: SidebarItem? {
         didSet {
             guard !isRestoringUIState else { return }
@@ -68,7 +70,19 @@ final class AppModel {
         didSet { if !isRestoringUIState { persistUIState() } }
     }
 
+    /// Width of the inspector column in points (320…520).
+    var inspectorWidth: Double = UIState.defaultInspectorWidth {
+        didSet { if !isRestoringUIState, inspectorWidth != oldValue { persistUIState() } }
+    }
+
+    /// Exited threads close themselves when their toast goes (the pre-audit behaviour). Not in
+    /// `Preferences` yet: read from `UserDefaults` under `autoCloseExitedThreads` until it lands there.
+    var autoCloseExitedThreads: Bool {
+        UserDefaults.standard.bool(forKey: "autoCloseExitedThreads")
+    }
+
     @ObservationIgnored private var lastThreadByScope: [ScopeID: ThreadID] = [:]
+    @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
     @ObservationIgnored private var launcher: ThreadLauncher
@@ -144,10 +158,89 @@ final class AppModel {
         session.record.taskID.flatMap(TaskID.init(rawValue:)).flatMap(task)
     }
 
-    /// The task the Delta inspector follows: the selected task, else the selected thread's task.
+    /// The task the Delta inspector and ⌘T follow, derived from `selection` alone: a task row or a thread
+    /// of a task. A scope or repo row has no task.
     var currentTask: TaskState? {
-        if case .task(let id) = selection { return task(id) }
-        return currentThread.flatMap(task(of:))
+        switch selection {
+        case .task(let id): task(id)
+        case .thread(let id): session(id).flatMap(task(of:))
+        case .scope, .repo, nil: nil
+        }
+    }
+
+    /// Where ⌘T (menu, footer, palette, tab strip `+`) opens the next thread.
+    var newThreadTarget: NewThreadTarget? {
+        switch selection {
+        case .scope(let id):
+            return scope(id).map { .scopeRoot($0) }
+        case .repo(let id, let relativePath):
+            guard let scope = scope(id) else { return nil }
+            return relativePath.isEmpty ? .scopeRoot(scope) : .repoBase(scope, relativePath: relativePath)
+        case .task(let id):
+            return task(id).map { .task($0) }
+        case .thread(let id):
+            guard let session = session(id), let scope = scope(session.record.scopeID) else { return nil }
+            if let task = task(of: session) { return .task(task) }
+            if case .repoBase(let relativePath) = session.record.cwdKind, !relativePath.isEmpty {
+                return .repoBase(scope, relativePath: relativePath)
+            }
+            return .scopeRoot(scope)
+        case nil:
+            return currentScope.map { .scopeRoot($0) }
+        }
+    }
+
+    /// `"in acme"`, `"in auth-refresh"`, `"in api (base)"` — for the New Thread tooltips and the palette hint.
+    var newThreadTargetDescription: String? {
+        switch newThreadTarget {
+        case .scopeRoot(let scope): "in \(scope.name)"
+        case .repoBase(let scope, let relativePath): "in \(scope.repo(relativePath: relativePath)?.shortName ?? relativePath) (base)"
+        case .task(let task): "in \(task.name)"
+        case nil: nil
+        }
+    }
+
+    /// `"acme · auth-refresh"`, `"acme · api (base)"` or `"acme"`: what the scene and inspector follow.
+    var contextDescription: String? {
+        switch newThreadTarget {
+        case .scopeRoot(let scope): scope.name
+        case .repoBase(let scope, let relativePath): "\(scope.name) · \(scope.repo(relativePath: relativePath)?.shortName ?? relativePath) (base)"
+        case .task(let task): "\(scope(task.scopeID)?.name ?? task.record.scopeName) · \(task.name)"
+        case nil: nil
+        }
+    }
+
+    /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`).
+    @discardableResult
+    func newThreadInCurrentContext(driverID: String? = nil) async -> ThreadSession? {
+        switch newThreadTarget {
+        case .scopeRoot(let scope):
+            return await newThread(in: scope.id, driverID: driverID)
+        case .repoBase(let scope, let relativePath):
+            return await newThread(in: scope.id, driverID: driverID, cwdKind: .repoBase(relativePath: relativePath))
+        case .task(let task):
+            return await newThread(in: task.scopeID, driverID: driverID, taskID: task.id)
+        case nil:
+            return nil
+        }
+    }
+
+    /// The tab / row label: duplicates of the same title in a scope are numbered in creation order
+    /// (`Shell · acme`, `Shell 2 · acme`).
+    func displayTitle(for session: ThreadSession) -> String {
+        let twins = threads(in: session.record.scopeID).filter { $0.record.title == session.record.title }
+        guard twins.count > 1, let index = twins.firstIndex(where: { $0.id == session.id }), index > 0 else { return session.title }
+        let title = session.title
+        if let separator = title.range(of: " · ") {
+            return "\(title[..<separator.lowerBound]) \(index + 1)\(title[separator.lowerBound...])"
+        }
+        return "\(title) \(index + 1)"
+    }
+
+    /// The OSC title when the process set one that differs from the label.
+    func secondaryTitle(for session: ThreadSession) -> String? {
+        guard let reported = session.terminalTitle, reported != session.title, reported != displayTitle(for: session) else { return nil }
+        return reported
     }
 
     /// The profile for an id, falling back to `shell`, then the first profile.
@@ -305,19 +398,24 @@ final class AppModel {
         }
         inspectorShown = state.inspectorVisible
         inspectorTab = state.inspectorTab
-        if let id = state.selectedThread, session(id) != nil {
-            selectedThreadID = id
-        }
+        inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
         switch state.selectedItem {
         case .scope(let id) where scope(id) != nil:
             selection = state.selectedItem
+            selectedThreadID = nil
         case .repo(let id, _) where scope(id) != nil:
             selection = state.selectedItem
+            selectedThreadID = nil
         case .thread(let id) where session(id) != nil:
             selection = state.selectedItem
             selectedThreadID = id
         case .task(let id) where task(id) != nil:
             selection = state.selectedItem
+            if let thread = state.selectedThread, let session = session(thread), session.record.taskID == id.rawValue {
+                selectedThreadID = thread
+            } else {
+                selectedThreadID = threads(in: id).first?.id
+            }
         default:
             selection = nil
         }
@@ -338,6 +436,7 @@ final class AppModel {
         state.expandedScopes = Set(scopes.filter(\.isExpanded).map(\.id))
         state.inspectorVisible = inspectorShown
         state.inspectorTab = inspectorTab
+        state.inspectorWidth = inspectorWidth
         env.uiState.save(state)
     }
 
@@ -350,12 +449,9 @@ final class AppModel {
         switch selection {
         case .thread(let id):
             selectedThreadID = id
-        case .scope(let id), .repo(let id, _):
-            if let last = lastThreadByScope[id], session(last) != nil {
-                selectedThreadID = last
-            } else {
-                selectedThreadID = threads(in: id).first?.id
-            }
+        case .scope, .repo:
+            // The scene shows the scope's empty view / repo context; the tabs stay listed, none active.
+            selectedThreadID = nil
         case .task(let id):
             let own = threads(in: id)
             if let scopeID = task(id)?.scopeID, let last = lastThreadByScope[scopeID], own.contains(where: { $0.id == last }) {
@@ -616,9 +712,49 @@ final class AppModel {
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
+        takeExitNotice(id)
+        let restoreSelection = selection
         detach(session)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
+        rememberClosed(ClosedThread(record: session.record, profile: session.profile, selection: restoreSelection))
         return true
+    }
+
+    // MARK: Undo close
+
+    static let undoCloseWindow: Duration = .seconds(30)
+
+    var canUndoCloseThread: Bool { !recentlyClosed.isEmpty }
+
+    /// Keeps the record for `undoCloseWindow` so ⇧⌘T can bring the thread back.
+    private func rememberClosed(_ closed: ClosedThread) {
+        recentlyClosed.append(closed)
+        undoTimers[closed.id]?.cancel()
+        undoTimers[closed.id] = Task { [weak self] in
+            try? await Task.sleep(for: AppModel.undoCloseWindow)
+            guard !Task.isCancelled, let self else { return }
+            self.recentlyClosed.removeAll { $0.id == closed.id }
+            self.undoTimers[closed.id] = nil
+        }
+    }
+
+    /// ⇧⌘T: reopens the most recently closed thread with the same record (resumed when the driver can).
+    /// Synchronous for menu items and palette actions; the launch runs in its own task.
+    func undoCloseThread() {
+        guard let closed = recentlyClosed.popLast() else { return }
+        Task { await restoreClosed(closed) }
+    }
+
+    private func restoreClosed(_ closed: ClosedThread) async {
+        undoTimers[closed.id]?.cancel()
+        undoTimers[closed.id] = nil
+        guard scope(closed.record.scopeID) != nil, session(closed.id) == nil else { return }
+        let session = ThreadSession(record: closed.record, profile: closed.profile)
+        register(session)
+        await env.threadRecords.save(closed.record)
+        selection = .thread(closed.id)
+        selectedThreadID = closed.id
+        await launch(session, mode: session.canResume ? .resume : .launch)
     }
 
     /// Removes the tab (and the terminal view with it) and moves the selection to a neighbour or the
@@ -671,8 +807,9 @@ final class AppModel {
         return response == .alertFirstButtonReturn
     }
 
-    /// A live exit closes the tab and shows a toast for 10 s (Relaunch / Details); the record is
-    /// deleted when the toast goes. Exits caused by `close` or by quitting keep their own paths.
+    /// A live exit keeps the tab (greyed, ring dot) and shows a toast for 10 s (Relaunch / Details);
+    /// the thread stays until the user closes it. With `autoCloseExitedThreads` the tab goes at once and
+    /// the record is deleted when the toast goes. Exits caused by `close` or by quitting keep their own paths.
     private func threadExited(_ session: ThreadSession, status: ExitStatus) {
         if status.isExecFailure {
             problems.error("\(session.profile.name) could not be started (exit 127)",
@@ -683,9 +820,10 @@ final class AppModel {
         notifier.clear(threadID: session.id)
         guard !isTerminating, !closingThreads.contains(session.id),
               threads.contains(where: { $0.id == session.id }) else { return }
-        detach(session)
+        let autoClose = autoCloseExitedThreads
+        if autoClose { detach(session) }
         let notice = ThreadExitNotice(record: session.record, profile: session.profile,
-                                      status: status, lastTitle: session.terminalTitle)
+                                      status: status, lastTitle: session.terminalTitle, closesThread: autoClose)
         notice.onExpire = { [weak self] notice in
             Task { await self?.dismissExitNotice(notice.id) }
         }
@@ -693,17 +831,34 @@ final class AppModel {
         notice.start()
     }
 
-    /// Explicit dismiss or the 10 s countdown: the thread is closed for good.
+    /// Explicit dismiss or the 10 s countdown: the toast goes; the thread is closed for good only when the
+    /// notice owns it (`autoCloseExitedThreads`).
     func dismissExitNotice(_ id: ThreadID) async {
         guard let notice = takeExitNotice(id) else { return }
-        await forget(id: id, scopeID: notice.record.scopeID, profile: notice.profile)
+        if notice.closesThread {
+            await forget(id: id, scopeID: notice.record.scopeID, profile: notice.profile)
+        }
     }
 
-    /// Reopens the tab for the same record and starts a fresh process.
+    /// The toast's *Close*: the thread goes for good (undoable for 30 s).
+    func closeExitedThread(_ id: ThreadID) async {
+        if session(id) != nil {
+            await close(id, force: true)
+        } else {
+            await dismissExitNotice(id)
+        }
+    }
+
+    /// Starts a fresh process in the same tab (or reopens the tab when it was auto-closed).
     func relaunchExitNotice(_ id: ThreadID) async {
         guard let notice = takeExitNotice(id), scope(notice.record.scopeID) != nil else { return }
-        let session = ThreadSession(record: notice.record, profile: notice.profile)
-        register(session)
+        let session: ThreadSession
+        if let existing = self.session(id) {
+            session = existing
+        } else {
+            session = ThreadSession(record: notice.record, profile: notice.profile)
+            register(session)
+        }
         selection = .thread(id)
         selectedThreadID = id
         await launch(session, mode: .launch)
@@ -715,6 +870,7 @@ final class AppModel {
         held ? notice.pause() : notice.start()
     }
 
+    @discardableResult
     private func takeExitNotice(_ id: ThreadID) -> ThreadExitNotice? {
         guard let index = exitNotices.firstIndex(where: { $0.id == id }) else { return nil }
         let notice = exitNotices.remove(at: index)

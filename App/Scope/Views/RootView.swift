@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ScopeCore
 
@@ -10,16 +11,18 @@ struct RootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 400)
+                .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 400)
         } detail: {
-            // A plain HStack rather than `.inspector`: macOS splits the window toolbar at the inspector edge,
-            // whereas the toolbar must span the full width with the inspector starting below it.
+            // A plain HStack rather than `.inspector`: macOS gives the inspector its own toolbar section (the
+            // toolbar splits at the inspector edge and the trailing items move above the inspector), whereas the
+            // toolbar must span the full width with the inspector starting below it. The divider is a drag handle
+            // (320…520 pt, persisted in `UIStateStore`).
             HStack(spacing: 0) {
                 SceneView()
                 if inspectorPresented.wrappedValue {
-                    Divider()
+                    InspectorResizeHandle(width: inspectorWidth)
                     InspectorView()
-                        .frame(width: model.inspectorTab == .delta ? 420 : 360)
+                        .frame(width: model.inspectorWidth)
                         .transition(.move(edge: .trailing))
                 }
             }
@@ -48,11 +51,54 @@ struct RootView: View {
         )
     }
 
+    private var inspectorWidth: Binding<Double> {
+        Binding(
+            get: { model.inspectorWidth },
+            set: { model.inspectorWidth = min(max($0, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound) }
+        )
+    }
+
     /// The inspector is hidden in the empty state (no scope) whatever the persisted preference says.
     private var inspectorPresented: Binding<Bool> {
         Binding(
             get: { !model.scopes.isEmpty && model.inspectorShown },
             set: { model.inspectorShown = $0 }
         )
+    }
+}
+
+/// The divider between the scene and the inspector, draggable over an 9 pt hit area with the resize cursor.
+private struct InspectorResizeHandle: View {
+    @Binding var width: Double
+    @State private var startWidth: Double?
+
+    var body: some View {
+        Divider()
+            .frame(maxHeight: .infinity)
+            .overlay {
+                Color.clear
+                    .frame(width: 9)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                if startWidth == nil { startWidth = width }
+                                width = (startWidth ?? width) - value.translation.width
+                            }
+                            .onEnded { _ in startWidth = nil }
+                    )
+            }
+            .accessibilityLabel("Inspector width")
+            .accessibilityValue("\(Int(width)) points")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: width += 20
+                case .decrement: width -= 20
+                @unknown default: break
+                }
+            }
     }
 }

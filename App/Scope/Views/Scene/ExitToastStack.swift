@@ -1,21 +1,22 @@
 import SwiftUI
 import ScopeCore
 
-/// Toasts for threads that exited live, newest at the bottom, overlaid at the top of the scene.
-/// Each one: icon, `Title exited (status)`, Relaunch, Details (popover), dismiss. Hovering holds the
-/// 10 s countdown.
+/// Toasts for threads that exited live, newest at the bottom, overlaid at the bottom of the scene (never
+/// over the tab strip). Each one: icon, `Title exited (status)`, Relaunch, Details (popover), dismiss.
+/// Hovering holds the 10 s countdown.
 struct ExitToastStack: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 8) {
             ForEach(model.exitNotices) { notice in
                 ExitToast(notice: notice)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .padding(.top, 10)
-        .animation(.easeOut(duration: 0.18), value: model.exitNotices.map(\.id))
+        .padding(.bottom, 12)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: model.exitNotices.map(\.id))
     }
 }
 
@@ -29,7 +30,7 @@ private struct ExitToast: View {
             Image(systemName: notice.status.isClean ? "checkmark.circle" : "exclamationmark.triangle")
                 .font(.system(size: 14))
                 .foregroundStyle(notice.status.isClean ? Color.secondary : Color(nsColor: .systemOrange))
-            Text("\(notice.title) exited (\(notice.shortStatus))")
+            Text("\(model.session(notice.id).map(model.displayTitle(for:)) ?? notice.title) exited (\(notice.shortStatus))")
                 .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -40,7 +41,7 @@ private struct ExitToast: View {
                 Button("Details") {
                     showsDetails.toggle()
                 }
-                .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
+                .popover(isPresented: $showsDetails, arrowEdge: .top) {
                     ExitDetails(notice: notice, isPresented: $showsDetails)
                 }
             }
@@ -50,12 +51,13 @@ private struct ExitToast: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Close for good")
+            .help(notice.closesThread ? "Close for good" : "Dismiss (the tab stays until you close it)")
+            .accessibilityLabel(notice.closesThread ? "Close thread" : "Dismiss")
         }
         .padding(.leading, 14)
         .padding(.trailing, 10)
@@ -96,9 +98,9 @@ private struct ExitDetails: View {
             .font(.system(size: 12))
             HStack(spacing: 6) {
                 Spacer()
-                Button("Close") {
+                Button("Close Thread") {
                     isPresented = false
-                    Task { await model.dismissExitNotice(notice.id) }
+                    Task { await model.closeExitedThread(notice.id) }
                 }
                 Button("Relaunch") {
                     isPresented = false

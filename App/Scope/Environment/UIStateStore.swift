@@ -9,11 +9,15 @@ struct UIState: Codable, Sendable, Equatable {
     var expandedScopes: Set<ScopeID> = []
     var inspectorVisible = false
     var inspectorTab: InspectorTab = .graph
+    /// Points; clamped to `inspectorWidthRange` on restore.
+    var inspectorWidth: Double = UIState.defaultInspectorWidth
 
     static let empty = UIState()
+    static let inspectorWidthRange: ClosedRange<Double> = 320...520
+    static let defaultInspectorWidth: Double = 380
 
     private enum CodingKeys: String, CodingKey {
-        case selectedItem, selectedThread, expandedScopes, inspectorVisible, inspectorTab
+        case selectedItem, selectedThread, expandedScopes, inspectorVisible, inspectorTab, inspectorWidth
     }
 
     init() {}
@@ -26,6 +30,7 @@ struct UIState: Codable, Sendable, Equatable {
         expandedScopes = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .expandedScopes)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .graph
+        inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
     }
 }
 
