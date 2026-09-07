@@ -163,6 +163,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var shellProbe: ShellProbeMode
     public var confirmCloseRunningThread: Bool
     public var confirmQuitWithRunningThreads: Bool
+    /// Menu bar item listing the threads waiting for the user (spec §7). On by default.
+    public var showMenuBarExtra: Bool
 
     public init(
         defaultDriverID: String = "shell",
@@ -170,7 +172,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         editor: EditorTemplate? = nil,
         shellProbe: ShellProbeMode = .interactiveLogin,
         confirmCloseRunningThread: Bool = true,
-        confirmQuitWithRunningThreads: Bool = true
+        confirmQuitWithRunningThreads: Bool = true,
+        showMenuBarExtra: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -178,12 +181,13 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.shellProbe = shellProbe
         self.confirmCloseRunningThread = confirmCloseRunningThread
         self.confirmQuitWithRunningThreads = confirmQuitWithRunningThreads
+        self.showMenuBarExtra = showMenuBarExtra
     }
 
     public static let `default` = Preferences()
 
     private enum CodingKeys: String, CodingKey {
-        case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads
+        case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra
     }
 
     public init(from decoder: any Decoder) throws {
@@ -197,6 +201,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.confirmCloseRunningThread
         confirmQuitWithRunningThreads = try container.decodeIfPresent(Bool.self, forKey: .confirmQuitWithRunningThreads)
             ?? defaults.confirmQuitWithRunningThreads
+        showMenuBarExtra = try container.decodeIfPresent(Bool.self, forKey: .showMenuBarExtra) ?? defaults.showMenuBarExtra
     }
 }
 

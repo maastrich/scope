@@ -25,6 +25,11 @@ struct RootView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .overlay {
+            if model.paletteShown {
+                CommandPalette()
+            }
+        }
         .folderDropTarget { urls in
             Task { await model.addScopes(urls) }
         }

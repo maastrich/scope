@@ -30,5 +30,24 @@ struct ScopeApp: App {
             SettingsView()
                 .environment(model)
         }
+
+        MenuBarExtra(isInserted: menuBarExtraShown) {
+            MenuBarExtraMenu()
+                .environment(model)
+        } label: {
+            let waiting = model.waitingThreads.count
+            Image(systemName: waiting > 0 ? "\(min(waiting, 50)).circle.fill" : "scope")
+        }
+    }
+
+    private var menuBarExtraShown: Binding<Bool> {
+        Binding(
+            get: { model.config.preferences.showMenuBarExtra },
+            set: { value in
+                // MenuBarExtra writes the binding on every scene update: only a real change reaches the config.
+                guard value != model.config.preferences.showMenuBarExtra else { return }
+                model.updatePreferences { $0.showMenuBarExtra = value }
+            }
+        )
     }
 }

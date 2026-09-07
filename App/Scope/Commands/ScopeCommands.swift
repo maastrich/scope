@@ -6,7 +6,7 @@ import ScopeCore
 /// `AppModel` through `@FocusedValue(\.appModel)`; items are disabled when no window is focused.
 ///
 /// ⌘-combinations are menu key equivalents and win over the terminal; nothing an agent TUI needs uses ⌘.
-/// ⌘K is reserved for the command palette (M4), so "clear" is ⌥⌘K.
+/// ⌘K opens the command palette, so "clear" is ⌥⌘K.
 struct ScopeCommands: Commands {
     @FocusedValue(\.appModel) private var model
 
@@ -199,10 +199,11 @@ struct ScopeCommands: Commands {
 
             Divider()
 
-            Button("Command Palette…") {}
-                .keyboardShortcut("k", modifiers: .command)
-                .disabled(true)
-                .help("The command palette arrives in M4")
+            Button("Command Palette…") {
+                model?.paletteShown.toggle()
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(model == nil)
 
             Divider()
 

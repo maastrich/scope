@@ -13,6 +13,9 @@ import SwiftUI
 final class AppModel {
     let env: AppEnvironment
     let problems = ProblemCenter()
+    let notifier = ThreadNotifier()
+    /// ⌘K.
+    var paletteShown = false
     private(set) var config: ScopeConfig = .empty
     /// Sidebar order == `config.scopes` order.
     private(set) var scopes: [ScopeState] = []
@@ -50,6 +53,7 @@ final class AppModel {
             if let id = selectedThreadID, let session = session(id) {
                 lastThreadByScope[session.record.scopeID] = id
             }
+            clearNotifications(for: selectedThreadID)
             if !isRestoringUIState { persistUIState() }
         }
     }
@@ -153,6 +157,7 @@ final class AppModel {
 
     /// §(d).5: stores in parallel, scopes built and scanned, records rebound, UI state restored.
     func bootstrap() async {
+        startBadgeTracking()
         guard !isBootstrapped else { return }
 
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
@@ -672,6 +677,7 @@ final class AppModel {
                            scope: session.record.scopeID,
                            actions: [.reveal(ScopeHome.driversURL(home: env.home).path)])
         }
+        notifier.clear(threadID: session.id)
         guard !isTerminating, !closingThreads.contains(session.id),
               threads.contains(where: { $0.id == session.id }) else { return }
         detach(session)
@@ -815,7 +821,9 @@ final class AppModel {
     // MARK: Adapter events
 
     func handle(_ event: AdapterEvent) {
-        session(event.threadID)?.apply(event)
+        guard let session = session(event.threadID), session.isAlive else { return }
+        session.apply(event)
+        notifyIfNeeded(event, session: session)
     }
 
     // MARK: Problem actions

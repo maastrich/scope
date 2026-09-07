@@ -1,5 +1,6 @@
 import AppKit
 import ScopeCore
+import UserNotifications
 
 /// Where `ScopeApp` parks the model so the AppKit delegate (created by the adaptor) can reach it.
 @MainActor
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()
+        UNUserNotificationCenter.current().delegate = self
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -27,9 +29,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        // Re-arm focus on the current terminal so typing resumes without a click.
+        AppServices.model?.clearNotifications(for: AppServices.model?.selectedThreadID)
+        Self.refocusTerminal()
+    }
+
+    /// Makes the current terminal first responder again so typing resumes without a click.
+    static func refocusTerminal() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow,
-              let container = Self.firstTerminalContainer(in: window.contentView) else { return }
+              let container = firstTerminalContainer(in: window.contentView) else { return }
         container.focusHostedView()
     }
 
@@ -84,5 +91,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+}
+
+// MARK: Notifications (spec §4.7)
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// A click on the banner, "Go to Thread" or "See Delta": the app comes up on the thread.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let threadID = ThreadID(rawValue: response.notification.request.identifier)
+        let showDelta = response.actionIdentifier == ThreadNotifier.seeDeltaAction
+        guard let threadID else { return }
+        await MainActor.run { AppServices.model?.reveal(thread: threadID, showDelta: showDelta) }
+    }
+
+    /// Nothing while frontmost: the sidebar dot and the badge already say it.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        []
     }
 }
