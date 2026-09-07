@@ -515,6 +515,7 @@ final class AppModel {
         let position = siblings.firstIndex { $0.id == id } ?? 0
         threads.removeAll { $0.id == id }
         env.knownThreads.remove(id)
+        AdapterInstaller.remove(profile: session.profile, threadID: id, home: env.home)
         problems.dismissAll(thread: id)
         if lastThreadByScope[session.record.scopeID] == id {
             lastThreadByScope[session.record.scopeID] = nil

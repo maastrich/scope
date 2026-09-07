@@ -13,14 +13,22 @@ import ScopeCore
 /// `thread` stays a plain string here: the hook binary forwards whatever `SCOPE_THREAD` contains and the
 /// app decides whether it names a known thread (see `HookSocketServer`).
 public struct HookEvent: Codable, Sendable, Equatable {
-    /// The five normalized driver events. Raw values are the strings accepted on the `scope-hook` command
+    /// The normalized driver events. Raw values are the strings accepted on the `scope-hook` command
     /// line and written on the wire.
+    ///
+    /// The five state-changing events come from spec §4.7. `session.started` is informational: it never
+    /// moves the thread state and only exists so an adapter can hand over the driver's session id
+    /// (`payload["session_id"]`) as soon as the driver starts, before any turn.
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
         case inputRequested = "input.requested"
         case permissionRequested = "permission.requested"
         case threadEnded = "thread.ended"
+        case sessionStarted = "session.started"
+
+        /// `true` for the events that move the thread state (everything but `session.started`).
+        public var changesState: Bool { self != .sessionStarted }
     }
 
     /// Value of `SCOPE_THREAD` in the driver's environment.
@@ -46,6 +54,10 @@ public struct HookEvent: Codable, Sendable, Equatable {
 extension HookEvent {
     /// Payload key under which `scope-hook` forwards a `reason=` argument (`input` or `permission`).
     public static let reasonKey = "reason"
+
+    /// Payload key under which `scope-hook` forwards the driver's own session id (lifted from the hook's
+    /// stdin JSON, or given as `session_id=`). `ThreadSession` stores it as `ThreadRecord.resumeID`.
+    public static let sessionIDKey = "session_id"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

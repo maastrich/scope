@@ -41,6 +41,14 @@ import Testing
         (.exited, .inputRequested, .exited),
         (.exited, .permissionRequested, .exited),
         (.exited, .threadEnded, .exited),
+
+        // session.started only carries the session id: no state moves.
+        (.idle, .sessionStarted, .idle),
+        (.running, .sessionStarted, .running),
+        (.waiting(reason: .input), .sessionStarted, .waiting(reason: .input)),
+        (.waiting(reason: .permission), .sessionStarted, .waiting(reason: .permission)),
+        (.done, .sessionStarted, .done),
+        (.exited, .sessionStarted, .exited),
     ]
 
     @Test func tableCoversEveryStateAndKind() {
@@ -61,7 +69,11 @@ import Testing
     @Test func nextAgreesWithThreadStateApplying() {
         for state in ThreadState.allCases {
             for kind in HookEvent.Kind.allCases {
-                #expect(ThreadStateMachine.next(state, on: kind) == state.applying(kind.stateEvent))
+                if let stateEvent = kind.stateEvent {
+                    #expect(ThreadStateMachine.next(state, on: kind) == state.applying(stateEvent))
+                } else {
+                    #expect(ThreadStateMachine.next(state, on: kind) == state, "\(kind) must not move \(state)")
+                }
             }
         }
     }
@@ -72,6 +84,7 @@ import Testing
         #expect(HookEvent.Kind.inputRequested.stateEvent == .inputRequested)
         #expect(HookEvent.Kind.permissionRequested.stateEvent == .permissionRequested)
         #expect(HookEvent.Kind.threadEnded.stateEvent == .threadEnded)
+        #expect(HookEvent.Kind.sessionStarted.stateEvent == nil)
         // No wire event stands for the PTY exit.
         #expect(!HookEvent.Kind.allCases.contains { $0.stateEvent == .processExited })
     }

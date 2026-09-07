@@ -8,13 +8,18 @@ import ScopeAdapters
 // Reads SCOPE_THREAD and SCOPE_SOCK from the environment (injected by Scope into every thread), optionally
 // embeds stdin (the driver's own hook JSON) as `raw`, and sends one HookEvent to the app's unix socket.
 //
+// With `--stdin` the driver's `session_id` (or Codex's `thread-id`) is lifted into `payload["session_id"]`
+// so the app can resume the session later without parsing `raw`. The pseudo-event `notification` reads
+// stdin and picks `permission.requested` or `input.requested` from Claude Code's `notification_type`
+// (informational notifications send nothing).
+//
 // Exit codes: 64 for a usage error (unknown event, malformed argument); 0 in every other case, including
 // "not running under Scope" and "socket unreachable", each with a one-line note on stderr. A driver hook
 // must never be broken by Scope's absence.
 
 /// The parsed command line.
 struct HookCommand: Equatable {
-    var event: HookEvent.Kind
+    var event: HookCommandEvent
     var payload: [String: String]
     var readStdin: Bool
 
@@ -26,7 +31,7 @@ struct HookCommand: Equatable {
     }
 
     static func parse(_ arguments: [String]) throws(ParseError) -> HookCommand {
-        var event: HookEvent.Kind?
+        var event: HookCommandEvent?
         var payload: [String: String] = [:]
         var readStdin = false
         for argument in arguments {
@@ -37,8 +42,8 @@ struct HookCommand: Equatable {
                 throw .help
             default:
                 if event == nil {
-                    guard let kind = HookEvent.Kind(rawValue: argument) else { throw .unknownEvent(argument) }
-                    event = kind
+                    guard let parsed = HookCommandEvent(word: argument) else { throw .unknownEvent(argument) }
+                    event = parsed
                 } else if let separator = argument.firstIndex(of: "="), separator != argument.startIndex {
                     let key = String(argument[..<separator])
                     payload[key] = String(argument[argument.index(after: separator)...])
@@ -48,7 +53,7 @@ struct HookCommand: Equatable {
             }
         }
         guard let event else { throw .missingEvent }
-        return HookCommand(event: event, payload: payload, readStdin: readStdin)
+        return HookCommand(event: event, payload: payload, readStdin: readStdin || event.needsStdin)
     }
 }
 
@@ -58,11 +63,12 @@ enum HookCLI {
     static let maxRawBytes = 256 * 1024
 
     static var usage: String {
-        let events = HookEvent.Kind.allCases.map(\.rawValue).joined(separator: " | ")
+        let events = HookCommandEvent.allWords.joined(separator: " | ")
         return """
         usage: scope-hook <event> [key=value ...] [--stdin]
           event: \(events)
-          --stdin  embed standard input (the driver's hook JSON) in the message
+          --stdin  embed standard input (the driver's hook JSON) in the message and lift its session id
+          notification  read stdin and derive permission.requested / input.requested from notification_type
         """
     }
 
@@ -99,8 +105,10 @@ enum HookCLI {
         }
 
         var raw: String?
+        var parsedStdin = HookStdin()
         if command.readStdin {
             var data = stdin.readDataToEndOfFile()
+            parsedStdin = HookStdin.parse(data)
             if data.count > maxRawBytes {
                 data = data.prefix(maxRawBytes)
                 note("stdin truncated to \(maxRawBytes) bytes")
@@ -108,15 +116,29 @@ enum HookCLI {
             raw = String(decoding: data, as: UTF8.self)
         }
 
-        let event = HookEvent(thread: thread, event: command.event, payload: command.payload, sentAt: .now, raw: raw)
+        guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw) else {
+            note("notification '\(parsedStdin.notificationType ?? "?")' needs nobody; nothing sent")
+            return 0
+        }
         do {
             let payload = try event.encoded()
             try await UnixSocketClient.send(payload, to: socketPath, timeout: .seconds(2))
         } catch {
-            note("could not deliver \(command.event.rawValue) to \(socketPath): \(error)")
+            note("could not deliver \(event.event.rawValue) to \(socketPath): \(error)")
             return 0
         }
         return 0
+    }
+
+    /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.
+    /// An explicit `session_id=` argument wins over the one lifted from stdin.
+    static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?) -> HookEvent? {
+        guard let kind = command.event.resolve(stdin: stdin) else { return nil }
+        var payload = command.payload
+        if payload[HookEvent.sessionIDKey] == nil, let sessionID = stdin.sessionID {
+            payload[HookEvent.sessionIDKey] = sessionID
+        }
+        return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }
 }
 

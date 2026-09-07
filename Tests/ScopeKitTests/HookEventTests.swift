@@ -36,6 +36,7 @@ import Testing
         ("input.requested", .inputRequested),
         ("permission.requested", .permissionRequested),
         ("thread.ended", .threadEnded),
+        ("session.started", .sessionStarted),
     ])
     func everyKindDecodesFromItsWireString(wire: String, kind: HookEvent.Kind) throws {
         let json = #"{ "thread" : "3f9a2c17be04", "event" : "\#(wire)", "payload" : {} }"#
@@ -46,8 +47,16 @@ import Testing
         #expect(HookEvent.Kind(rawValue: wire) == kind)
     }
 
-    @Test func allCasesCoverTheFiveEvents() {
-        #expect(HookEvent.Kind.allCases.count == 5)
+    @Test func allCasesCoverTheFiveEventsPlusSessionStarted() {
+        #expect(HookEvent.Kind.allCases.count == 6)
+        #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 5)
+        #expect(!HookEvent.Kind.sessionStarted.changesState)
+    }
+
+    @Test func sessionIDTravelsInThePayload() throws {
+        let event = HookEvent(thread: "3f9a2c17be04", event: .sessionStarted, payload: [HookEvent.sessionIDKey: "abc"])
+        let decoded = try HookEvent.decode(try event.encoded())
+        #expect(decoded.payload["session_id"] == "abc")
     }
 
     @Test func unknownKindFails() {

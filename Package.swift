@@ -26,7 +26,7 @@ let package = Package(
         ),
         .target(
             name: "ScopeDrivers",
-            dependencies: ["ScopeCore"],
+            dependencies: ["ScopeCore", "ScopeAdapters"],
             resources: [.copy("Builtin")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

@@ -197,6 +197,8 @@ public enum DriverPlaceholder: String, CaseIterable, Sendable {
     case home = "home"
     /// The prompt for headless runs.
     case prompt = "prompt"
+    /// Absolute path of the `scope-hook` binary (embedded in the app, or found on PATH).
+    case scopeHook = "scope_hook"
 
     /// Every `{name}`-shaped token in `string`, in order, including unknown names (for validation).
     public static func referencedNames(in string: String) -> [String] {
@@ -261,6 +263,8 @@ public struct PlaceholderValues: Sendable {
     public var home: String
     /// `{prompt}` — headless runs only.
     public var prompt: String?
+    /// `{scope_hook}` — absolute path of the `scope-hook` binary (see `ScopeHookLocator`).
+    public var scopeHook: String?
 
     public init(
         threadID: String,
@@ -269,7 +273,8 @@ public struct PlaceholderValues: Sendable {
         scope: String,
         task: String? = nil,
         home: String,
-        prompt: String? = nil
+        prompt: String? = nil,
+        scopeHook: String? = nil
     ) {
         self.threadID = threadID
         self.resumeID = resumeID
@@ -278,6 +283,7 @@ public struct PlaceholderValues: Sendable {
         self.task = task
         self.home = home
         self.prompt = prompt
+        self.scopeHook = scopeHook
     }
 
     /// The value for one placeholder, nil when it has no value in this context.
@@ -290,6 +296,7 @@ public struct PlaceholderValues: Sendable {
         case .task: return task
         case .home: return home
         case .prompt: return prompt
+        case .scopeHook: return scopeHook
         }
     }
 

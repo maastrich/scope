@@ -53,6 +53,8 @@ public enum LaunchError: Error, Sendable, Equatable {
     case resumeUnavailable
     /// `startProcess` left `process.running == false` (`forkpty` failed).
     case forkFailed
+    /// The event adapter could not be prepared (e.g. the hooks settings file could not be written).
+    case adapterSetupFailed(String)
 
     /// One line for a banner or a problem row.
     public var title: String {
@@ -67,6 +69,8 @@ public enum LaunchError: Error, Sendable, Equatable {
             return "This thread cannot be resumed"
         case .forkFailed:
             return "The process could not be started"
+        case .adapterSetupFailed:
+            return "The driver's event adapter could not be set up"
         }
     }
 
@@ -91,6 +95,8 @@ public enum LaunchError: Error, Sendable, Equatable {
                 return "The driver profile references {task} but this thread is not attached to a task."
             case .prompt:
                 return "The driver profile references {prompt}, which is only available for headless runs."
+            case .scopeHook:
+                return "The driver profile references {scope_hook} but the scope-hook binary was not found (neither embedded in the app nor on PATH)."
             default:
                 return "The driver profile references {\(placeholder.rawValue)} but it has no value in this context."
             }
@@ -98,14 +104,18 @@ public enum LaunchError: Error, Sendable, Equatable {
             return "The driver profile has no \"resume\" command, or this thread has no session id to resume. Relaunch instead."
         case .forkFailed:
             return "forkpty failed. The system may be out of pseudo-terminals or processes; try closing other threads."
+        case .adapterSetupFailed(let reason):
+            return reason
         }
     }
 }
 
 /// Turns a profile + context into a `LaunchPlan`, or a readable `LaunchError`.
 public enum LaunchPlanner {
-    /// Steps: pick the argv for `mode`, expand placeholders, resolve the executable against the login-shell
-    /// PATH, verify `values.cwd` exists, build the child environment, set `argv0` for login shells.
+    /// Steps: pick the argv for `mode`, expand placeholders, append `adapterArguments` (what the event
+    /// adapter needs on the command line, e.g. `--settings <file>`; the same for a fresh launch and a
+    /// resume), resolve the executable against the login-shell PATH, verify `values.cwd` exists, build the
+    /// child environment, set `argv0` for login shells.
     public static func plan(
         profile: DriverProfile,
         mode: LaunchMode,
@@ -113,6 +123,7 @@ public enum LaunchPlanner {
         shellEnvironment: ResolvedShellEnvironment,
         scopeVariables: TerminalEnvironment.ScopeVariables,
         appVersion: String,
+        adapterArguments: [String] = [],
         fileExists: (String) -> Bool = { directoryExists($0) }
     ) throws(LaunchError) -> LaunchPlan {
         let rawArgv: [String]
@@ -130,7 +141,7 @@ public enum LaunchPlanner {
         guard let command = argv.first, !command.isEmpty else {
             throw .commandNotFound(command: profile.command, searchedPATH: shellEnvironment.path, shell: shellEnvironment.shell)
         }
-        let arguments = Array(argv.dropFirst())
+        let arguments = Array(argv.dropFirst()) + adapterArguments
 
         guard let executable = ExecutableResolver.resolve(command, path: shellEnvironment.path, shell: shellEnvironment.shell) else {
             throw .commandNotFound(command: command, searchedPATH: shellEnvironment.path, shell: shellEnvironment.shell)

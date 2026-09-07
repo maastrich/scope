@@ -14,13 +14,16 @@ import ScopeCore
 /// | done          | running      | done       | waiting(input)   | waiting(permission)   | done         |
 /// | exited        | exited       | exited     | exited           | exited                | exited       |
 ///
+/// `session.started` (not in the table) leaves every state unchanged: it only carries the session id.
+///
 /// `exited` is produced only by the PTY `processTerminated` callback (`ThreadStateEvent.processExited`), never
 /// by an adapter event: `thread.ended` is `done` (the driver finished its work; the process may still be
 /// alive). `exited` absorbs everything; a relaunch resets the state to `ThreadState.initial` externally.
 public enum ThreadStateMachine {
     /// Next state after `kind` arrives while in `current`.
     public static func next(_ current: ThreadState, on kind: HookEvent.Kind) -> ThreadState {
-        current.applying(kind.stateEvent)
+        guard let stateEvent = kind.stateEvent else { return current }
+        return current.applying(stateEvent)
     }
 
     /// Same table, refined by the event payload: `input.requested` with `reason=permission` counts as a
@@ -39,14 +42,15 @@ public enum ThreadStateMachine {
 }
 
 extension HookEvent.Kind {
-    /// The `ThreadStateEvent` this wire event stands for.
-    public var stateEvent: ThreadStateEvent {
+    /// The `ThreadStateEvent` this wire event stands for; `nil` for `session.started`, which moves nothing.
+    public var stateEvent: ThreadStateEvent? {
         switch self {
         case .turnStarted: .turnStarted
         case .turnEnded: .turnEnded
         case .inputRequested: .inputRequested
         case .permissionRequested: .permissionRequested
         case .threadEnded: .threadEnded
+        case .sessionStarted: nil
         }
     }
 }
