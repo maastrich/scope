@@ -1,0 +1,344 @@
+import Foundation
+import ScopeCore
+import ScopeGit
+
+/// Tunables of `TaskManager`.
+public struct TaskManagerOptions: Sendable, Equatable {
+    /// `Preferences.branchPrefix`: task branches are `<prefix>/<slug>`.
+    public var branchPrefix: String
+    /// Repo scope only (task root == sandbox): write `AGENTS.md` into the sandbox when no such file
+    /// exists, and list it in `.git/info/exclude` so it never shows in the delta (spec §4.6). Off by
+    /// default: drivers that take a context flag get the content from `TaskProjection` instead.
+    public var writeContextFileIntoMonoRepoSandbox: Bool
+
+    public init(branchPrefix: String = "scope", writeContextFileIntoMonoRepoSandbox: Bool = false) {
+        self.branchPrefix = branchPrefix
+        self.writeContextFileIntoMonoRepoSandbox = writeContextFileIntoMonoRepoSandbox
+    }
+}
+
+/// Creates, extends, archives and closes tasks (spec §4.3): one worktree per repo on
+/// `scope/<slug>`, the task root under `<home>/sandboxes/<scope-slug>/<task-slug>/`, `AGENTS.md`
+/// and `<slug>.code-workspace` projected into it, the record in `<home>/tasks/<id>.json`.
+///
+/// Repo paths are relative to the scope root (`"api"`, `"group/web"`); `"."` means the scope
+/// folder itself is the repo (repo scope, spec §2), in which case the task root *is* the sandbox.
+public actor TaskManager {
+    public nonisolated let home: URL
+    public var options: TaskManagerOptions
+    private let registry: GitClientRegistry
+    private let store: TaskRecordStore
+    private var records: [TaskID: TaskRecord] = [:]
+
+    public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore, options: TaskManagerOptions = .init()) {
+        self.home = home
+        self.registry = registry
+        self.store = store
+        self.options = options
+    }
+
+    public func setOptions(_ options: TaskManagerOptions) { self.options = options }
+
+    // MARK: - Records
+
+    /// Loads every record from disk into the manager. Call once at startup.
+    public func loadAll() async -> [StoreProblem] {
+        let loaded = await store.loadAll()
+        records = Dictionary(uniqueKeysWithValues: loaded.records.map { ($0.id, $0) })
+        return loaded.problems
+    }
+
+    /// Every known task, oldest first.
+    public var allTasks: [TaskRecord] {
+        records.values.sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+    }
+
+    public func tasks(in scope: ScopeID) -> [TaskRecord] {
+        allTasks.filter { $0.scopeID == scope }
+    }
+
+    public func task(_ id: TaskID) -> TaskRecord? { records[id] }
+
+    /// `sandboxes/<scope-slug>/`
+    public nonisolated func scopeSandboxesURL(scopeSlug: String) -> URL {
+        ScopeHome.sandboxesURL(home: home).appending(path: scopeSlug, directoryHint: .isDirectory)
+    }
+
+    /// See `TaskRecord.threadCwd`.
+    public nonisolated func threadCwd(for task: TaskRecord) -> URL { task.threadCwd }
+
+    /// See `TaskRecord.environment` (`SCOPE_TASK`, `SCOPE_TASK_ROOT`).
+    public nonisolated func taskEnvironment(for task: TaskRecord) -> [String: String] { task.environment }
+
+    // MARK: - Create / extend
+
+    /// Creates a task: unique slug in the scope, `<prefix>/<slug>` branch, one worktree per repo
+    /// from `origin/<default>` (after `fetch`; local `<default>` when there is no origin), the
+    /// projection files, and the record.
+    ///
+    /// - Parameters:
+    ///   - name: display name; the slug derives from it (`"Auth refresh"` → `auth-refresh`, `-2` on collision).
+    ///   - scope: the declaring scope.
+    ///   - repos: relative paths of the repos to sandbox (`["."]` for a repo scope).
+    ///   - scopeRepos: relative paths of *all* repos of the scope, for the "other repos" section of `AGENTS.md`.
+    /// - Throws: `TaskError`. Worktrees and branches created before a failure are removed again.
+    public func create(name: String, in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = []) async throws -> TaskRecord {
+        let requested = repos.map(TaskRepo.normalize)
+        guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
+        if requested.contains("."), requested.count > 1 {
+            throw TaskError.invalidRepoSelection("a repo scope task holds the scope itself only")
+        }
+        guard Set(requested).count == requested.count else { throw TaskError.invalidRepoSelection("duplicate repositories") }
+
+        let slug = uniqueSlug(for: name, in: scope)
+        let branch = TaskBranch.name(prefix: options.branchPrefix, taskName: slug)
+        let root = scopeSandboxesURL(scopeSlug: scope.slug).appending(path: slug, directoryHint: .isDirectory)
+
+        var record = TaskRecord(
+            scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
+            slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now)
+        )
+
+        var created: [(TaskRepo, branchWasNew: Bool)] = []
+        do {
+            for path in requested {
+                let (repo, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
+                created.append((repo, isNew))
+                record.repos.append(repo)
+            }
+            try await writeProjection(record, scopeRepos: scopeRepos)
+            try await persist(record)
+        } catch {
+            await rollback(created, task: record)
+            throw error
+        }
+        records[record.id] = record
+        return record
+    }
+
+    /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
+    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = []) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let path = TaskRepo.normalize(repo)
+        if path == "." || record.isMonoRepo {
+            throw TaskError.invalidRepoSelection("a repo scope task holds the scope itself only")
+        }
+        guard record.repo(at: path) == nil else { throw TaskError.repoAlreadyInTask(repo: path) }
+
+        let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
+        record.repos.append(sandbox)
+        do {
+            try await writeProjection(record, scopeRepos: scopeRepos)
+            try await persist(record)
+        } catch {
+            await rollback([(sandbox, isNew)], task: record)
+            throw error
+        }
+        records[id] = record
+        return record
+    }
+
+    /// Rewrites `AGENTS.md` and the `.code-workspace` (after a Graph refresh, or a repo list change).
+    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = []) async throws {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        try await writeProjection(record, scopeRepos: scopeRepos)
+    }
+
+    // MARK: - Archive / close
+
+    /// Removes every sandbox but keeps the branches; the record stays, marked archived.
+    /// Guardrail: `TaskError.uncommittedChanges` on the first dirty sandbox unless `force`. Nothing is
+    /// removed before every sandbox passed the check.
+    @discardableResult
+    public func archive(_ id: TaskID, force: Bool = false) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        try await guardClean(record, force: force)
+        for index in record.repos.indices where record.repos[index].state == .active {
+            try await removeSandbox(record.repos[index], task: record, force: force)
+            record.repos[index].state = .archived
+        }
+        removeRootIfNotSandbox(record)
+        record.archivedAt = TaskRecord.roundedToMilliseconds(.now)
+        try await persist(record)
+        records[id] = record
+        return record
+    }
+
+    /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`.
+    ///
+    /// Guardrails: `TaskError.uncommittedChanges` for a dirty sandbox and `TaskError.branchNotMerged`
+    /// for an unmerged branch (`git branch -d`), both bypassed by `force` (`-D`) once the user confirmed.
+    public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false) async throws {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        try await guardClean(record, force: force)
+        for index in record.repos.indices where record.repos[index].state == .active {
+            try await removeSandbox(record.repos[index], task: record, force: force)
+            record.repos[index].state = .archived
+        }
+        removeRootIfNotSandbox(record)
+        if deleteBranch {
+            for repo in record.repos {
+                let client = try await baseClient(for: repo.repoRelativePath, task: record)
+                do {
+                    try await client.deleteBranch(name: repo.branch, force: force)
+                } catch let error as GitError {
+                    if !force, error.message.contains("not fully merged") {
+                        // Sandboxes are gone but the record stays so the user can retry with force.
+                        try? await persist(record)
+                        records[id] = record
+                        throw TaskError.branchNotMerged(repo: repo.repoRelativePath, branch: repo.branch)
+                    }
+                    if !error.message.contains("not found") {
+                        throw TaskError.git(repo: repo.repoRelativePath, error)
+                    }
+                }
+            }
+        }
+        do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
+        records[id] = nil
+    }
+
+    /// `git worktree prune` on each base checkout (spec §4.3: at startup). Failures are logged, never thrown.
+    public func pruneWorktrees(in scope: ScopeDeclaration, repos: [String]) async {
+        for path in repos {
+            let base = Self.baseURL(scopeRoot: scope.path, repoRelativePath: TaskRepo.normalize(path))
+            let client = await registry.client(for: base)
+            do { try await client.prune() } catch { Log.tasks.error("prune failed in \(base.path): \(String(describing: error))") }
+        }
+    }
+
+    // MARK: - Internals
+
+    /// `<root>/<slug>` plus `-2`, `-3`… while a record of the scope or a folder under `sandboxes/<scope>/` uses it.
+    private func uniqueSlug(for name: String, in scope: ScopeDeclaration) -> String {
+        var taken = Set(tasks(in: scope.id).map(\.slug))
+        if let folders = try? FileManager.default.contentsOfDirectory(atPath: scopeSandboxesURL(scopeSlug: scope.slug).path) {
+            taken.formUnion(folders)
+        }
+        return SlugAllocator.unique(base: TaskBranch.slug(for: name), taken: taken)
+    }
+
+    static func baseURL(scopeRoot: String, repoRelativePath: String) -> URL {
+        let root = URL(fileURLWithPath: scopeRoot, isDirectory: true)
+        return repoRelativePath == "." ? root : root.appending(path: repoRelativePath, directoryHint: .isDirectory)
+    }
+
+    private func baseClient(for repoRelativePath: String, task: TaskRecord) async throws -> GitClient {
+        let base = Self.baseURL(scopeRoot: task.scopeRoot, repoRelativePath: repoRelativePath)
+        guard RepoDiscovery.gitKind(at: base) != nil else { throw TaskError.repoNotFound(repo: repoRelativePath) }
+        return await registry.client(for: base)
+    }
+
+    /// Fetch, resolve the start point, add the worktree. Returns the repo entry and whether the branch was created.
+    private func makeSandbox(repoRelativePath path: String, task: TaskRecord) async throws -> (TaskRepo, Bool) {
+        let client = try await baseClient(for: path, task: task)
+        let sandbox = path == "." ? task.rootURL : task.rootURL.appending(path: path, directoryHint: .isDirectory)
+
+        if await client.hasRemote("origin") {
+            do { try await client.fetch(remote: "origin") } catch {
+                Log.tasks.warning("fetch failed in \(path): \(String(describing: error)); using the local origin/<default>")
+            }
+        }
+        guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
+        let startPoint = await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
+        let branchWasNew = !(await client.branchExists(task.branch))
+
+        do {
+            try await client.createWorktree(at: sandbox, branch: task.branch, from: startPoint)
+        } catch let error as GitError {
+            throw TaskError.git(repo: path, error)
+        } catch let error as WorktreeError {
+            throw TaskError.worktree(repo: path, error)
+        }
+        let repo = TaskRepo(repoRelativePath: path, sandboxPath: sandbox.filesystemPath, branch: task.branch)
+        return (repo, branchWasNew)
+    }
+
+    private func rollback(_ created: [(TaskRepo, branchWasNew: Bool)], task: TaskRecord) async {
+        for (repo, branchWasNew) in created {
+            guard let client = try? await baseClient(for: repo.repoRelativePath, task: task) else { continue }
+            try? await client.removeWorktree(at: repo.sandboxURL, force: true)
+            if branchWasNew { try? await client.deleteBranch(name: repo.branch, force: true) }
+        }
+        removeRootIfNotSandbox(task)
+    }
+
+    private func guardClean(_ record: TaskRecord, force: Bool) async throws {
+        guard !force else { return }
+        for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
+            let client = try await baseClient(for: repo.repoRelativePath, task: record)
+            let dirty: Bool
+            do { dirty = try await client.hasUncommittedChanges(at: repo.sandboxURL) }
+            catch let error as GitError { throw TaskError.git(repo: repo.repoRelativePath, error) }
+            if dirty { throw TaskError.uncommittedChanges(repo: repo.repoRelativePath) }
+        }
+    }
+
+    private func removeSandbox(_ repo: TaskRepo, task: TaskRecord, force: Bool) async throws {
+        let client = try await baseClient(for: repo.repoRelativePath, task: task)
+        do {
+            try await client.removeWorktree(at: repo.sandboxURL, force: force)
+        } catch let error as WorktreeError {
+            throw TaskError.worktree(repo: repo.repoRelativePath, error)
+        } catch let error as GitError {
+            throw TaskError.git(repo: repo.repoRelativePath, error)
+        }
+    }
+
+    /// Deletes the task root (projection files, empty folders) — never when the root is itself a sandbox.
+    private func removeRootIfNotSandbox(_ record: TaskRecord) {
+        guard !record.isMonoRepo else { return }
+        try? FileManager.default.removeItem(at: record.rootURL)
+    }
+
+    private func persist(_ record: TaskRecord) async throws {
+        do { try await store.save(record) } catch { throw TaskError.persistence(String(describing: error)) }
+    }
+
+    /// Writes `AGENTS.md` and `<slug>.code-workspace` in the task root. Repo scope: no workspace
+    /// (single root), and `AGENTS.md` only under `writeContextFileIntoMonoRepoSandbox`.
+    private func writeProjection(_ record: TaskRecord, scopeRepos: [String]) async throws {
+        let others = scopeRepos.map(TaskRepo.normalize).filter { $0 != "." }
+        let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName)
+        do {
+            if record.isMonoRepo {
+                guard options.writeContextFileIntoMonoRepoSandbox, let repo = record.activeRepos.first else { return }
+                let file = record.contextFileURL
+                guard !FileManager.default.fileExists(atPath: file.path) else { return }
+                try markdown.write(to: file, atomically: true, encoding: .utf8)
+                try await excludeFromGit("AGENTS.md", in: repo, task: record)
+                return
+            }
+            try FileManager.default.createDirectory(at: record.rootURL, withIntermediateDirectories: true)
+            try markdown.write(to: record.contextFileURL, atomically: true, encoding: .utf8)
+            try TaskProjection.workspaceJSON(task: record).write(to: record.workspaceURL, options: [.atomic])
+        } catch let error as TaskError {
+            throw error
+        } catch {
+            throw TaskError.persistence("projection write failed: \(String(describing: error))")
+        }
+    }
+
+    /// Appends `name` to the repo's `info/exclude` (resolved with `git rev-parse --git-path`, so it
+    /// works from a worktree where `.git` is a file) unless already listed.
+    private func excludeFromGit(_ name: String, in repo: TaskRepo, task: TaskRecord) async throws {
+        let client = try await baseClient(for: repo.repoRelativePath, task: task)
+        let sandbox = repo.sandboxPath
+        let raw: String
+        do { raw = try await client.output(["-C", sandbox, "rev-parse", "--git-path", "info/exclude"]) }
+        catch let error as GitError { throw TaskError.git(repo: repo.repoRelativePath, error) }
+        let exclude = raw.hasPrefix("/")
+            ? URL(fileURLWithPath: raw)
+            : URL(fileURLWithPath: sandbox, isDirectory: true).appending(path: raw, directoryHint: .notDirectory)
+        try FileManager.default.createDirectory(at: exclude.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let existing = (try? String(contentsOf: exclude, encoding: .utf8)) ?? ""
+        let listed = existing.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces) == name || $0.trimmingCharacters(in: .whitespaces) == "/\(name)" }
+        guard !listed else { return }
+        var updated = existing
+        if !updated.isEmpty, !updated.hasSuffix("\n") { updated += "\n" }
+        updated += "/\(name)\n"
+        try updated.write(to: exclude, atomically: true, encoding: .utf8)
+    }
+}

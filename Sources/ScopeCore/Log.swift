@@ -16,6 +16,8 @@ public enum Log {
     public static let threads = Logger(subsystem: subsystem, category: "threads")
     /// Git subprocesses.
     public static let git = Logger(subsystem: subsystem, category: "git")
+    /// Tasks and sandboxes (M2).
+    public static let tasks = Logger(subsystem: subsystem, category: "tasks")
     /// File-system watching.
     public static let fs = Logger(subsystem: subsystem, category: "fs")
     /// Adapter socket and hook events.
