@@ -17,6 +17,7 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs"
 REPO = "https://github.com/maastrich/scope"
+SITE = "https://maastrich.github.io/scope"
 
 NAV = [
     ("Start", [
@@ -95,9 +96,13 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Scope">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
-<meta property="og:image" content="assets/img/hero.png">
+<meta property="og:url" content="{site}/{slug}">
+<meta property="og:image" content="{site}/assets/img/hero.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/img/icon.png">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -117,7 +122,7 @@ def render(slug: str, title: str, description: str, body: str, wide: bool) -> st
     else:
         content = ('<div class="layout">' + sidebar(slug) + "<main>" + body + "</main>" + toc(body) + "</div>")
     return PAGE.format(title=html.escape(title), description=html.escape(description),
-                       topbar=TOPBAR, content=content, footer=FOOTER)
+                       site=SITE, slug=slug, topbar=TOPBAR, content=content, footer=FOOTER)
 
 
 def figure(name: str, caption: str, classes: str = "shot") -> str:
@@ -625,6 +630,13 @@ REFERENCE = """
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
 
+<h2 id="palette">The command palette</h2>
+<p><kbd>⌘K</kbd> opens one field over everything: the actions of the current context, the files of the
+selection, the repositories of the scope and the open threads. <kbd>⌘P</kbd> opens it straight in file mode.</p>
+FIG_PALETTE
+<div class="note warn"><p>While a terminal has keyboard focus it keeps <kbd>⌘K</kbd> for itself. Click outside
+the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p></div>
+
 <h2 id="shortcuts">Keyboard</h2>
 <table>
   <tr><th>Key</th><th>Action</th></tr>
@@ -689,6 +701,7 @@ its optional signing secrets.</p>
 FIGURES = {
     "FIG_NEWTASK": figure("newtask-proposal", "The driver’s proposal, all three fields editable."),
     "FIG_AGENT": figure("agent-thread-full", "Claude Code running in a task sandbox, prompt already sent."),
+    "FIG_PALETTE": figure("palette", "The command palette: actions, files, repositories and threads in one field."),
     "FIG_AGENT_DELTA": figure("agent-delta", "The whole window while an agent works: its terminal on the left, its diff on the right."),
     "FIG_DELTA": figure("delta-files", "Delta groups the changed files by repository."),
     "FIG_DELTA_PANEL": figure("delta-panel", "Delta: files by repository, the diff, and commit / push / create PR."),

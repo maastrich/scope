@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Files, keys, updates — Scope</title>
 <meta name="description" content="Where Scope stores things, every keyboard shortcut, the settings, updates and what it touches on disk.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Scope">
 <meta property="og:title" content="Files, keys, updates — Scope">
 <meta property="og:description" content="Where Scope stores things, every keyboard shortcut, the settings, updates and what it touches on disk.">
-<meta property="og:image" content="assets/img/hero.png">
+<meta property="og:url" content="https://maastrich.github.io/scope/reference.html">
+<meta property="og:image" content="https://maastrich.github.io/scope/assets/img/hero.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/img/icon.png">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -39,6 +43,13 @@
 ~/Library/Application Support/Scope/ui-state.json   <span class="c"># selection, expansion, panel widths</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
+
+<h2 id="palette">The command palette</h2>
+<p><kbd>⌘K</kbd> opens one field over everything: the actions of the current context, the files of the
+selection, the repositories of the scope and the open threads. <kbd>⌘P</kbd> opens it straight in file mode.</p>
+<figure class="shot"><img src="assets/img/palette.png" alt="The command palette: actions, files, repositories and threads in one field." loading="lazy"><figcaption>The command palette: actions, files, repositories and threads in one field.</figcaption></figure>
+<div class="note warn"><p>While a terminal has keyboard focus it keeps <kbd>⌘K</kbd> for itself. Click outside
+the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p></div>
 
 <h2 id="shortcuts">Keyboard</h2>
 <table>
@@ -97,7 +108,7 @@ swift build              <span class="c"># the ScopeKit package alone</span></co
 release with its checksum and the Sparkle appcast, and publishes it. The version <i>is</i> the tag; nothing in
 the tree is bumped. See the <a href="https://github.com/maastrich/scope/blob/main/README.md#releasing">README</a> for the full pipeline and
 its optional signing secrets.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#layout">On disk</a><a class="lvl2" href="#shortcuts">Keyboard</a><a class="lvl2" href="#settings">Settings</a><a class="lvl2" href="#updates">Updates</a><a class="lvl2" href="#privacy">What Scope touches</a><a class="lvl2" href="#building">Building and releasing</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#layout">On disk</a><a class="lvl2" href="#palette">The command palette</a><a class="lvl2" href="#shortcuts">Keyboard</a><a class="lvl2" href="#settings">Settings</a><a class="lvl2" href="#updates">Updates</a><a class="lvl2" href="#privacy">What Scope touches</a><a class="lvl2" href="#building">Building and releasing</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
