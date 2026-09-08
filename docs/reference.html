@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files, keys, updates — Scope</title>
+<meta name="description" content="Where Scope stores things, every keyboard shortcut, the settings, updates and what it touches on disk.">
+<meta property="og:title" content="Files, keys, updates — Scope">
+<meta property="og:description" content="Where Scope stores things, every keyboard shortcut, the settings, updates and what it touches on disk.">
+<meta property="og:image" content="assets/img/hero.png">
+<link rel="icon" href="assets/img/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.png" alt=""> Scope <span class="ver">macOS 15+</span></a>
+  <nav>
+    <a href="getting-started.html">Docs</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope/releases/latest">Download</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope">GitHub</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2z"/></svg></button>
+  </nav>
+</header>
+<div class="layout"><aside class="sidebar" id="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Working in Scope</h4><a href="concepts.html">Scopes, threads, drivers</a><a href="tasks.html">Tasks and sandboxes</a><a href="review.html">Delta, Base, pull requests</a><a href="graph.html">The repository graph</a><h4>Reference</h4><a href="drivers.html">Driver profiles</a><a href="adapters.html">Hooks and thread states</a><a class="active" href="reference.html">Files, keys, updates</a></aside><main>
+<div class="eyebrow">Reference</div>
+<h1>Files, keys, updates</h1>
+
+<h2 id="layout">On disk</h2>
+<pre><code>~/.scope/                 <span class="c"># SCOPE_HOME; override it with launchctl setenv SCOPE_HOME …</span>
+├── config.json           <span class="c"># declared scopes + preferences</span>
+├── drivers/*.json        <span class="c"># driver profiles</span>
+├── threads/&lt;id&gt;.json     <span class="c"># one record per thread</span>
+├── tasks/&lt;id&gt;.json       <span class="c"># one record per task</span>
+├── graph/&lt;scope&gt;.json    <span class="c"># the repository cards</span>
+├── sandboxes/            <span class="c"># the task worktrees</span>
+└── scope.sock            <span class="c"># hook events</span>
+
+~/Library/Application Support/Scope/ui-state.json   <span class="c"># selection, expansion, panel widths</span></code></pre>
+<p>Every store writes atomically. A file with a newer schema version than the running build is reported and
+left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
+
+<h2 id="shortcuts">Keyboard</h2>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>⌘O</kbd></td><td>Declare a scope…</td></tr>
+  <tr><td><kbd>⌘R</kbd></td><td>Refresh scope</td></tr>
+  <tr><td><kbd>⌘T</kbd></td><td>New thread in the current context</td></tr>
+  <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or undo the last close)</td></tr>
+  <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
+  <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
+  <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread</td></tr>
+  <tr><td><kbd>⌘1</kbd>–<kbd>⌘9</kbd>, <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd></td><td>Switch threads</td></tr>
+  <tr><td><kbd>⌘K</kbd></td><td>Command palette</td></tr>
+  <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
+  <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
+  <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
+  <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
+  <tr><td><kbd>⌘E</kbd> / <kbd>⇧⌘E</kbd></td><td>Open the selection / the task in your editor</td></tr>
+  <tr><td><kbd>⌘F</kbd>, <kbd>⌘G</kbd></td><td>Find in the terminal or the diff</td></tr>
+  <tr><td><kbd>⌥⌘K</kbd></td><td>Clear the terminal scrollback</td></tr>
+  <tr><td><kbd>⌘/</kbd></td><td>This list, in the app</td></tr>
+</table>
+
+<h2 id="settings">Settings</h2>
+<figure class="shot narrow"><img src="assets/img/settings.png" alt="Settings → General." loading="lazy"><figcaption>Settings → General.</figcaption></figure>
+<ul>
+  <li><b>General</b> — config folder, default driver, editor command, terminal font size and appearance
+  (follow the system, or always dark, which is what agent TUIs assume), notification status.</li>
+  <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
+  <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
+</ul>
+<p>The editor command is a template: <code>["code", "-g", "{file}:{line}"]</code>. <code>{path}</code>,
+<code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>
+
+<h2 id="updates">Updates</h2>
+<p>Scope ships with Sparkle. <b>Scope → Check for Updates…</b> reads a signed appcast attached to the latest
+GitHub release; updates are verified with an EdDSA signature before they are applied. Prereleases
+(<code>v1.0.0-rc.1</code>) are excluded from the stable feed.</p>
+
+<h2 id="privacy">What Scope touches</h2>
+<ul>
+  <li>It <b>reads</b> your declared folders — files, git metadata, README and manifests.</li>
+  <li>It <b>writes</b> only under <code>~/.scope/</code> and its own Application Support folder — with two
+  exceptions you ask for: git operations you trigger from a panel, and the worktrees it creates for tasks.</li>
+  <li>It sends nothing anywhere. Network traffic comes from the agents you launch, from <code>git</code>,
+  <code>gh</code>, and from the update check.</li>
+</ul>
+
+<h2 id="building">Building and releasing</h2>
+<pre><code>make generate            <span class="c"># Scope.xcodeproj from project.yml</span>
+make build               <span class="c"># Debug .app (CONFIG=Release for release)</span>
+make run                 <span class="c"># build + open</span>
+make test-one FILE=SlugTests
+swift build              <span class="c"># the ScopeKit package alone</span></code></pre>
+<p>Releases are driven by tags: pushing <code>vX.Y.Z</code> builds a universal DMG, attaches it to a GitHub
+release with its checksum and the Sparkle appcast, and publishes it. The version <i>is</i> the tag; nothing in
+the tree is bumped. See the <a href="https://github.com/maastrich/scope/blob/main/README.md#releasing">README</a> for the full pipeline and
+its optional signing secrets.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#layout">On disk</a><a class="lvl2" href="#shortcuts">Keyboard</a><a class="lvl2" href="#settings">Settings</a><a class="lvl2" href="#updates">Updates</a><a class="lvl2" href="#privacy">What Scope touches</a><a class="lvl2" href="#building">Building and releasing</a></aside></div>
+<footer class="footer"><div class="footer-inner">
+  <span>Scope — a control room for CLI code agents.</span>
+  <a href="https://github.com/maastrich/scope">Source</a>
+  <a href="https://github.com/maastrich/scope/blob/main/SPEC.md">Specification</a>
+  <a href="https://github.com/maastrich/scope/blob/main/LICENSE">MIT licence</a>
+  <span>Every screenshot uses a throwaway demo workspace.</span>
+</div></footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The repository graph — Scope</title>
+<meta name="description" content="One card per repository — purpose, stack, entry points, setup and test commands — projected into every task.">
+<meta property="og:title" content="The repository graph — Scope">
+<meta property="og:description" content="One card per repository — purpose, stack, entry points, setup and test commands — projected into every task.">
+<meta property="og:image" content="assets/img/hero.png">
+<link rel="icon" href="assets/img/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.png" alt=""> Scope <span class="ver">macOS 15+</span></a>
+  <nav>
+    <a href="getting-started.html">Docs</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope/releases/latest">Download</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope">GitHub</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2z"/></svg></button>
+  </nav>
+</header>
+<div class="layout"><aside class="sidebar" id="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Working in Scope</h4><a href="concepts.html">Scopes, threads, drivers</a><a href="tasks.html">Tasks and sandboxes</a><a href="review.html">Delta, Base, pull requests</a><a class="active" href="graph.html">The repository graph</a><h4>Reference</h4><a href="drivers.html">Driver profiles</a><a href="adapters.html">Hooks and thread states</a><a href="reference.html">Files, keys, updates</a></aside><main>
+<div class="eyebrow">Guide</div>
+<h1>The repository graph</h1>
+<p class="lede">One card per repository: what it is for, what it is built with, how to set it up and test it,
+and which repositories it talks to. It is what Scope hands to an agent when a task starts.</p>
+
+<figure class="shot"><img src="assets/img/graph-card.png" alt="A repository card: purpose, stack, entry points, relations." loading="lazy"><figcaption>A repository card: purpose, stack, entry points, relations.</figcaption></figure>
+
+<h2 id="generation">Two levels of generation</h2>
+<table>
+  <tr><th>Level</th><th>Source</th><th>Fills</th></tr>
+  <tr><td><b>Level 0</b></td><td>README, manifests (<code>package.json</code>, <code>go.mod</code>, <code>Cargo.toml</code>…), git log</td><td>name, remote, default branch, stack, entry points, setup and test commands, last activity</td></tr>
+  <tr><td><b>Level 1</b></td><td>the default driver, run headless once per repository</td><td>the purpose sentence, the relations between repositories, tags</td></tr>
+</table>
+<p><b>Analyze</b> in the panel header runs both; the split button runs level 0 alone, which needs no agent and
+no network. Results are cached per repository, keyed by HEAD plus the hashes of the README and manifests, so
+re-analysing an unchanged repository costs nothing.</p>
+
+<h2 id="editing">Editing a card</h2>
+<p><b>Edit</b> on any card opens the fields for hand-editing. An edited card is marked and generation never
+overwrites it again — the graph is a document you own, not a cache the app owns.</p>
+<figure class="shot"><img src="assets/img/graph-panel.png" alt="The graph of a scope; “edited” marks a card generation will not touch." loading="lazy"><figcaption>The graph of a scope; “edited” marks a card generation will not touch.</figcaption></figure>
+<p>Cards are stored as one JSON file per scope in <code>~/.scope/graph/&lt;scope-slug&gt;.json</code>. Editing
+that file by hand works too; <b>Refresh Scope</b> (<kbd>⌘R</kbd>) picks it up.</p>
+
+<h2 id="projection">How agents see it</h2>
+<p>When a task is created, the cards of the repositories it touches are projected into the task's
+<code>AGENTS.md</code>, under the goal. The agent starts knowing what each repository is for, how to install
+it and how to run its tests, instead of spending its first minutes rediscovering that.</p>
+
+<h2 id="filter">Finding things</h2>
+<p>The filter field above the cards matches path and stack at once: type <code>go</code> to get the Go
+services, <code>api</code> to get everything whose path says so.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#generation">Two levels of generation</a><a class="lvl2" href="#editing">Editing a card</a><a class="lvl2" href="#projection">How agents see it</a><a class="lvl2" href="#filter">Finding things</a></aside></div>
+<footer class="footer"><div class="footer-inner">
+  <span>Scope — a control room for CLI code agents.</span>
+  <a href="https://github.com/maastrich/scope">Source</a>
+  <a href="https://github.com/maastrich/scope/blob/main/SPEC.md">Specification</a>
+  <a href="https://github.com/maastrich/scope/blob/main/LICENSE">MIT licence</a>
+  <span>Every screenshot uses a throwaway demo workspace.</span>
+</div></footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

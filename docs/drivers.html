@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driver profiles — Scope</title>
+<meta name="description" content="Every tool Scope can launch is one JSON file: fields, placeholders, resolution, and how to add your own.">
+<meta property="og:title" content="Driver profiles — Scope">
+<meta property="og:description" content="Every tool Scope can launch is one JSON file: fields, placeholders, resolution, and how to add your own.">
+<meta property="og:image" content="assets/img/hero.png">
+<link rel="icon" href="assets/img/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.png" alt=""> Scope <span class="ver">macOS 15+</span></a>
+  <nav>
+    <a href="getting-started.html">Docs</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope/releases/latest">Download</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope">GitHub</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2z"/></svg></button>
+  </nav>
+</header>
+<div class="layout"><aside class="sidebar" id="sidebar"><h4>Start</h4><a href="index.html">Overview</a><a href="getting-started.html">Getting started</a><h4>Working in Scope</h4><a href="concepts.html">Scopes, threads, drivers</a><a href="tasks.html">Tasks and sandboxes</a><a href="review.html">Delta, Base, pull requests</a><a href="graph.html">The repository graph</a><h4>Reference</h4><a class="active" href="drivers.html">Driver profiles</a><a href="adapters.html">Hooks and thread states</a><a href="reference.html">Files, keys, updates</a></aside><main>
+<div class="eyebrow">Reference</div>
+<h1>Driver profiles</h1>
+<p class="lede">A driver is one JSON file in <code>~/.scope/drivers/&lt;id&gt;.json</code>. Four are bundled;
+adding a fifth is a text edit, not a rebuild.</p>
+
+<h2 id="example">A complete profile</h2>
+<pre><code>{
+  "id": "claude-code",
+  "name": "Claude Code",
+  "command": "claude",
+  "args": [],
+  "env": {},
+  "context": { "file": "CLAUDE.md", "mode": "generate" },
+  "resume": ["claude", "--resume", "{resume_id}"],
+  "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
+  "prompt": ["{prompt}"],
+  "adapter": { "kind": "claude-hooks" },
+  "icon": "sparkles"
+}</code></pre>
+
+<h2 id="fields">Fields</h2>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>id</code></td><td><code>^[a-z0-9][a-z0-9-]*$</code>; the file is named after it</td></tr>
+  <tr><td><code>name</code></td><td>what the menus show</td></tr>
+  <tr><td><code>command</code></td><td><code>"$SHELL"</code>, a bare name resolved on the login-shell PATH, an absolute path, or <code>~/…</code></td></tr>
+  <tr><td><code>args</code>, <code>env</code></td><td>appended arguments and extra environment; both accept placeholders</td></tr>
+  <tr><td><code>loginShell</code></td><td><code>true</code> starts the command as a login shell (Terminal.app style)</td></tr>
+  <tr><td><code>context</code></td><td>the project file the tool reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>) and how Scope projects into it: <code>generate</code>, <code>file</code>, <code>flag</code>, <code>none</code></td></tr>
+  <tr><td><code>resume</code></td><td>full argv to resume a captured session</td></tr>
+  <tr><td><code>headless</code></td><td>full argv for one-shot runs: graph level 1, task branch proposals</td></tr>
+  <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
+  <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
+  <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
+  <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
+</table>
+
+<h2 id="placeholders">Placeholders</h2>
+<table>
+  <tr><th>Placeholder</th><th>Replaced by</th></tr>
+  <tr><td><code>{thread_id}</code></td><td>the thread id</td></tr>
+  <tr><td><code>{resume_id}</code></td><td>the captured session id (<code>resume</code> only)</td></tr>
+  <tr><td><code>{prompt}</code></td><td>the initial prompt, or the meta-prompt for a headless run</td></tr>
+  <tr><td><code>{cwd}</code>, <code>{scope}</code>, <code>{task}</code>, <code>{home}</code></td><td>working directory, scope root, task slug, <code>SCOPE_HOME</code></td></tr>
+  <tr><td><code>{scope_hook}</code></td><td>path of the bundled <code>scope-hook</code> helper</td></tr>
+</table>
+<p>A profile that uses a placeholder Scope cannot fill is refused at load time rather than at launch time.</p>
+
+<h2 id="resolution">How the command is resolved</h2>
+<p>Scope probes your login shell once at launch (<code>$SHELL -ilc</code> by default) and resolves every
+<code>command</code> against that <code>PATH</code>. That is why a driver installed through nvm, mise or a
+shell function works here exactly as it does in your terminal. The mode is a setting: interactive login,
+login only, or no probe at all.</p>
+<p><b>Settings → Drivers</b> lists every profile with the binary it resolves to, and flags the ones it cannot
+find. <b>Reload</b> picks up edits without restarting.</p>
+
+<h2 id="adding">Adding your own</h2>
+<pre><code>cat &gt; ~/.scope/drivers/aider.json &lt;&lt;'JSON'
+{
+  "id": "aider",
+  "name": "Aider",
+  "command": "aider",
+  "args": ["--no-auto-commits"],
+  "icon": "wand.and.stars"
+}
+JSON</code></pre>
+<p>Then <b>Settings → Drivers → Reload</b>. The minimum is <code>id</code>, <code>name</code> and
+<code>command</code>; everything else is optional and degrades gracefully — a driver without
+<code>headless</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
+state.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#example">A complete profile</a><a class="lvl2" href="#fields">Fields</a><a class="lvl2" href="#placeholders">Placeholders</a><a class="lvl2" href="#resolution">How the command is resolved</a><a class="lvl2" href="#adding">Adding your own</a></aside></div>
+<footer class="footer"><div class="footer-inner">
+  <span>Scope — a control room for CLI code agents.</span>
+  <a href="https://github.com/maastrich/scope">Source</a>
+  <a href="https://github.com/maastrich/scope/blob/main/SPEC.md">Specification</a>
+  <a href="https://github.com/maastrich/scope/blob/main/LICENSE">MIT licence</a>
+  <span>Every screenshot uses a throwaway demo workspace.</span>
+</div></footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

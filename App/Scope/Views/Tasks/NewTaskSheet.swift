@@ -26,6 +26,8 @@ struct NewTaskSheet: View {
     @State private var folder = ""
     @State private var source: TaskProposal.Source?
     @State private var fieldsEdited = false
+    /// Last values written by `apply`; an `onChange` back to one of them is our own write, not an edit.
+    @State private var appliedFields: [String] = ["", "", ""]
     @State private var proposing: Task<Void, Never>?
     @State private var isCreating = false
     @State private var error: String?
@@ -167,15 +169,15 @@ struct NewTaskSheet: View {
         Section {
             TextField("Title", text: $title)
                 .focused($titleFocused)
-                .onChange(of: title) { fieldsEdited = true }
+                .onChange(of: title) { if title != appliedFields[0] { fieldsEdited = true } }
             TextField("Branch", text: $branch)
                 .font(.system(size: 12, design: .monospaced))
                 .autocorrectionDisabled()
-                .onChange(of: branch) { fieldsEdited = true }
+                .onChange(of: branch) { if branch != appliedFields[1] { fieldsEdited = true } }
             TextField("Folder", text: $folder)
                 .font(.system(size: 12, design: .monospaced))
                 .autocorrectionDisabled()
-                .onChange(of: folder) { fieldsEdited = true }
+                .onChange(of: folder) { if folder != appliedFields[2] { fieldsEdited = true } }
             LabeledContent("Sandbox") {
                 Text(sandboxPath)
                     .font(.system(size: 11, design: .monospaced))
@@ -316,6 +318,7 @@ struct NewTaskSheet: View {
         guard canContinue else { return }
         error = nil
         fieldsEdited = false
+        appliedFields = ["", "", ""]
         step = .proposal
         let request = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let repos = repos
@@ -346,6 +349,7 @@ struct NewTaskSheet: View {
         title = proposal.title
         branch = proposal.branch
         folder = proposal.slug
+        appliedFields = [proposal.title, proposal.branch, proposal.slug]
         source = proposal.source
         fieldsEdited = false
     }

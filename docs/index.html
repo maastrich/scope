@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scope — a control room for CLI code agents</title>
+<meta name="description" content="Scope is a native macOS workspace for running Claude Code, Codex, Cursor or a shell against your repositories: threads, git-worktree sandboxes, diffs and pull requests in one window.">
+<meta property="og:title" content="Scope — a control room for CLI code agents">
+<meta property="og:description" content="Scope is a native macOS workspace for running Claude Code, Codex, Cursor or a shell against your repositories: threads, git-worktree sandboxes, diffs and pull requests in one window.">
+<meta property="og:image" content="assets/img/hero.png">
+<link rel="icon" href="assets/img/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.png" alt=""> Scope <span class="ver">macOS 15+</span></a>
+  <nav>
+    <a href="getting-started.html">Docs</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope/releases/latest">Download</a>
+    <a class="hide-sm" href="https://github.com/maastrich/scope">GitHub</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme"><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></svg><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2z"/></svg></button>
+  </nav>
+</header>
+<div class="home-wrap">
+<section class="hero">
+  <h1>A control room for<br>CLI code agents</h1>
+  <p class="lede">Scope is a native macOS workspace for running Claude Code, Codex, Cursor or a plain shell
+  against your repositories — many agents at once, each in its own terminal, each on its own git worktree,
+  with the diff, the history and the pull request one panel away.</p>
+  <div class="btn-row">
+    <a class="btn" href="https://github.com/maastrich/scope/releases/latest">Download for macOS</a>
+    <a class="btn ghost" href="getting-started.html">Getting started</a>
+  </div>
+  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with tasks and threads, an embedded terminal, and the repository graph in the inspector"></div>
+</section>
+
+<h2 id="what-it-does">What it does</h2>
+<p>Declare a folder as a <b>scope</b> — a cloned GitHub org, a folder of side projects, a single repository.
+Scope discovers the repos inside it, and everything else hangs off that: threads, tasks, diffs, graph.
+It reads your folders and writes nothing inside them.</p>
+
+<div class="grid">
+  <a class="card" href="concepts.html"><h3 id="threads">Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot in the tab.</p></a>
+  <a class="card" href="tasks.html"><h3 id="tasks">Tasks</h3><p>Describe the work in a prompt; the driver proposes the branch, and each repo gets a worktree sandbox.</p></a>
+  <a class="card" href="review.html"><h3 id="delta">Delta</h3><p>The diff of the task against its base, per repo — read it, commit it, push it, open the PR.</p></a>
+  <a class="card" href="graph.html"><h3 id="graph">Graph</h3><p>One card per repo: purpose, stack, entry points, setup and test commands, and who depends on whom.</p></a>
+  <a class="card" href="adapters.html"><h3 id="states">States</h3><p>Hooks report back over a unix socket, so you can see which agent is waiting for you without looking.</p></a>
+  <a class="card" href="drivers.html"><h3 id="drivers">Drivers</h3><p>Every tool is one JSON file. Edit the bundled ones or add your own; no rebuild.</p></a>
+</div>
+
+<h2 id="run-an-agent-where-the-work-is">Run an agent where the work is</h2>
+<div class="split">
+  <div>
+    <h3 id="say-what-you-want-not-what-to-call-it">Say what you want, not what to call it</h3>
+    <p>A task starts as a prompt. The selected driver reads the repository's existing branch names, follows
+    that convention and proposes a title, a branch and a folder — all three editable before you commit to them.
+    No imposed <code>scope/</code> prefix.</p>
+    <p><a href="tasks.html">How tasks work →</a></p>
+  </div>
+  <figure class="shot"><img src="assets/img/newtask-proposal.png" alt="The driver’s proposal, all three fields editable." loading="lazy"><figcaption>The driver’s proposal, all three fields editable.</figcaption></figure>
+</div>
+<div class="split rev">
+  <div>
+    <h3 id="every-task-is-a-sandbox">Every task is a sandbox</h3>
+    <p>One git worktree per repository, on the task branch, under <code>~/.scope/sandboxes/</code>. Your
+    checkouts stay on whatever branch you left them on. The agent gets an <code>AGENTS.md</code> describing the
+    goal and the repos it can touch.</p>
+    <p><a href="tasks.html#sandboxes">Sandboxes →</a></p>
+  </div>
+  <figure class="shot"><img src="assets/img/agent-thread-full.png" alt="Claude Code running in a task sandbox, prompt already sent." loading="lazy"><figcaption>Claude Code running in a task sandbox, prompt already sent.</figcaption></figure>
+</div>
+<div class="split">
+  <div>
+    <h3 id="read-the-diff-without-leaving">Read the diff without leaving</h3>
+    <p>Delta shows the task branch against its merge-base, the uncommitted changes, or the branch against
+    <code>origin</code> — grouped by repository, with per-file counts. Commit, push and open the pull request
+    from the same panel.</p>
+    <p><a href="review.html">Reviewing changes →</a></p>
+  </div>
+  <figure class="shot"><img src="assets/img/delta-files.png" alt="Delta groups the changed files by repository." loading="lazy"><figcaption>Delta groups the changed files by repository.</figcaption></figure>
+</div>
+
+<h2 id="install">Install</h2>
+<p>Download the DMG from the latest release, or build it yourself:</p>
+<pre><code>git clone https://github.com/maastrich/scope.git &amp;&amp; cd scope
+brew install xcodegen
+xcodebuild -downloadComponent MetalToolchain   <span class="c"># once per machine</span>
+make run</code></pre>
+<p>Scope updates itself through Sparkle once installed. <a href="getting-started.html">Full instructions →</a></p>
+</div>
+<footer class="footer"><div class="footer-inner">
+  <span>Scope — a control room for CLI code agents.</span>
+  <a href="https://github.com/maastrich/scope">Source</a>
+  <a href="https://github.com/maastrich/scope/blob/main/SPEC.md">Specification</a>
+  <a href="https://github.com/maastrich/scope/blob/main/LICENSE">MIT licence</a>
+  <span>Every screenshot uses a throwaway demo workspace.</span>
+</div></footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

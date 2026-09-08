@@ -1,0 +1,761 @@
+#!/usr/bin/env python3
+"""Builds the GitHub Pages site in docs/ from the page bodies below.
+
+    python3 scripts/build-docs.py
+
+Everything the site needs is committed: docs/ is served as-is by GitHub Pages
+("Deploy from a branch" → main → /docs). Only the HTML is generated; the CSS,
+the JS and the screenshots under docs/assets/ are checked in by hand.
+"""
+
+from __future__ import annotations
+
+import html
+import pathlib
+import re
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+OUT = ROOT / "docs"
+REPO = "https://github.com/maastrich/scope"
+
+NAV = [
+    ("Start", [
+        ("index.html", "Overview"),
+        ("getting-started.html", "Getting started"),
+    ]),
+    ("Working in Scope", [
+        ("concepts.html", "Scopes, threads, drivers"),
+        ("tasks.html", "Tasks and sandboxes"),
+        ("review.html", "Delta, Base, pull requests"),
+        ("graph.html", "The repository graph"),
+    ]),
+    ("Reference", [
+        ("drivers.html", "Driver profiles"),
+        ("adapters.html", "Hooks and thread states"),
+        ("reference.html", "Files, keys, updates"),
+    ]),
+]
+
+
+# --------------------------------------------------------------------------- shell
+
+def toc(body: str) -> str:
+    items = re.findall(r'<h([23]) id="([^"]+)">(.*?)</h[23]>', body, re.S)
+    if len(items) < 2:
+        return ""
+    links = "".join(
+        '<a class="lvl{lvl}" href="#{anchor}">{label}</a>'.format(
+            lvl=level, anchor=anchor, label=re.sub(r"<[^>]+>", "", label))
+        for level, anchor, label in items
+    )
+    return f'<aside class="toc"><strong>On this page</strong>{links}</aside>'
+
+
+def sidebar(current: str) -> str:
+    out = []
+    for group, pages in NAV:
+        out.append(f"<h4>{group}</h4>")
+        for href, label in pages:
+            cls = ' class="active"' if href == current else ""
+            out.append(f'<a{cls} href="{href}">{label}</a>')
+    return '<aside class="sidebar" id="sidebar">' + "".join(out) + "</aside>"
+
+
+SUN = ('<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+       'stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2'
+       'M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></svg>')
+MOON = ('<svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2z"/></svg>')
+BURGER = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">'
+          '<path d="M4 7h16M4 12h16M4 17h16"/></svg>')
+
+TOPBAR = f"""<header class="topbar">
+  <button class="icon-btn" id="menu-toggle" aria-label="Menu">{BURGER}</button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.png" alt=""> Scope <span class="ver">macOS 15+</span></a>
+  <nav>
+    <a href="getting-started.html">Docs</a>
+    <a class="hide-sm" href="{REPO}/releases/latest">Download</a>
+    <a class="hide-sm" href="{REPO}">GitHub</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">{SUN}{MOON}</button>
+  </nav>
+</header>"""
+
+FOOTER = f"""<footer class="footer"><div class="footer-inner">
+  <span>Scope — a control room for CLI code agents.</span>
+  <a href="{REPO}">Source</a>
+  <a href="{REPO}/blob/main/SPEC.md">Specification</a>
+  <a href="{REPO}/blob/main/LICENSE">MIT licence</a>
+  <span>Every screenshot uses a throwaway demo workspace.</span>
+</div></footer>"""
+
+PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<meta name="description" content="{description}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:image" content="assets/img/hero.png">
+<link rel="icon" href="assets/img/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+{topbar}
+{content}
+{footer}
+<script src="assets/docs.js"></script>
+</body>
+</html>
+"""
+
+
+def render(slug: str, title: str, description: str, body: str, wide: bool) -> str:
+    if wide:
+        content = body
+    else:
+        content = ('<div class="layout">' + sidebar(slug) + "<main>" + body + "</main>" + toc(body) + "</div>")
+    return PAGE.format(title=html.escape(title), description=html.escape(description),
+                       topbar=TOPBAR, content=content, footer=FOOTER)
+
+
+def figure(name: str, caption: str, classes: str = "shot") -> str:
+    return (f'<figure class="{classes}"><img src="assets/img/{name}.png" alt="{html.escape(caption)}" loading="lazy">'
+            f"<figcaption>{caption}</figcaption></figure>")
+
+
+# --------------------------------------------------------------------------- pages
+
+HOME = """<div class="home-wrap">
+<section class="hero">
+  <h1>A control room for<br>CLI code agents</h1>
+  <p class="lede">Scope is a native macOS workspace for running Claude Code, Codex, Cursor or a plain shell
+  against your repositories — many agents at once, each in its own terminal, each on its own git worktree,
+  with the diff, the history and the pull request one panel away.</p>
+  <div class="btn-row">
+    <a class="btn" href="REPO/releases/latest">Download for macOS</a>
+    <a class="btn ghost" href="getting-started.html">Getting started</a>
+  </div>
+  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with tasks and threads, an embedded terminal, and the repository graph in the inspector"></div>
+</section>
+
+<h2>What it does</h2>
+<p>Declare a folder as a <b>scope</b> — a cloned GitHub org, a folder of side projects, a single repository.
+Scope discovers the repos inside it, and everything else hangs off that: threads, tasks, diffs, graph.
+It reads your folders and writes nothing inside them.</p>
+
+<div class="grid">
+  <a class="card" href="concepts.html"><h3>Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot in the tab.</p></a>
+  <a class="card" href="tasks.html"><h3>Tasks</h3><p>Describe the work in a prompt; the driver proposes the branch, and each repo gets a worktree sandbox.</p></a>
+  <a class="card" href="review.html"><h3>Delta</h3><p>The diff of the task against its base, per repo — read it, commit it, push it, open the PR.</p></a>
+  <a class="card" href="graph.html"><h3>Graph</h3><p>One card per repo: purpose, stack, entry points, setup and test commands, and who depends on whom.</p></a>
+  <a class="card" href="adapters.html"><h3>States</h3><p>Hooks report back over a unix socket, so you can see which agent is waiting for you without looking.</p></a>
+  <a class="card" href="drivers.html"><h3>Drivers</h3><p>Every tool is one JSON file. Edit the bundled ones or add your own; no rebuild.</p></a>
+</div>
+
+<h2>Run an agent where the work is</h2>
+<div class="split">
+  <div>
+    <h3>Say what you want, not what to call it</h3>
+    <p>A task starts as a prompt. The selected driver reads the repository's existing branch names, follows
+    that convention and proposes a title, a branch and a folder — all three editable before you commit to them.
+    No imposed <code>scope/</code> prefix.</p>
+    <p><a href="tasks.html">How tasks work →</a></p>
+  </div>
+  FIG_NEWTASK
+</div>
+<div class="split rev">
+  <div>
+    <h3>Every task is a sandbox</h3>
+    <p>One git worktree per repository, on the task branch, under <code>~/.scope/sandboxes/</code>. Your
+    checkouts stay on whatever branch you left them on. The agent gets an <code>AGENTS.md</code> describing the
+    goal and the repos it can touch.</p>
+    <p><a href="tasks.html#sandboxes">Sandboxes →</a></p>
+  </div>
+  FIG_AGENT
+</div>
+<div class="split">
+  <div>
+    <h3>Read the diff without leaving</h3>
+    <p>Delta shows the task branch against its merge-base, the uncommitted changes, or the branch against
+    <code>origin</code> — grouped by repository, with per-file counts. Commit, push and open the pull request
+    from the same panel.</p>
+    <p><a href="review.html">Reviewing changes →</a></p>
+  </div>
+  FIG_DELTA
+</div>
+
+<h2>Install</h2>
+<p>Download the DMG from the latest release, or build it yourself:</p>
+<pre><code>git clone REPO.git &amp;&amp; cd scope
+brew install xcodegen
+xcodebuild -downloadComponent MetalToolchain   <span class="c"># once per machine</span>
+make run</code></pre>
+<p>Scope updates itself through Sparkle once installed. <a href="getting-started.html">Full instructions →</a></p>
+</div>"""
+
+GETTING_STARTED = """
+<div class="eyebrow">Start here</div>
+<h1>Getting started</h1>
+<p class="lede">Install Scope, declare your first scope and open a thread. Five minutes, no configuration
+file to write.</p>
+
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li><b>macOS 15</b> or later, Apple silicon or Intel.</li>
+  <li>The agent CLIs you intend to use, on your login shell's <code>PATH</code> —
+      <code>claude</code>, <code>codex</code>, <code>cursor-agent</code>. A plain shell always works.</li>
+  <li><code>git</code>. <code>gh</code> only if you want the pull request panel.</li>
+</ul>
+
+<h2 id="install">Install</h2>
+<p>Download <code>Scope-X.Y.Z.dmg</code> from the <a href="REPO/releases/latest">latest release</a> and drag
+Scope into <code>/Applications</code>.</p>
+<div class="note warn"><p><b>Ad-hoc signed builds.</b> Until the project ships with a Developer ID certificate,
+Gatekeeper refuses the first launch. Right-click the app → <b>Open</b>, or run
+<code>xattr -d com.apple.quarantine /Applications/Scope.app</code> once.</p></div>
+<p>Later versions install themselves: Scope checks a signed Sparkle appcast and offers the update in place
+(<b>Scope → Check for Updates…</b>).</p>
+
+<h3 id="from-source">From source</h3>
+<pre><code>git clone REPO.git &amp;&amp; cd scope
+brew install xcodegen
+xcodebuild -downloadComponent MetalToolchain   <span class="c"># SwiftTerm ships a Metal shader</span>
+make run                                       <span class="c"># build + open the .app</span></code></pre>
+<p><code>make build</code> leaves the app in <code>DerivedData/Build/Products/Debug/</code>. The app is
+ad-hoc signed and not sandboxed — it forks PTYs and runs arbitrary binaries.</p>
+
+<h2 id="first-scope">Declare your first scope</h2>
+<p>A scope is any folder you want Scope to look after. <kbd>⌘O</kbd>, or <b>File → Declare a Scope…</b>, then
+pick one of:</p>
+<ul>
+  <li>a folder holding several clones (a cloned GitHub org, your <code>~/Developer</code>);</li>
+  <li>a single repository — Scope treats the scope itself as the repo;</li>
+  <li>a monorepo — same thing, one repo, many packages.</li>
+</ul>
+<p>Scope walks the folder up to the discovery depth (1 by default, 0–4) and lists what it found. Nothing is
+written inside your folders.</p>
+
+FIG_SIDEBAR
+
+<h2 id="first-thread">Open a thread</h2>
+<p><kbd>⌘T</kbd> opens a thread in whatever is selected — the scope root, a repository, a task sandbox. The
+default driver is the plain shell; the split button next to it picks another. The thread is a real terminal:
+your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
+back.</p>
+FIG_TABSTRIP
+<p>Threads survive a restart: Scope keeps a record per thread and offers <b>Relaunch</b> — or <b>Resume</b>,
+when the driver captured a session id.</p>
+
+<h2 id="first-task">Create your first task</h2>
+<p><kbd>⇧⌘T</kbd>. Describe the work in a sentence, pick the repositories it touches, press <b>Continue</b>.
+The driver proposes a branch that matches the conventions already in the repo; <b>Create</b> makes one worktree
+per repository and opens the first thread with your prompt already sent.</p>
+FIG_NEWTASK
+<p>From there, <a href="review.html">Delta</a> shows what the agent changed, and <b>Commit… → Push → Create PR</b>
+finishes the job.</p>
+
+<h2 id="whats-next">What next</h2>
+<div class="grid">
+  <a class="card" href="concepts.html"><h3>The vocabulary</h3><p>Scopes, repositories, threads, drivers and the state dots.</p></a>
+  <a class="card" href="tasks.html"><h3>Tasks</h3><p>Prompt-driven branches, sandboxes, AGENTS.md, archiving.</p></a>
+  <a class="card" href="drivers.html"><h3>Add a driver</h3><p>Any CLI becomes a driver with one JSON file.</p></a>
+</div>
+"""
+
+CONCEPTS = """
+<div class="eyebrow">Concepts</div>
+<h1>Scopes, threads, drivers</h1>
+<p class="lede">Five nouns carry the whole app. Learn them once and every panel makes sense.</p>
+
+<h2 id="scope">Scope</h2>
+<p>A folder you declared. It is the unit of everything: the sidebar shows one scope at a time, tasks belong to
+a scope, the graph is cached per scope. A scope has a <b>name</b>, a <b>slug</b> (unique, used for file names)
+and a <b>discovery depth</b>.</p>
+<p>Scopes may nest — declaring <code>~/Developer</code> and <code>~/Developer/acme</code> both is allowed; each
+keeps its own tasks and graph.</p>
+
+<h2 id="repository">Repository</h2>
+<p>A git repository found inside the scope. Scope reads it — HEAD, default branch, remotes, status — and never
+writes to it, except when you explicitly commit, push or pull from a panel. A repository row shows the repo
+name; the owner appears in the tooltip.</p>
+
+<h2 id="thread">Thread</h2>
+<p>A driver running in an embedded terminal (a real PTY, via SwiftTerm), with a working directory, a title and a
+persisted record. Threads live in tabs; <kbd>⌘1</kbd>–<kbd>⌘9</kbd> jump to one,
+<kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
+<p>Each thread receives:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>SCOPE_THREAD</code></td><td>12-hex thread id, also the record file name</td></tr>
+  <tr><td><code>SCOPE_SCOPE</code></td><td>the scope's slug</td></tr>
+  <tr><td><code>SCOPE_SCOPE_ROOT</code></td><td>absolute path of the scope folder</td></tr>
+  <tr><td><code>SCOPE_HOME</code></td><td><code>~/.scope</code>, or wherever you pointed it</td></tr>
+  <tr><td><code>SCOPE_SOCK</code></td><td>unix socket the hooks report to</td></tr>
+  <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code></td><td>only in a task thread: its slug and root</td></tr>
+</table>
+<p>Stopping a thread (<kbd>⌘.</kbd>) leaves the tab greyed with an exit toast for ten seconds — long enough to
+relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
+<kbd>⇧⌘T</kbd> undoes a close.</p>
+
+<h2 id="states">States</h2>
+<p>The dot on a tab, a sidebar row and the Dock badge all say the same thing:</p>
+<ul>
+  <li><span class="dot running"></span><b>Running</b> — the agent is working.</li>
+  <li><span class="dot waiting"></span><b>Waiting</b> — it asked you something: a prompt, a permission.</li>
+  <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
+  <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
+</ul>
+<p>States come from the driver's own hooks, not from guessing at terminal output. See
+<a href="adapters.html">hooks and thread states</a>.</p>
+
+<h2 id="driver">Driver</h2>
+<p>How Scope starts a tool: a JSON profile with a command, arguments, environment and optional argv templates
+for resuming a session, running headless, or passing an initial prompt. Four are bundled — Shell, Claude Code,
+Codex CLI, Cursor CLI — and copied into <code>~/.scope/drivers/</code> on first run, where you can edit them.</p>
+FIG_SETTINGS
+<p><a href="drivers.html">The full profile format →</a></p>
+
+<h2 id="task">Task</h2>
+<p>A named unit of work with a branch and one git worktree per repository it touches. Threads opened inside a
+task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
+
+<h2 id="inspector">The inspector</h2>
+<p>The right-hand panel, four tabs, always about the current selection:</p>
+<table>
+  <tr><th>Tab</th><th>Shows</th><th>Key</th></tr>
+  <tr><td><b>Graph</b></td><td>one card per repository of the scope</td><td></td></tr>
+  <tr><td><b>Delta</b></td><td>the diff of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
+  <tr><td><b>Base</b></td><td>the untouched checkout: files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
+  <tr><td><b>PRs</b></td><td>open pull requests of the repository</td><td><kbd>⇧⌘P</kbd></td></tr>
+</table>
+<p>Drag its left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+"""
+
+TASKS = """
+<div class="eyebrow">Guide</div>
+<h1>Tasks and sandboxes</h1>
+<p class="lede">A task is a prompt, a branch and one worktree per repository. You write the prompt; the driver
+names the branch the way your repository already names branches.</p>
+
+<h2 id="create">Creating a task</h2>
+<p><kbd>⇧⌘T</kbd>, or <b>New Task</b> at the bottom of the sidebar. The first step asks for three things: what
+you want done, which driver should do it, and which repositories it may touch.</p>
+FIG_PROMPT
+<p>The prompt is not a throwaway: it opens the first thread of the task, and it is written into
+<code>AGENTS.md</code> as the goal, so a later thread — or a different agent — still knows what this branch is
+for.</p>
+
+<h2 id="branch">The driver proposes the branch</h2>
+<p>Press <b>Continue</b> and the selected driver runs once, headless, with the repository's recent branch names
+and commit subjects as evidence:</p>
+FIG_LOADING
+<p>It answers with a title, a branch and a folder name that follow the convention already in use — if the repo
+lives on <code>feat/…</code> and <code>fix/…</code>, so will the task; if it prefixes branches with a
+username, so will the task. Scope validates the answer with <code>git check-ref-format</code>, sanitises it and
+makes it unique.</p>
+FIG_PROPOSAL
+<p>All three fields stay editable. What you type wins: a proposal that arrives after you started typing only
+updates the caption, never your text.</p>
+<div class="note"><p><b>No headless driver, no network, driver too slow?</b> Scope derives the branch itself:
+the title from the first line of the prompt, the prefix from the dominant prefix among the existing branches, or
+<code>feat/</code> / <code>fix/</code> inferred from the wording. The caption says which one you got and why.
+There is no imposed <code>scope/</code> prefix — a branch Scope creates looks like a branch you would have
+created.</p></div>
+
+<h2 id="sandboxes">Sandboxes</h2>
+<p><b>Create</b> makes, for every selected repository, a git worktree on the task branch:</p>
+<pre><code>~/.scope/sandboxes/&lt;scope-slug&gt;/&lt;task-slug&gt;/
+├── AGENTS.md                 <span class="c"># goal + one section per repository</span>
+├── &lt;task-slug&gt;.code-workspace
+├── checkout-api/             <span class="c"># worktree on feat/redis-product-catalogue-cache</span>
+└── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
+<p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
+in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+<p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
+the local default branch otherwise.</p>
+
+<h2 id="threads">Threads inside a task</h2>
+<p>Creating the task opens the first thread on the spot, in the sandbox, with your prompt already sent to the
+driver.</p>
+FIG_THREAD
+<p><kbd>⌘T</kbd> inside a task opens more threads in the same sandbox — a shell to run the tests next to the
+agent doing the work, a second agent on the same branch.</p>
+
+<h2 id="context">AGENTS.md</h2>
+<p>Scope writes a context file at the task root, generated from the prompt and the
+<a href="graph.html">graph</a>: the goal, and one section per repository with its purpose, stack, setup and
+test commands. Drivers that read a different file name (<code>CLAUDE.md</code>) get theirs instead — the
+profile says which.</p>
+
+<h2 id="lifecycle">Archiving and closing</h2>
+<table>
+  <tr><th>Action</th><th>Effect</th></tr>
+  <tr><td><b>Archive</b></td><td>removes every worktree, keeps the branches and the record</td></tr>
+  <tr><td><b>Close…</b></td><td>removes the worktrees and the record; optionally deletes the branches</td></tr>
+</table>
+<p>Both refuse to run on a dirty sandbox unless you force them, and closing refuses to delete a branch that is
+not merged. Scope prunes stale worktrees on every launch.</p>
+
+<h2 id="from-pr">Starting from a pull request</h2>
+<p>The <b>PRs</b> tab lists the open pull requests of a repository (through <code>gh</code>). Opening one as a
+task creates the sandbox on the PR's head branch — including a fork's head — so you can review and push back
+without touching your checkout.</p>
+"""
+
+REVIEW = """
+<div class="eyebrow">Guide</div>
+<h1>Delta, Base, pull requests</h1>
+<p class="lede">Everything you would otherwise leave the app for: what changed, what it changed from, and
+where it is going.</p>
+
+FIG_AGENT_DELTA
+
+<h2 id="delta">Delta</h2>
+<p><kbd>⌘D</kbd>. Three modes over the same selection:</p>
+<table>
+  <tr><th>Mode</th><th>Compares</th></tr>
+  <tr><td><b>Task</b></td><td>the task branch against its merge-base with the default branch — the whole change</td></tr>
+  <tr><td><b>Uncommitted</b></td><td>the working tree against HEAD — what the agent has not committed yet</td></tr>
+  <tr><td><b>Base vs origin</b></td><td>the local branch against its remote — what is not pushed</td></tr>
+</table>
+FIG_DELTA_FILES
+<p>Files are grouped by repository, with an add/modify/delete filter, a fuzzy filter field and per-file line
+counts. <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
+
+<h3 id="diff">The diff</h3>
+FIG_HUNK
+<p>Native text: selectable, searchable with <kbd>⌘F</kbd>, with both line numbers, and a copy / reveal /
+open-in-editor row for the file.</p>
+
+<h3 id="publish">Commit, push, open the PR</h3>
+<p>The footer of the panel carries the three actions, per repository, with the state next to them
+(<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
+the resulting pull request to the task, so the PRs tab keeps showing it.</p>
+
+<h2 id="base">Base</h2>
+<p><kbd>⇧⌘B</kbd>. The repository as it is on disk, outside any sandbox — the reference the agent is working
+from.</p>
+FIG_BASE_VIEWER
+<ul>
+  <li><b>Files</b> — a tree and a read-only viewer with line numbers.</li>
+  <li><b>Search</b> — <code>git grep</code> across the checkout, with case, regex, whole-word and folder filters.</li>
+  <li><b>History</b> — recent commits of the branch.</li>
+</ul>
+FIG_BASE_SEARCH
+<p><b>Pull</b> is fast-forward only and refuses on a dirty tree. <b>Shell</b> opens a thread rooted at the base
+checkout — useful when you want to run something against the real branch rather than a sandbox.</p>
+
+<h2 id="prs">Pull requests</h2>
+<p><kbd>⇧⌘P</kbd>. Open pull requests of the selected repository, through the <code>gh</code> CLI and your
+existing GitHub authentication: title, number, author, branch, checks and review state. Open one in the
+browser, or turn it into a task whose sandbox sits on the PR's head.</p>
+<div class="note"><p>The panel needs <code>gh auth login</code> and a GitHub remote. A repository without one
+simply shows nothing to list.</p></div>
+"""
+
+GRAPH = """
+<div class="eyebrow">Guide</div>
+<h1>The repository graph</h1>
+<p class="lede">One card per repository: what it is for, what it is built with, how to set it up and test it,
+and which repositories it talks to. It is what Scope hands to an agent when a task starts.</p>
+
+FIG_GRAPH_CARD
+
+<h2 id="generation">Two levels of generation</h2>
+<table>
+  <tr><th>Level</th><th>Source</th><th>Fills</th></tr>
+  <tr><td><b>Level 0</b></td><td>README, manifests (<code>package.json</code>, <code>go.mod</code>, <code>Cargo.toml</code>…), git log</td><td>name, remote, default branch, stack, entry points, setup and test commands, last activity</td></tr>
+  <tr><td><b>Level 1</b></td><td>the default driver, run headless once per repository</td><td>the purpose sentence, the relations between repositories, tags</td></tr>
+</table>
+<p><b>Analyze</b> in the panel header runs both; the split button runs level 0 alone, which needs no agent and
+no network. Results are cached per repository, keyed by HEAD plus the hashes of the README and manifests, so
+re-analysing an unchanged repository costs nothing.</p>
+
+<h2 id="editing">Editing a card</h2>
+<p><b>Edit</b> on any card opens the fields for hand-editing. An edited card is marked and generation never
+overwrites it again — the graph is a document you own, not a cache the app owns.</p>
+FIG_GRAPH_PANEL
+<p>Cards are stored as one JSON file per scope in <code>~/.scope/graph/&lt;scope-slug&gt;.json</code>. Editing
+that file by hand works too; <b>Refresh Scope</b> (<kbd>⌘R</kbd>) picks it up.</p>
+
+<h2 id="projection">How agents see it</h2>
+<p>When a task is created, the cards of the repositories it touches are projected into the task's
+<code>AGENTS.md</code>, under the goal. The agent starts knowing what each repository is for, how to install
+it and how to run its tests, instead of spending its first minutes rediscovering that.</p>
+
+<h2 id="filter">Finding things</h2>
+<p>The filter field above the cards matches path and stack at once: type <code>go</code> to get the Go
+services, <code>api</code> to get everything whose path says so.</p>
+"""
+
+DRIVERS = """
+<div class="eyebrow">Reference</div>
+<h1>Driver profiles</h1>
+<p class="lede">A driver is one JSON file in <code>~/.scope/drivers/&lt;id&gt;.json</code>. Four are bundled;
+adding a fifth is a text edit, not a rebuild.</p>
+
+<h2 id="example">A complete profile</h2>
+<pre><code>{
+  "id": "claude-code",
+  "name": "Claude Code",
+  "command": "claude",
+  "args": [],
+  "env": {},
+  "context": { "file": "CLAUDE.md", "mode": "generate" },
+  "resume": ["claude", "--resume", "{resume_id}"],
+  "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
+  "prompt": ["{prompt}"],
+  "adapter": { "kind": "claude-hooks" },
+  "icon": "sparkles"
+}</code></pre>
+
+<h2 id="fields">Fields</h2>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>id</code></td><td><code>^[a-z0-9][a-z0-9-]*$</code>; the file is named after it</td></tr>
+  <tr><td><code>name</code></td><td>what the menus show</td></tr>
+  <tr><td><code>command</code></td><td><code>"$SHELL"</code>, a bare name resolved on the login-shell PATH, an absolute path, or <code>~/…</code></td></tr>
+  <tr><td><code>args</code>, <code>env</code></td><td>appended arguments and extra environment; both accept placeholders</td></tr>
+  <tr><td><code>loginShell</code></td><td><code>true</code> starts the command as a login shell (Terminal.app style)</td></tr>
+  <tr><td><code>context</code></td><td>the project file the tool reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>) and how Scope projects into it: <code>generate</code>, <code>file</code>, <code>flag</code>, <code>none</code></td></tr>
+  <tr><td><code>resume</code></td><td>full argv to resume a captured session</td></tr>
+  <tr><td><code>headless</code></td><td>full argv for one-shot runs: graph level 1, task branch proposals</td></tr>
+  <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
+  <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
+  <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
+  <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
+</table>
+
+<h2 id="placeholders">Placeholders</h2>
+<table>
+  <tr><th>Placeholder</th><th>Replaced by</th></tr>
+  <tr><td><code>{thread_id}</code></td><td>the thread id</td></tr>
+  <tr><td><code>{resume_id}</code></td><td>the captured session id (<code>resume</code> only)</td></tr>
+  <tr><td><code>{prompt}</code></td><td>the initial prompt, or the meta-prompt for a headless run</td></tr>
+  <tr><td><code>{cwd}</code>, <code>{scope}</code>, <code>{task}</code>, <code>{home}</code></td><td>working directory, scope root, task slug, <code>SCOPE_HOME</code></td></tr>
+  <tr><td><code>{scope_hook}</code></td><td>path of the bundled <code>scope-hook</code> helper</td></tr>
+</table>
+<p>A profile that uses a placeholder Scope cannot fill is refused at load time rather than at launch time.</p>
+
+<h2 id="resolution">How the command is resolved</h2>
+<p>Scope probes your login shell once at launch (<code>$SHELL -ilc</code> by default) and resolves every
+<code>command</code> against that <code>PATH</code>. That is why a driver installed through nvm, mise or a
+shell function works here exactly as it does in your terminal. The mode is a setting: interactive login,
+login only, or no probe at all.</p>
+<p><b>Settings → Drivers</b> lists every profile with the binary it resolves to, and flags the ones it cannot
+find. <b>Reload</b> picks up edits without restarting.</p>
+
+<h2 id="adding">Adding your own</h2>
+<pre><code>cat &gt; ~/.scope/drivers/aider.json &lt;&lt;'JSON'
+{
+  "id": "aider",
+  "name": "Aider",
+  "command": "aider",
+  "args": ["--no-auto-commits"],
+  "icon": "wand.and.stars"
+}
+JSON</code></pre>
+<p>Then <b>Settings → Drivers → Reload</b>. The minimum is <code>id</code>, <code>name</code> and
+<code>command</code>; everything else is optional and degrades gracefully — a driver without
+<code>headless</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
+state.</p>
+"""
+
+ADAPTERS = """
+<div class="eyebrow">Reference</div>
+<h1>Hooks and thread states</h1>
+<p class="lede">Scope does not parse terminal output to guess what an agent is doing. The agent tells it,
+through its own hook mechanism, over a unix socket.</p>
+
+<h2 id="pipeline">The pipeline</h2>
+<pre><code>agent hook  →  scope-hook (stdin: JSON)  →  $SCOPE_SOCK  →  adapter  →  thread state</code></pre>
+<p><code>scope-hook</code> is a tiny helper shipped inside the app bundle
+(<code>Scope.app/Contents/Helpers/scope-hook</code>). It reads the hook payload on stdin, adds
+<code>SCOPE_THREAD</code> and writes one line to the socket named by <code>SCOPE_SOCK</code>. It never blocks
+the agent: if Scope is not listening, it exits quietly.</p>
+
+<h2 id="claude">Claude Code</h2>
+<p>For a driver with <code>"adapter": { "kind": "claude-hooks" }</code>, Scope writes a settings file per
+thread and starts the CLI with <code>--settings</code>. The events it subscribes to:</p>
+<table>
+  <tr><th>Hook</th><th>Becomes</th></tr>
+  <tr><td><code>SessionStart</code></td><td>running; the session id is captured, which is what makes <b>Resume</b> possible</td></tr>
+  <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running</td></tr>
+  <tr><td><code>Notification</code>, <code>PermissionRequest</code></td><td><span class="dot waiting"></span>waiting — and a macOS notification when Scope is in the background</td></tr>
+  <tr><td><code>Stop</code></td><td><span class="dot done"></span>done</td></tr>
+  <tr><td><code>SessionEnd</code></td><td>idle</td></tr>
+</table>
+<p>Your own <code>~/.claude/settings.json</code> is not modified: the per-thread file lives under
+<code>~/.scope/threads/</code> and is passed on the command line.</p>
+
+<h2 id="others">Codex and Cursor</h2>
+<p>Codex is wired through its <code>notify</code> configuration and Cursor through its hooks, with the same
+helper and the same socket. Both profiles ship with <code>adapter</code> set; a tool without one still runs
+perfectly — its tab simply shows no live state.</p>
+
+<h2 id="notifications">Notifications and the badge</h2>
+<p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Go to
+thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
+item lists them, so you can leave the window behind and come back exactly when an agent needs you.</p>
+
+<h2 id="socket">The socket</h2>
+<p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code>. One JSON object per line:</p>
+<pre><code>{"thread":"3f9a2c17be04","kind":"Notification","session_id":"…","payload":{…}}</code></pre>
+<p>Anything that can write a line to a unix socket can drive the state of a thread — a wrapper script, a CI
+watcher, your own tool. <code>scope-hook</code> is only the convenient way to do it.</p>
+"""
+
+REFERENCE = """
+<div class="eyebrow">Reference</div>
+<h1>Files, keys, updates</h1>
+
+<h2 id="layout">On disk</h2>
+<pre><code>~/.scope/                 <span class="c"># SCOPE_HOME; override it with launchctl setenv SCOPE_HOME …</span>
+├── config.json           <span class="c"># declared scopes + preferences</span>
+├── drivers/*.json        <span class="c"># driver profiles</span>
+├── threads/&lt;id&gt;.json     <span class="c"># one record per thread</span>
+├── tasks/&lt;id&gt;.json       <span class="c"># one record per task</span>
+├── graph/&lt;scope&gt;.json    <span class="c"># the repository cards</span>
+├── sandboxes/            <span class="c"># the task worktrees</span>
+└── scope.sock            <span class="c"># hook events</span>
+
+~/Library/Application Support/Scope/ui-state.json   <span class="c"># selection, expansion, panel widths</span></code></pre>
+<p>Every store writes atomically. A file with a newer schema version than the running build is reported and
+left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
+
+<h2 id="shortcuts">Keyboard</h2>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>⌘O</kbd></td><td>Declare a scope…</td></tr>
+  <tr><td><kbd>⌘R</kbd></td><td>Refresh scope</td></tr>
+  <tr><td><kbd>⌘T</kbd></td><td>New thread in the current context</td></tr>
+  <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or undo the last close)</td></tr>
+  <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
+  <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
+  <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread</td></tr>
+  <tr><td><kbd>⌘1</kbd>–<kbd>⌘9</kbd>, <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd></td><td>Switch threads</td></tr>
+  <tr><td><kbd>⌘K</kbd></td><td>Command palette</td></tr>
+  <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
+  <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
+  <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
+  <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
+  <tr><td><kbd>⌘E</kbd> / <kbd>⇧⌘E</kbd></td><td>Open the selection / the task in your editor</td></tr>
+  <tr><td><kbd>⌘F</kbd>, <kbd>⌘G</kbd></td><td>Find in the terminal or the diff</td></tr>
+  <tr><td><kbd>⌥⌘K</kbd></td><td>Clear the terminal scrollback</td></tr>
+  <tr><td><kbd>⌘/</kbd></td><td>This list, in the app</td></tr>
+</table>
+
+<h2 id="settings">Settings</h2>
+FIG_SETTINGS
+<ul>
+  <li><b>General</b> — config folder, default driver, editor command, terminal font size and appearance
+  (follow the system, or always dark, which is what agent TUIs assume), notification status.</li>
+  <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
+  <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
+</ul>
+<p>The editor command is a template: <code>["code", "-g", "{file}:{line}"]</code>. <code>{path}</code>,
+<code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>
+
+<h2 id="updates">Updates</h2>
+<p>Scope ships with Sparkle. <b>Scope → Check for Updates…</b> reads a signed appcast attached to the latest
+GitHub release; updates are verified with an EdDSA signature before they are applied. Prereleases
+(<code>v1.0.0-rc.1</code>) are excluded from the stable feed.</p>
+
+<h2 id="privacy">What Scope touches</h2>
+<ul>
+  <li>It <b>reads</b> your declared folders — files, git metadata, README and manifests.</li>
+  <li>It <b>writes</b> only under <code>~/.scope/</code> and its own Application Support folder — with two
+  exceptions you ask for: git operations you trigger from a panel, and the worktrees it creates for tasks.</li>
+  <li>It sends nothing anywhere. Network traffic comes from the agents you launch, from <code>git</code>,
+  <code>gh</code>, and from the update check.</li>
+</ul>
+
+<h2 id="building">Building and releasing</h2>
+<pre><code>make generate            <span class="c"># Scope.xcodeproj from project.yml</span>
+make build               <span class="c"># Debug .app (CONFIG=Release for release)</span>
+make run                 <span class="c"># build + open</span>
+make test-one FILE=SlugTests
+swift build              <span class="c"># the ScopeKit package alone</span></code></pre>
+<p>Releases are driven by tags: pushing <code>vX.Y.Z</code> builds a universal DMG, attaches it to a GitHub
+release with its checksum and the Sparkle appcast, and publishes it. The version <i>is</i> the tag; nothing in
+the tree is bumped. See the <a href="REPO/blob/main/README.md#releasing">README</a> for the full pipeline and
+its optional signing secrets.</p>
+"""
+
+# --------------------------------------------------------------------------- build
+
+FIGURES = {
+    "FIG_NEWTASK": figure("newtask-proposal", "The driver’s proposal, all three fields editable."),
+    "FIG_AGENT": figure("agent-thread-full", "Claude Code running in a task sandbox, prompt already sent."),
+    "FIG_AGENT_DELTA": figure("agent-delta", "The whole window while an agent works: its terminal on the left, its diff on the right."),
+    "FIG_DELTA": figure("delta-files", "Delta groups the changed files by repository."),
+    "FIG_DELTA_PANEL": figure("delta-panel", "Delta: files by repository, the diff, and commit / push / create PR."),
+    "FIG_SIDEBAR": figure("sidebar", "The sidebar: tasks and their threads first, repositories on demand."),
+    "FIG_TABSTRIP": figure("tabstrip", "One tab per thread, with its live state dot.", "plain"),
+    "FIG_SETTINGS": figure("settings", "Settings → General.", "shot narrow"),
+    "FIG_PROMPT": figure("newtask-prompt", "Step one: the request, the driver, the repositories."),
+    "FIG_LOADING": figure("newtask-loading", "The driver runs headless while the derived name stands in."),
+    "FIG_PROPOSAL": figure("newtask-proposal", "The proposal follows the repository’s own convention."),
+    "FIG_THREAD": figure("claude-thread", "The first thread starts with the task's prompt.", "plain"),
+    "FIG_DELTA_FILES": figure("delta-panel", "Ten files changed across the task’s repositories, with the diff below."),
+    "FIG_HUNK": figure("delta-hunk", "A hunk, with both line numbers and selectable text."),
+    "FIG_BASE_VIEWER": figure("base-viewer", "Base: the tree and the read-only viewer."),
+    "FIG_BASE_SEARCH": figure("base-search", "Search runs git grep across the checkout."),
+    "FIG_GRAPH_CARD": figure("graph-card", "A repository card: purpose, stack, entry points, relations."),
+    "FIG_GRAPH_PANEL": figure("graph-panel", "The graph of a scope; “edited” marks a card generation will not touch."),
+}
+
+PAGES = [
+    ("index.html", "Scope — a control room for CLI code agents",
+     "Scope is a native macOS workspace for running Claude Code, Codex, Cursor or a shell against your "
+     "repositories: threads, git-worktree sandboxes, diffs and pull requests in one window.", HOME, True),
+    ("getting-started.html", "Getting started — Scope",
+     "Install Scope, declare a scope, open a thread and create your first task.", GETTING_STARTED, False),
+    ("concepts.html", "Scopes, threads, drivers — Scope",
+     "The vocabulary behind the app: scopes, repositories, threads, drivers, states, tasks and the inspector.",
+     CONCEPTS, False),
+    ("tasks.html", "Tasks and sandboxes — Scope",
+     "A task is a prompt, a branch proposed by the driver, and one git worktree per repository.", TASKS, False),
+    ("review.html", "Delta, Base, pull requests — Scope",
+     "Read the diff, browse and search the base checkout, and open the pull request without leaving Scope.",
+     REVIEW, False),
+    ("graph.html", "The repository graph — Scope",
+     "One card per repository — purpose, stack, entry points, setup and test commands — projected into every task.",
+     GRAPH, False),
+    ("drivers.html", "Driver profiles — Scope",
+     "Every tool Scope can launch is one JSON file: fields, placeholders, resolution, and how to add your own.",
+     DRIVERS, False),
+    ("adapters.html", "Hooks and thread states — Scope",
+     "How agent hooks reach Scope through scope-hook and a unix socket, and become live thread states.",
+     ADAPTERS, False),
+    ("reference.html", "Files, keys, updates — Scope",
+     "Where Scope stores things, every keyboard shortcut, the settings, updates and what it touches on disk.",
+     REFERENCE, False),
+]
+
+
+def slugify(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text).lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
+
+def main() -> None:
+    OUT.mkdir(exist_ok=True)
+    (OUT / ".nojekyll").write_text("")
+    for slug, title, description, body, wide in PAGES:
+        for key in sorted(FIGURES, key=len, reverse=True):  # FIG_AGENT_DELTA before FIG_AGENT
+            markup = FIGURES[key]
+            body = body.replace(key, markup)
+        body = body.replace("REPO", REPO)
+        # Give every heading an id so the table of contents can link to it.
+        body = re.sub(r"<h([23])>(.*?)</h\1>",
+                      lambda m: f'<h{m.group(1)} id="{slugify(m.group(2))}">{m.group(2)}</h{m.group(1)}>',
+                      body, flags=re.S)
+        (OUT / slug).write_text(render(slug, title, description, body, wide))
+        print(f"docs/{slug}")
+
+
+if __name__ == "__main__":
+    main()

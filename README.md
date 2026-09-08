@@ -6,7 +6,9 @@ Scope is a native macOS workspace for running coding agents (Claude Code, Codex,
 Declare any folder as a *scope* — a cloned GitHub org, a folder of projects, a single repo — and open *threads* (PTY terminals) in it, each with `SCOPE_*` variables injected so hooks can report their state back.
 Scope reads your folders and writes nothing inside them.
 
-**Status: M0 skeleton.** Scopes, repo discovery, threads with live terminals, launch/relaunch/stop/close, persisted records, problem reporting. Tasks (sandboxes), the inspector panels and adapters arrive in M1–M4 (see `SPEC.md`).
+**Documentation: https://maastrich.github.io/scope/**
+
+Scopes and repo discovery, threads with live terminals and hook-driven states, prompt-driven tasks with one git worktree per repository, the Delta / Base / Graph / Pull-request inspector, notifications and the command palette. `SPEC.md` is the reference; `docs/` is the site.
 
 ## Requirements
 
