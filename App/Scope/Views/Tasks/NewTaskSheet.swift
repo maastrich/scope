@@ -29,6 +29,9 @@ struct NewTaskSheet: View {
     @State private var startPoint: TaskStartPoint = .defaultBranch
     @State private var resolution: AppModel.TaskRequestResolution?
     @State private var resolving = false
+    /// The branch proposed for a *new* branch, kept aside so switching "Start from" back to one restores it
+    /// instead of leaving the pull request's branch name behind.
+    @State private var derivedBranch = ""
     @State private var title = ""
     @State private var branch = ""
     @State private var folder = ""
@@ -221,7 +224,7 @@ struct NewTaskSheet: View {
                 .controlSize(.small)
                 .buttonStyle(.borderless)
             } footer: {
-                Text(repoFooter)
+                if !repoFooter.isEmpty { Text(repoFooter) }
             }
         }
 
@@ -422,6 +425,7 @@ struct NewTaskSheet: View {
             // 3. A pull request settles the name, the branch and the folder: nothing to propose.
             if let pr = resolved.pullRequest {
                 startPoint = .pullRequest(pr)
+                derivedBranch = model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID).branch
                 apply(TaskProposal(
                     title: TaskManager.taskName(forPullRequest: pr),
                     slug: model.uniqueTaskSlug(TaskManager.taskSlug(forPullRequest: pr), in: scopeID),
@@ -448,11 +452,13 @@ struct NewTaskSheet: View {
         }
     }
 
-    /// The start point owns the branch: keep the field in step with the picker.
+    /// The start point owns the branch: keep the field in step with the picker, and put the proposed name
+    /// back when the answer is "a new branch" again.
     private func startPointChanged(_ option: TaskStartPoint) {
-        guard let required = option.requiredBranch else { return }
-        branch = required
-        appliedFields[1] = required
+        let name = option.requiredBranch ?? derivedBranch
+        guard !name.isEmpty else { return }
+        branch = name
+        appliedFields[1] = name
     }
 
     /// Fills the fields; a level-1 answer does not clobber what the user already typed.
@@ -464,6 +470,7 @@ struct NewTaskSheet: View {
         title = proposal.title
         branch = startPoint.requiredBranch ?? proposal.branch
         folder = proposal.slug
+        if startPoint.requiredBranch == nil { derivedBranch = proposal.branch }
         appliedFields = [title, branch, folder]
         source = proposal.source
         fieldsEdited = false

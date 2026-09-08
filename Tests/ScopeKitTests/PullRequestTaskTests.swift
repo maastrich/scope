@@ -24,6 +24,54 @@ import ScopeGit
         return sha
     }
 
+    /// The path a prompt naming a pull request takes: `create(startPoint: .pullRequest)`, not
+    /// `createForPullRequest` — same result, plus the prompt.
+    @Test func createFromAPromptOnAPullRequestChecksItsHeadOutAndBindsTheRecord() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        try await scope.makeRepo("web")
+        let sha = try await publishHead(scope, repo: api, branch: "feat/lcm-agent-tab", file: "agent.txt")
+        let manager = makeManager(scope)
+        let pr = PullRequest(number: 6613, title: "Agent tab", author: "ada", headRefName: "feat/lcm-agent-tab",
+                             baseRefName: "main", url: URL(string: "https://github.com/acme/api/pull/6613")!)
+
+        let task = try await manager.create(
+            name: TaskManager.taskName(forPullRequest: pr), branch: "chore/rebase-pr-6613",
+            slug: TaskManager.taskSlug(forPullRequest: pr), initialPrompt: "rebase la pr .../pull/6613",
+            in: scope.declaration, repos: ["api"], startPoint: .pullRequest(pr),
+            pullRequest: LinkedPullRequest(pr), scopeRepos: ["api", "web"]
+        )
+        // The branch the caller passed is ignored: the pull request already has one.
+        #expect(task.branch == "feat/lcm-agent-tab")
+        #expect(task.name == "#6613 Agent tab")
+        #expect(task.slug == "pr-6613-agent-tab")
+        #expect(task.prompt == "rebase la pr .../pull/6613")
+        #expect(task.pullRequest?.number == 6613)
+        #expect(task.pullRequest?.isCrossRepository == false)
+        #expect(task.repos.map(\.repoRelativePath) == ["api"])
+        let sandbox = await scope.client(for: task.repos[0].sandboxURL)
+        #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/lcm-agent-tab")
+        #expect(try await sandbox.output(["rev-parse", "HEAD"]) == sha)
+        #expect(scope.exists(task.repos[0].sandboxURL.appending(path: "agent.txt")))
+    }
+
+    @Test func aTaskOnAPullRequestSandboxesOneRepositoryOnly() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        try await scope.makeRepo("web")
+        _ = try await publishHead(scope, repo: api, branch: "feature/y", file: "y.txt")
+        let manager = makeManager(scope)
+        let pr = PullRequest(number: 7, title: "Y", author: "ada", headRefName: "feature/y",
+                             baseRefName: "main", url: URL(string: "https://github.com/acme/api/pull/7")!)
+
+        await #expect(throws: TaskError.self) {
+            try await manager.create(
+                name: "#7 Y", branch: "feature/y", in: scope.declaration, repos: ["api", "web"],
+                startPoint: .pullRequest(pr), pullRequest: LinkedPullRequest(pr)
+            )
+        }
+    }
+
     @Test func createsASandboxOnTheHeadOfASameRepoPullRequest() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")
