@@ -345,12 +345,27 @@ TASKS = """
 names the branch the way your repository already names branches.</p>
 
 <h2 id="create">Creating a task</h2>
-<p><kbd>⇧⌘T</kbd>, or <b>New Task</b> at the bottom of the sidebar. The first step asks for three things: what
-you want done, which driver should do it, and which repositories it may touch.</p>
+<p><kbd>⇧⌘T</kbd>, or <b>New Task</b> at the bottom of the sidebar. The first step asks for two things: what
+you want done, and which driver should do it. Nothing else — the repositories, the branch and the folder come
+from the prompt.</p>
 FIG_PROMPT
 <p>The prompt is not a throwaway: it opens the first thread of the task, and it is written into
 <code>AGENTS.md</code> as the goal, so a later thread — or a different agent — still knows what this branch is
 for.</p>
+
+<h2 id="reading">What Scope reads out of the prompt</h2>
+<p><b>Continue</b> reads the request before anything is created:</p>
+<table>
+  <tr><th>In the prompt</th><th>What it becomes</th></tr>
+  <tr><td>a pull request — <code>…/pull/6613</code>, <code>owner/repo#6613</code>, or <code>#6613</code> in a single-repository scope</td><td>its repository, its head branch checked out, and the task bound to it</td></tr>
+  <tr><td>a repository of the scope, by folder name, path or <code>owner/repo</code></td><td>the repositories the task sandboxes</td></tr>
+  <tr><td>a branch that already exists</td><td>a start point that continues it instead of branching</td></tr>
+</table>
+<p>Repositories are matched on their <code>origin</code> remote, not on the folder name — a pull request of
+<code>acme-devops/acme-front</code> finds the clone you keep in a folder called <code>front</code>.</p>
+<div class="note"><p>Everything Scope worked out is shown on the second step and stays editable. A wrong
+branch name is a typo; a wrong repository is a worktree in the wrong place, so nothing is created from a
+guess you were not shown.</p></div>
 
 <h2 id="branch">The driver proposes the branch</h2>
 <p>Press <b>Continue</b> and the selected driver runs once, headless, with the repository's recent branch names
@@ -368,6 +383,22 @@ the title from the first line of the prompt, the prefix from the dominant prefix
 <code>feat/</code> / <code>fix/</code> inferred from the wording. The caption says which one you got and why.
 There is no imposed <code>scope/</code> prefix — a branch Scope creates looks like a branch you would have
 created.</p></div>
+
+<h2 id="continue">Continuing existing work</h2>
+<p>The <b>Start from</b> row decides what the sandbox is based on:</p>
+<table>
+  <tr><th>Start from</th><th>Effect</th></tr>
+  <tr><td><b>A new branch</b></td><td>the proposed branch, off <code>origin/&lt;default&gt;</code> — the usual case</td></tr>
+  <tr><td><b>#6613 …</b></td><td>the pull request's head is checked out; a fork's head becomes <code>pr/6613</code></td></tr>
+  <tr><td><b>an existing branch</b></td><td>that branch is checked out, local copy first, <code>origin/</code> otherwise</td></tr>
+</table>
+<p>In the last two the branch <i>is</i> the start point, so the Branch field goes read-only: nothing is
+created, the work continues where it was. A pull request lives in one repository, so a task on one sandboxes
+that repository alone. Starting a task on a pull request Scope already has a task for offers that task
+instead of a second sandbox.</p>
+<div class="note warn"><p>A branch can only live in one working tree. If the branch you start from is already
+checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it,
+rather than letting git fail.</p></div>
 
 <h2 id="sandboxes">Sandboxes</h2>
 <p><b>Create</b> makes, for every selected repository, a git worktree on the task branch:</p>
@@ -404,9 +435,10 @@ profile says which.</p>
 not merged. Scope prunes stale worktrees on every launch.</p>
 
 <h2 id="from-pr">Starting from a pull request</h2>
-<p>The <b>PRs</b> tab lists the open pull requests of a repository (through <code>gh</code>). Opening one as a
-task creates the sandbox on the PR's head branch — including a fork's head — so you can review and push back
-without touching your checkout.</p>
+<p>Two ways in, one result. Name the pull request in the prompt, or open it from the <b>PRs</b> tab, which
+lists the open pull requests of a repository through <code>gh</code>. Either way the sandbox sits on the PR's
+head branch — including a fork's head — the task is bound to the pull request, and you review and push back
+without touching your own checkout.</p>
 """
 
 REVIEW = """
