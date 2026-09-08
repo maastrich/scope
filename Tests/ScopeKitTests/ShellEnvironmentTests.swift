@@ -93,7 +93,9 @@ struct ShellEnvironmentTests {
         let start = clock.now
         let result = await ShellEnvironment.probe(shell: hanging, mode: .interactiveLogin, timeout: .seconds(1))
         #expect(result == nil)
-        #expect(clock.now - start < .seconds(5))
+        // The claim is "it does not wait for the 30 s sleep", not "it returns in exactly 1 s": a loaded CI
+        // runner needs room above the timeout, and 5 s of it was not enough.
+        #expect(clock.now - start < .seconds(15))
     }
 
     @Test("a missing shell binary yields nil")
