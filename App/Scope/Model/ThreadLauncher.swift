@@ -16,7 +16,9 @@ struct ThreadLauncher {
         ScopeHookLocator.locate(bundleURL: Bundle.main.bundleURL, searchPATH: searchPATH)
     }
 
-    func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode) async throws(LaunchError) -> LaunchPlan {
+    /// `initialPrompt` fills `{prompt}` so the profile's `prompt` argv is appended (fresh launch only).
+    func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode,
+              initialPrompt: String? = nil) async throws(LaunchError) -> LaunchPlan {
         let shell = await env.shell.environment()
         let scopeHook = scopeHookPath(searchPATH: shell.path)
         let adapterArguments = try AdapterInstaller.prepare(profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook)
@@ -27,6 +29,7 @@ struct ThreadLauncher {
             scope: scope.path,
             task: task?.root,
             home: env.home.path,
+            prompt: initialPrompt,
             scopeHook: scopeHook
         )
         let variables = TerminalEnvironment.ScopeVariables(

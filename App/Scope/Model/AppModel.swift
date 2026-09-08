@@ -328,7 +328,6 @@ final class AppModel {
             Task { await scope.rescan() }
         }
 
-        await env.tasks.setOptions(TaskManagerOptions(branchPrefix: config.preferences.branchPrefix))
         let taskProblems = await env.tasks.loadAll()
         if !taskProblems.isEmpty {
             problems.warn("\(taskProblems.count) task \(taskProblems.count == 1 ? "record" : "records") could not be loaded",
@@ -507,10 +506,6 @@ final class AppModel {
         if config.preferences.shellProbe != before.shellProbe {
             reprobeShell()
         }
-        if config.preferences.branchPrefix != before.branchPrefix {
-            let prefix = config.preferences.branchPrefix
-            Task { await env.tasks.setOptions(TaskManagerOptions(branchPrefix: prefix)) }
-        }
     }
 
     func reprobeShell() {
@@ -644,8 +639,11 @@ final class AppModel {
         env.knownThreads.insert(session.id)
     }
 
+    /// Opens a thread. `initialPrompt` is handed to the driver on this first launch only (the profile's
+    /// `prompt` argv; ignored by profiles without one), never on a relaunch or resume.
     @discardableResult
-    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil, title customTitle: String? = nil) async -> ThreadSession? {
+    func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
+                   title customTitle: String? = nil, initialPrompt: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -693,17 +691,18 @@ final class AppModel {
         await env.threadRecords.save(record)
         selection = .thread(session.id)
         selectedThreadID = session.id
-        await launch(session, mode: .launch)
+        await launch(session, mode: .launch, initialPrompt: initialPrompt)
         return session
     }
 
-    private func launch(_ session: ThreadSession, mode: LaunchMode) async {
+    private func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
         guard !session.isAlive else { return }
         guard let scope = scope(session.record.scopeID) else { return }
         session.markLaunching()
         do {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
-                                               scope: scope.declaration, task: task(of: session)?.record, mode: mode)
+                                               scope: scope.declaration, task: task(of: session)?.record, mode: mode,
+                                               initialPrompt: initialPrompt)
             session.launch(plan)
         } catch {
             session.fail(error)

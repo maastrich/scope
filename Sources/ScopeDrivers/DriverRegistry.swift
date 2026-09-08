@@ -45,8 +45,14 @@ public actor DriverRegistry {
         try bundledURLs(in: bundle).map { try decode(at: $0) }
     }
 
-    /// Copies each bundled profile to `<home>/drivers/<id>.json` when that file does not exist yet. Never
-    /// overwrites, so user edits survive. Returns the ids installed by this call.
+    /// Installs the bundled profiles into `<home>/drivers/<id>.json`:
+    ///
+    /// - a missing file is copied;
+    /// - an existing file is **replaced** only when it is an untouched older bundled copy: it decodes, still says
+    ///   `"builtin": true`, and its `version` is lower than the bundled one. A user edit that drops or changes
+    ///   `builtin` / `version`, or an unreadable file, is left alone.
+    ///
+    /// Returns the ids installed or upgraded by this call.
     @discardableResult
     public func installBuiltins() async throws -> [String] {
         try FileManager.default.createDirectory(at: driversDirectory, withIntermediateDirectories: true)
@@ -54,12 +60,21 @@ public actor DriverRegistry {
         for url in bundledURLs {
             let profile = try Self.decode(at: url)
             let destination = driversDirectory.appending(path: "\(profile.id).json")
-            guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                guard Self.isStaleBuiltinCopy(at: destination, bundled: profile) else { continue }
+                try FileManager.default.removeItem(at: destination)
+            }
             try FileManager.default.copyItem(at: url, to: destination)
             installed.append(profile.id)
         }
         if !installed.isEmpty { cache = nil }
         return installed
+    }
+
+    /// `true` when the file at `url` is a bundled copy (`builtin == true`) older than `bundled.version`.
+    static func isStaleBuiltinCopy(at url: URL, bundled: DriverProfile) -> Bool {
+        guard let existing = try? JSONStore.load(DriverProfile.self, from: url), existing.builtin == true else { return false }
+        return (existing.version ?? 0) < (bundled.version ?? 0)
     }
 
     /// Bundled profiles overlaid with the user's valid files. Cached after the first call; see `reload()`.

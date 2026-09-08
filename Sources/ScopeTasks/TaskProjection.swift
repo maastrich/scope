@@ -40,6 +40,12 @@ public enum TaskProjection {
         lines.append("- Branch: `\(task.branch)`")
         lines.append("- Task root: `\(task.root)`")
         lines.append("")
+        if let prompt = task.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
+            lines.append("## Goal")
+            lines.append("")
+            lines.append(prompt)
+            lines.append("")
+        }
         lines.append("## Repositories of this task")
         lines.append("")
         let active = task.activeRepos

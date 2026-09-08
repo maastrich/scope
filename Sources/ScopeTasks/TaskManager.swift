@@ -4,21 +4,18 @@ import ScopeGit
 
 /// Tunables of `TaskManager`.
 public struct TaskManagerOptions: Sendable, Equatable {
-    /// `Preferences.branchPrefix`: task branches are `<prefix>/<slug>`.
-    public var branchPrefix: String
     /// Repo scope only (task root == sandbox): write `AGENTS.md` into the sandbox when no such file
     /// exists, and list it in `.git/info/exclude` so it never shows in the delta (spec §4.6). Off by
     /// default: drivers that take a context flag get the content from `TaskProjection` instead.
     public var writeContextFileIntoMonoRepoSandbox: Bool
 
-    public init(branchPrefix: String = "scope", writeContextFileIntoMonoRepoSandbox: Bool = false) {
-        self.branchPrefix = branchPrefix
+    public init(writeContextFileIntoMonoRepoSandbox: Bool = false) {
         self.writeContextFileIntoMonoRepoSandbox = writeContextFileIntoMonoRepoSandbox
     }
 }
 
-/// Creates, extends, archives and closes tasks (spec §4.3): one worktree per repo on
-/// `scope/<slug>`, the task root under `<home>/sandboxes/<scope-slug>/<task-slug>/`, `AGENTS.md`
+/// Creates, extends, archives and closes tasks (spec §4.3): one worktree per repo on the task
+/// branch (see `TaskProposer`), the task root under `<home>/sandboxes/<scope-slug>/<task-slug>/`, `AGENTS.md`
 /// and `<slug>.code-workspace` projected into it, the record in `<home>/tasks/<id>.json`.
 ///
 /// Repo paths are relative to the scope root (`"api"`, `"group/web"`); `"."` means the scope
@@ -72,17 +69,23 @@ public actor TaskManager {
 
     // MARK: - Create / extend
 
-    /// Creates a task: unique slug in the scope, `<prefix>/<slug>` branch, one worktree per repo
-    /// from `origin/<default>` (after `fetch`; local `<default>` when there is no origin), the
-    /// projection files, and the record.
+    /// Creates a task: unique slug in the scope, the given branch, one worktree per repo from
+    /// `origin/<default>` (after `fetch`; local `<default>` when there is no origin), the projection
+    /// files, and the record. The branch name is the caller's (a `TaskProposal`): no prefix is added.
     ///
     /// - Parameters:
-    ///   - name: display name; the slug derives from it (`"Auth refresh"` → `auth-refresh`, `-2` on collision).
+    ///   - name: display name (the proposal title).
+    ///   - branch: the branch to create in every sandbox; must be a valid ref name.
+    ///   - slug: worktree folder name; derived from `name` when nil. `-2`, `-3`… on collision.
+    ///   - initialPrompt: the request the task was created from, stored on the record and shown in `AGENTS.md`.
     ///   - scope: the declaring scope.
     ///   - repos: relative paths of the repos to sandbox (`["."]` for a repo scope).
     ///   - scopeRepos: relative paths of *all* repos of the scope, for the "other repos" section of `AGENTS.md`.
     /// - Throws: `TaskError`. Worktrees and branches created before a failure are removed again.
-    public func create(name: String, in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws -> TaskRecord {
+    public func create(
+        name: String, branch: String, slug requestedSlug: String? = nil, initialPrompt: String? = nil,
+        in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
+    ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
         if requested.contains("."), requested.count > 1 {
@@ -90,14 +93,18 @@ public actor TaskManager {
         }
         guard Set(requested).count == requested.count else { throw TaskError.invalidRepoSelection("duplicate repositories") }
 
-        let slug = uniqueSlug(for: name, in: scope)
-        let branch = TaskBranch.name(prefix: options.branchPrefix, taskName: slug)
+        let branch = branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !branch.isEmpty, !branch.hasPrefix("scope/") else { throw TaskError.invalidBranch(branch) }
+        let slugSource = requestedSlug?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let slug = uniqueSlug(for: slugSource.isEmpty ? name : slugSource, in: scope)
         let root = scopeSandboxesURL(scopeSlug: scope.slug).appending(path: slug, directoryHint: .isDirectory)
+        let prompt = initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         var record = TaskRecord(
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
-            slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now)
+            slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
+            prompt: (prompt?.isEmpty ?? true) ? nil : prompt
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []

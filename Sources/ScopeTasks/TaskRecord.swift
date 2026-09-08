@@ -48,7 +48,7 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var repoRelativePath: String
     /// Absolute path of the worktree.
     public var sandboxPath: String
-    /// Branch checked out in the sandbox (`scope/<slug>`).
+    /// Branch checked out in the sandbox (the task branch).
     public var branch: String
     public var state: State
 
@@ -117,7 +117,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var name: String
     /// Unique within the scope; names the task root and the branch.
     public var slug: String
-    /// `scope/<slug>` (prefix from `Preferences.branchPrefix`).
+    /// The task branch, proposed by the driver (or derived from the prompt) when the task was created;
+    /// follows the repo's own naming convention, never a `scope/` prefix.
     public var branch: String
     /// Absolute path of the task root (`<home>/sandboxes/<scope-slug>/<task-slug>/`).
     public var root: String
@@ -127,6 +128,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var archivedAt: Date?
     /// The pull request this task was opened from or linked to, if any.
     public var pullRequest: LinkedPullRequest?
+    /// The initial request the task was created from (New Task sheet); shown in the sidebar and as the
+    /// "Goal" of `AGENTS.md`, and given to the first thread as its opening prompt.
+    public var prompt: String?
 
     public init(
         id: TaskID = .generate(),
@@ -141,7 +145,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         repos: [TaskRepo] = [],
         createdAt: Date = .now,
         archivedAt: Date? = nil,
-        pullRequest: LinkedPullRequest? = nil
+        pullRequest: LinkedPullRequest? = nil,
+        prompt: String? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -157,6 +162,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.createdAt = createdAt
         self.archivedAt = archivedAt
         self.pullRequest = pullRequest
+        self.prompt = prompt
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -197,7 +203,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest
+        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -217,5 +223,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
         pullRequest = try container.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest)
+        prompt = try container.decodeIfPresent(String.self, forKey: .prompt)
     }
 }

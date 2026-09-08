@@ -7,8 +7,9 @@
   "context" : { "file" : "AGENTS.md", "mode" : "file" },
   "resume" : ["cursor-agent", "--resume", "{resume_id}"],
   "headless" : ["cursor-agent", "-p", "{prompt}"],
+  "prompt" : ["{prompt}"],
   "adapter" : { "kind" : "cursor-hooks" },
   "icon" : "cursorarrow.rays",
   "builtin" : true,
-  "version" : 1
+  "version" : 2
 }

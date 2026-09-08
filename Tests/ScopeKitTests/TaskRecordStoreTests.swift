@@ -15,7 +15,7 @@ import ScopeCore
             scopeID: ScopeID(rawValue: "8d0c1f9e-4b6a-4c62-9c3f-2d1e7a5b9f10"), scopeRoot: "/tmp/acme", scopeSlug: "acme", scopeName: "Acme",
             name: name, slug: slugify(name), branch: "scope/\(slugify(name))", root: "/tmp/home/sandboxes/acme/\(slugify(name))",
             repos: [TaskRepo(repoRelativePath: "api", sandboxPath: "/tmp/home/sandboxes/acme/\(slugify(name))/api", branch: "scope/\(slugify(name))")],
-            createdAt: createdAt
+            createdAt: createdAt, prompt: "Do \(name)"
         )
     }
 
@@ -32,6 +32,7 @@ import ScopeCore
         let loaded = await store.loadAll()
         #expect(loaded.problems.isEmpty)
         #expect(loaded.records == [older, newer])
+        #expect(loaded.records[0].prompt == "Do Older")
         #expect(loaded.records[1].createdAt == newer.createdAt)   // fractional seconds survive
 
         try await store.delete(older.id)
@@ -82,7 +83,7 @@ import ScopeCore
         {"version":1,"id":"3f9a2c17be04","scopeID":"8D0C1F9E-4B6A-4C62-9C3F-2D1E7A5B9F10","slug":"auth","branch":"scope/auth","root":"/r/auth"}
         """
         let decoded = try JSONStore.makeDecoder(fractionalSeconds: true).decode(TaskRecord.self, from: Data(json.utf8))
-        #expect(decoded.name == "auth" && decoded.repos.isEmpty && decoded.archivedAt == nil)
+        #expect(decoded.name == "auth" && decoded.repos.isEmpty && decoded.archivedAt == nil && decoded.prompt == nil)
         #expect(decoded.threadCwd.path == "/r/auth")
         #expect(decoded.environment == ["SCOPE_TASK": "auth", "SCOPE_TASK_ROOT": "/r/auth"])
 

@@ -12,7 +12,7 @@ struct DriverProfileTests {
         for profile in profiles {
             #expect(throws: Never.self) { try profile.validate() }
             #expect(profile.builtin == true)
-            #expect(profile.version == 1)
+            #expect(profile.version == 2)
             #expect(profile.icon != nil)
         }
 
@@ -22,6 +22,7 @@ struct DriverProfileTests {
         #expect(shell.args.isEmpty)
         #expect(shell.env.isEmpty)
         #expect(!shell.canResume)
+        #expect(!shell.acceptsInitialPrompt)
 
         let claude = try #require(profiles.first { $0.id == "claude-code" })
         #expect(claude.command == "claude")
@@ -31,6 +32,7 @@ struct DriverProfileTests {
         #expect(claude.adapter?.kind == "claude-hooks")
         #expect(claude.canResume)
         #expect(!claude.isLoginShell)
+        #expect(claude.prompt == ["{prompt}"] && claude.acceptsInitialPrompt)
 
         let codex = try #require(profiles.first { $0.id == "codex" })
         #expect(codex.context?.mode == .file)
@@ -145,6 +147,27 @@ struct PlaceholderValuesTests {
         let profile = DriverProfile(id: "x", name: "X", command: "x", resume: ["x", "--resume", "{thread_id}"])
         #expect(throws: Never.self) { try profile.validate() }
         #expect(try values.expand(profile.resume ?? []) == ["x", "--resume", "3f9a2c17be04"])
+    }
+
+    @Test("the prompt argv is appended on a fresh launch with an initial prompt only")
+    func promptArgvAppended() throws {
+        let profile = DriverProfile(id: "x", name: "X", command: "/bin/echo", args: ["--verbose"],
+                                    resume: ["/bin/echo", "--resume", "{resume_id}"], prompt: ["{prompt}"])
+        #expect(throws: DriverProfileError.badPlaceholder("nope", in: "prompt")) {
+            try DriverProfile(id: "x", name: "X", command: "x", prompt: ["{nope}"]).validate()
+        }
+        let shell = ResolvedShellEnvironment(shell: "/bin/zsh", variables: ["PATH": "/usr/bin:/bin"], source: .login)
+        let scope = TerminalEnvironment.ScopeVariables(thread: "3f9a2c17be04", scope: "acme", scopeRoot: "/tmp", sock: "/tmp/s", home: "/tmp")
+        func plan(mode: LaunchMode, prompt: String?) throws -> LaunchPlan {
+            var v = values
+            v.cwd = "/tmp"
+            v.prompt = prompt
+            return try LaunchPlanner.plan(profile: profile, mode: mode, values: v, shellEnvironment: shell, scopeVariables: scope,
+                                          appVersion: "0.1.0", adapterArguments: ["--settings", "s.json"])
+        }
+        #expect(try plan(mode: .launch, prompt: "Add login").arguments == ["--verbose", "Add login", "--settings", "s.json"])
+        #expect(try plan(mode: .launch, prompt: nil).arguments == ["--verbose", "--settings", "s.json"])
+        #expect(try plan(mode: .resume, prompt: "Add login").arguments == ["--resume", "sess-1", "--settings", "s.json"])
     }
 
     @Test("unknown names and stray braces pass through unchanged")

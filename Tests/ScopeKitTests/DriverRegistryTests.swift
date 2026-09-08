@@ -26,7 +26,7 @@ private struct DriverTestHome {
 
 @Suite("DriverRegistry")
 struct DriverRegistryTests {
-    @Test("installBuiltins copies the four bundled files once and never overwrites")
+    @Test("installBuiltins copies the four bundled files once and never overwrites a user edit")
     func installBuiltins() async throws {
         let home = try DriverTestHome()
         defer { home.remove() }
@@ -49,6 +49,27 @@ struct DriverRegistryTests {
         let second = try await registry.installBuiltins()
         #expect(second.isEmpty)
         #expect(try String(contentsOf: home.drivers.appending(path: "shell.json"), encoding: .utf8) == edited)
+    }
+
+    @Test("installBuiltins replaces an untouched older bundled copy, keeps an edited one")
+    func upgradeStaleBuiltin() async throws {
+        let home = try DriverTestHome()
+        defer { home.remove() }
+        let registry = DriverRegistry(home: home.url)
+        // A copy shipped by an older build: still `builtin`, lower version → replaced.
+        try home.write("claude-code.json", #"{ "id": "claude-code", "name": "Claude Code", "command": "claude", "builtin": true, "version": 1 }"#)
+        // A user edit that kept `builtin` but bumped the version past the bundled one → kept.
+        try home.write("codex.json", #"{ "id": "codex", "name": "My Codex", "command": "codex", "builtin": true, "version": 99 }"#)
+        // A user edit that dropped `builtin` → kept.
+        try home.write("cursor.json", #"{ "id": "cursor", "name": "My Cursor", "command": "cursor-agent" }"#)
+
+        let installed = try await registry.installBuiltins()
+        #expect(Set(installed) == ["shell", "claude-code"])
+        let loaded = await registry.load()
+        #expect(loaded.profile(id: "claude-code")?.prompt == ["{prompt}"])
+        #expect(loaded.profile(id: "claude-code")?.version == 2)
+        #expect(loaded.profile(id: "codex")?.name == "My Codex")
+        #expect(loaded.profile(id: "cursor")?.name == "My Cursor")
     }
 
     @Test("load without a drivers directory returns the bundled profiles, shell first, no problems")

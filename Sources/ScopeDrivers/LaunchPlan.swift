@@ -94,7 +94,7 @@ public enum LaunchError: Error, Sendable, Equatable {
             case .task:
                 return "The driver profile references {task} but this thread is not attached to a task."
             case .prompt:
-                return "The driver profile references {prompt}, which is only available for headless runs."
+                return "The driver profile references {prompt}, which is only available for headless runs and threads started with an initial prompt."
             case .scopeHook:
                 return "The driver profile references {scope_hook} but the scope-hook binary was not found (neither embedded in the app nor on PATH)."
             default:
@@ -114,8 +114,9 @@ public enum LaunchError: Error, Sendable, Equatable {
 public enum LaunchPlanner {
     /// Steps: pick the argv for `mode`, expand placeholders, append `adapterArguments` (what the event
     /// adapter needs on the command line, e.g. `--settings <file>`; the same for a fresh launch and a
-    /// resume), resolve the executable against the login-shell PATH, verify `values.cwd` exists, build the
-    /// child environment, set `argv0` for login shells.
+    /// resume), append the profile's `prompt` argv on a fresh launch with `values.prompt` set, resolve the
+    /// executable against the login-shell PATH, verify `values.cwd` exists, build the child environment,
+    /// set `argv0` for login shells.
     public static func plan(
         profile: DriverProfile,
         mode: LaunchMode,
@@ -129,7 +130,8 @@ public enum LaunchPlanner {
         let rawArgv: [String]
         switch mode {
         case .launch:
-            rawArgv = [profile.command] + profile.args
+            let promptArgv = values.prompt != nil ? (profile.prompt ?? []) : []
+            rawArgv = [profile.command] + profile.args + promptArgv
         case .resume:
             guard let resume = profile.resume, !resume.isEmpty, values.resumeID != nil else {
                 throw .resumeUnavailable

@@ -2,40 +2,6 @@ import Foundation
 import ScopeCore
 import ScopeDrivers
 
-/// Runs a driver's headless argv. Injected so tests never start a real driver.
-public protocol HeadlessRunner: Sendable {
-    /// `argv[0]` is the command as written in the profile (`claude`), not yet resolved to a path.
-    func run(argv: [String], cwd: URL, timeout: Duration) async throws -> ProcessResult
-}
-
-/// The real runner: resolves `argv[0]` on the login-shell PATH and runs it with `Subprocess`.
-public struct SubprocessHeadlessRunner: HeadlessRunner {
-    /// `PATH` used to resolve the command (the login-shell one, see `ShellEnvironmentResolver`).
-    public var path: String
-    /// Login shell for `$SHELL` commands.
-    public var shell: String
-    /// Extra environment merged over the process one.
-    public var environment: [String: String]
-
-    public init(path: String, shell: String = ShellEnvironment.loginShell(), environment: [String: String] = [:]) {
-        self.path = path
-        self.shell = shell
-        self.environment = environment
-    }
-
-    public func run(argv: [String], cwd: URL, timeout: Duration) async throws -> ProcessResult {
-        guard let command = argv.first, let executable = ExecutableResolver.resolve(command, path: path, shell: shell) else {
-            throw Level1Error.commandNotFound(argv.first ?? "")
-        }
-        var env = environment
-        env["PATH"] = path
-        return try await Subprocess.run(
-            executable: executable, arguments: Array(argv.dropFirst()), currentDirectory: cwd,
-            environment: env, timeout: timeout
-        )
-    }
-}
-
 /// Why a level-1 run produced no card.
 public enum Level1Error: Error, Sendable, Equatable, CustomStringConvertible {
     /// The driver profile has no `headless` argv.
@@ -105,6 +71,8 @@ public struct Level1Generator: Sendable {
             result = try await runner.run(argv: argv, cwd: repo, timeout: timeout)
         } catch let error as Level1Error {
             throw error
+        } catch HeadlessError.commandNotFound(let command) {
+            throw Level1Error.commandNotFound(command)
         } catch SubprocessError.timedOut {
             throw Level1Error.timedOut
         } catch {
@@ -159,7 +127,7 @@ public struct Level1Generator: Sendable {
 
     // MARK: - Parsing
 
-    /// Unwraps `claude --output-format json` envelopes (`{"result": "…"}`) and ```json fences, decodes
+    /// Unwraps `claude --output-format json` envelopes and ```json fences (`HeadlessOutput`), decodes
     /// the payload, validates it and merges it into `seed`.
     public static func parse(output: String, seed: RepoCard, otherRepos: [String]) throws -> RepoCard {
         let payload = try decodePayload(output)
@@ -183,27 +151,13 @@ public struct Level1Generator: Sendable {
     }
 
     static func decodePayload(_ output: String) throws -> Level1Payload {
-        var text = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text: String
+        do {
+            text = try HeadlessOutput.extractJSONObject(from: output)
+        } catch HeadlessError.driverReportedError(let message) {
+            throw Level1Error.driverFailed(message: message)
+        }
         guard !text.isEmpty else { throw Level1Error.notJSON("") }
-        // Envelope from `claude -p --output-format json`.
-        if let data = text.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           object["result"] != nil || object["is_error"] != nil {
-            if let isError = object["is_error"] as? Bool, isError {
-                throw Level1Error.driverFailed(message: (object["result"] as? String) ?? "driver reported an error")
-            }
-            if let inner = object["result"] as? String {
-                text = inner.trimmingCharacters(in: .whitespacesAndNewlines)
-            } else if let inner = object["result"] as? [String: Any],
-                      let data = try? JSONSerialization.data(withJSONObject: inner) {
-                text = String(decoding: data, as: UTF8.self)
-            }
-        }
-        text = stripFences(text)
-        // Tolerate prose around the object: take the outermost `{ … }`.
-        if !text.hasPrefix("{"), let open = text.firstIndex(of: "{"), let close = text.lastIndex(of: "}"), open < close {
-            text = String(text[open...close])
-        }
         do {
             return try JSONDecoder().decode(Level1Payload.self, from: Data(text.utf8))
         } catch let error as DecodingError {
@@ -214,18 +168,6 @@ public struct Level1Generator: Sendable {
         } catch {
             throw Level1Error.notJSON(text)
         }
-    }
-
-    /// Removes a leading ```json / ``` line and a trailing ``` line.
-    static func stripFences(_ text: String) -> String {
-        var lines = text.components(separatedBy: "\n")
-        if let first = lines.first, first.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-            lines.removeFirst()
-            if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-                lines.removeLast()
-            }
-        }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func clean(_ items: [String]) -> [String] {

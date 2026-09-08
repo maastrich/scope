@@ -61,11 +61,16 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     public var resume: [String]?
     /// Full argv used for headless runs (graph, M3); may use placeholders.
     public var headless: [String]?
+    /// Arguments appended to `args` when a thread starts with an initial prompt (a task created from a
+    /// prompt): `["{prompt}"]` for tools that take the prompt as a positional argument. Nil → the prompt
+    /// is not passed on the command line.
+    public var prompt: [String]?
     /// Event adapter.
     public var adapter: Adapter?
-    /// `true` on bundled copies.
+    /// `true` on bundled copies. Keep it (with `version`) to receive updates of the bundled profile; drop
+    /// it once you edit the file so `DriverRegistry.installBuiltins` never overwrites your copy.
     public var builtin: Bool?
-    /// Revision of the bundled profile (1).
+    /// Revision of the bundled profile; an installed copy with a lower revision is replaced at startup.
     public var version: Int?
     /// SF Symbol name for the sidebar and tabs (`terminal`, `sparkles`).
     public var icon: String?
@@ -80,6 +85,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         context: Context? = nil,
         resume: [String]? = nil,
         headless: [String]? = nil,
+        prompt: [String]? = nil,
         adapter: Adapter? = nil,
         builtin: Bool? = nil,
         version: Int? = nil,
@@ -94,6 +100,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         self.context = context
         self.resume = resume
         self.headless = headless
+        self.prompt = prompt
         self.adapter = adapter
         self.builtin = builtin
         self.version = version
@@ -113,6 +120,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         context = try container.decodeIfPresent(Context.self, forKey: .context)
         resume = try container.decodeIfPresent([String].self, forKey: .resume)
         headless = try container.decodeIfPresent([String].self, forKey: .headless)
+        prompt = try container.decodeIfPresent([String].self, forKey: .prompt)
         adapter = try container.decodeIfPresent(Adapter.self, forKey: .adapter)
         builtin = try container.decodeIfPresent(Bool.self, forKey: .builtin)
         version = try container.decodeIfPresent(Int.self, forKey: .version)
@@ -125,7 +133,10 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// `true` when the profile declares a non-empty `resume` argv.
     public var canResume: Bool { !(resume ?? []).isEmpty }
 
-    /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless` and `env`.
+    /// `true` when the profile can take an initial prompt on the command line (`prompt` argv).
+    public var acceptsInitialPrompt: Bool { !(prompt ?? []).isEmpty }
+
+    /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`, `prompt` and `env`.
     public func validate() throws(DriverProfileError) {
         guard Self.isValidID(id) else { throw .invalidID(id) }
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -135,6 +146,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         try Self.checkPlaceholders(in: args, field: "args")
         try Self.checkPlaceholders(in: resume ?? [], field: "resume")
         try Self.checkPlaceholders(in: headless ?? [], field: "headless")
+        try Self.checkPlaceholders(in: prompt ?? [], field: "prompt")
         try Self.checkPlaceholders(in: env.keys.sorted().map { env[$0] ?? "" }, field: "env")
     }
 
@@ -178,7 +190,7 @@ public enum DriverProfileError: Error, Sendable, Equatable, CustomStringConverti
     }
 }
 
-/// Placeholders allowed in `args`, `resume`, `headless` and `env` values.
+/// Placeholders allowed in `args`, `resume`, `headless`, `prompt` and `env` values.
 ///
 /// A placeholder is written `{name}`. Braces around anything else (`{}`, `{ "json": 1 }`, `{Foo}`)
 /// are left untouched, so JSON or brace-expansion syntax can still appear in arguments.
@@ -195,7 +207,7 @@ public enum DriverPlaceholder: String, CaseIterable, Sendable {
     case task = "task"
     /// `SCOPE_HOME`.
     case home = "home"
-    /// The prompt for headless runs.
+    /// The prompt for headless runs, or the initial prompt of a thread (`prompt` argv).
     case prompt = "prompt"
     /// Absolute path of the `scope-hook` binary (embedded in the app, or found on PATH).
     case scopeHook = "scope_hook"
@@ -261,7 +273,7 @@ public struct PlaceholderValues: Sendable {
     public var task: String?
     /// `{home}` — `SCOPE_HOME`.
     public var home: String
-    /// `{prompt}` — headless runs only.
+    /// `{prompt}` — headless runs and threads started with an initial prompt.
     public var prompt: String?
     /// `{scope_hook}` — absolute path of the `scope-hook` binary (see `ScopeHookLocator`).
     public var scopeHook: String?

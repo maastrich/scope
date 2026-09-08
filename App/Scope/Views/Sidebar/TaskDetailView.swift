@@ -20,6 +20,22 @@ struct TaskDetailView: View {
                     .truncationMode(.middle)
             }
             .frame(height: 20)
+            if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(height: 16)
+                    Text(prompt)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.bottom, 4)
+                .help(prompt)
+            }
             if let pr = task.record.pullRequest {
                 HStack(spacing: 5) {
                     Image(systemName: "arrow.triangle.pull")

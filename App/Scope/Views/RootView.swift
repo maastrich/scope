@@ -37,7 +37,7 @@ struct RootView: View {
             Task { await model.addScopes(urls) }
         }
         .sheet(item: newTaskScope) { scope in
-            NewTaskSheet(scope: scope)
+            NewTaskSheet(scope: scope, defaultDriverID: model.config.preferences.defaultDriverID)
                 .environment(model)
         }
         .focusedSceneValue(\.appModel, model)

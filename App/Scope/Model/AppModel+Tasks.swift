@@ -1,6 +1,8 @@
 import AppKit
 import Foundation
 import ScopeCore
+import ScopeDrivers
+import ScopeGit
 import ScopeTasks
 
 /// Task actions (spec §4.3): create, add a repo, archive, close. The worktree work runs inside the
@@ -12,17 +14,66 @@ extension AppModel {
         newTaskScopeID = id
     }
 
-    /// Creates the task, selects it and starts its watcher. Throws `TaskError` for the sheet to show inline.
+    /// Base checkouts of `repos` (relative paths, `"."` for the scope itself) in `scope`.
+    private func baseURLs(of repos: [String], in scope: ScopeState) -> [URL] {
+        repos.map { path in
+            let normalized = TaskRepo.normalize(path)
+            return normalized == "." ? scope.url : scope.url.appending(path: normalized, directoryHint: .isDirectory)
+        }
+    }
+
+    /// Task slugs and sandbox folders already used in a scope (the proposer keeps clear of them).
+    private func takenTaskSlugs(in scope: ScopeState) -> Set<String> {
+        var taken = Set(tasks(in: scope.id).map(\.record.slug))
+        let folder = env.tasks.scopeSandboxesURL(scopeSlug: scope.declaration.slug)
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) { taken.formUnion(names) }
+        return taken
+    }
+
+    /// Branch-naming evidence of the repos a task would sandbox (New Task sheet, gathered once per prompt).
+    func branchEvidence(for repos: [String], in scopeID: ScopeID) async -> BranchEvidence {
+        guard let scope = scope(scopeID) else { return BranchEvidence() }
+        return await BranchEvidence.gather(repos: baseURLs(of: repos, in: scope), registry: env.git)
+    }
+
+    /// Level 0: title / slug / branch derived from the prompt and the evidence, instantly.
+    func fallbackProposal(prompt: String, evidence: BranchEvidence, in scopeID: ScopeID) -> TaskProposal {
+        let taken = scope(scopeID).map(takenTaskSlugs) ?? []
+        return TaskProposer.fallback(prompt: prompt, evidence: evidence, takenSlugs: taken)
+    }
+
+    /// Level 1: asks `driverID` (headless) for a branch that follows the repo's convention; falls back to
+    /// `fallbackProposal` when the driver cannot answer (see `TaskProposal.source`).
+    func proposeTask(prompt: String, driverID: String?, repos: [String], evidence: BranchEvidence, in scopeID: ScopeID) async -> TaskProposal {
+        guard let scope = scope(scopeID) else { return TaskProposer.fallback(prompt: prompt, evidence: evidence, takenSlugs: []) }
+        let profile = profile(id: driverID)
+        let bases = baseURLs(of: repos, in: scope)
+        let cwd = bases.first ?? scope.url
+        let shell = await env.shell.environment()
+        let validator = TaskProposer.gitRefValidator(client: await env.git.client(for: cwd))
+        let proposer = TaskProposer(
+            profile: profile, runner: SubprocessHeadlessRunner(path: shell.path, shell: shell.shell), home: env.home, validateRef: validator
+        )
+        let taken = takenTaskSlugs(in: scope)
+        // `propose` is nonisolated async: it runs off the main actor, and cancelling the caller's task kills the driver.
+        return await proposer.propose(prompt: prompt, evidence: evidence, cwd: cwd, scopeRoot: scope.url, takenSlugs: taken)
+    }
+
+    /// Creates the task from a proposal, selects it, starts its watcher, then opens its first thread with
+    /// `driverID` and the prompt as the driver's opening request. Throws `TaskError` for the sheet to show inline.
     @discardableResult
-    func createTask(name: String, in scopeID: ScopeID, repos: [String]) async throws -> TaskState {
+    func createTask(_ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String]) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
         let summaries = await graphSummaries(for: scope)
         let record: TaskRecord
         do {
-            record = try await env.tasks.create(name: name, in: scope.declaration, repos: repos, scopeRepos: scopeRepos, repoSummaries: summaries)
+            record = try await env.tasks.create(
+                name: proposal.title, branch: proposal.branch, slug: proposal.slug, initialPrompt: prompt,
+                in: scope.declaration, repos: repos, scopeRepos: scopeRepos, repoSummaries: summaries
+            )
         } catch {
-            problems.error("Could not create task “\(name)”", detail: String(describing: error), scope: scopeID)
+            problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
             throw error
         }
         let state = TaskState(record: record, git: env.git)
@@ -32,6 +83,8 @@ extension AppModel {
         selection = .task(record.id)
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        await newThread(in: scopeID, driverID: driverID, taskID: record.id, initialPrompt: trimmed.isEmpty ? nil : trimmed)
         return state
     }
 

@@ -7,8 +7,9 @@
   "context" : { "file" : "CLAUDE.md", "mode" : "generate" },
   "resume" : ["claude", "--resume", "{resume_id}"],
   "headless" : ["claude", "-p", "{prompt}", "--output-format", "json"],
+  "prompt" : ["{prompt}"],
   "adapter" : { "kind" : "claude-hooks" },
   "icon" : "sparkles",
   "builtin" : true,
-  "version" : 1
+  "version" : 2
 }

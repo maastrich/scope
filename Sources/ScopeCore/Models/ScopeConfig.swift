@@ -164,7 +164,8 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
 public struct Preferences: Codable, Sendable, Equatable {
     /// Driver used by ⌘T; `"shell"` by default.
     public var defaultDriverID: String
-    /// Branch prefix for task sandboxes (`scope/<task-slug>`).
+    /// Deprecated, unused since task branches are proposed by the driver (`TaskProposer`); kept so an
+    /// older `config.json` still decodes. Empty by default.
     public var branchPrefix: String
     /// `nil` until detected or chosen in Settings.
     public var editor: EditorTemplate?
@@ -190,7 +191,7 @@ public struct Preferences: Codable, Sendable, Equatable {
 
     public init(
         defaultDriverID: String = "shell",
-        branchPrefix: String = "scope",
+        branchPrefix: String = "",
         editor: EditorTemplate? = nil,
         shellProbe: ShellProbeMode = .interactiveLogin,
         confirmCloseRunningThread: Bool = true,

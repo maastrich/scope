@@ -25,6 +25,8 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case persistence(String)
     /// `createForPullRequest`: the head of the pull request could not be fetched from `origin`.
     case pullRequestHeadMissing(repo: String, ref: String)
+    /// `create`: the branch name is empty or uses the reserved `scope/` prefix.
+    case invalidBranch(String)
 
     public var description: String {
         switch self {
@@ -39,6 +41,7 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .worktree(let repo, let error): "\(repo): \(error.description)"
         case .persistence(let message): message
         case .pullRequestHeadMissing(let repo, let ref): "\(repo): \(ref) is not on origin after fetch"
+        case .invalidBranch(let branch): branch.isEmpty ? "the task needs a branch name" : "\"\(branch)\" is not a valid task branch (the scope/ prefix is reserved)"
         }
     }
 }

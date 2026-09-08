@@ -96,7 +96,7 @@ import ScopeGit
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
         let manager = makeManager(scope)
-        let task = try await manager.create(name: "Auth", in: scope.declaration, repos: ["api"])
+        let task = try await manager.create(name: "Auth", branch: "feat/auth", in: scope.declaration, repos: ["api"])
         #expect(task.pullRequest == nil)
         let link = LinkedPullRequest(number: 3, url: URL(string: "https://github.com/acme/api/pull/3")!, title: "Auth")
         let linked = try await manager.linkPullRequest(link, to: task.id)

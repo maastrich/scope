@@ -7,8 +7,9 @@
   "context" : { "file" : "AGENTS.md", "mode" : "file" },
   "resume" : ["codex", "-c", "notify=[\"{scope_hook}\",\"turn.ended\",\"--stdin\"]", "resume", "{resume_id}"],
   "headless" : ["codex", "exec", "{prompt}"],
+  "prompt" : ["{prompt}"],
   "adapter" : { "kind" : "codex-notify" },
   "icon" : "cpu",
   "builtin" : true,
-  "version" : 1
+  "version" : 2
 }

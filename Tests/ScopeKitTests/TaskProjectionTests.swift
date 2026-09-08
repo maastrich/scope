@@ -31,6 +31,14 @@ import ScopeCore
         #expect(md.hasPrefix(TaskProjection.generatedMarker))
     }
 
+    @Test func goalSectionCarriesThePrompt() {
+        var withPrompt = task
+        withPrompt.prompt = "Add a refresh-token flow to the auth service."
+        let md = TaskProjection.agentsMarkdown(task: withPrompt, otherRepos: [], scopeName: "Acme")
+        #expect(md.contains("- Task root: `/h/sandboxes/acme/auth`\n\n## Goal\n\nAdd a refresh-token flow to the auth service.\n\n## Repositories of this task\n"))
+        #expect(!TaskProjection.agentsMarkdown(task: task, otherRepos: [], scopeName: "Acme").contains("## Goal"))
+    }
+
     @Test func withoutSummariesOutputIsUnchanged() {
         let md = TaskProjection.agentsMarkdown(task: task, otherRepos: ["web"], scopeName: "Acme")
         #expect(md.contains("- **api** — sandbox: `/h/sandboxes/acme/auth/api` (branch `scope/auth`)\n\n## Other"))
