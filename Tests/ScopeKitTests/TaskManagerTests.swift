@@ -9,6 +9,46 @@ import ScopeGit
         TaskManager(home: scope.home, registry: scope.registry, store: TaskRecordStore(home: scope.home), options: options)
     }
 
+    @Test func existingBranchStartPointContinuesItInsteadOfBranching() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let client = await scope.client(for: api)
+        // A branch someone already pushed work to, back on main afterwards.
+        try await client.run(["checkout", "-q", "-b", "feat/half-done"])
+        try await client.run(["commit", "-q", "--allow-empty", "-m", "wip"])
+        let head = try await client.output(["rev-parse", "HEAD"])
+        try await client.run(["checkout", "-q", "main"])
+        let manager = makeManager(scope)
+
+        let task = try await manager.create(
+            name: "Finish it", branch: "ignored/name", initialPrompt: "finish feat/half-done",
+            in: scope.declaration, repos: ["api"], startPoint: .existingBranch("feat/half-done")
+        )
+        // The start point owns the branch: the caller's name is not used and nothing new was created.
+        #expect(task.branch == "feat/half-done")
+        let sandbox = await scope.client(for: task.repos[0].sandboxURL)
+        #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/half-done")
+        #expect(try await sandbox.output(["rev-parse", "HEAD"]) == head)
+    }
+
+    @Test func aBranchCheckedOutElsewhereIsRefusedWithItsPath() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let client = await scope.client(for: api)
+        try await client.run(["checkout", "-q", "-b", "feat/busy"])
+        let manager = makeManager(scope)
+
+        await #expect(throws: TaskError.self) {
+            try await manager.create(
+                name: "Busy", branch: "feat/busy", in: scope.declaration, repos: ["api"],
+                startPoint: .existingBranch("feat/busy")
+            )
+        }
+        // The base checkout is untouched and no sandbox was left behind.
+        #expect(try await client.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/busy")
+        #expect(!scope.exists(scope.home.appending(path: "sandboxes/acme/busy")))
+    }
+
     @Test func createMultiRepoTaskProjectsFilesAndWorktrees() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")

@@ -1,5 +1,6 @@
 import Foundation
 import ScopeCore
+import ScopeGit
 
 /// Identity of a task: 12 lowercase hex characters, used verbatim as `tasks/<id>.json`.
 public struct TaskID: Hashable, Codable, Sendable, CustomStringConvertible, Comparable {
@@ -97,6 +98,11 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
 
     /// `#123`
     public var label: String { "#\(number)" }
+
+    /// The link that binds a task to `pr`.
+    public init(_ pr: PullRequest) {
+        self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository)
+    }
 }
 
 /// One `tasks/<id>.json` document (spec §4.3).

@@ -4,11 +4,16 @@ import ScopeDrivers
 import ScopeGit
 import ScopeTasks
 
-/// ⌘⇧T, two steps. **Prompt**: what the agent should do, the driver, the repos (a repo scope sandboxes the
-/// scope itself). **Continue** derives a title / branch / folder from the prompt at once (level 0) and, when
-/// the driver has a headless mode, asks it for a branch that follows the repo's own convention (level 1,
-/// replaces the fields when it answers, cancellable). **Create** makes the sandboxes, then opens the first
-/// thread with the driver and the prompt. Errors show inline and in the Problem Center.
+/// ⌘⇧T, two steps. **Prompt**: what the agent should do, and the driver — nothing else to fill in.
+///
+/// **Continue** reads the prompt (`TaskTargets`, `PullRequestReference`) and works out what it is about:
+/// the repositories it names, and whether it continues work that already exists — a pull request whose head
+/// must be checked out, or a branch of the repo. Without one, the title / branch / folder are derived from
+/// the prompt at once (level 0) and, when the driver has a headless mode, it is asked for a branch that
+/// follows the repo's own convention (level 1, replaces the fields when it answers, cancellable).
+///
+/// Everything it worked out is shown and editable before **Create**: a wrong branch name is a typo, a wrong
+/// repository is a worktree in the wrong place. Errors show inline and in the Problem Center.
 struct NewTaskSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -21,6 +26,9 @@ struct NewTaskSheet: View {
     @State private var driverID: String
     @State private var selectedRepos: Set<String> = []
     @State private var evidence: BranchEvidence?
+    @State private var startPoint: TaskStartPoint = .defaultBranch
+    @State private var resolution: AppModel.TaskRequestResolution?
+    @State private var resolving = false
     @State private var title = ""
     @State private var branch = ""
     @State private var folder = ""
@@ -116,50 +124,11 @@ struct NewTaskSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        if isRepoScope {
-            Section {
-                Label("Sandbox: a worktree of \(scope.name) on the task branch.", systemImage: "info.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-        } else {
-            Section {
-                if scope.repos.isEmpty {
-                    Text(scope.discovery == .scanning ? "Scanning…" : "No git repository found in this scope.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(scope.repos) { repo in
-                        Toggle(isOn: binding(for: repo.id)) {
-                            HStack(spacing: 6) {
-                                Text(repo.id)
-                                    .font(.system(size: 12))
-                                if let branch = repo.branchLabel {
-                                    Text(branch)
-                                        .font(.system(size: 10.5, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-                }
-            } header: {
-                HStack {
-                    Text("Repositories")
-                    Spacer()
-                    if scope.repos.count > 1 {
-                        Button("All") { selectedRepos = Set(scope.repos.map(\.id)) }
-                        Button("None") { selectedRepos = [] }
-                    }
-                }
-                .controlSize(.small)
-                .buttonStyle(.borderless)
-            } footer: {
-                if !scope.repos.isEmpty, selectedRepos.isEmpty {
-                    Text("Pick at least one repository.")
-                }
-            }
+        Section {
+            Label(repoHint, systemImage: repoHintSymbol)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -173,11 +142,18 @@ struct NewTaskSheet: View {
             TextField("Branch", text: $branch)
                 .font(.system(size: 12, design: .monospaced))
                 .autocorrectionDisabled()
+                .disabled(startPoint.continuesExistingWork)
                 .onChange(of: branch) { if branch != appliedFields[1] { fieldsEdited = true } }
             TextField("Folder", text: $folder)
                 .font(.system(size: 12, design: .monospaced))
                 .autocorrectionDisabled()
                 .onChange(of: folder) { if folder != appliedFields[2] { fieldsEdited = true } }
+            Picker("Start from", selection: $startPoint) {
+                ForEach(startPointOptions, id: \.self) { option in
+                    Text(label(for: option)).tag(option)
+                }
+            }
+            .onChange(of: startPoint) { _, option in startPointChanged(option) }
             LabeledContent("Sandbox") {
                 Text(sandboxPath)
                     .font(.system(size: 11, design: .monospaced))
@@ -193,7 +169,7 @@ struct NewTaskSheet: View {
             HStack(spacing: 6) {
                 if proposing != nil {
                     ProgressView().controlSize(.mini)
-                    Text("Asking \(selectedProfile?.name ?? "the driver") for a branch name…")
+                    Text(resolving ? "Reading the request…" : "Asking \(selectedProfile?.name ?? "the driver") for a branch name…")
                     Button("Stop") { cancelProposing() }
                         .controlSize(.mini)
                         .buttonStyle(.borderless)
@@ -203,6 +179,50 @@ struct NewTaskSheet: View {
             }
             .font(.system(size: 11.5))
             .foregroundStyle(.secondary)
+        }
+
+        if let existing = resolution?.existingTask, let task = model.task(existing) {
+            Section {
+                Label("\(task.name) already works on this pull request.", systemImage: "arrow.triangle.branch")
+                    .font(.system(size: 12))
+                Button("Open it instead") {
+                    model.selection = .task(existing)
+                    dismiss()
+                }
+                .controlSize(.small)
+            }
+        }
+
+        if !isRepoScope {
+            Section {
+                ForEach(scope.repos) { repo in
+                    Toggle(isOn: binding(for: repo.id)) {
+                        HStack(spacing: 6) {
+                            Text(repo.id).font(.system(size: 12))
+                            if let branch = repo.branchLabel {
+                                Text(branch)
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .toggleStyle(.checkbox)
+                    .disabled(startPoint.pullRequest != nil && !selectedRepos.contains(repo.id))
+                }
+            } header: {
+                HStack {
+                    Text("Repositories")
+                    Spacer()
+                    if scope.repos.count > 1, startPoint.pullRequest == nil {
+                        Button("All") { selectedRepos = Set(scope.repos.map(\.id)) }
+                        Button("None") { selectedRepos = [] }
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderless)
+            } footer: {
+                Text(repoFooter)
+            }
         }
 
         Section {
@@ -271,11 +291,63 @@ struct NewTaskSheet: View {
         return "\(profile.name) has no headless mode: the branch name is derived from the prompt."
     }
 
+    /// What step 1 promises: Scope reads the prompt, the sheet does not ask for a repository.
+    private var repoHint: String {
+        if isRepoScope { return "Sandbox: a worktree of \(scope.name) on the task branch." }
+        return "Name a repository, a branch or a pull request in the prompt and Scope picks them up — you confirm everything on the next step."
+    }
+
+    private var repoHintSymbol: String { isRepoScope ? "info.circle" : "wand.and.stars" }
+
+    private var repoFooter: String {
+        if startPoint.pullRequest != nil {
+            return "A pull request lives in one repository, so this task sandboxes that one."
+        }
+        if selectedRepos.isEmpty { return "Pick at least one repository." }
+        if resolution?.repos.isEmpty == false, Set(resolution?.repos ?? []) == selectedRepos {
+            return "Named in the prompt."
+        }
+        return ""
+    }
+
+    /// The start points offered: a new branch, the pull request the prompt named, the branch it named, and
+    /// the repository's other branches (the evidence already gathered for the proposal).
+    private var startPointOptions: [TaskStartPoint] {
+        var options: [TaskStartPoint] = []
+        if let pr = resolution?.pullRequest { options.append(.pullRequest(pr)) }
+        options.append(.defaultBranch)
+        var seen = Set<String>()
+        for name in (evidence?.branches ?? []) where seen.insert(name).inserted {
+            options.append(.existingBranch(name))
+            if options.count > 16 { break }
+        }
+        if case .existingBranch(let name) = startPoint, !seen.contains(name) {
+            options.insert(.existingBranch(name), at: min(1, options.count))
+        }
+        return options
+    }
+
+    private func label(for option: TaskStartPoint) -> String {
+        switch option {
+        case .defaultBranch: "A new branch"
+        case .existingBranch(let name): name
+        case .pullRequest(let pr): "#\(pr.number) \(pr.title)"
+        }
+    }
+
     private var sourceCaption: String {
-        switch source {
-        case .driver(let name): "Suggested by \(name)."
-        case .derived(let reason?): "Derived from the prompt — \(reason)"
-        case .derived(nil), nil: "Derived from the prompt."
+        if let unresolved = resolution?.unresolved { return unresolved }
+        switch startPoint {
+        case .pullRequest(let pr):
+            return "Checks \(pr.isCrossRepository ? "the fork's head" : pr.headRefName) out — no branch is created."
+        case .existingBranch(let name):
+            return "Continues \(name) — no branch is created."
+        case .defaultBranch:
+            switch source {
+            case .driver(let name): return "Suggested by \(name)."
+            case .derived(let reason?): return "Derived from the prompt — \(reason)"
+            case .derived(nil), nil: return "Derived from the prompt."
+            }
         }
     }
 
@@ -295,11 +367,11 @@ struct NewTaskSheet: View {
     private var repoCount: Int { isRepoScope ? 1 : selectedRepos.count }
 
     private var canContinue: Bool {
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && repoCount > 0
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var canCreate: Bool {
-        !isCreating && proposing == nil
+        !isCreating && proposing == nil && repoCount > 0
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -321,23 +393,66 @@ struct NewTaskSheet: View {
         appliedFields = ["", "", ""]
         step = .proposal
         let request = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let repos = repos
         let scopeID = scope.id
         let driver = driverID
+        resolution = nil
+        startPoint = .defaultBranch
+        resolving = true
         proposing?.cancel()
         proposing = Task {
-            let evidence = await model.branchEvidence(for: repos, in: scopeID)
+            // 1. What is the prompt about? Local, except for one `gh pr view` when it names a pull request.
+            let resolved = await model.resolveTaskRequest(prompt: request, in: scopeID)
+            guard !Task.isCancelled else { return }
+            resolution = resolved
+            resolving = false
+            if isRepoScope {
+                selectedRepos = ["."]
+            } else if !resolved.repos.isEmpty {
+                selectedRepos = Set(resolved.repos)
+            } else if selectedRepos.isEmpty, scope.repos.count == 1, let only = scope.repos.first {
+                selectedRepos = [only.id]
+            }
+
+            // 2. The branches of the repos in play — the proposal's evidence, and the "Start from" list.
+            let evidenceRepos = repos.isEmpty ? (isRepoScope ? ["."] : scope.repos.map(\.id)) : repos
+            let evidence = await model.branchEvidence(for: evidenceRepos, in: scopeID)
             guard !Task.isCancelled else { return }
             self.evidence = evidence
+
+            // 3. A pull request settles the name, the branch and the folder: nothing to propose.
+            if let pr = resolved.pullRequest {
+                startPoint = .pullRequest(pr)
+                apply(TaskProposal(
+                    title: TaskManager.taskName(forPullRequest: pr),
+                    slug: model.uniqueTaskSlug(TaskManager.taskSlug(forPullRequest: pr), in: scopeID),
+                    branch: TaskStartPoint.pullRequest(pr).requiredBranch ?? pr.headRefName,
+                    source: .derived(reason: nil)
+                ), force: true)
+                titleFocused = true
+                proposing = nil
+                return
+            }
+
+            // 4. Otherwise: level 0 now, the driver's answer when it comes.
+            if let branch = TaskTargets.branch(namedIn: request, among: evidence.branches) {
+                startPoint = .existingBranch(branch)
+            }
             apply(model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID), force: true)
             titleFocused = true
-            if model.drivers.profile(id: driver)?.headless?.isEmpty == false {
-                let proposal = await model.proposeTask(prompt: request, driverID: driver, repos: repos, evidence: evidence, in: scopeID)
+            if startPoint == .defaultBranch, model.drivers.profile(id: driver)?.headless?.isEmpty == false {
+                let proposal = await model.proposeTask(prompt: request, driverID: driver, repos: evidenceRepos, evidence: evidence, in: scopeID)
                 guard !Task.isCancelled else { return }
                 apply(proposal, force: false)
             }
             proposing = nil
         }
+    }
+
+    /// The start point owns the branch: keep the field in step with the picker.
+    private func startPointChanged(_ option: TaskStartPoint) {
+        guard let required = option.requiredBranch else { return }
+        branch = required
+        appliedFields[1] = required
     }
 
     /// Fills the fields; a level-1 answer does not clobber what the user already typed.
@@ -347,9 +462,9 @@ struct NewTaskSheet: View {
             return
         }
         title = proposal.title
-        branch = proposal.branch
+        branch = startPoint.requiredBranch ?? proposal.branch
         folder = proposal.slug
-        appliedFields = [proposal.title, proposal.branch, proposal.slug]
+        appliedFields = [title, branch, folder]
         source = proposal.source
         fieldsEdited = false
     }
@@ -383,7 +498,7 @@ struct NewTaskSheet: View {
         let repos = repos
         Task {
             do {
-                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos)
+                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos, startPoint: startPoint)
                 dismiss()
             } catch {
                 self.error = String(describing: error)

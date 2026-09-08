@@ -51,6 +51,25 @@ public extension GitClient {
         (try? await run(["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"], timeout: .seconds(10), allowFailure: true).succeeded) ?? false
     }
 
+    /// The checkout that currently has `branch` checked out — the main working tree or one of its
+    /// worktrees — or `nil` when no checkout holds it.
+    ///
+    /// git refuses `worktree add` for a branch that is already checked out somewhere; asking first turns
+    /// that into an error the UI can explain.
+    func worktreePath(ofBranch branch: String) async -> String? {
+        guard let data = try? await run(["worktree", "list", "--porcelain"], timeout: .seconds(30)).stdout else { return nil }
+        let output = String(decoding: data, as: UTF8.self)
+        var path: String?
+        for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.hasPrefix("worktree ") {
+                path = String(line.dropFirst("worktree ".count))
+            } else if line == "branch refs/heads/\(branch)" {
+                return path
+            }
+        }
+        return nil
+    }
+
     /// Adds a worktree at `path` on `branch`.
     ///
     /// - When the branch does not exist: `git worktree add <path> -b <branch> <startPoint>`.

@@ -80,20 +80,30 @@ public actor TaskManager {
     ///   - initialPrompt: the request the task was created from, stored on the record and shown in `AGENTS.md`.
     ///   - scope: the declaring scope.
     ///   - repos: relative paths of the repos to sandbox (`["."]` for a repo scope).
+    ///   - startPoint: what the sandboxes are based on; `.existingBranch` and `.pullRequest` continue work
+    ///     that already exists, in which case `branch` must be the branch they name.
+    ///   - pullRequest: the pull request to bind the record to (set together with `.pullRequest`).
     ///   - scopeRepos: relative paths of *all* repos of the scope, for the "other repos" section of `AGENTS.md`.
     /// - Throws: `TaskError`. Worktrees and branches created before a failure are removed again.
     public func create(
         name: String, branch: String, slug requestedSlug: String? = nil, initialPrompt: String? = nil,
-        in scope: ScopeDeclaration, repos: [String], scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
+        in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
+        pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
         if requested.contains("."), requested.count > 1 {
             throw TaskError.invalidRepoSelection("a repo scope task holds the scope itself only")
         }
+        // One branch, one head: a pull request lives in exactly one repository.
+        if startPoint.pullRequest != nil, requested.count > 1 {
+            throw TaskError.invalidRepoSelection("a task on a pull request sandboxes its repository only")
+        }
         guard Set(requested).count == requested.count else { throw TaskError.invalidRepoSelection("duplicate repositories") }
 
-        let branch = branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The start point dictates the branch when it continues existing work: the branch is not a name to
+        // choose, it is the one already carrying the commits.
+        let branch = (startPoint.requiredBranch ?? branch).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !branch.isEmpty, !branch.hasPrefix("scope/") else { throw TaskError.invalidBranch(branch) }
         let slugSource = requestedSlug?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let slug = uniqueSlug(for: slugSource.isEmpty ? name : slugSource, in: scope)
@@ -104,13 +114,13 @@ public actor TaskManager {
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
-            prompt: (prompt?.isEmpty ?? true) ? nil : prompt
+            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
             for path in requested {
-                let (repo, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
+                let (repo, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: startPoint)
                 created.append((repo, isNew))
                 record.repos.append(repo)
             }
@@ -132,23 +142,24 @@ public actor TaskManager {
     /// - Cross-repository PR (fork): `pull/<n>/head` is fetched into `refs/remotes/origin/pr/<n>` and the
     ///   local branch is `pr/<n>`. Pushing back goes to the fork, which needs its own remote — out of scope here.
     public func createForPullRequest(
-        _ pr: PullRequest, in scope: ScopeDeclaration, repo: String,
+        _ pr: PullRequest, in scope: ScopeDeclaration, repo: String, initialPrompt: String? = nil,
         scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
     ) async throws -> TaskRecord {
         let path = TaskRepo.normalize(repo)
-        let name = "#\(pr.number) \(pr.title)"
-        let slug = uniqueSlug(for: "pr-\(pr.number)-\(TaskBranch.slug(for: pr.title))", in: scope)
+        let name = TaskManager.taskName(forPullRequest: pr)
+        let slug = uniqueSlug(for: TaskManager.taskSlug(forPullRequest: pr), in: scope)
         let branch = pr.isCrossRepository ? "pr/\(pr.number)" : pr.headRefName
         let root = scopeSandboxesURL(scopeSlug: scope.slug).appending(path: slug, directoryHint: .isDirectory)
         var record = TaskRecord(
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name, slug: slug, branch: branch, root: root.filesystemPath,
             createdAt: TaskRecord.roundedToMilliseconds(.now),
-            pullRequest: LinkedPullRequest(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository)
+            pullRequest: LinkedPullRequest(pr),
+            prompt: initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
-            let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, pullRequest: pr)
+            let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: .pullRequest(pr))
             created.append((sandbox, isNew))
             record.repos.append(sandbox)
             try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
@@ -159,6 +170,14 @@ public actor TaskManager {
         }
         records[record.id] = record
         return record
+    }
+
+    /// `#<n> <title>` — the display name both pull-request paths give a task.
+    public static func taskName(forPullRequest pr: PullRequest) -> String { "#\(pr.number) \(pr.title)" }
+
+    /// `pr-<n>-<title slug>` — the sandbox folder both pull-request paths give a task.
+    public static func taskSlug(forPullRequest pr: PullRequest) -> String {
+        "pr-\(pr.number)-\(TaskBranch.slug(for: pr.title))"
     }
 
     /// The task bound to pull request `number` in `scope` (archived tasks included), if any.
@@ -292,16 +311,19 @@ public actor TaskManager {
 
     /// Fetch, resolve the start point, add the worktree. Returns the repo entry and whether the branch was created.
     ///
-    /// With `pullRequest`, the start point is the PR head instead of `origin/<default>` (see `createForPullRequest`).
-    private func makeSandbox(repoRelativePath path: String, task: TaskRecord, pullRequest: PullRequest? = nil) async throws -> (TaskRepo, Bool) {
+    /// `startPoint` decides what the worktree is based on: a new branch off the repository's base
+    /// (`.defaultBranch`), an existing branch, or a pull request's head (see `createForPullRequest`).
+    private func makeSandbox(
+        repoRelativePath path: String, task: TaskRecord, startPoint requested: TaskStartPoint = .defaultBranch
+    ) async throws -> (TaskRepo, Bool) {
         let client = try await baseClient(for: path, task: task)
         let sandbox = path == "." ? task.rootURL : task.rootURL.appending(path: path, directoryHint: .isDirectory)
 
         let hasOrigin = await client.hasRemote("origin")
         if hasOrigin {
             do { try await client.fetch(remote: "origin") } catch {
-                // A PR head only exists on origin: the fetch must succeed. A plain task falls back to the local refs.
-                guard pullRequest == nil else {
+                // Continuing existing work needs origin's refs. A plain task falls back to the local ones.
+                guard !requested.continuesExistingWork else {
                     if let error = error as? GitError { throw TaskError.git(repo: path, error) }
                     throw TaskError.persistence("fetch failed in \(path): \(String(describing: error))")
                 }
@@ -309,7 +331,8 @@ public actor TaskManager {
             }
         }
         let startPoint: String
-        if let pullRequest {
+        switch requested {
+        case .pullRequest(let pullRequest):
             let ref: String
             if pullRequest.isCrossRepository {
                 ref = "origin/pr/\(pullRequest.number)"
@@ -323,11 +346,23 @@ public actor TaskManager {
             }
             guard await client.refExists(ref) else { throw TaskError.pullRequestHeadMissing(repo: path, ref: ref) }
             startPoint = ref
-        } else {
+        case .existingBranch(let name):
+            // The local branch wins (that is the work being continued); origin's copy is the fallback.
+            if await client.branchExists(name) {
+                startPoint = name
+            } else if await client.refExists("origin/\(name)") {
+                startPoint = "origin/\(name)"
+            } else {
+                throw TaskError.branchNotFound(repo: path, branch: name)
+            }
+        case .defaultBranch:
             guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
             startPoint = await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
         }
         let branchWasNew = !(await client.branchExists(task.branch))
+        if !branchWasNew, let checkout = await client.worktreePath(ofBranch: task.branch) {
+            throw TaskError.branchAlreadyCheckedOut(repo: path, branch: task.branch, path: checkout)
+        }
 
         do {
             try await client.createWorktree(at: sandbox, branch: task.branch, from: startPoint)

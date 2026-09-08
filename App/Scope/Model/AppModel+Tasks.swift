@@ -30,6 +30,70 @@ extension AppModel {
         return taken
     }
 
+    /// What a task request turned out to be about: the repositories, and whether it continues work that
+    /// already exists instead of opening a branch. Everything in it is shown and editable in the sheet.
+    struct TaskRequestResolution: Sendable {
+        /// Relative paths of the repositories the request names; empty when nothing was recognised.
+        var repos: [String] = []
+        var startPoint: TaskStartPoint = .defaultBranch
+        /// The pull request the prompt named and `gh` resolved.
+        var pullRequest: PullRequest?
+        /// A pull request was named but could not be resolved; the reason is worth showing.
+        var unresolved: String?
+        /// A task of this scope is already bound to that pull request.
+        var existingTask: TaskID?
+    }
+
+    /// Reads the prompt and works out what it is about, before anything is created.
+    ///
+    /// A pull request named in the prompt wins: its repository comes from the `origin` remote it names (not
+    /// from a folder name — `.../acme-front/pull/6613` lives in the folder `front`), its head becomes the
+    /// start point and its number the task's identity. Otherwise repositories and an existing branch are
+    /// matched against what the scope already knows. Local and instant except for the one `gh pr view`.
+    func resolveTaskRequest(prompt: String, in scopeID: ScopeID, knownBranches: [String] = []) async -> TaskRequestResolution {
+        guard let scope = scope(scopeID) else { return TaskRequestResolution() }
+        let isRepoScope = scope.kind == .repo || scope.repos.contains { $0.id.isEmpty }
+        let candidates: [RepoCandidate] = isRepoScope
+            ? [RepoCandidate(path: ".", name: scope.name, remote: scope.repos.first?.facts?.remote)]
+            : scope.repos.map { RepoCandidate(path: $0.id, name: $0.shortName, remote: $0.facts?.remote) }
+
+        var resolution = TaskRequestResolution()
+        resolution.repos = TaskTargets.repos(namedIn: prompt, among: candidates)
+
+        if let reference = PullRequestReference.detect(in: prompt) {
+            guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
+                resolution.unresolved = "\(reference.label) is not a pull request of a repository in this scope."
+                return resolution
+            }
+            guard let gh = GhClient.locate() else {
+                resolution.unresolved = "\(reference.label): gh is not installed, so its branch cannot be looked up."
+                return resolution
+            }
+            let checkout = baseURLs(of: [candidate.path], in: scope).first ?? scope.url
+            do {
+                let pr = try await gh.prView(number: reference.number, in: checkout, repo: reference.fullName)
+                resolution.repos = [candidate.path]
+                resolution.pullRequest = pr
+                resolution.startPoint = .pullRequest(pr)
+                resolution.existingTask = tasks(in: scopeID).first { $0.record.pullRequest?.number == pr.number }?.id
+            } catch {
+                resolution.unresolved = "\(reference.label) could not be read: \(String(describing: error))"
+            }
+            return resolution
+        }
+
+        if let branch = TaskTargets.branch(namedIn: prompt, among: knownBranches) {
+            resolution.startPoint = .existingBranch(branch)
+        }
+        return resolution
+    }
+
+    /// `base`, or `base-2`, `base-3`… when a task or a sandbox folder of the scope already uses it.
+    func uniqueTaskSlug(_ base: String, in scopeID: ScopeID) -> String {
+        guard let scope = scope(scopeID) else { return base }
+        return SlugAllocator.unique(base: base, taken: takenTaskSlugs(in: scope))
+    }
+
     /// Branch-naming evidence of the repos a task would sandbox (New Task sheet, gathered once per prompt).
     func branchEvidence(for repos: [String], in scopeID: ScopeID) async -> BranchEvidence {
         guard let scope = scope(scopeID) else { return BranchEvidence() }
@@ -62,7 +126,10 @@ extension AppModel {
     /// Creates the task from a proposal, selects it, starts its watcher, then opens its first thread with
     /// `driverID` and the prompt as the driver's opening request. Throws `TaskError` for the sheet to show inline.
     @discardableResult
-    func createTask(_ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String]) async throws -> TaskState {
+    func createTask(
+        _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
+        startPoint: TaskStartPoint = .defaultBranch
+    ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
         let summaries = await graphSummaries(for: scope)
@@ -70,7 +137,9 @@ extension AppModel {
         do {
             record = try await env.tasks.create(
                 name: proposal.title, branch: proposal.branch, slug: proposal.slug, initialPrompt: prompt,
-                in: scope.declaration, repos: repos, scopeRepos: scopeRepos, repoSummaries: summaries
+                in: scope.declaration, repos: repos, startPoint: startPoint,
+                pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
+                scopeRepos: scopeRepos, repoSummaries: summaries
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)

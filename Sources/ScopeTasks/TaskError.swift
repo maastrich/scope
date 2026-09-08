@@ -27,6 +27,10 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case pullRequestHeadMissing(repo: String, ref: String)
     /// `create`: the branch name is empty or uses the reserved `scope/` prefix.
     case invalidBranch(String)
+    /// `TaskStartPoint.existingBranch`: no such branch locally or on `origin`.
+    case branchNotFound(repo: String, branch: String)
+    /// The branch is checked out in another working tree; git refuses a second worktree on it.
+    case branchAlreadyCheckedOut(repo: String, branch: String, path: String)
 
     public var description: String {
         switch self {
@@ -42,6 +46,9 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .persistence(let message): message
         case .pullRequestHeadMissing(let repo, let ref): "\(repo): \(ref) is not on origin after fetch"
         case .invalidBranch(let branch): branch.isEmpty ? "the task needs a branch name" : "\"\(branch)\" is not a valid task branch (the scope/ prefix is reserved)"
+        case .branchNotFound(let repo, let branch): "\(repo): no branch \(branch), locally or on origin"
+        case .branchAlreadyCheckedOut(let repo, let branch, let path):
+            "\(repo): \(branch) is already checked out at \(path) — a branch can only live in one working tree"
         }
     }
 }
