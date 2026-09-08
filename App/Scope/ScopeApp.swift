@@ -35,8 +35,13 @@ struct ScopeApp: App {
             MenuBarExtraMenu()
                 .environment(model)
         } label: {
+            // The petal-ring template glyph; while threads wait, the count badge replaces it so the number stays legible.
             let waiting = model.waitingThreads.count
-            Image(systemName: waiting > 0 ? "\(min(waiting, 50)).circle.fill" : "scope")
+            if waiting > 0 {
+                Image(systemName: "\(min(waiting, 50)).circle.fill")
+            } else {
+                Image("MenuBarIcon")
+            }
         }
     }
 

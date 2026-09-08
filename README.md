@@ -1,3 +1,5 @@
+<img src="App/Scope/Design/scope-icon-256.png" width="96" align="left" alt="Scope icon">
+
 # Scope
 
 Scope is a native macOS workspace for running coding agents (Claude Code, Codex, Cursor, or a plain shell) against your repositories.
