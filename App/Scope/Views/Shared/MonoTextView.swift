@@ -229,6 +229,10 @@ struct MonoTextView: NSViewRepresentable {
 /// right edge of the (at least clip-wide) text view.
 final class RowBackgroundLayoutManager: NSLayoutManager {
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        // The two `main actor-isolated property … from a nonisolated context` warnings below are known. AppKit
+        // draws on the main thread, so the reads are safe, but the override cannot be `@MainActor` (the
+        // superclass method is not) and `MainActor.assumeIsolated` cannot take this nonisolated `self` with it.
+        // Silencing them properly means caching the width on this layout manager and pushing it from the view.
         if let storage = textStorage, let textView = textContainers.first?.textView {
             let width = max(textView.bounds.width, textView.frame.width)
             enumerateLineFragments(forGlyphRange: glyphsToShow) { rect, _, _, glyphRange, _ in

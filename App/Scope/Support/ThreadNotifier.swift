@@ -18,11 +18,14 @@ final class ThreadNotifier {
         registerCategoryIfNeeded()
         let center = UNUserNotificationCenter.current()
         let request = Self.request(content, threadID: threadID)
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if let error { Log.threads.warning("notification authorization: \(error.localizedDescription, privacy: .public)") }
-            guard granted else { return }
-            center.add(request) { error in
-                if let error { Log.threads.warning("notification post: \(error.localizedDescription, privacy: .public)") }
+        // The async form keeps `center` and `request` on this actor. The completion-handler pair handed both to
+        // a `@Sendable` closure instead, and neither type is `Sendable`.
+        Task { @MainActor in
+            do {
+                guard try await center.requestAuthorization(options: [.alert, .sound, .badge]) else { return }
+                try await center.add(request)
+            } catch {
+                Log.threads.warning("notification: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
