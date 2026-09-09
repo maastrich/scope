@@ -187,8 +187,18 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     /// `<root>/<slug>.code-workspace`
     public var workspaceURL: URL { rootURL.appending(path: "\(slug).code-workspace", directoryHint: .notDirectory) }
-    /// `<root>/AGENTS.md`
-    public var contextFileURL: URL { rootURL.appending(path: "AGENTS.md", directoryHint: .notDirectory) }
+    /// `<thread cwd>/AGENTS.md` — the pivot name, for callers that only need the default one.
+    public var contextFileURL: URL { contextFileURL(named: TaskRecord.pivotContextFile) }
+
+    /// The context file a driver reading `name` would find: it sits where the task's threads start, which
+    /// is the sandbox for a one-repository task and the task root otherwise. A file written anywhere else
+    /// is a file the driver never opens.
+    public func contextFileURL(named name: String) -> URL {
+        threadCwd.appending(path: name, directoryHint: .notDirectory)
+    }
+
+    /// The name every driver understands, written even when no profile asks for it.
+    public static let pivotContextFile = "AGENTS.md"
 
     /// Working directory of a thread attached to this task (spec §4.3): the sandbox itself when
     /// the task has exactly one active repo (drivers expect a git root), the task root otherwise.

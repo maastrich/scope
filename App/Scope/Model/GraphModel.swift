@@ -214,9 +214,10 @@ extension AppModel {
         let scopeRepos = scope.repos.map(\.id)
         for task in tasks(in: scope.id) {
             do {
-                try await env.tasks.regenerateProjection(task.id, scopeRepos: scopeRepos, repoSummaries: summaries)
+                try await env.tasks.regenerateProjection(task.id, scopeRepos: scopeRepos, repoSummaries: summaries,
+                                                         contextFiles: contextFileNames)
             } catch {
-                problems.warn("Could not refresh AGENTS.md of \(task.name)", detail: String(describing: error), scope: scope.id)
+                problems.warn("Could not refresh the context file of \(task.name)", detail: String(describing: error), scope: scope.id)
             }
         }
     }

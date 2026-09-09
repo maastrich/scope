@@ -159,7 +159,8 @@ extension AppModel {
         let record: TaskRecord
         do {
             record = try await env.tasks.createForPullRequest(pr, in: scope.declaration, repo: GraphModel.key(for: repo),
-                                                              scopeRepos: scopeRepos, repoSummaries: summaries)
+                                                              scopeRepos: scopeRepos, repoSummaries: summaries,
+                                                              contextFiles: contextFileNames)
         } catch {
             problems.error("Could not open #\(pr.number) in Scope", detail: String(describing: error), scope: scope.id)
             return

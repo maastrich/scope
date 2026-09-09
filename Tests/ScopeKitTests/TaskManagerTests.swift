@@ -5,8 +5,8 @@ import ScopeGit
 @testable import ScopeTasks
 
 @Suite(.serialized) struct TaskManagerTests {
-    private func makeManager(_ scope: TestScope, options: TaskManagerOptions = .init()) -> TaskManager {
-        TaskManager(home: scope.home, registry: scope.registry, store: TaskRecordStore(home: scope.home), options: options)
+    private func makeManager(_ scope: TestScope) -> TaskManager {
+        TaskManager(home: scope.home, registry: scope.registry, store: TaskRecordStore(home: scope.home))
     }
 
     @Test func existingBranchStartPointContinuesItInsteadOfBranching() async throws {
@@ -129,9 +129,16 @@ import ScopeGit
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
         let manager = makeManager(scope)
-        let task = try await manager.create(name: "one", branch: "feat/one", in: scope.declaration, repos: ["api"])
+        let task = try await manager.create(name: "one", branch: "feat/one", in: scope.declaration, repos: ["api"],
+                                            contextFiles: ["CLAUDE.md"])
         #expect(task.threadCwd.path == task.repos[0].sandboxPath)
-        #expect(scope.exists(task.contextFileURL) && scope.exists(task.workspaceURL))
+        #expect(scope.exists(task.workspaceURL))
+        // One repository: the thread starts in the sandbox, so both files are written there, not at the root
+        // the driver never opens.
+        for name in ["AGENTS.md", "CLAUDE.md"] {
+            #expect(scope.exists(task.repos[0].sandboxURL.appending(path: name)))
+            #expect(!scope.exists(task.rootURL.appending(path: name)))
+        }
     }
 
     @Test func addRepoCreatesSandboxAndRegeneratesProjection() async throws {
@@ -139,10 +146,11 @@ import ScopeGit
         try await scope.makeRepo("api")
         try await scope.makeRepo("web")
         let manager = makeManager(scope)
-        let task = try await manager.create(name: "grow", branch: "feat/grow", in: scope.declaration, repos: ["api"], scopeRepos: ["api", "web"])
+        let task = try await manager.create(name: "grow", branch: "feat/grow", in: scope.declaration, repos: ["api"],
+                                            scopeRepos: ["api", "web"], contextFiles: ["CLAUDE.md"])
         #expect(try String(contentsOf: task.contextFileURL, encoding: .utf8).contains("- web\n"))
 
-        let grown = try await manager.addRepo(task.id, repo: "web", scopeRepos: ["api", "web"])
+        let grown = try await manager.addRepo(task.id, repo: "web", scopeRepos: ["api", "web"], contextFiles: ["CLAUDE.md"])
         #expect(grown.repos.map(\.repoRelativePath) == ["api", "web"])
         #expect(scope.exists(grown.repos[1].sandboxURL.appending(path: "README.md")))
         #expect(grown.threadCwd == grown.rootURL)
@@ -150,6 +158,12 @@ import ScopeGit
         #expect(agents.contains("**web**") && !agents.contains("## Other repositories"))
         let workspace = try String(contentsOf: grown.workspaceURL, encoding: .utf8)
         #expect(workspace.contains("\"path\" : \"web\""))
+        // The cwd moved from the sandbox up to the task root: the copies left behind are gone, so no agent
+        // reads a projection that lists one repository when the task now has two.
+        for name in ["AGENTS.md", "CLAUDE.md"] {
+            #expect(scope.exists(grown.rootURL.appending(path: name)))
+            #expect(!scope.exists(grown.repos[0].sandboxURL.appending(path: name)))
+        }
 
         await #expect(throws: TaskError.self) { try await manager.addRepo(task.id, repo: "web") }
         await #expect(throws: TaskError.self) { try await manager.addRepo(task.id, repo: "missing") }
@@ -216,7 +230,7 @@ import ScopeGit
         #expect(!(await scope.client(for: api).branchExists("feat/park")))
     }
 
-    @Test func monoRepoTaskRootIsTheSandboxAndContextFileIsOptIn() async throws {
+    @Test func monoRepoTaskRootIsTheSandboxAndCarriesTheContextFiles() async throws {
         let scope = try await TestScope.make()
         try await scope.makeRepo(".")
         let manager = makeManager(scope)
@@ -226,29 +240,35 @@ import ScopeGit
         #expect(task.repos[0].sandboxPath == task.root)
         #expect(task.threadCwd == task.rootURL)
         #expect(scope.exists(task.rootURL.appending(path: "README.md")))
-        #expect(!scope.exists(task.contextFileURL))      // default: never pollute the sandbox
+        // The thread starts here, so the context file is here — excluded from git, so the delta stays clean.
+        #expect(scope.exists(task.contextFileURL))
         #expect(!scope.exists(task.workspaceURL))
         let cwdClient = await scope.client(for: task.threadCwd)
         #expect(try await cwdClient.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/solo")
         await #expect(throws: TaskError.self) { try await manager.create(name: "bad", branch: "feat/bad", in: scope.declaration, repos: [".", "api"]) }
         await #expect(throws: TaskError.self) { try await manager.addRepo(task.id, repo: "sub") }
 
-        // Opt-in: AGENTS.md written once and excluded from git (the delta stays clean).
-        await manager.setOptions(TaskManagerOptions(writeContextFileIntoMonoRepoSandbox: true))
-        try await manager.regenerateProjection(task.id)
-        #expect(scope.exists(task.contextFileURL))
+        // Every driver's file name, one content, all excluded.
+        try await manager.regenerateProjection(task.id, contextFiles: ["CLAUDE.md", "AGENTS.md", "CLAUDE.md"])
+        let claude = task.contextFileURL(named: "CLAUDE.md")
+        #expect(scope.exists(claude))
+        #expect(try String(contentsOf: claude, encoding: .utf8) == (try String(contentsOf: task.contextFileURL, encoding: .utf8)))
         let excludeRaw = try await cwdClient.output(["rev-parse", "--git-path", "info/exclude"])
         let exclude = excludeRaw.hasPrefix("/") ? URL(fileURLWithPath: excludeRaw) : task.rootURL.appending(path: excludeRaw)
         #expect(try String(contentsOf: exclude, encoding: .utf8).contains("/AGENTS.md"))
+        #expect(try String(contentsOf: exclude, encoding: .utf8).contains("/CLAUDE.md"))
         let baseClient = await scope.client(for: scope.scopeRoot)
         #expect(try await baseClient.hasUncommittedChanges(at: task.rootURL) == false)
         let delta = try await Delta.load(mode: .uncommitted, in: task.rootURL, using: baseClient)
         #expect(delta.files.isEmpty)
 
-        // Existing user file is never overwritten; exclude is not duplicated.
+        // A file Scope did not generate is never overwritten; it is reported instead, and the exclude is
+        // not duplicated. Scope's own file is refreshed in place.
         try "mine".write(to: task.contextFileURL, atomically: true, encoding: .utf8)
-        try await manager.regenerateProjection(task.id)
+        try await manager.regenerateProjection(task.id, contextFiles: ["CLAUDE.md"])
         #expect(try String(contentsOf: task.contextFileURL, encoding: .utf8) == "mine")
+        #expect(await manager.projectionWarnings(for: task.id) == ["AGENTS.md"])
+        #expect(try String(contentsOf: claude, encoding: .utf8).hasPrefix(TaskProjection.generatedMarker))
         #expect(try String(contentsOf: exclude, encoding: .utf8).components(separatedBy: "/AGENTS.md").count == 2)
 
         // Archive removes the worktree (= the root); close deletes the branch.

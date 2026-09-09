@@ -124,7 +124,10 @@ Panneau unique, indépendant du driver, agrégé sur les repos de la task.
 - **Cache** : clé = SHA de HEAD + hash du README + hash des manifestes. Édition manuelle possible et prioritaire sur la génération.
 - **Vue** : cartes par repo en v1 ; une vue graphe des relations `related` quand le champ sera assez rempli pour la mériter.
 - **Projection vers les drivers** : Scope écrit `AGENTS.md` (convention pivot, lue par Codex et Cursor) à la racine de task. Le profil Claude Code peut demander en plus un `CLAUDE.md` généré. Contenu : les repos de la task et leur rôle, les autres repos du scope avec leur rôle (pour que l'agent sache demander à en ajouter un), les règles (branche, ne pas toucher à la base).
-- **Cas mono-repo** : la racine de task est la sandbox elle-même, donc écrire `AGENTS.md` dedans polluerait le delta. Scope privilégie l'injection par le driver (flag de contexte quand il existe) ; sinon écrit le fichier seulement s'il n'en existe pas et l'ajoute à `.git/info/exclude`. Voir décision ouverte 6.
+- **Où** : le fichier est écrit là où démarrent les threads de la task — la sandbox quand la task n'a qu'un repo (y compris le cas mono-repo, où la racine de task *est* la sandbox), la racine sinon. Ailleurs, le driver ne le lit jamais.
+- **Sous quels noms** : tous ceux que les profils déclarent (`context.file`, sauf `mode: none`), `AGENTS.md` toujours inclus — les threads d'une même task peuvent tourner sous des drivers différents. Même contenu dans chacun.
+- **Fichier existant** : jamais écrasé, sauf s'il porte le marqueur de génération de Scope. Le nom laissé de côté est signalé dans le Problem Center : un agent qui démarre sans son contexte doit se voir.
+- **Dans une sandbox** : chaque fichier écrit est ajouté à `.git/info/exclude`, donc le delta reste propre (décision ouverte 6 tranchée : fichier + exclude, tant qu'aucun driver n'expose de flag de contexte).
 
 ### 4.7 Adaptateurs et notifications
 
@@ -258,7 +261,7 @@ Détaillée en maquettes SVG à l'étape 3. Squelette :
 3. **Cwd par défaut d'un thread** : task (proposé) ou racine du scope ?
 4. **Nom de branche** : `scope/<slug>` ou `<user>/<slug>` ?
 5. **Base de branche** : `origin/<default>` fraîchement fetché (proposé) ou la base locale ?
-6. **Projection mono-repo** : flag de contexte du driver, ou fichier + `.git/info/exclude` ? Que faire si le repo a déjà un `AGENTS.md` committé ?
+6. ~~**Projection mono-repo** : flag de contexte du driver, ou fichier + `.git/info/exclude` ?~~ Tranché : fichier + `exclude`, écrit dans le cwd des threads, sous chaque nom déclaré par les drivers ; un fichier que Scope n'a pas généré est laissé en place et signalé.
 7. **Rendu du delta** : natif SwiftUI + parser (proposé, cohérent, plus long) ou `WKWebView` + diff2html (rapide, moins natif).
 8. **Graph L1** : quel driver par défaut ? Coût et durée acceptables par repo ?
 9. **Repos non clonés** : `gh` obligatoire, ou API GitHub avec token ?

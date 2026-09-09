@@ -2,18 +2,6 @@ import Foundation
 import ScopeCore
 import ScopeGit
 
-/// Tunables of `TaskManager`.
-public struct TaskManagerOptions: Sendable, Equatable {
-    /// Repo scope only (task root == sandbox): write `AGENTS.md` into the sandbox when no such file
-    /// exists, and list it in `.git/info/exclude` so it never shows in the delta (spec §4.6). Off by
-    /// default: drivers that take a context flag get the content from `TaskProjection` instead.
-    public var writeContextFileIntoMonoRepoSandbox: Bool
-
-    public init(writeContextFileIntoMonoRepoSandbox: Bool = false) {
-        self.writeContextFileIntoMonoRepoSandbox = writeContextFileIntoMonoRepoSandbox
-    }
-}
-
 /// Creates, extends, archives and closes tasks (spec §4.3): one worktree per repo on the task
 /// branch (see `TaskProposer`), the task root under `<home>/sandboxes/<scope-slug>/<task-slug>/`, `AGENTS.md`
 /// and `<slug>.code-workspace` projected into it, the record in `<home>/tasks/<id>.json`.
@@ -22,19 +10,22 @@ public struct TaskManagerOptions: Sendable, Equatable {
 /// folder itself is the repo (repo scope, spec §2), in which case the task root *is* the sandbox.
 public actor TaskManager {
     public nonisolated let home: URL
-    public var options: TaskManagerOptions
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
     private var records: [TaskID: TaskRecord] = [:]
+    /// Context files a projection left alone because the repository already had one of its own, per task.
+    /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
+    private var projectionSkips: [TaskID: [String]] = [:]
 
-    public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore, options: TaskManagerOptions = .init()) {
+    public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore) {
         self.home = home
         self.registry = registry
         self.store = store
-        self.options = options
     }
 
-    public func setOptions(_ options: TaskManagerOptions) { self.options = options }
+    /// Names of the context files the last projection of `id` did not write, because a file of that name
+    /// was already there and Scope did not generate it.
+    public func projectionWarnings(for id: TaskID) -> [String] { projectionSkips[id] ?? [] }
 
     // MARK: - Records
 
@@ -88,7 +79,8 @@ public actor TaskManager {
     public func create(
         name: String, branch: String, slug requestedSlug: String? = nil, initialPrompt: String? = nil,
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
-        pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
+        pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
+        contextFiles: [String] = []
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -124,7 +116,7 @@ public actor TaskManager {
                 created.append((repo, isNew))
                 record.repos.append(repo)
             }
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
+            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback(created, task: record)
@@ -143,7 +135,7 @@ public actor TaskManager {
     ///   local branch is `pr/<n>`. Pushing back goes to the fork, which needs its own remote — out of scope here.
     public func createForPullRequest(
         _ pr: PullRequest, in scope: ScopeDeclaration, repo: String, initialPrompt: String? = nil,
-        scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []
+        scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = []
     ) async throws -> TaskRecord {
         let path = TaskRepo.normalize(repo)
         let name = TaskManager.taskName(forPullRequest: pr)
@@ -162,7 +154,7 @@ public actor TaskManager {
             let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: .pullRequest(pr))
             created.append((sandbox, isNew))
             record.repos.append(sandbox)
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
+            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback(created, task: record)
@@ -196,7 +188,8 @@ public actor TaskManager {
     }
 
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
-    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws -> TaskRecord {
+    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
+                        contextFiles: [String] = []) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard !record.isArchived else { throw TaskError.taskArchived }
         let path = TaskRepo.normalize(repo)
@@ -208,7 +201,7 @@ public actor TaskManager {
         let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
         record.repos.append(sandbox)
         do {
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
+            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback([(sandbox, isNew)], task: record)
@@ -219,9 +212,10 @@ public actor TaskManager {
     }
 
     /// Rewrites `AGENTS.md` and the `.code-workspace` (after a Graph refresh, or a repo list change).
-    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = []) async throws {
+    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
+                                     contextFiles: [String] = []) async throws {
         guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries)
+        try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
     }
 
     // MARK: - Archive / close
@@ -416,27 +410,73 @@ public actor TaskManager {
         do { try await store.save(record) } catch { throw TaskError.persistence(String(describing: error)) }
     }
 
-    /// Writes `AGENTS.md` and `<slug>.code-workspace` in the task root. Repo scope: no workspace
-    /// (single root), and `AGENTS.md` only under `writeContextFileIntoMonoRepoSandbox`.
-    private func writeProjection(_ record: TaskRecord, scopeRepos: [String], repoSummaries: [RepoContextSummary]) async throws {
+    /// Writes the context file under every name the drivers read, where the task's threads start, plus
+    /// `<slug>.code-workspace` in the task root.
+    ///
+    /// The name is a property of the *driver*, not of the task — a task's threads can run Claude Code
+    /// (`CLAUDE.md`) and Codex (`AGENTS.md`) side by side — so every declared name is written, all with the
+    /// same content. A file Scope did not generate is never touched; its name is recorded in
+    /// `projectionWarnings` instead, because an agent starting without its context is worth saying out loud.
+    ///
+    /// Inside a sandbox the file is listed in `.git/info/exclude`, so the delta stays clean (spec §4.6).
+    /// Adding a second repository moves the thread cwd from the sandbox up to the task root: the copies
+    /// left behind are removed, so the agent can never read a stale one.
+    private func writeProjection(_ record: TaskRecord, scopeRepos: [String], repoSummaries: [RepoContextSummary],
+                                 contextFiles: [String]) async throws {
         let others = scopeRepos.map(TaskRepo.normalize).filter { $0 != "." }
         let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, repoSummaries: repoSummaries)
+        let names = Self.contextFileNames(contextFiles)
+        let directory = record.threadCwd
+        // The thread starts inside a worktree whenever the cwd is a sandbox (always, for a repo scope).
+        let sandbox = record.activeRepos.first { $0.sandboxURL.filesystemPath == directory.filesystemPath }
+        var skipped: [String] = []
         do {
-            if record.isMonoRepo {
-                guard options.writeContextFileIntoMonoRepoSandbox, let repo = record.activeRepos.first else { return }
-                let file = record.contextFileURL
-                guard !FileManager.default.fileExists(atPath: file.path) else { return }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            for name in names {
+                let file = directory.appending(path: name, directoryHint: .notDirectory)
+                if let existing = try? String(contentsOf: file, encoding: .utf8), !existing.hasPrefix(TaskProjection.generatedMarker) {
+                    skipped.append(name)
+                    continue
+                }
                 try markdown.write(to: file, atomically: true, encoding: .utf8)
-                try await excludeFromGit("AGENTS.md", in: repo, task: record)
-                return
+                if let sandbox { try await excludeFromGit(name, in: sandbox, task: record) }
             }
-            try FileManager.default.createDirectory(at: record.rootURL, withIntermediateDirectories: true)
-            try markdown.write(to: record.contextFileURL, atomically: true, encoding: .utf8)
-            try TaskProjection.workspaceJSON(task: record).write(to: record.workspaceURL, options: [.atomic])
+            try await removeGeneratedContextFiles(names, outside: directory, task: record)
+            if !record.isMonoRepo {
+                try TaskProjection.workspaceJSON(task: record).write(to: record.workspaceURL, options: [.atomic])
+            }
         } catch let error as TaskError {
             throw error
         } catch {
             throw TaskError.persistence("projection write failed: \(String(describing: error))")
+        }
+        projectionSkips[record.id] = skipped
+    }
+
+    /// `AGENTS.md` first, then the other names the drivers declare, deduplicated: the pivot file is written
+    /// even when no profile mentions it, so a driver Scope knows nothing about still finds something.
+    static func contextFileNames(_ declared: [String]) -> [String] {
+        var names = [TaskRecord.pivotContextFile]
+        for raw in declared {
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            // A name is a file in the task's own directory, never a path out of it.
+            guard !name.isEmpty, !name.contains("/"), name != "." , name != "..", !names.contains(name) else { continue }
+            names.append(name)
+        }
+        return names
+    }
+
+    /// Deletes the generated context files of a task that sit somewhere the threads no longer start.
+    private func removeGeneratedContextFiles(_ names: [String], outside directory: URL, task: TaskRecord) async throws {
+        var stale: [URL] = [task.rootURL]
+        stale.append(contentsOf: task.repos.map(\.sandboxURL))
+        for base in stale where base.filesystemPath != directory.filesystemPath {
+            for name in names {
+                let file = base.appending(path: name, directoryHint: .notDirectory)
+                guard let existing = try? String(contentsOf: file, encoding: .utf8),
+                      existing.hasPrefix(TaskProjection.generatedMarker) else { continue }
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 

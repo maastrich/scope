@@ -6,8 +6,13 @@ import Foundation
 /// `cursor`) are copied there on first run and can be edited or replaced by the user.
 public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// Which project-context file the tool reads and how Scope projects its own context into it.
+    ///
+    /// The name is what matters today: a task writes its projection under the name of every installed
+    /// profile whose mode is not `none` (`TaskManager.writeProjection`), since its threads can run several
+    /// drivers. `generate`, `file` and `flag` all produce the generated file for now — no driver exposes a
+    /// context flag, so there is nothing to pass one to.
     public struct Context: Codable, Sendable, Equatable {
-        /// How the context file is produced for a task sandbox (M2).
+        /// How the context file is produced for a task sandbox.
         public enum Mode: String, Codable, Sendable {
             /// Scope generates the file from the graph.
             case generate
