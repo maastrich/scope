@@ -137,23 +137,36 @@ public struct TaskProposal: Sendable, Equatable {
     public var slug: String
     /// Branch name; never `scope/…`.
     public var branch: String
+    /// Relative paths of the repositories the task is about, as the driver read the request; always a subset
+    /// of the candidates it was given. Empty when it named none — the sheet's own matching then stands.
+    public var repos: [String]
+    /// A pull request the driver recognised in the request (through `gh`, or from the prompt's own words).
+    /// Only the reference: the caller resolves it, so a model's claim never becomes a checkout on its own.
+    public var pullRequest: PullRequestReference?
     public var source: Source
 
-    public init(title: String, slug: String, branch: String, source: Source) {
+    public init(title: String, slug: String, branch: String, repos: [String] = [],
+                pullRequest: PullRequestReference? = nil, source: Source) {
         self.title = title
         self.slug = slug
         self.branch = branch
+        self.repos = repos
+        self.pullRequest = pullRequest
         self.source = source
     }
 
     public var isDerived: Bool { if case .derived = source { return true } else { return false } }
 }
 
-/// Proposes `{title, slug, branch}` for a task request (spec: the driver decides the branch name, following
-/// the repo's own convention; `scope/` is never used).
+/// Proposes `{title, slug, branch, repos, pull request}` for a task request (spec: the driver decides the
+/// branch name, following the repo's own convention; `scope/` is never used).
 ///
-/// - Level 1: the driver's `headless` argv with a strict-JSON meta-prompt carrying the request and the branch
-///   evidence; the answer is validated (`git check-ref-format`), sanitised and made unique.
+/// - Level 1: a **microsession** — the driver's `headlessLight` argv (its light model, with a read-only tool
+///   allowlist) or, absent that, its `headless` argv — run with a strict-JSON meta-prompt carrying the
+///   request, the branch evidence and the scope's repositories. Because the microsession has tools, it can
+///   resolve a pull request the request only alludes to ("the auth PR on front") with `gh pr list`; it
+///   answers with the *reference*, and the caller resolves it. The answer is validated
+///   (`git check-ref-format`), sanitised and made unique; repository paths it invented are dropped.
 /// - Level 0 (`fallback`): title from the first line of the prompt, slug from the title, branch from the
 ///   repo's dominant prefix, or `feat/` / `fix/` inferred from the request, or the bare slug.
 public struct TaskProposer: Sendable {
@@ -164,6 +177,8 @@ public struct TaskProposer: Sendable {
     public static let titleLimit = 60
     /// Default headless timeout.
     public static let defaultTimeout: Duration = .seconds(30)
+    /// Timeout for a microsession that may run tools (`gh pr list` against the network).
+    public static let microsessionTimeout: Duration = .seconds(90)
 
     /// The driver asked for a proposal; nil (or a profile without `headless`) means fallback only.
     public var profile: DriverProfile?
@@ -205,16 +220,18 @@ public struct TaskProposer: Sendable {
     ///   - cwd: where the driver runs (the first repo's base checkout; read-only use).
     ///   - scopeRoot: `{scope}` placeholder.
     ///   - takenSlugs: task slugs already used in the scope (and folders under `sandboxes/<scope>/`).
-    public func propose(prompt: String, evidence: BranchEvidence, cwd: URL, scopeRoot: URL, takenSlugs: Set<String>) async -> TaskProposal {
-        guard let profile, let headless = profile.headless, !headless.isEmpty else {
+    ///   - candidates: the scope's repositories, so the answer can name the ones the task is about.
+    public func propose(prompt: String, evidence: BranchEvidence, cwd: URL, scopeRoot: URL,
+                        takenSlugs: Set<String>, candidates: [RepoCandidate] = []) async -> TaskProposal {
+        guard let profile, let microsession = profile.microsession, !microsession.isEmpty else {
             return Self.fallback(prompt: prompt, evidence: evidence, takenSlugs: takenSlugs, reason: nil)
         }
         let values = PlaceholderValues(
             threadID: "task-proposal", cwd: cwd.path, scope: scopeRoot.path, home: home.path,
-            prompt: Self.metaPrompt(request: prompt, evidence: evidence)
+            prompt: Self.metaPrompt(request: prompt, evidence: evidence, candidates: candidates)
         )
         let argv: [String]
-        do { argv = try values.expand(headless) } catch {
+        do { argv = try values.expand(microsession) } catch {
             return Self.fallback(prompt: prompt, evidence: evidence, takenSlugs: takenSlugs, reason: "headless argv: \(String(describing: error))")
         }
         let result: ProcessResult
@@ -232,11 +249,13 @@ public struct TaskProposer: Sendable {
             let text = result.stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
             return Self.fallback(prompt: prompt, evidence: evidence, takenSlugs: takenSlugs, reason: text.isEmpty ? "\(profile.name) exited \(result.exitCode)" : text)
         }
-        return await finalize(output: result.stdoutText, driverName: profile.name, prompt: prompt, evidence: evidence, takenSlugs: takenSlugs)
+        return await finalize(output: result.stdoutText, driverName: profile.name, prompt: prompt,
+                              evidence: evidence, takenSlugs: takenSlugs, candidates: candidates)
     }
 
     /// Parses and validates a driver answer (public for tests and for callers with their own runner).
-    public func finalize(output: String, driverName: String, prompt: String, evidence: BranchEvidence, takenSlugs: Set<String>) async -> TaskProposal {
+    public func finalize(output: String, driverName: String, prompt: String, evidence: BranchEvidence,
+                         takenSlugs: Set<String>, candidates: [RepoCandidate] = []) async -> TaskProposal {
         let raw: RawProposal
         do { raw = try Self.parse(output: output) } catch {
             return Self.fallback(prompt: prompt, evidence: evidence, takenSlugs: takenSlugs, reason: String(describing: error))
@@ -257,23 +276,56 @@ public struct TaskProposer: Sendable {
 
         let slugSource = (raw.slug ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let slug = SlugAllocator.unique(base: slugSource.isEmpty ? TaskBranch.slug(for: title) : TaskBranch.slug(for: slugSource), taken: takenSlugs)
-        return TaskProposal(title: title, slug: slug, branch: branch, source: .driver(name: driverName))
+        return TaskProposal(title: title, slug: slug, branch: branch,
+                            repos: Self.knownRepos(raw.repos ?? [], among: candidates),
+                            pullRequest: Self.reference(from: raw.pullRequest),
+                            source: .driver(name: driverName))
     }
 
-    /// The strict-JSON meta-prompt.
-    public static func metaPrompt(request: String, evidence: BranchEvidence) -> String {
+    /// Keeps the answered paths that are really repositories of the scope, in the candidates' own order.
+    /// A path the driver invented is dropped rather than corrected: a worktree in the wrong place is worse
+    /// than one repository missing from the selection.
+    static func knownRepos(_ answered: [String], among candidates: [RepoCandidate]) -> [String] {
+        guard !candidates.isEmpty else { return [] }
+        let wanted = Set(answered.map { TaskRepo.normalize($0).lowercased() })
+        guard !wanted.isEmpty else { return [] }
+        return candidates.map(\.path).filter { wanted.contains(TaskRepo.normalize($0).lowercased()) }
+    }
+
+    /// The pull request the driver answered with: its number, and the repository when it gave one. The number
+    /// alone is enough — the caller resolves the reference against the scope's remotes.
+    static func reference(from raw: RawPullRequest?) -> PullRequestReference? {
+        guard let raw, let number = raw.number, number > 0 else { return nil }
+        guard let full = raw.repo?.trimmingCharacters(in: .whitespacesAndNewlines), !full.isEmpty else {
+            return PullRequestReference(number: number)
+        }
+        // `owner/repo`, or a whole URL the driver pasted back.
+        if let detected = PullRequestReference.detect(in: "\(full)#\(number)") { return detected }
+        return PullRequestReference(number: number)
+    }
+
+    /// The strict-JSON meta-prompt. `candidates` are the scope's repositories; when they are given, the
+    /// answer is asked for the ones the task is about and for any pull request the request refers to.
+    public static func metaPrompt(request: String, evidence: BranchEvidence, candidates: [RepoCandidate] = []) -> String {
         let branches = evidence.branches.prefix(BranchEvidence.branchSample)
         let branchList = branches.isEmpty ? "(none yet)" : branches.map { "- \($0)" }.joined(separator: "\n")
         let commits = evidence.commitSubjects.prefix(BranchEvidence.commitSample)
         let commitList = commits.isEmpty ? "(none)" : commits.map { "- \($0)" }.joined(separator: "\n")
+        let repoList = candidates.isEmpty ? "(unknown)" : candidates.map { candidate in
+            let remote = candidate.remote.map { " — remote \($0.fullName)" } ?? ""
+            return "- \(candidate.path) (\(candidate.name))\(remote)"
+        }.joined(separator: "\n")
         return """
-        You are naming a git branch for a task in this repository. Do not modify anything; answer with a single \
+        You are preparing a task in this workspace: naming its git branch, and working out which repositories \
+        it touches. Read only — never create, modify, push or comment on anything. Answer with a single \
         JSON object and nothing else: no prose, no markdown fences, no comments.
 
         Required JSON shape:
         {"title": "string, at most \(titleLimit) characters, plain words, no trailing period", \
         "slug": "string, kebab-case, at most 48 characters: the worktree folder name", \
-        "branch": "string: the branch name"}
+        "branch": "string: the branch name", \
+        "repos": ["the paths, copied exactly from the repository list below, that the task touches"], \
+        "pull_request": {"number": 123, "repo": "owner/repo"} or null}
 
         Rules for "branch":
         - Follow the SAME convention as the existing branch names below: prefixes (feat/, fix/, chore/, <user>/ …), \
@@ -283,8 +335,28 @@ public struct TaskProposer: Sendable {
         - Never use a `scope/` prefix. Never reuse an existing branch name. No spaces, no uppercase unless the \
         existing names use it. Keep it short (under 50 characters).
 
+        Rules for "repos":
+        - Only paths from the list below, copied character for character. Never invent one.
+        - Name the repositories the work actually happens in. When the request says nothing about where, \
+        answer with an empty list rather than guessing.
+
+        Rules for "pull_request":
+        - Non-null only when the request is about an EXISTING pull request — named outright, or described \
+        ("the auth refresh PR on front", "my open PR about the sidebar").
+        - Nothing in the request suggests an existing pull request? Answer null and run no command at all: \
+        every tool call keeps someone waiting in front of a dialog.
+        - If you have `gh`, use it to find the number: `gh pr list --repo <owner/repo> --search <terms> \
+        --json number,title,headRefName`, or `gh pr view <number> --repo <owner/repo> --json number,title,headRefName`. \
+        Read-only subcommands only.
+        - Answer with the number and its `owner/repo`. Do not guess a number you have not seen, and do not \
+        report the branch: the caller resolves the pull request itself.
+        - A request to open new work is not a pull request. Leave it null.
+
         Task request:
         \(request.trimmingCharacters(in: .whitespacesAndNewlines))
+
+        Repositories of this workspace (path, folder name, remote):
+        \(repoList)
 
         Default branch: \(evidence.defaultBranch ?? "(unknown)")
 
@@ -301,6 +373,24 @@ public struct TaskProposer: Sendable {
         public var title: String?
         public var slug: String?
         public var branch: String?
+        public var repos: [String]?
+        public var pullRequest: RawPullRequest?
+
+        enum CodingKeys: String, CodingKey {
+            case title, slug, branch, repos
+            case pullRequest = "pull_request"
+        }
+    }
+
+    /// The `pull_request` member: a number, and the repository it belongs to when the driver knows it.
+    public struct RawPullRequest: Codable, Sendable, Equatable {
+        public var number: Int?
+        public var repo: String?
+
+        public init(number: Int? = nil, repo: String? = nil) {
+            self.number = number
+            self.repo = repo
+        }
     }
 
     /// Why an answer was unusable.
@@ -325,7 +415,9 @@ public struct TaskProposer: Sendable {
         catch HeadlessError.driverReportedError(let message) { throw ParseError.driverFailed(message) }
         guard !text.isEmpty else { throw ParseError.notJSON("") }
         guard let raw = try? JSONDecoder().decode(RawProposal.self, from: Data(text.utf8)) else { throw ParseError.notJSON(text) }
-        guard let branch = raw.branch?.trimmingCharacters(in: .whitespacesAndNewlines), !branch.isEmpty else { throw ParseError.missingBranch }
+        let branch = raw.branch?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // A pull request answer carries no branch to invent — the pull request has one already.
+        guard !branch.isEmpty || reference(from: raw.pullRequest) != nil else { throw ParseError.missingBranch }
         return raw
     }
 

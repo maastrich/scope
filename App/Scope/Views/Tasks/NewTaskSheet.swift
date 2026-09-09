@@ -9,8 +9,9 @@ import ScopeTasks
 /// **Continue** reads the prompt (`TaskTargets`, `PullRequestReference`) and works out what it is about:
 /// the repositories it names, and whether it continues work that already exists — a pull request whose head
 /// must be checked out, or a branch of the repo. Without one, the title / branch / folder are derived from
-/// the prompt at once (level 0) and, when the driver has a headless mode, it is asked for a branch that
-/// follows the repo's own convention (level 1, replaces the fields when it answers, cancellable).
+/// the prompt at once (level 0) and a microsession of the driver's light model is asked for a branch that
+/// follows the repo's own convention, the repositories the work touches, and any pull request the request
+/// only alludes to — which it looks up with `gh` (level 1, replaces the fields when it answers, cancellable).
 ///
 /// Everything it worked out is shown and editable before **Create**: a wrong branch name is a typo, a wrong
 /// repository is a worktree in the wrong place. Errors show inline and in the Problem Center.
@@ -37,6 +38,8 @@ struct NewTaskSheet: View {
     @State private var folder = ""
     @State private var source: TaskProposal.Source?
     @State private var fieldsEdited = false
+    /// The repository selection was ticked by hand; a microsession answer no longer touches it.
+    @State private var reposEdited = false
     /// Last values written by `apply`; an `onChange` back to one of them is our own write, not an edit.
     @State private var appliedFields: [String] = ["", "", ""]
     @State private var proposing: Task<Void, Never>?
@@ -172,7 +175,7 @@ struct NewTaskSheet: View {
             HStack(spacing: 6) {
                 if proposing != nil {
                     ProgressView().controlSize(.mini)
-                    Text(resolving ? "Reading the request…" : "Asking \(selectedProfile?.name ?? "the driver") for a branch name…")
+                    Text(resolving ? "Reading the request…" : "\(selectedProfile?.name ?? "The driver") is reading the repositories…")
                     Button("Stop") { cancelProposing() }
                         .controlSize(.mini)
                         .buttonStyle(.borderless)
@@ -217,8 +220,8 @@ struct NewTaskSheet: View {
                     Text("Repositories")
                     Spacer()
                     if scope.repos.count > 1, startPoint.pullRequest == nil {
-                        Button("All") { selectedRepos = Set(scope.repos.map(\.id)) }
-                        Button("None") { selectedRepos = [] }
+                        Button("All") { reposEdited = true; selectedRepos = Set(scope.repos.map(\.id)) }
+                        Button("None") { reposEdited = true; selectedRepos = [] }
                     }
                 }
                 .controlSize(.small)
@@ -288,6 +291,9 @@ struct NewTaskSheet: View {
 
     private var driverCaption: String {
         guard let profile = selectedProfile else { return "The branch name is derived from the prompt." }
+        if profile.headlessLight?.isEmpty == false {
+            return "\(profile.name) reads the request with its light model — the branch name from the repo's own conventions, the repositories it touches, and any pull request it refers to — then opens the first thread."
+        }
         if profile.headless?.isEmpty == false {
             return "\(profile.name) proposes the branch name from the repo's existing conventions, then opens the first thread."
         }
@@ -383,7 +389,10 @@ struct NewTaskSheet: View {
     private func binding(for repo: String) -> Binding<Bool> {
         Binding(
             get: { selectedRepos.contains(repo) },
-            set: { on in if on { selectedRepos.insert(repo) } else { selectedRepos.remove(repo) } }
+            set: { on in
+                reposEdited = true
+                if on { selectedRepos.insert(repo) } else { selectedRepos.remove(repo) }
+            }
         )
     }
 
@@ -393,6 +402,7 @@ struct NewTaskSheet: View {
         guard canContinue else { return }
         error = nil
         fieldsEdited = false
+        reposEdited = false
         appliedFields = ["", "", ""]
         step = .proposal
         let request = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -424,32 +434,64 @@ struct NewTaskSheet: View {
 
             // 3. A pull request settles the name, the branch and the folder: nothing to propose.
             if let pr = resolved.pullRequest {
-                startPoint = .pullRequest(pr)
                 derivedBranch = model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID).branch
-                apply(TaskProposal(
-                    title: TaskManager.taskName(forPullRequest: pr),
-                    slug: model.uniqueTaskSlug(TaskManager.taskSlug(forPullRequest: pr), in: scopeID),
-                    branch: TaskStartPoint.pullRequest(pr).requiredBranch ?? pr.headRefName,
-                    source: .derived(reason: nil)
-                ), force: true)
+                applyPullRequest(pr, in: scopeID, force: true)
                 titleFocused = true
                 proposing = nil
                 return
             }
 
-            // 4. Otherwise: level 0 now, the driver's answer when it comes.
+            // 4. Otherwise: level 0 now, the microsession's answer when it comes.
             if let branch = TaskTargets.branch(namedIn: request, among: evidence.branches) {
                 startPoint = .existingBranch(branch)
             }
             apply(model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID), force: true)
             titleFocused = true
-            if startPoint == .defaultBranch, model.drivers.profile(id: driver)?.headless?.isEmpty == false {
+            if startPoint == .defaultBranch, model.drivers.profile(id: driver)?.microsession?.isEmpty == false {
                 let proposal = await model.proposeTask(prompt: request, driverID: driver, repos: evidenceRepos, evidence: evidence, in: scopeID)
                 guard !Task.isCancelled else { return }
-                apply(proposal, force: false)
+                applyRepos(proposal.repos)
+                // The microsession recognised a pull request the prompt only alluded to: `gh` says what it
+                // is, and it settles the fields the same way a pasted URL would.
+                if let reference = proposal.pullRequest,
+                   let resolved = await model.resolveProposedPullRequest(reference, in: scopeID),
+                   let pr = resolved.pullRequest {
+                    guard !Task.isCancelled else { return }
+                    resolution = resolved
+                    applyRepos(resolved.repos)
+                    applyPullRequest(pr, in: scopeID, force: false)
+                } else {
+                    apply(proposal, force: false)
+                }
             }
             proposing = nil
         }
+    }
+
+    /// The repositories the microsession named, unless the selection was ticked by hand meanwhile.
+    ///
+    /// The branch evidence was gathered before the answer, from the selection as it stood, so a branch name
+    /// is unique among *those* repositories' branches — not necessarily among a repository the answer adds.
+    /// Git refuses a duplicate branch at creation time and the field is editable, which is cheaper than
+    /// gathering the evidence twice for every prompt.
+    private func applyRepos(_ repos: [String]) {
+        guard !isRepoScope, !reposEdited, !repos.isEmpty else { return }
+        selectedRepos = Set(repos)
+    }
+
+    /// A resolved pull request owns the task's identity: its title, its folder and its head as the branch,
+    /// with the proposed new-branch name kept in `derivedBranch` so the "Start from" picker can go back.
+    private func applyPullRequest(_ pr: PullRequest, in scopeID: ScopeID, force: Bool) {
+        // Setting the start point rewrites the branch field on its own (`startPointChanged`), so an answer
+        // that arrives after the user typed has to keep out entirely, not just skip `apply`.
+        guard force || !fieldsEdited else { return }
+        startPoint = .pullRequest(pr)
+        apply(TaskProposal(
+            title: TaskManager.taskName(forPullRequest: pr),
+            slug: model.uniqueTaskSlug(TaskManager.taskSlug(forPullRequest: pr), in: scopeID),
+            branch: TaskStartPoint.pullRequest(pr).requiredBranch ?? pr.headRefName,
+            source: .derived(reason: nil)
+        ), force: force)
     }
 
     /// The start point owns the branch: keep the field in step with the picker, and put the proposed name

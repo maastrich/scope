@@ -61,6 +61,10 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     public var resume: [String]?
     /// Full argv used for headless runs (graph, M3); may use placeholders.
     public var headless: [String]?
+    /// Full argv for a *microsession*: one short, structured question (the New Task proposal) answered by the
+    /// driver's light model, with a read-only tool allowlist so it can look a mentioned pull request up.
+    /// Falls back to `headless` when absent; may use placeholders.
+    public var headlessLight: [String]?
     /// Arguments appended to `args` when a thread starts with an initial prompt (a task created from a
     /// prompt): `["{prompt}"]` for tools that take the prompt as a positional argument. Nil → the prompt
     /// is not passed on the command line.
@@ -85,6 +89,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         context: Context? = nil,
         resume: [String]? = nil,
         headless: [String]? = nil,
+        headlessLight: [String]? = nil,
         prompt: [String]? = nil,
         adapter: Adapter? = nil,
         builtin: Bool? = nil,
@@ -100,6 +105,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         self.context = context
         self.resume = resume
         self.headless = headless
+        self.headlessLight = headlessLight
         self.prompt = prompt
         self.adapter = adapter
         self.builtin = builtin
@@ -120,6 +126,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         context = try container.decodeIfPresent(Context.self, forKey: .context)
         resume = try container.decodeIfPresent([String].self, forKey: .resume)
         headless = try container.decodeIfPresent([String].self, forKey: .headless)
+        headlessLight = try container.decodeIfPresent([String].self, forKey: .headlessLight)
         prompt = try container.decodeIfPresent([String].self, forKey: .prompt)
         adapter = try container.decodeIfPresent(Adapter.self, forKey: .adapter)
         builtin = try container.decodeIfPresent(Bool.self, forKey: .builtin)
@@ -136,7 +143,14 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// `true` when the profile can take an initial prompt on the command line (`prompt` argv).
     public var acceptsInitialPrompt: Bool { !(prompt ?? []).isEmpty }
 
-    /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`, `prompt` and `env`.
+    /// The argv a microsession runs: the light one when the profile declares it, else the headless argv.
+    public var microsession: [String]? {
+        let light = headlessLight ?? []
+        return light.isEmpty ? headless : light
+    }
+
+    /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`,
+    /// `headlessLight`, `prompt` and `env`.
     public func validate() throws(DriverProfileError) {
         guard Self.isValidID(id) else { throw .invalidID(id) }
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -146,6 +160,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         try Self.checkPlaceholders(in: args, field: "args")
         try Self.checkPlaceholders(in: resume ?? [], field: "resume")
         try Self.checkPlaceholders(in: headless ?? [], field: "headless")
+        try Self.checkPlaceholders(in: headlessLight ?? [], field: "headlessLight")
         try Self.checkPlaceholders(in: prompt ?? [], field: "prompt")
         try Self.checkPlaceholders(in: env.keys.sorted().map { env[$0] ?? "" }, field: "env")
     }

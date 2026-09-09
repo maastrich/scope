@@ -67,7 +67,10 @@ struct DriverRegistryTests {
         #expect(Set(installed) == ["shell", "claude-code"])
         let loaded = await registry.load()
         #expect(loaded.profile(id: "claude-code")?.prompt == ["{prompt}"])
-        #expect(loaded.profile(id: "claude-code")?.version == 2)
+        // Replaced by whatever the bundled revision currently is, not by a literal that ages.
+        let bundled = try DriverRegistry.bundledProfiles().first { $0.id == "claude-code" }
+        #expect(loaded.profile(id: "claude-code")?.version == bundled?.version)
+        #expect(loaded.profile(id: "claude-code")?.headlessLight == bundled?.headlessLight)
         #expect(loaded.profile(id: "codex")?.name == "My Codex")
         #expect(loaded.profile(id: "cursor")?.name == "My Cursor")
     }

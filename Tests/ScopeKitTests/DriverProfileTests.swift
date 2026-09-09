@@ -12,7 +12,8 @@ struct DriverProfileTests {
         for profile in profiles {
             #expect(throws: Never.self) { try profile.validate() }
             #expect(profile.builtin == true)
-            #expect(profile.version == 2)
+            // The bundled revision only ever goes up; `installBuiltins` replaces an untouched older copy.
+            #expect((profile.version ?? 0) >= 2)
             #expect(profile.icon != nil)
         }
 
@@ -28,6 +29,14 @@ struct DriverProfileTests {
         #expect(claude.command == "claude")
         #expect(claude.resume == ["claude", "--resume", "{resume_id}"])
         #expect(claude.headless == ["claude", "-p", "{prompt}", "--output-format", "json"])
+        // The microsession runs the light model, and only read-only tools; the prompt stays ahead of
+        // `--allowedTools`, which is variadic and would otherwise swallow it.
+        let light = try #require(claude.headlessLight)
+        #expect(claude.microsession == light)
+        #expect(light.firstIndex(of: "{prompt}") == 2)
+        #expect(light.contains("--model") && light.contains("haiku"))
+        #expect(light.last?.contains("Bash(gh pr view:*)") == true)
+        #expect(light.last?.contains("gh pr create") == false)
         #expect(claude.context == DriverProfile.Context(file: "CLAUDE.md", mode: .generate))
         #expect(claude.adapter?.kind == "claude-hooks")
         #expect(claude.canResume)

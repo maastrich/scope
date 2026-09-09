@@ -58,7 +58,7 @@ A driver is a JSON file in `~/.scope/drivers/`, named `<id>.json`:
 }
 ```
 
-`command` is resolved on your login-shell PATH (Scope probes `$SHELL -ilc` once at launch; change the mode in Settings). Placeholders: `{thread_id}`, `{resume_id}`, `{cwd}`, `{scope}`, `{task}`, `{home}`, `{prompt}`. Optional argv templates: `resume` (full argv to resume a session), `headless` (full argv for one-shot runs: graph analysis, branch-name proposals) and `prompt` (arguments appended to `args` when a thread starts with an initial prompt, e.g. `["{prompt}"]` — the first thread of a task created from a prompt). Every thread receives `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_SCOPE_ROOT`, `SCOPE_SOCK`, `SCOPE_HOME`. Settings › Drivers › Reload picks up edits.
+`command` is resolved on your login-shell PATH (Scope probes `$SHELL -ilc` once at launch; change the mode in Settings). Placeholders: `{thread_id}`, `{resume_id}`, `{cwd}`, `{scope}`, `{task}`, `{home}`, `{prompt}`. Optional argv templates: `resume` (full argv to resume a session), `headless` (full argv for one-shot runs: graph analysis, branch-name proposals), `headlessLight` (the microsession the New Task sheet runs — the driver's light model with a read-only tool allowlist, so it can resolve a pull request the prompt only alludes to; falls back to `headless`) and `prompt` (arguments appended to `args` when a thread starts with an initial prompt, e.g. `["{prompt}"]` — the first thread of a task created from a prompt). Every thread receives `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_SCOPE_ROOT`, `SCOPE_SOCK`, `SCOPE_HOME`. Settings › Drivers › Reload picks up edits.
 
 ## Releasing
 

@@ -52,38 +52,53 @@ extension AppModel {
     /// matched against what the scope already knows. Local and instant except for the one `gh pr view`.
     func resolveTaskRequest(prompt: String, in scopeID: ScopeID, knownBranches: [String] = []) async -> TaskRequestResolution {
         guard let scope = scope(scopeID) else { return TaskRequestResolution() }
-        let isRepoScope = scope.kind == .repo || scope.repos.contains { $0.id.isEmpty }
-        let candidates: [RepoCandidate] = isRepoScope
-            ? [RepoCandidate(path: ".", name: scope.name, remote: scope.repos.first?.facts?.remote)]
-            : scope.repos.map { RepoCandidate(path: $0.id, name: $0.shortName, remote: $0.facts?.remote) }
+        let candidates = repoCandidates(in: scope)
 
         var resolution = TaskRequestResolution()
         resolution.repos = TaskTargets.repos(namedIn: prompt, among: candidates)
 
         if let reference = PullRequestReference.detect(in: prompt) {
-            guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
-                resolution.unresolved = "\(reference.label) is not a pull request of a repository in this scope."
-                return resolution
-            }
-            guard let gh = GhClient.locate() else {
-                resolution.unresolved = "\(reference.label): gh is not installed, so its branch cannot be looked up."
-                return resolution
-            }
-            let checkout = baseURLs(of: [candidate.path], in: scope).first ?? scope.url
-            do {
-                let pr = try await gh.prView(number: reference.number, in: checkout, repo: reference.fullName)
-                resolution.repos = [candidate.path]
-                resolution.pullRequest = pr
-                resolution.startPoint = .pullRequest(pr)
-                resolution.existingTask = tasks(in: scopeID).first { $0.record.pullRequest?.number == pr.number }?.id
-            } catch {
-                resolution.unresolved = "\(reference.label) could not be read: \(String(describing: error))"
-            }
-            return resolution
+            return await resolve(reference, in: scope, candidates: candidates, keeping: resolution)
         }
 
         if let branch = TaskTargets.branch(namedIn: prompt, among: knownBranches) {
             resolution.startPoint = .existingBranch(branch)
+        }
+        return resolution
+    }
+
+    /// The scope's repositories as the New Task sheet sees them (`"."` for a repo scope).
+    func repoCandidates(in scope: ScopeState) -> [RepoCandidate] {
+        let isRepoScope = scope.kind == .repo || scope.repos.contains { $0.id.isEmpty }
+        return isRepoScope
+            ? [RepoCandidate(path: ".", name: scope.name, remote: scope.repos.first?.facts?.remote)]
+            : scope.repos.map { RepoCandidate(path: $0.id, name: $0.shortName, remote: $0.facts?.remote) }
+    }
+
+    /// Turns a reference into a real pull request through `gh`, whether it was read off the prompt or
+    /// answered by a microsession: the model names a pull request, `gh pr view` says what it is. The head
+    /// that gets checked out never comes from the model's own words.
+    func resolve(_ reference: PullRequestReference, in scope: ScopeState, candidates: [RepoCandidate],
+                 keeping resolution: TaskRequestResolution) async -> TaskRequestResolution {
+        var resolution = resolution
+        guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
+            resolution.unresolved = "\(reference.label) is not a pull request of a repository in this scope."
+            return resolution
+        }
+        guard let gh = GhClient.locate() else {
+            resolution.unresolved = "\(reference.label): gh is not installed, so its branch cannot be looked up."
+            return resolution
+        }
+        let checkout = baseURLs(of: [candidate.path], in: scope).first ?? scope.url
+        do {
+            let pr = try await gh.prView(number: reference.number, in: checkout, repo: reference.fullName)
+            resolution.repos = [candidate.path]
+            resolution.pullRequest = pr
+            resolution.startPoint = .pullRequest(pr)
+            resolution.existingTask = tasks(in: scope.id).first { $0.record.pullRequest?.number == pr.number }?.id
+            resolution.unresolved = nil
+        } catch {
+            resolution.unresolved = "\(reference.label) could not be read: \(String(describing: error))"
         }
         return resolution
     }
@@ -115,12 +130,25 @@ extension AppModel {
         let cwd = bases.first ?? scope.url
         let shell = await env.shell.environment()
         let validator = TaskProposer.gitRefValidator(client: await env.git.client(for: cwd))
+        // A light run with tools may spend a while in `gh`; a plain headless one keeps the short bound.
+        let timeout = profile?.headlessLight?.isEmpty == false ? TaskProposer.microsessionTimeout : TaskProposer.defaultTimeout
         let proposer = TaskProposer(
-            profile: profile, runner: SubprocessHeadlessRunner(path: shell.path, shell: shell.shell), home: env.home, validateRef: validator
+            profile: profile, runner: SubprocessHeadlessRunner(path: shell.path, shell: shell.shell), home: env.home,
+            timeout: timeout, validateRef: validator
         )
         let taken = takenTaskSlugs(in: scope)
         // `propose` is nonisolated async: it runs off the main actor, and cancelling the caller's task kills the driver.
-        return await proposer.propose(prompt: prompt, evidence: evidence, cwd: cwd, scopeRoot: scope.url, takenSlugs: taken)
+        return await proposer.propose(prompt: prompt, evidence: evidence, cwd: cwd, scopeRoot: scope.url,
+                                      takenSlugs: taken, candidates: repoCandidates(in: scope))
+    }
+
+    /// A pull request a microsession found in a request that named none literally: resolved through `gh`,
+    /// exactly as a pasted URL would be. Nil when it resolves to nothing usable, so the caller keeps the
+    /// new-branch proposal it already has.
+    func resolveProposedPullRequest(_ reference: PullRequestReference, in scopeID: ScopeID) async -> TaskRequestResolution? {
+        guard let scope = scope(scopeID) else { return nil }
+        let resolved = await resolve(reference, in: scope, candidates: repoCandidates(in: scope), keeping: TaskRequestResolution())
+        return resolved.pullRequest == nil ? nil : resolved
     }
 
     /// Creates the task from a proposal, selects it, starts its watcher, then opens its first thread with

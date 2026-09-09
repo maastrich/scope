@@ -42,6 +42,9 @@ adding a fifth is a text edit, not a rebuild.</p>
   "context": { "file": "CLAUDE.md", "mode": "generate" },
   "resume": ["claude", "--resume", "{resume_id}"],
   "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
+  "headlessLight": ["claude", "-p", "{prompt}", "--output-format", "json", "--model", "haiku",
+                    "--tools", "Bash", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence",
+                    "--allowedTools", "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"],
   "prompt": ["{prompt}"],
   "adapter": { "kind": "claude-hooks" },
   "icon": "sparkles"
@@ -58,6 +61,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>context</code></td><td>the project file the tool reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>) and how Scope projects into it: <code>generate</code>, <code>file</code>, <code>flag</code>, <code>none</code></td></tr>
   <tr><td><code>resume</code></td><td>full argv to resume a captured session</td></tr>
   <tr><td><code>headless</code></td><td>full argv for one-shot runs: graph level 1, task branch proposals</td></tr>
+  <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
   <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
@@ -95,7 +99,7 @@ find. <b>Reload</b> picks up edits without restarting.</p>
 JSON</code></pre>
 <p>Then <b>Settings → Drivers → Reload</b>. The minimum is <code>id</code>, <code>name</code> and
 <code>command</code>; everything else is optional and degrades gracefully — a driver without
-<code>headless</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
+<code>headless</code> nor <code>headlessLight</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
 state.</p>
 </main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#example">A complete profile</a><a class="lvl2" href="#fields">Fields</a><a class="lvl2" href="#placeholders">Placeholders</a><a class="lvl2" href="#resolution">How the command is resolved</a><a class="lvl2" href="#adding">Adding your own</a></aside></div>
 <footer class="footer"><div class="footer-inner">

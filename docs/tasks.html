@@ -56,13 +56,20 @@ branch name is a typo; a wrong repository is a worktree in the wrong place, so n
 guess you were not shown.</p></div>
 
 <h2 id="branch">The driver proposes the branch</h2>
-<p>Press <b>Continue</b> and the selected driver runs once, headless, with the repository's recent branch names
-and commit subjects as evidence:</p>
+<p>Press <b>Continue</b> and the selected driver answers one short question — a <b>microsession</b>: its light
+model, run once, with the repository's recent branch names and commit subjects as evidence, and the scope's
+repositories as the list it may choose from:</p>
 <figure class="shot"><img src="assets/img/newtask-loading.png" alt="The driver runs headless while the derived name stands in." loading="lazy"><figcaption>The driver runs headless while the derived name stands in.</figcaption></figure>
 <p>It answers with a title, a branch and a folder name that follow the convention already in use — if the repo
 lives on <code>feat/…</code> and <code>fix/…</code>, so will the task; if it prefixes branches with a
 username, so will the task. Scope validates the answer with <code>git check-ref-format</code>, sanitises it and
 makes it unique.</p>
+<p>It also says <b>which repositories</b> the work touches, and whether the request is about a pull request that
+already exists. A microsession has read-only tools, so a request that only alludes to one — "rebase the auth PR
+on front" — is enough: it finds the number with <code>gh pr list</code> and answers with the reference. Scope
+then resolves that reference itself with <code>gh pr view</code>, exactly as it does for a pasted URL: the head
+that gets checked out never comes from the model's own words, and an invented repository path is dropped rather
+than corrected.</p>
 <figure class="shot"><img src="assets/img/newtask-proposal.png" alt="The proposal follows the repository’s own convention." loading="lazy"><figcaption>The proposal follows the repository’s own convention.</figcaption></figure>
 <p>All three fields stay editable. What you type wins: a proposal that arrives after you started typing only
 updates the caption, never your text.</p>
