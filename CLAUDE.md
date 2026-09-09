@@ -53,19 +53,22 @@ xcodebuild -project Scope.xcodeproj -scheme Scope -configuration Debug \
 - **Microsession argv** (`headlessLight`): keep `{prompt}` *before* variadic flags like `--tools` or
   `--allowedTools`, which would otherwise swallow it.
 - **Never `pkill -f` the Scope binary.** It matches the user's running app too. Kill by pid.
+- **A Debug build is a different app.** It is `Scope Debug.app`, bundle id `dev.maastrich.scope.debug`, and its
+  data lives in `~/.scope-debug` — so it never shares config, thread records or the hook socket with the copy in
+  `/Applications`, and Spotlight can tell them apart. Release is untouched (`Scope.app`, `dev.maastrich.scope`).
 
 ## Running a throwaway instance
 
 `SCOPE_HOME` picks the data directory, so a second instance can run against a scratch workspace without
-touching `~/.scope`:
+touching the Debug build's own `~/.scope-debug`:
 
 ```sh
-open -n --env SCOPE_HOME=/tmp/scope-demo/home "$PWD/DerivedData/Build/Products/Debug/Scope.app"
+open -n --env SCOPE_HOME=/tmp/scope-demo/home "$PWD/DerivedData/Build/Products/Debug/Scope Debug.app"
 ```
 
 Seed `$SCOPE_HOME/config.json` with a scope declaration to skip the onboarding. Screenshots: find the window
-id with `CGWindowListCopyWindowInfo` (owner `Scope`), then `screencapture -x -o -l <id> shot.png`. The window
-must be on a visible Space or the capture fails with *could not create image from window*.
+id with `CGWindowListCopyWindowInfo` (owner `Scope Debug`), then `screencapture -x -o -l <id> shot.png`. The
+window must be on a visible Space or the capture fails with *could not create image from window*.
 
 ## Conventions
 

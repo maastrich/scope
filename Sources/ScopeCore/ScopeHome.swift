@@ -9,15 +9,22 @@ import Foundation
 /// `SCOPE_HOME` exported in `.zshrc` is invisible to it (only `launchctl setenv SCOPE_HOME …` reaches
 /// GUI apps).
 public enum ScopeHome {
-    /// `SCOPE_HOME` from `environment` (tilde expanded) when set and non-empty, else `~/.scope`.
-    public static func url(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+    /// `SCOPE_HOME` from `environment` (tilde expanded) when set and non-empty, else `~/<folderName>`.
+    ///
+    /// - Parameter folderName: the default folder under the user's home. The app passes `.scope-debug` for a
+    ///   Debug build so a build you run from Xcode never shares its config, its thread records, its sandboxes
+    ///   or its hook socket with the copy installed in /Applications.
+    public static func url(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        folderName: String = ".scope"
+    ) -> URL {
         if let override = environment["SCOPE_HOME"], !override.isEmpty {
             let expanded = (override as NSString).expandingTildeInPath
             return URL(fileURLWithPath: expanded, isDirectory: true).standardizedFileURL
         }
         // Not sandboxed, so this is the real home (in a sandbox it would be the container).
         return FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: ".scope", directoryHint: .isDirectory)
+            .appending(path: folderName, directoryHint: .isDirectory)
     }
 
     /// Creates `drivers/`, `graph/`, `sandboxes/` and `threads/` under `home` (idempotent) and returns `home`.

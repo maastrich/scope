@@ -237,7 +237,9 @@ such one-liner.</p></div>
 brew install xcodegen
 xcodebuild -downloadComponent MetalToolchain   <span class="c"># SwiftTerm ships a Metal shader</span>
 make run                                       <span class="c"># build + open the .app</span></code></pre>
-<p><code>make build</code> leaves the app in <code>DerivedData/Build/Products/Debug/</code>. The app is
+<p><code>make build</code> leaves <code>Scope Debug.app</code> in
+<code>DerivedData/Build/Products/Debug/</code> — a Debug build is a separate app with its own bundle id and its
+own data in <code>~/.scope-debug</code>, so it never disturbs an installed copy. The app is
 ad-hoc signed and not sandboxed — it forks PTYs and runs arbitrary binaries.</p>
 
 <h2 id="first-scope">Declare your first scope</h2>

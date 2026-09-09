@@ -76,9 +76,17 @@ final class AppEnvironment {
 
     /// The real thing: `~/.scope` (or `SCOPE_HOME`), layout ensured, hook server started.
     /// A hook server failure becomes a problem, never a crash: the app works without adapters.
+    ///
+    /// A Debug build lives in `~/.scope-debug` instead. Running one beside the installed copy otherwise means
+    /// two apps sharing one config, one set of thread records and — worse — one hook socket, so a driver's
+    /// events reach whichever of the two happens to be listening.
     static func live() -> AppEnvironment {
         var problems: [Problem] = []
+        #if DEBUG
+        let home = ScopeHome.url(folderName: ".scope-debug")
+        #else
         let home = ScopeHome.url()
+        #endif
         do {
             try ScopeHome.ensureLayout(at: home)
         } catch {

@@ -4,7 +4,9 @@ SHELL := /bin/bash
 DERIVED := $(CURDIR)/DerivedData
 SCHEME := Scope
 CONFIG ?= Debug
-APP := $(DERIVED)/Build/Products/$(CONFIG)/Scope.app
+# Debug builds "Scope Debug.app" so it never collides with the installed copy (project.yml).
+APP_NAME := $(if $(filter Debug,$(CONFIG)),Scope Debug,Scope)
+APP := $(DERIVED)/Build/Products/$(CONFIG)/$(APP_NAME).app
 XCB := xcodebuild -project Scope.xcodeproj -scheme $(SCHEME) -configuration $(CONFIG) -derivedDataPath $(DERIVED) -skipPackagePluginValidation -skipMacroValidation CODE_SIGN_IDENTITY="-"
 
 .PHONY: generate resolve build run test test-one clean app-path
