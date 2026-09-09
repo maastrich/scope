@@ -60,18 +60,24 @@ struct NewTaskSheet: View {
                 case .prompt: promptSections
                 case .proposal: proposalSections
                 }
-                if let error {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(nsColor: .systemRed))
-                            .lineLimit(4)
-                            .textSelection(.enabled)
-                    }
-                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
+
+            // Outside the Form on purpose. As its last section the message was the bottom of a scrolling list
+            // nothing scrolled to, so a failed Create looked like nothing happening at all — the only legible
+            // copy was in the toolbar's problem popover.
+            if let error {
+                Divider()
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(nsColor: .systemRed))
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(EdgeInsets(top: 10, leading: 20, bottom: 2, trailing: 20))
+            }
 
             buttonRow
                 .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
