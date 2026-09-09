@@ -5,9 +5,10 @@ import SwiftUI
 ///
 /// `.buttonStyle(.plain)` strips a button of every native affordance, which is right for the look and wrong
 /// for the feel — the control ends up indistinguishable from static text until you click it and something
-/// happens. On macOS the cue for "this does something" is the hover wash, not a hand cursor: the pointing
-/// hand means *link* here, and using it for buttons is a web habit that reads as foreign (`.pointerStyle(.link)`
-/// is for the few controls that really do open a link).
+/// happens. The wash is the cue that belongs here: the pointer keeps the arrow, which the macOS HIG assigns to
+/// "selecting and interacting with content and interface elements" — the pointing hand is reserved for content
+/// that is "a URL link to a webpage, document, or other item", and Apple warns that a pointer change people
+/// cannot act on "can distract and even irritate".
 struct IconButtonStyle: ButtonStyle {
     /// Padding around the label, which is what the wash covers.
     var padding: CGFloat = 4

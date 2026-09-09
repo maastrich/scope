@@ -80,8 +80,8 @@ struct TaskSummaryBand: View {
                         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
-                    // The macOS hand cursor means "link", and this one genuinely opens github.com.
-                    .pointerStyle(.link)
+                    // A real URL link, which is what the pointing hand means on macOS.
+                    .cursor(.pointingHand)
                     .help("Open on GitHub — \(pr.url.absoluteString)")
                     .accessibilityLabel("Open pull request \(pr.label) on GitHub")
                 }

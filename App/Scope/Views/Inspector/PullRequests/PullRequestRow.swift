@@ -84,6 +84,7 @@ struct PullRequestRow: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
+                .cursor(.pointingHand)
                 .help(pr.url.absoluteString)
                 .opacity(hovering ? 1 : 0.55)
             }

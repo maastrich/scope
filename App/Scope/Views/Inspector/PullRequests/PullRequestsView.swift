@@ -47,6 +47,7 @@ struct PullRequestsView: View {
                         Image(systemName: "arrow.up.right.square")
                     }
                     .buttonStyle(.borderless)
+                    .cursor(.pointingHand)
                     .help("Open on GitHub")
                 }
                 Button {
