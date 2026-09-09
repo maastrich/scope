@@ -72,9 +72,10 @@ enum TerminalAppearance {
     /// The frame a terminal is created with, before its host lays it out (about 90×28 cells at 13 pt).
     static let initialFrame = NSRect(x: 0, y: 0, width: 800, height: 480)
 
-    /// Emulator options read once at init: 10 000 lines of scrollback.
+    /// Emulator options read once at init: 10 000 lines of scrollback, and a steady underline caret —
+    /// SwiftTerm's default block blinks by fading its whole layer in and out, which reads as a glow.
     static var options: TerminalOptions {
-        TerminalOptions(scrollback: 10_000)
+        TerminalOptions(cursorStyle: .steadyUnderline, scrollback: 10_000)
     }
 
     /// SF Mono at the preferred size, falling back to the system monospaced font.
