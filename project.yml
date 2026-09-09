@@ -109,10 +109,22 @@ targets:
         # Do NOT set SUEnableInstallerLauncherService / SUEnableDownloaderService: Scope is not sandboxed.
     entitlements:
       path: App/Scope/Scope.entitlements
+      properties:
+        # Scope is distributed outside the App Store and spawns PTYs and arbitrary binaries, so
+        # com.apple.security.app-sandbox is NOT set. Hardened runtime comes from ENABLE_HARDENED_RUNTIME.
+        #
+        # disable-library-validation is required as long as the DMG is ad-hoc signed. Library validation wants
+        # a loaded framework to carry the same Team ID as the process; an ad-hoc signature has none on either
+        # side, and dyld does not treat two independent ad-hoc signatures as one signer — so the released app
+        # refused to load its own Sparkle.framework and died at launch ("different Team IDs"). A Debug build
+        # never showed it: it carries get-task-allow, which relaxes the same check. Drop this once the DMG is
+        # signed with a real Developer ID, where the app and the framework share a team.
+        com.apple.security.cs.disable-library-validation: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope
         PRODUCT_NAME: Scope
+        SCOPE_DISPLAY_NAME: Scope
         MARKETING_VERSION: "0.0.0"   # dev builds; releases: tag without "v" (scripts/package.sh)
         CURRENT_PROJECT_VERSION: "0" # dev builds; releases: git rev-list --count HEAD (scripts/package.sh)
         ENABLE_HARDENED_RUNTIME: YES
