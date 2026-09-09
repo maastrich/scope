@@ -11,6 +11,19 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.2.2](https://github.com/maastrich/scope/releases/tag/v0.2.2) - 2026-09-09
+
+### Added
+
+- **drivers:** an opt-in Claude Code profile that skips the permission prompts by @maastrich
+
+### Fixed
+
+- **release:** let the ad-hoc app load its own Sparkle by @maastrich
+- **dev:** a Debug build is its own app by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.2.1...v0.2.2
+
 ## [0.2.1](https://github.com/maastrich/scope/releases/tag/v0.2.1) - 2026-09-09
 
 ### Fixed
