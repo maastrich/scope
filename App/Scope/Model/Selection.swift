@@ -42,6 +42,16 @@ enum InspectorTab: String, CaseIterable, Codable, Sendable, Hashable {
         case .pullRequests: "PRs"
         }
     }
+
+    /// Whether the panel is about the selected *task* (Delta, PRs) rather than the scope and its repositories
+    /// (Base, Graph). The inspector shows its task summary band only for the first kind, and greys out the tabs
+    /// that have no subject for the current selection.
+    var followsTask: Bool {
+        switch self {
+        case .delta, .pullRequests: true
+        case .base, .graph: false
+        }
+    }
 }
 
 /// Where ⌘T opens the next thread, derived from the sidebar selection (`AppModel.newThreadTarget`).

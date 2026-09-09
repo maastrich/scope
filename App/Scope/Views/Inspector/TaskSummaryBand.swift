@@ -1,79 +1,115 @@
 import SwiftUI
 import ScopeTasks
 
-/// The block shown under the selected task row: the branch line, the pull request line (when bound) and one row per repo with the
-/// sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / Show Delta buttons.
-struct TaskDetailView: View {
+/// The band under the inspector's tab row, on the tabs that follow a task (Delta and PRs): the task's name and
+/// scope, its branch, the bound pull request, the prompt it was opened with, and one row per repo with the sandbox
+/// state, `+N −M` and the Open in Editor / See Delta buttons.
+///
+/// This is the single owner of all of it. The same fields used to be drawn inside the sidebar, in a block injected
+/// into the `List` under the selected task row, which shoved every row below it by a variable amount on every
+/// click; the branch was drawn a second time by `DeltaView`. The sidebar now says *which* task, in one 28 pt row
+/// like any other, and the panel says *what*.
+struct TaskSummaryBand: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                Text(task.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                Button {
+                    model.openTaskInEditor(task)
+                } label: {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .disabled(model.config.preferences.editor == nil)
+                .help("Open Task in Editor (⇧⌘E)")
+                .accessibilityLabel("Open \(task.name) in Editor")
+                Button {
+                    Reveal.inFinder(task.record.rootURL)
+                } label: {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Reveal in Finder")
+                .accessibilityLabel("Reveal \(task.name) in Finder")
+            }
+            .frame(height: 22)
+
+            HStack(spacing: 6) {
                 Text(task.branch)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-            }
-            .frame(height: 20)
-            if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
-                HStack(alignment: .top, spacing: 5) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .frame(height: 16)
-                    Text(prompt)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.bottom, 4)
-                .help(prompt)
-            }
-            if let pr = task.record.pullRequest {
-                HStack(spacing: 5) {
-                    Image(systemName: "arrow.triangle.pull")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Text("\(pr.label) \(pr.title)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 4)
+                    .help(task.branch)
+                Spacer(minLength: 4)
+                if let pr = task.record.pullRequest {
                     Button {
                         model.openOnGitHub(pr.url)
                     } label: {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(.system(size: 11))
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(PullRequestStyle.color(model.liveChecks(for: task) ?? .none))
+                                .frame(width: 6, height: 6)
+                            Text("\(pr.label) \(pr.title)")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                     .help("Open on GitHub — \(pr.url.absoluteString)")
                     .accessibilityLabel("Open pull request \(pr.label) on GitHub")
                 }
-                .frame(height: 20)
             }
+            .frame(height: 22)
+
+            if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
+                Text(prompt)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
+                    .help(prompt)
+            }
+
             ForEach(task.activeRepos) { repo in
                 TaskRepoRow(task: task, repo: repo)
             }
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 8)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
-        .padding(.top, 2)
-        .padding(.bottom, 4)
-        .selectionDisabled()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color("PanelBackground"))
     }
 }
 
+/// One repo of the task: name, sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / See Delta.
 private struct TaskRepoRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -100,9 +136,7 @@ private struct TaskRepoRow: View {
                 .help("Open in Editor (⌥-click copies the path)")
                 .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
-                    model.selection = .task(task.id)
                     model.inspectorTab = .delta
-                    model.inspectorShown = true
                     model.delta.selectedFile = model.delta.orderedFiles.first { $0.repo == repo.repoRelativePath }
                 } label: {
                     Image(systemName: "plus.forwardslash.minus")

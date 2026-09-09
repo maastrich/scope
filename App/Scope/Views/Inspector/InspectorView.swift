@@ -1,7 +1,12 @@
 import SwiftUI
 
-/// Right-hand inspector: a segmented Graph / Delta / Base / PRs control with the context it follows
-/// (`acme · auth-refresh`) in its own header, then the panel pinned to the top. ⌘D / ⌘⇧B switch tabs.
+/// Right-hand inspector: two segmented controls in a 30 pt header — Delta / PRs, which follow the selected task,
+/// and Base / Graph, which follow the scope and its repositories — then the task summary band on the first pair,
+/// then the panel pinned to the top. ⌘D / ⌘⇧B switch tabs.
+///
+/// The header used to carry `contextDescription` as its caption, which is derived from `newThreadTarget`: the
+/// panel labelled itself with ⌘T's next destination rather than with what it was showing. `TaskSummaryBand` says
+/// it properly now, so the caption is gone.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
@@ -10,8 +15,11 @@ struct InspectorView: View {
         VStack(spacing: 0) {
             // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
-                Picker("Inspector tab", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases, id: \.self) { tab in
+                // Two groups, because the tabs follow two different subjects: Delta and PRs are about the selected
+                // task, Base and Graph about the scope and its repositories. Without the split, selecting a task
+                // while sitting on Graph silently keeps showing something else.
+                Picker("Task", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases.filter(\.followsTask), id: \.self) { tab in
                         Text(tab.title).tag(tab)
                     }
                 }
@@ -19,21 +27,33 @@ struct InspectorView: View {
                 .labelsHidden()
                 .controlSize(.small)
                 .fixedSize()
-                if let context = model.contextDescription {
-                    Text(context)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .accessibilityLabel("Inspector context: \(context)")
+                .disabled(model.currentTask == nil)
+                .help(model.currentTask == nil ? "Select a task or one of its threads" : "The selected task")
+
+                Picker("Scope", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases.filter { !$0.followsTask }, id: \.self) { tab in
+                        Text(tab.title).tag(tab)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+                .help("The scope and its repositories")
+
+                Spacer(minLength: 4)
             }
             .padding(.horizontal, 10)
             .frame(height: 30)
             .frame(maxWidth: .infinity)
             .background(Color("PanelBackground"))
             Divider()
+            // Only under the tabs that follow a task: Base and Graph are about the scope and its repos, and give
+            // the height back to their own content.
+            if model.inspectorTab.followsTask, let task = model.currentTask {
+                TaskSummaryBand(task: task)
+                Divider()
+            }
             Group {
                 switch model.inspectorTab {
                 case .graph:

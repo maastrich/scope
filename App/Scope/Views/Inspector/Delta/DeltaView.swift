@@ -126,15 +126,11 @@ struct DeltaView: View {
         }
     }
 
-    /// Branch, mode caption and counts. The ring shows when the panel has keyboard focus (j/k/[/] work).
+    /// Mode caption and counts. The ring shows when the panel has keyboard focus (j/k/[/] work). The branch used
+    /// to lead this row; `TaskSummaryBand`, right above the panel, owns it now.
     private func summaryRow(_ task: TaskState) -> some View {
         let delta = model.delta
         return keyboardHint(HStack(spacing: 6) {
-            Text(task.branch)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
             Text(modeCaption)
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
