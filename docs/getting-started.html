@@ -41,11 +41,18 @@ file to write.</p>
 </ul>
 
 <h2 id="install">Install</h2>
-<p>Download <code>Scope-X.Y.Z.dmg</code> from the <a href="https://github.com/maastrich/scope/releases/latest">latest release</a> and drag
-Scope into <code>/Applications</code>.</p>
-<div class="note warn"><p><b>Ad-hoc signed builds.</b> Until the project ships with a Developer ID certificate,
-Gatekeeper refuses the first launch. Right-click the app → <b>Open</b>, or run
-<code>xattr -d com.apple.quarantine /Applications/Scope.app</code> once.</p></div>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/maastrich/scope/main/scripts/install.sh | bash</code></pre>
+<p>The script takes the latest release's DMG, checks it against the SHA-256 published beside it, copies
+<code>Scope.app</code> into <code>/Applications</code> and clears the quarantine flag. <code>SCOPE_VERSION</code>
+and <code>SCOPE_DEST</code> change which version it installs and where.</p>
+<div class="note warn"><p><b>Ad-hoc signed builds.</b> A Developer ID signature needs a paid Apple Developer
+Program membership, so Gatekeeper refuses the first launch until the quarantine flag is gone — which is what
+the script does for you. By hand: download <code>Scope-X.Y.Z.dmg</code> from the
+<a href="https://github.com/maastrich/scope/releases/latest">latest release</a>, check it against the published <code>.sha256</code>, drag
+Scope into <code>/Applications</code>, then run
+<code>xattr -dr com.apple.quarantine /Applications/Scope.app</code> once. Read
+<a href="https://github.com/maastrich/scope/blob/main/scripts/install.sh">the script</a> before piping it into a shell, as you would with any
+such one-liner.</p></div>
 <p>Later versions install themselves: Scope checks a signed Sparkle appcast and offers the update in place
 (<b>Scope → Check for Updates…</b>).</p>
 

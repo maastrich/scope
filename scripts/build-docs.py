@@ -192,7 +192,9 @@ It reads your folders and writes nothing inside them.</p>
 </div>
 
 <h2>Install</h2>
-<p>Download the DMG from the latest release, or build it yourself:</p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/maastrich/scope/main/scripts/install.sh | bash</code></pre>
+<p>Checks the DMG against its published SHA-256, installs it and clears the quarantine flag the ad-hoc
+signature would otherwise trip over. Or build it yourself:</p>
 <pre><code>git clone REPO.git &amp;&amp; cd scope
 brew install xcodegen
 xcodebuild -downloadComponent MetalToolchain   <span class="c"># once per machine</span>
@@ -215,11 +217,18 @@ file to write.</p>
 </ul>
 
 <h2 id="install">Install</h2>
-<p>Download <code>Scope-X.Y.Z.dmg</code> from the <a href="REPO/releases/latest">latest release</a> and drag
-Scope into <code>/Applications</code>.</p>
-<div class="note warn"><p><b>Ad-hoc signed builds.</b> Until the project ships with a Developer ID certificate,
-Gatekeeper refuses the first launch. Right-click the app → <b>Open</b>, or run
-<code>xattr -d com.apple.quarantine /Applications/Scope.app</code> once.</p></div>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/maastrich/scope/main/scripts/install.sh | bash</code></pre>
+<p>The script takes the latest release's DMG, checks it against the SHA-256 published beside it, copies
+<code>Scope.app</code> into <code>/Applications</code> and clears the quarantine flag. <code>SCOPE_VERSION</code>
+and <code>SCOPE_DEST</code> change which version it installs and where.</p>
+<div class="note warn"><p><b>Ad-hoc signed builds.</b> A Developer ID signature needs a paid Apple Developer
+Program membership, so Gatekeeper refuses the first launch until the quarantine flag is gone — which is what
+the script does for you. By hand: download <code>Scope-X.Y.Z.dmg</code> from the
+<a href="REPO/releases/latest">latest release</a>, check it against the published <code>.sha256</code>, drag
+Scope into <code>/Applications</code>, then run
+<code>xattr -dr com.apple.quarantine /Applications/Scope.app</code> once. Read
+<a href="REPO/blob/main/scripts/install.sh">the script</a> before piping it into a shell, as you would with any
+such one-liner.</p></div>
 <p>Later versions install themselves: Scope checks a signed Sparkle appcast and offers the update in place
 (<b>Scope → Check for Updates…</b>).</p>
 
@@ -288,8 +297,8 @@ name; the owner appears in the tooltip.</p>
 
 <h2 id="thread">Thread</h2>
 <p>A driver running in an embedded terminal (a real PTY, via SwiftTerm), with a working directory, a title and a
-persisted record. Threads live in tabs; <kbd>⌘1</kbd>–<kbd>⌘9</kbd> jump to one,
-<kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
+persisted record. Threads are listed in the sidebar and switched from there; <kbd>⌘1</kbd>–<kbd>⌘9</kbd> jump to one
+in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 <p>Each thread receives:</p>
 <table>
   <tr><th>Variable</th><th>Value</th></tr>
@@ -368,13 +377,20 @@ branch name is a typo; a wrong repository is a worktree in the wrong place, so n
 guess you were not shown.</p></div>
 
 <h2 id="branch">The driver proposes the branch</h2>
-<p>Press <b>Continue</b> and the selected driver runs once, headless, with the repository's recent branch names
-and commit subjects as evidence:</p>
+<p>Press <b>Continue</b> and the selected driver answers one short question — a <b>microsession</b>: its light
+model, run once, with the repository's recent branch names and commit subjects as evidence, and the scope's
+repositories as the list it may choose from:</p>
 FIG_LOADING
 <p>It answers with a title, a branch and a folder name that follow the convention already in use — if the repo
 lives on <code>feat/…</code> and <code>fix/…</code>, so will the task; if it prefixes branches with a
 username, so will the task. Scope validates the answer with <code>git check-ref-format</code>, sanitises it and
 makes it unique.</p>
+<p>It also says <b>which repositories</b> the work touches, and whether the request is about a pull request that
+already exists. A microsession has read-only tools, so a request that only alludes to one — "rebase the auth PR
+on front" — is enough: it finds the number with <code>gh pr list</code> and answers with the reference. Scope
+then resolves that reference itself with <code>gh pr view</code>, exactly as it does for a pasted URL: the head
+that gets checked out never comes from the model's own words, and an invented repository path is dropped rather
+than corrected.</p>
 FIG_PROPOSAL
 <p>All three fields stay editable. What you type wins: a proposal that arrives after you started typing only
 updates the caption, never your text.</p>
@@ -420,10 +436,16 @@ FIG_THREAD
 agent doing the work, a second agent on the same branch.</p>
 
 <h2 id="context">AGENTS.md</h2>
-<p>Scope writes a context file at the task root, generated from the prompt and the
-<a href="graph.html">graph</a>: the goal, and one section per repository with its purpose, stack, setup and
-test commands. Drivers that read a different file name (<code>CLAUDE.md</code>) get theirs instead — the
-profile says which.</p>
+<p>Scope writes a context file generated from the prompt and the <a href="graph.html">graph</a>: the goal, and
+one section per repository with its purpose, stack, setup and test commands.</p>
+<p>It lands where the task's threads start — the sandbox when the task has one repository, the task root when
+it has several — because a file anywhere else is a file the driver never opens. It is written under every name
+the installed drivers read (<code>AGENTS.md</code>, and <code>CLAUDE.md</code> for Claude Code; the profile's
+<code>context</code> says which), with the same content in each. Inside a sandbox each file is added to
+<code>.git/info/exclude</code>, so it never shows up in your delta.</p>
+<p>A file Scope did not generate is never overwritten: if the repository already has its own
+<code>AGENTS.md</code>, Scope leaves it alone and says so in the Problem Center, so you know the agent is
+starting without the task's goal and rules.</p>
 
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
@@ -543,6 +565,9 @@ adding a fifth is a text edit, not a rebuild.</p>
   "context": { "file": "CLAUDE.md", "mode": "generate" },
   "resume": ["claude", "--resume", "{resume_id}"],
   "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
+  "headlessLight": ["claude", "-p", "{prompt}", "--output-format", "json", "--model", "haiku",
+                    "--tools", "Bash", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence",
+                    "--allowedTools", "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"],
   "prompt": ["{prompt}"],
   "adapter": { "kind": "claude-hooks" },
   "icon": "sparkles"
@@ -556,9 +581,10 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>command</code></td><td><code>"$SHELL"</code>, a bare name resolved on the login-shell PATH, an absolute path, or <code>~/…</code></td></tr>
   <tr><td><code>args</code>, <code>env</code></td><td>appended arguments and extra environment; both accept placeholders</td></tr>
   <tr><td><code>loginShell</code></td><td><code>true</code> starts the command as a login shell (Terminal.app style)</td></tr>
-  <tr><td><code>context</code></td><td>the project file the tool reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>) and how Scope projects into it: <code>generate</code>, <code>file</code>, <code>flag</code>, <code>none</code></td></tr>
+  <tr><td><code>context</code></td><td>the project file the tool reads (<code>CLAUDE.md</code>, <code>AGENTS.md</code>). Every task writes its projection under this name, next to the names the other profiles declare, where the task's threads start. <code>mode: none</code> opts the driver out; the other modes (<code>generate</code>, <code>file</code>, <code>flag</code>) all write the generated file today</td></tr>
   <tr><td><code>resume</code></td><td>full argv to resume a captured session</td></tr>
   <tr><td><code>headless</code></td><td>full argv for one-shot runs: graph level 1, task branch proposals</td></tr>
+  <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
   <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
@@ -596,7 +622,7 @@ find. <b>Reload</b> picks up edits without restarting.</p>
 JSON</code></pre>
 <p>Then <b>Settings → Drivers → Reload</b>. The minimum is <code>id</code>, <code>name</code> and
 <code>command</code>; everything else is optional and degrades gracefully — a driver without
-<code>headless</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
+<code>headless</code> nor <code>headlessLight</code> simply never proposes branch names, and one without <code>adapter</code> shows no live
 state.</p>
 """
 
@@ -680,6 +706,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
   <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread</td></tr>
   <tr><td><kbd>⌘1</kbd>–<kbd>⌘9</kbd>, <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd></td><td>Switch threads</td></tr>
+  <tr><td><kbd>⌘↩</kbd></td><td>Newline in the terminal (sent as meta <kbd>↩</kbd>)</td></tr>
   <tr><td><kbd>⌘K</kbd></td><td>Command palette</td></tr>
   <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
   <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
@@ -694,8 +721,10 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
 <h2 id="settings">Settings</h2>
 FIG_SETTINGS
 <ul>
-  <li><b>General</b> — config folder, default driver, editor command, terminal font size and appearance
-  (follow the system, or always dark, which is what agent TUIs assume), notification status.</li>
+  <li><b>General</b> — config folder, default driver, editor command, terminal font size, appearance
+  (follow the system, or always dark, which is what agent TUIs assume) and cursor shape — underline, bar or
+  block, steady or blinking; a blinking caret fades in and out rather than switching on and off, and a program
+  can still ask for its own shape — plus notification status.</li>
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
 </ul>

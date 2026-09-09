@@ -10,7 +10,31 @@ Scope reads your folders and writes nothing inside them.
 
 Scopes and repo discovery, threads with live terminals and hook-driven states, prompt-driven tasks with one git worktree per repository, the Delta / Base / Graph / Pull-request inspector, notifications and the command palette. `SPEC.md` is the reference; `docs/` is the site.
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/maastrich/scope/main/scripts/install.sh | bash
+```
+
+The script takes the latest release's DMG, **checks it against the SHA-256 published beside it**, copies
+`Scope.app` into `/Applications` and clears the quarantine flag. Set `SCOPE_VERSION`, `SCOPE_DEST` or
+`SCOPE_REPO` to change what it installs and where. From then on Scope updates itself through Sparkle.
+
+That last step is why the script exists. The DMG is **ad-hoc signed** — a Developer ID signature needs a paid
+Apple Developer Program membership — so Gatekeeper refuses the app until the quarantine flag is gone. Prefer
+doing it yourself? Download the DMG from [Releases](https://github.com/maastrich/scope/releases), verify it
+against the published `.sha256`, drag the app to `/Applications`, then:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Scope.app
+```
+
+Read [`scripts/install.sh`](scripts/install.sh) before piping it into a shell, as you would with any such
+one-liner.
+
 ## Requirements
+
+Building from source:
 
 - macOS 15+
 - Xcode 26+ (Swift 6, strict concurrency)

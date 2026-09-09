@@ -86,7 +86,9 @@ It reads your folders and writes nothing inside them.</p>
 </div>
 
 <h2 id="install">Install</h2>
-<p>Download the DMG from the latest release, or build it yourself:</p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/maastrich/scope/main/scripts/install.sh | bash</code></pre>
+<p>Checks the DMG against its published SHA-256, installs it and clears the quarantine flag the ad-hoc
+signature would otherwise trip over. Or build it yourself:</p>
 <pre><code>git clone https://github.com/maastrich/scope.git &amp;&amp; cd scope
 brew install xcodegen
 xcodebuild -downloadComponent MetalToolchain   <span class="c"># once per machine</span>
