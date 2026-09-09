@@ -158,7 +158,7 @@ extension AppModel {
         guard let session = session(id) else { return }
         let alert = NSAlert()
         alert.messageText = "Rename Thread"
-        alert.informativeText = "The title is shown in the sidebar, the tab strip and the command palette."
+        alert.informativeText = "The title is shown in the sidebar and the command palette."
         alert.addButton(withTitle: "Rename")
         alert.addButton(withTitle: "Cancel")
         let field = NSTextField(string: session.title)

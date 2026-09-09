@@ -1,8 +1,7 @@
 import SwiftUI
 import ScopeCore
 
-/// Toasts for threads that exited live, newest at the bottom, overlaid at the bottom of the scene (never
-/// over the tab strip). Each one: icon, `Title exited (status)`, Relaunch, Details (popover), dismiss.
+/// Toasts for threads that exited live, newest at the bottom, overlaid at the bottom of the scene. Each one: icon, `Title exited (status)`, Relaunch, Details (popover), dismiss.
 /// Hovering holds the 10 s countdown.
 struct ExitToastStack: View {
     @Environment(AppModel.self) private var model

@@ -65,6 +65,7 @@ final class AppModel {
         didSet {
             if let id = selectedThreadID, let session = session(id) {
                 lastThreadByScope[session.record.scopeID] = id
+                revealThread(session)
             }
             clearNotifications(for: selectedThreadID)
             if !isRestoringUIState { persistUIState() }
@@ -194,7 +195,7 @@ final class AppModel {
         }
     }
 
-    /// Where ⌘T (menu, footer, palette, tab strip `+`) opens the next thread.
+    /// Where ⌘T (menu, footer, palette) opens the next thread.
     var newThreadTarget: NewThreadTarget? {
         switch selection {
         case .scope(let id):
@@ -477,7 +478,7 @@ final class AppModel {
         case .thread(let id):
             selectedThreadID = id
         case .scope, .repo:
-            // The scene shows the scope's empty view / repo context; the tabs stay listed, none active.
+            // The scene shows the scope's empty view / repo context; no thread is active.
             selectedThreadID = nil
         case .task(let id):
             let own = threads(in: id)
@@ -489,6 +490,13 @@ final class AppModel {
         case nil:
             selectedThreadID = nil
         }
+    }
+
+    /// The sidebar is the only thread switcher: a thread that becomes active must be visible in it, so the
+    /// task holding it unfolds.
+    private func revealThread(_ session: ThreadSession) {
+        guard let task = task(of: session), !task.isExpanded else { return }
+        task.isExpanded = true
     }
 
     // MARK: Config
@@ -790,14 +798,14 @@ final class AppModel {
     private func detach(_ session: ThreadSession) {
         let id = session.id
         let wasSelected = selectedThreadID == id
-        let siblings = threads(in: session.record.scopeID)
+        let siblings = threadOrder(in: session.record.scopeID)
         let position = siblings.firstIndex { $0.id == id } ?? 0
         threads.removeAll { $0.id == id }
         if lastThreadByScope[session.record.scopeID] == id {
             lastThreadByScope[session.record.scopeID] = nil
         }
         guard wasSelected else { return }
-        let remaining = threads(in: session.record.scopeID)
+        let remaining = threadOrder(in: session.record.scopeID)
         if let neighbour = remaining[safe: min(position, remaining.count - 1)] {
             selection = .thread(neighbour.id)
             selectedThreadID = neighbour.id
@@ -908,8 +916,14 @@ final class AppModel {
 
     // MARK: Tab navigation
 
+    /// The sidebar's own order — each task's threads, in task order, then the scope-level threads. The
+    /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
+    func threadOrder(in scope: ScopeID) -> [ThreadSession] {
+        tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
+    }
+
     private var currentTabs: [ThreadSession] {
-        currentScope.map { threads(in: $0.id) } ?? []
+        currentScope.map { threadOrder(in: $0.id) } ?? []
     }
 
     func selectThread(index: Int) {
