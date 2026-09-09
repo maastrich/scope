@@ -104,12 +104,35 @@ private final class GitFixtureRepo: Sendable {
     @Test func defaultBranchFromInitDefaultBranchConfig() async throws {
         let fixture = try await GitFixtureRepo.make()
         try await fixture.client.run(["config", "init.defaultBranch", "develop"])
+        try await fixture.client.run(["branch", "develop"])
 
         let facts = await RepoFacts.load(for: fixture.repo, using: fixture.client)
         #expect(facts.originURL == nil)
         #expect(facts.remote == nil)
         #expect(facts.defaultBranch == "develop")
         #expect(facts.currentBranch == "main")
+    }
+
+    /// `init.defaultBranch` says what `git init` would create, not what this repository has.
+    @Test func initDefaultBranchIsIgnoredWhenThatBranchDoesNotExist() async throws {
+        let fixture = try await GitFixtureRepo.make()
+        try await fixture.client.run(["config", "init.defaultBranch", "develop"])
+
+        let facts = await RepoFacts.load(for: fixture.repo, using: fixture.client)
+        #expect(facts.defaultBranch == "main")
+    }
+
+    /// Xcode ships a system gitconfig with `init.defaultBranch = main`, which Apple's git reads. Answering
+    /// `main` for a repository whose only branch is `master` sent `git worktree add … main` to its death and
+    /// made every new task fail there.
+    @Test func configuredMainLosesToTheMasterThatActuallyExists() async throws {
+        let fixture = try await GitFixtureRepo.make()
+        try await fixture.client.run(["branch", "-m", "main", "master"])
+        try await fixture.client.run(["config", "init.defaultBranch", "main"])
+
+        let facts = await RepoFacts.load(for: fixture.repo, using: fixture.client)
+        #expect(facts.defaultBranch == "master")
+        #expect(facts.currentBranch == "master")
     }
 
     @Test func defaultBranchFromLocalMain() async throws {

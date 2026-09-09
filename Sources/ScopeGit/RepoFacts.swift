@@ -89,20 +89,33 @@ public struct RepoFacts: Sendable, Equatable {
 
     /// Default branch, in order of trust:
     /// 1. `refs/remotes/origin/HEAD` (set by clone; `git remote set-head origin -a` restores it),
-    /// 2. `init.defaultBranch` from config,
-    /// 3. an existing local `main`, then `master`.
+    /// 2. `init.defaultBranch` from config, **only when that branch exists here**,
+    /// 3. an existing local (or `origin/`) `main`, then `master`.
+    ///
+    /// Every candidate but the first is checked against the repository, and a name that resolves to nothing is
+    /// never returned. `init.defaultBranch` says what `git init` *would* create, not what this repository *has*:
+    /// Xcode ships a system gitconfig setting it to `main`, so trusting it blindly answered `main` for every
+    /// repository without an `origin/HEAD` — including one whose only branch is `master`, where the answer then
+    /// reached `git worktree add … main` and failed with *invalid reference: main*, making a new task impossible.
     private static func defaultBranch(using client: GitClient, timeout: Duration) async -> String? {
+        // origin/HEAD is a symbolic ref inside this repository: it cannot name a branch that is not there.
         if let ref = try? await client.output(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], timeout: timeout),
            let slash = ref.firstIndex(of: "/") {
             return String(ref[ref.index(after: slash)...])   // "origin/main" -> "main"
         }
+
+        var candidates: [String] = []
         if let configured = try? await client.output(["config", "--get", "init.defaultBranch"], timeout: timeout),
            !configured.isEmpty {
-            return configured
+            candidates.append(configured)
         }
-        for candidate in ["main", "master"] {
-            if (try? await client.run(["rev-parse", "--verify", "--quiet", "refs/heads/\(candidate)"], timeout: timeout)) != nil {
-                return candidate
+        candidates.append(contentsOf: ["main", "master"])
+
+        for candidate in candidates where !candidate.isEmpty {
+            for ref in ["refs/heads/\(candidate)", "refs/remotes/origin/\(candidate)"] {
+                if (try? await client.run(["rev-parse", "--verify", "--quiet", ref], timeout: timeout)) != nil {
+                    return candidate
+                }
             }
         }
         return nil
