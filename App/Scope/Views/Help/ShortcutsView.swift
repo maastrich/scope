@@ -37,6 +37,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⇧⌘]", title: "Next Thread"),
             ShortcutEntry(keys: "⇧⌘[", title: "Previous Thread"),
             ShortcutEntry(keys: "⌥⌘K", title: "Clear Scrollback"),
+            ShortcutEntry(keys: "⌘↩", title: "Newline in the terminal", note: "sent as meta ↩, the agents' \"do not submit\" key"),
         ]),
         ShortcutGroup(title: "Find", entries: [
             ShortcutEntry(keys: "⌘F", title: "Find in Terminal", note: "the terminal pane must have focus"),

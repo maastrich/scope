@@ -3,18 +3,14 @@ import SwiftUI
 import ScopeCore
 
 /// The centre column. Picks `SceneEmptyView` (no scope), `ScopeEmptyView` (scope or repo row without a thread),
-/// `TaskEmptyView` (task without a thread) or the tab strip + `ThreadPane` of the selected thread, and declares
-/// the scene part of the window toolbar. Exit toasts sit at the bottom so they never cover the tabs.
+/// `TaskEmptyView` (task without a thread) or the `ThreadPane` of the selected thread, and declares the scene
+/// part of the window toolbar. Threads are switched from the sidebar alone; there is no tab strip.
 struct SceneView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(spacing: 0) {
             if let scope = model.currentScope {
-                let threads = model.threads(in: scope.id)
-                if !threads.isEmpty {
-                    TabStrip(scope: scope, threads: threads)
-                }
                 if let session = model.currentThread {
                     ThreadPane(session: session)
                 } else if let task = model.currentTask {

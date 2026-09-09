@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ScopeCore
 
@@ -6,6 +7,7 @@ import ScopeCore
 /// of `SidebarItem`s in three sections — **Tasks** (task rows with their threads nested), **Threads**
 /// (scope-level threads) and **Repositories** (collapsed by default, `ScopeState.reposShown`) — with the
 /// New Thread / New Task footer. Other scopes are reached through the switcher, ⌘K or ⌘O.
+/// It is the only thread switcher: picking a thread hands the keyboard straight back to its terminal.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @State private var scopeBeingRenamed: ScopeState?
@@ -49,6 +51,14 @@ struct SidebarView: View {
             footer
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
+        // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
+        // the keyboard (the command palette already behaves this way).
+        .onChange(of: model.selectedThreadID) { _, id in
+            guard id != nil, !filterFocused else { return }
+            // One turn later: the new thread's `TerminalHost` has to be in the window before it can hold
+            // the keyboard.
+            DispatchQueue.main.async { AppDelegate.refocusTerminal() }
+        }
         .alert("Rename Scope", isPresented: isRenaming, presenting: scopeBeingRenamed) { scope in
             TextField("Name", text: $renameText)
             Button("Rename") {
@@ -292,15 +302,22 @@ struct SidebarView: View {
 
     private func footerButtons(_ style: some LabelStyle) -> some View {
         HStack(spacing: 6) {
-            Button {
-                Task { await model.newThreadInCurrentContext() }
+            Menu {
+                ForEach(model.drivers.profiles) { profile in
+                    Button(profile.name) {
+                        Task { await model.newThreadInCurrentContext(driverID: profile.id) }
+                    }
+                }
             } label: {
                 Label("New Thread", systemImage: "plus")
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
+            } primaryAction: {
+                Task { await model.newThreadInCurrentContext() }
             }
+            .menuIndicator(.hidden)
             .disabled(model.currentScope == nil)
-            .help("New Thread (⌘T) \(model.newThreadTargetDescription ?? "")".trimmingCharacters(in: .whitespaces))
+            .help("New Thread (⌘T) \(model.newThreadTargetDescription ?? "") — long-press or right-click to choose a driver".trimmingCharacters(in: .whitespaces))
             .accessibilityLabel("New Thread")
 
             Button {

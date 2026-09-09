@@ -8,7 +8,7 @@ struct InspectorView: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            // One 30 pt band, same height and ground as the tab strip, so the two read as a single line across the window.
+            // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
                 Picker("Inspector tab", selection: $model.inspectorTab) {
                     ForEach(InspectorTab.allCases, id: \.self) { tab in
