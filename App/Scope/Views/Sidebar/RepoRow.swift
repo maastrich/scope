@@ -1,8 +1,8 @@
 import SwiftUI
 import ScopeCore
 
-/// Sidebar row for a discovered repository: the repo name (never `owner/`), branch chip, dirty dot; the full
-/// `owner/repo` and path live in the hover tooltip.
+/// Sidebar row for a discovered repository: the repo name (never `owner/`), one trailing chip (refresh spinner,
+/// else the branch) and the dirty dot; the full `owner/repo` and path live in the hover tooltip.
 /// Lives in the collapsible Repositories section of the sidebar.
 struct RepoRow: View {
     @Environment(AppModel.self) private var model
@@ -27,8 +27,7 @@ struct RepoRow: View {
             if repo.isRefreshing {
                 ProgressView()
                     .controlSize(.mini)
-            }
-            if let branch = repo.branchLabel {
+            } else if let branch = repo.branchLabel {
                 Text(branch)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -38,11 +37,18 @@ struct RepoRow: View {
                     .frame(height: 18)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
             }
+
+            // The gutter `ThreadRow` reserves for its close button, so every row's trailing marker lands in the
+            // same column whatever the section.
+            Color.clear.frame(width: 16, height: 1)
+
             if repo.isDirty {
                 Circle()
                     .fill(ThreadStateStyle.waiting)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 8, height: 8)
                     .help("Uncommitted changes")
+            } else {
+                Color.clear.frame(width: 8, height: 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

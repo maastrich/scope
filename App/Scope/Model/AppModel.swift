@@ -441,6 +441,7 @@ final class AppModel {
         defer { isRestoringUIState = false }
         for scope in scopes {
             scope.reposShown = state.reposShown.contains(scope.id)
+            scope.looseThreadsShown = !state.looseThreadsCollapsed.contains(scope.id)
         }
         inspectorShown = state.inspectorVisible
         inspectorTab = state.inspectorTab
@@ -483,6 +484,7 @@ final class AppModel {
         state.selectedThread = selectedThreadID
         state.currentScope = currentScopeID
         state.reposShown = Set(scopes.filter(\.reposShown).map(\.id))
+        state.looseThreadsCollapsed = Set(scopes.filter { !$0.looseThreadsShown }.map(\.id))
         state.inspectorVisible = inspectorShown
         state.inspectorTab = inspectorTab
         state.inspectorWidth = inspectorWidth

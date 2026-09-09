@@ -2,10 +2,17 @@ import SwiftUI
 import ScopeCore
 
 /// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path; none under a task,
-/// the indentation already says "sandbox"), state dot. The trailing group has a fixed width so dots line up.
-/// The row of the thread the scene shows carries an accent bar and a bold title — the sidebar is the only
-/// thread switcher, so it has to say which one is live even when the List highlights the task row instead.
-/// Hovering swaps the caption for a close button.
+/// the indentation already says "sandbox"), state dot.
+///
+/// One row at a time may look selected, and it is the List's: the thread the scene shows used to carry an accent
+/// bar and a bold title of its own, which read as a second selection whenever the List highlighted the task row
+/// instead. It now carries a quiet, un-accented marker, and only while it is *not* the selected row — when it is,
+/// the highlight already says so.
+///
+/// The trailing group lays out from the right: the state dot at a fixed inset, then a 16 pt gutter that is always
+/// reserved (the hover close button lands in it, so nothing moves when the pointer arrives), then the caption,
+/// which takes what is left and truncates. Nothing here has a fixed width, so a narrow sidebar shortens the
+/// caption and then the title, and never pushes the dot off the edge.
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -18,27 +25,43 @@ struct ThreadRow: View {
         HStack(spacing: 7) {
             Image(systemName: session.profile.icon ?? "terminal")
                 .font(.system(size: 13))
-                .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .foregroundStyle(.secondary)
                 .frame(width: 16)
 
             Text(model.displayTitle(for: session))
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .font(.system(size: 13))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
 
+            if showsLiveMarker {
+                Image(systemName: "chevron.left.2")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Shown in the terminal")
+            }
+
             Spacer(minLength: 4)
 
-            if isHovered {
-                closeButton
+            if session.displayState.needsAttention {
+                Text(session.displayState == .waiting(reason: .permission) ? "permission" : "needs you")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color("WarningText"))
+                    .lineLimit(1)
             } else if let caption {
                 Text(caption)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(width: 64, alignment: .trailing)
             }
+
+            // Always in the layout, so the close button appearing on hover moves nothing. Not clickable while
+            // invisible: an unseen ✕ next to the state dot would close threads by accident (⌘W and the context
+            // menu stay the keyboard path).
+            closeButton
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
 
             StateDot(state: session.displayState)
         }
@@ -46,10 +69,16 @@ struct ThreadRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .overlay(alignment: .leading) {
-            if isSelected {
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(width: 2)
+            // A blocked thread does nothing until you answer: it is the loudest thing the sidebar has to say, and
+            // a 6 pt dot at the far edge was the quietest way to say it.
+            if session.displayState.needsAttention {
+                // Inset and rounded so it sits inside the List's selection background rather than sticking out
+                // to the left of it when the row is also the selected one.
+                Capsule()
+                    .fill(ThreadStateStyle.waiting)
+                    .frame(width: 3)
+                    .padding(.vertical, 5)
+                    .padding(.leading, 4)
             }
         }
         .contentShape(Rectangle())
@@ -63,7 +92,7 @@ struct ThreadRow: View {
             }
         }
         .contextMenu { contextMenu }
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAddTraits(isListSelected ? .isSelected : [])
     }
 
     private var closeButton: some View {
@@ -81,8 +110,19 @@ struct ThreadRow: View {
         .accessibilityLabel("Close \(model.displayTitle(for: session))")
     }
 
-    private var isSelected: Bool {
+    /// The thread the scene shows: where typing goes.
+    private var isLive: Bool {
         model.selectedThreadID == session.id
+    }
+
+    /// The row the List highlights.
+    private var isListSelected: Bool {
+        model.selection == .thread(session.id)
+    }
+
+    /// Only worth drawing when the highlight is elsewhere — on a task row, say.
+    private var showsLiveMarker: Bool {
+        isLive && !isListSelected
     }
 
     private var caption: String? {

@@ -204,6 +204,12 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("[", modifiers: [.command, .shift])
             .disabled(threadCount < 2)
 
+            Button("Next Thread Waiting for You") {
+                model?.revealNextWaitingThread()
+            }
+            .keyboardShortcut(.return, modifiers: [.command, .option])
+            .disabled((model?.waitingThreads.count ?? 0) == 0)
+
             Divider()
 
             ForEach(1...9, id: \.self) { number in

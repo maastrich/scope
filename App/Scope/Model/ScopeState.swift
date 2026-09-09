@@ -22,6 +22,9 @@ final class ScopeState: Identifiable {
     private(set) var discovery: DiscoveryPhase = .idle
     /// Whether the sidebar lists the repositories of this scope (collapsed by default; persisted in the UI state).
     var reposShown = false
+    /// Whether the sidebar expands the "Loose threads" group — the threads of this scope that belong to no task
+    /// (expanded by default; persisted in the UI state).
+    var looseThreadsShown = true
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private let problems: ProblemCenter

@@ -10,6 +10,8 @@ struct UIState: Codable, Sendable, Equatable {
     var currentScope: ScopeID?
     /// Scopes whose Repositories section is expanded (collapsed by default).
     var reposShown: Set<ScopeID> = []
+    /// Scopes whose "Loose threads" group is collapsed (expanded by default, so the set holds the exceptions).
+    var looseThreadsCollapsed: Set<ScopeID> = []
     var inspectorVisible = false
     var inspectorTab: InspectorTab = .graph
     /// Points; clamped to `inspectorWidthRange` on restore.
@@ -23,7 +25,8 @@ struct UIState: Codable, Sendable, Equatable {
     static let defaultInspectorWidth: Double = 380
 
     private enum CodingKeys: String, CodingKey {
-        case selectedItem, selectedThread, currentScope, reposShown, inspectorVisible, inspectorTab, inspectorWidth, lastDrivers
+        case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
+        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers
     }
 
     init() {}
@@ -35,6 +38,7 @@ struct UIState: Codable, Sendable, Equatable {
         selectedThread = try? container.decodeIfPresent(ThreadID.self, forKey: .selectedThread)
         currentScope = try? container.decodeIfPresent(ScopeID.self, forKey: .currentScope)
         reposShown = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .reposShown)) ?? []
+        looseThreadsCollapsed = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .looseThreadsCollapsed)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .graph
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth

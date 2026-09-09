@@ -85,6 +85,16 @@ private struct GeneralSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+            Section("Threads waiting for you") {
+                Picker("Show the count", selection: preference(\.attentionCounter)) {
+                    ForEach(AttentionCounterPlacement.allCases, id: \.self) { placement in
+                        Text(placement.title).tag(placement)
+                    }
+                }
+                Text("A waiting thread is always marked in place — a square dot, a bar down its row and the word “needs you”. This is only where the count of them goes; ⌥⌘↩ jumps to the next one either way.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
             Section("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
             }

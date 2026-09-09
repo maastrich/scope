@@ -3,15 +3,23 @@ import ScopeCore
 
 /// The state dot from the UI direction A legend: an 8 pt filled circle (7 pt inside pills and tabs).
 /// `exited` is drawn as a 1.5 pt ring, never filled.
+///
+/// `waiting` is the exception: a rounded **square**, not a circle. It is the one state that asks something of the
+/// user, and the one it must never be confused with — *running*, which asks nothing — sits right beside it in the
+/// same column. Distinguishing them by colour alone loses that in greyscale and for the ~8 % of men with a colour
+/// vision deficiency, so the shape carries it too.
 struct StateDot: View {
     var state: ThreadState
     var size: CGFloat = 8
 
     var body: some View {
         Group {
-            if case .exited = state {
+            switch state {
+            case .exited:
                 Circle().strokeBorder(ThreadStateStyle.exitedRing, lineWidth: 1.5)
-            } else {
+            case .waiting:
+                RoundedRectangle(cornerRadius: size / 4, style: .continuous).fill(state.dotColor)
+            default:
                 Circle().fill(state.dotColor)
             }
         }

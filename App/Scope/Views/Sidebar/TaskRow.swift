@@ -2,8 +2,14 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task (Tasks section): chevron, branch icon, name, the `#123` chip of a bound pull request
-/// (dot = live checks state), the `api · web` caption and the aggregated state dot of its threads.
+/// Sidebar row for a task: chevron, branch icon, name, at most one trailing chip and the aggregated state dot
+/// of its threads.
+///
+/// The trailing group carries a single chip, chosen by priority — a refresh spinner, else the `#123` of a bound
+/// pull request (its dot = live checks state) — and then the same 16 pt gutter `ThreadRow` reserves for its hover
+/// close button, empty here, so the state dots of tasks and threads line up in one column. The `api · web` repo
+/// caption is gone: it had a fixed 64 pt frame that squeezed the name at narrow widths, and the repositories of a
+/// task now belong to the inspector's summary band.
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -37,8 +43,7 @@ struct TaskRow: View {
 
             if task.isRefreshing {
                 ProgressView().controlSize(.mini)
-            }
-            if let pr = task.record.pullRequest {
+            } else if let pr = task.record.pullRequest {
                 HStack(spacing: 4) {
                     Circle()
                         .fill(PullRequestStyle.color(model.liveChecks(for: task) ?? .none))
@@ -46,21 +51,21 @@ struct TaskRow: View {
                     Text(pr.label)
                         .font(.system(size: 10.5, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 .padding(.horizontal, 6)
                 .frame(height: 18)
                 .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
                 .help("\(pr.title)\n\(pr.url.absoluteString)")
             }
-            Text(task.reposCaption)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(width: 64, alignment: .trailing)
-                .help(task.reposCaption)
+
+            // Empty counterpart of ThreadRow's hover gutter: it buys nothing here but the shared dot column.
+            Color.clear.frame(width: 16, height: 1)
+
             if let state = aggregateState {
                 StateDot(state: state)
+            } else {
+                Color.clear.frame(width: 8, height: 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

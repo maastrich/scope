@@ -4,9 +4,9 @@ import ScopeCore
 
 /// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
 /// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
-/// of `SidebarItem`s in three sections — **Tasks** (task rows with their threads nested), **Threads**
-/// (scope-level threads) and **Repositories** (collapsed by default, `ScopeState.reposShown`) — with the
-/// New Thread / New Task footer. Other scopes are reached through the switcher, ⌘K or ⌘O.
+/// of `SidebarItem`s as **one tree** — a **Loose threads** group holding the threads that belong to no task, then
+/// the tasks with their own threads nested — followed by **Repositories** (collapsed by default,
+/// `ScopeState.reposShown`), which is a launcher rather than work. The New Thread / New Task footer closes it. Other scopes are reached through the switcher, ⌘K or ⌘O.
 /// It is the only thread switcher: picking a thread hands the keyboard straight back to its terminal.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
@@ -28,8 +28,7 @@ struct SidebarView: View {
                 SidebarEmptyView()
             } else if let scope = model.currentScope {
                 List(selection: $model.selection) {
-                    tasksSection(scope)
-                    threadsSection(scope)
+                    workSection(scope)
                     repositoriesSection(scope)
                 }
                 .listStyle(.sidebar)
@@ -43,6 +42,9 @@ struct SidebarView: View {
                             scopeBeingRenamed = scope
                         }
                         filterField
+                        if model.config.preferences.attentionCounter == .sidebar {
+                            AttentionBanner()
+                        }
                     }
                 }
             }
@@ -173,16 +175,17 @@ struct SidebarView: View {
 
     // MARK: Sections
 
-    /// Task rows with their threads nested (and the detail block under the selected task).
-    private func tasksSection(_ scope: ScopeState) -> some View {
+    /// The work of the scope as one tree, with no section header: the **Loose threads** group first — the threads
+    /// that belong to no task, which used to live in a Threads section of their own — then the tasks with their
+    /// own threads nested. One shape, one depth, one place to look for a thread.
+    private func workSection(_ scope: ScopeState) -> some View {
         Section {
+            looseThreadsGroup(scope)
+
             let tasks = visibleTasks(in: scope)
             ForEach(tasks) { task in
                 TaskRow(task: task)
                     .tag(SidebarItem.task(task.id))
-                if model.selection == .task(task.id), !isFiltering {
-                    TaskDetailView(task: task)
-                }
                 if task.isExpanded || isFiltering {
                     ForEach(visibleThreads(in: task)) { session in
                         ThreadRow(session: session, depth: 1)
@@ -193,24 +196,23 @@ struct SidebarView: View {
             if tasks.isEmpty {
                 hintRow(isFiltering ? "No task matches “\(filter)”" : (scope.kind == .missing ? "Scope folder is missing" : "No task yet — ⇧⌘T"))
             }
-        } header: {
-            sectionHeader("Tasks")
         }
     }
 
-    /// Scope-level threads (scope root and base shells); exited ones stay listed with their ring dot.
-    private func threadsSection(_ scope: ScopeState) -> some View {
-        Section {
-            let threads = visibleScopeThreads(in: scope)
-            ForEach(threads) { session in
-                ThreadRow(session: session, depth: 0)
-                    .tag(SidebarItem.thread(session.id))
+    /// The scope-level and repo-base threads, under one group row at the depth of a task. The group is skipped
+    /// entirely when the scope has none: an empty parent is worse than no parent.
+    @ViewBuilder
+    private func looseThreadsGroup(_ scope: ScopeState) -> some View {
+        let threads = visibleScopeThreads(in: scope)
+        if !threads.isEmpty {
+            LooseThreadsRow(scope: scope, count: threads.count)
+                .selectionDisabled()
+            if scope.looseThreadsShown || isFiltering {
+                ForEach(threads) { session in
+                    ThreadRow(session: session, depth: 1)
+                        .tag(SidebarItem.thread(session.id))
+                }
             }
-            if threads.isEmpty {
-                hintRow(isFiltering ? "No thread matches “\(filter)”" : "No thread yet — ⌘T")
-            }
-        } header: {
-            sectionHeader("Threads")
         }
     }
 

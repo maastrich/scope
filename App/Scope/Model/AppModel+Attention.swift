@@ -10,6 +10,29 @@ extension AppModel {
         threads.filter { $0.displayState.needsAttention }
     }
 
+    /// The waiting threads of the scope the sidebar shows, which is what its banner counts.
+    var waitingThreadsInCurrentScope: [ThreadSession] {
+        guard let id = currentScopeID else { return [] }
+        return waitingThreads.filter { $0.record.scopeID == id }
+    }
+
+    /// ⌥⌘↩: selects the next thread that wants the user and hands it the keyboard, wrapping around and crossing
+    /// into another scope when the current one has nothing waiting.
+    func revealNextWaitingThread() {
+        let waiting = waitingThreads
+        guard !waiting.isEmpty else { return }
+        // Prefer the current scope, so the shortcut does not throw the sidebar somewhere else while work is left
+        // here; fall back to any scope once this one is answered.
+        let candidates = waitingThreadsInCurrentScope.isEmpty ? waiting : waitingThreadsInCurrentScope
+        let next: ThreadSession
+        if let current = selectedThreadID, let index = candidates.firstIndex(where: { $0.id == current }) {
+            next = candidates[(index + 1) % candidates.count]
+        } else {
+            next = candidates[0]
+        }
+        reveal(thread: next.id, showDelta: false)
+    }
+
     /// Re-evaluates the Dock badge whenever any thread state it depends on changes.
     func startBadgeTracking() {
         withObservationTracking {

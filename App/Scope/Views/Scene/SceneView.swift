@@ -48,6 +48,9 @@ struct SceneView: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            if model.config.preferences.attentionCounter == .toolbar {
+                AttentionToolbarButton()
+            }
             if model.currentThread != nil || model.currentScope != nil {
                 Button {
                     if NSEvent.modifierFlags.contains(.option), let path = model.currentEditorPath {

@@ -18,6 +18,30 @@ public enum ShellProbeMode: String, Codable, Sendable, CaseIterable {
     case none
 }
 
+/// Where the count of threads waiting for the user is shown, on top of the per-row marks that are always drawn
+/// (a square state dot, a bar down the row and the word *needs you*).
+///
+/// The per-row marks only help for a row you can see; the counter is what catches a thread blocked further down a
+/// long list or inside a collapsed task. Which of the two places suits a given screen is a matter of taste, hence
+/// the preference.
+public enum AttentionCounterPlacement: String, Codable, Sendable, CaseIterable {
+    /// A banner under the scope switcher, only while something waits. Costs 24 pt of the list when shown.
+    case sidebar
+    /// A button in the window toolbar, always in the same place, counting every scope rather than the current one.
+    case toolbar
+    /// No counter: the row marks alone.
+    case none
+
+    /// What Settings shows.
+    public var title: String {
+        switch self {
+        case .sidebar: "In the sidebar"
+        case .toolbar: "In the toolbar"
+        case .none: "Nowhere"
+        }
+    }
+}
+
 /// Whether the terminal follows the app appearance or stays dark.
 public enum TerminalAppearanceMode: String, Codable, Sendable, CaseIterable {
     /// Light palette under the light appearance, dark palette under the dark one.
@@ -218,6 +242,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
+    /// Where the "N waiting for you" counter lives. In the sidebar by default.
+    public var attentionCounter: AttentionCounterPlacement
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -238,7 +264,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalFontSize: Int = 13,
         terminalAppearance: TerminalAppearanceMode = .system,
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
-        autoCloseExitedThreads: Bool = false
+        autoCloseExitedThreads: Bool = false,
+        attentionCounter: AttentionCounterPlacement = .sidebar
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -251,13 +278,14 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalAppearance = terminalAppearance
         self.terminalCursorStyle = terminalCursorStyle
         self.autoCloseExitedThreads = autoCloseExitedThreads
+        self.attentionCounter = attentionCounter
     }
 
     public static let `default` = Preferences()
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads
+             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads, attentionCounter
     }
 
     public init(from decoder: any Decoder) throws {
@@ -280,6 +308,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.terminalCursorStyle
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
+        attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
+            ?? defaults.attentionCounter
     }
 }
 
