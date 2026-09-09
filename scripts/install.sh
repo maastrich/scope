@@ -42,7 +42,11 @@ if [ -z "$version" ]; then
     location=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") \
         || die "could not reach github.com."
     version="${location##*/tag/}"
-    [ "$version" != "$location" ] || die "no published release yet on $REPO."
+    # No redirect to /tag/<v> means no published, non-prerelease release: either the repository has never cut
+    # one, or the newest is still a draft while its DMG is being built and attached.
+    [ "$version" != "$location" ] || die "$REPO has no published release yet.
+  A release under way stays a draft until its DMG is attached — try again in a few minutes.
+  To install a specific version, including a prerelease: SCOPE_VERSION=0.1.0 (or 0.1.0-rc.1)."
 fi
 tag="$version"
 case "$tag" in v*) ;; *) tag="v$tag" ;; esac
