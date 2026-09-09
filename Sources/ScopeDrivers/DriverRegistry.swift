@@ -40,7 +40,7 @@ public actor DriverRegistry {
         bundledURLs = Self.bundledURLs(in: bundle)
     }
 
-    /// The four bundled profiles, decoded and validated. Throws on a malformed bundled file (a packaging bug).
+    /// The bundled profiles, decoded and validated. Throws on a malformed bundled file (a packaging bug).
     public static func bundledProfiles(bundle: Bundle = DriverRegistry.builtinBundle) throws -> [DriverProfile] {
         try bundledURLs(in: bundle).map { try decode(at: $0) }
     }

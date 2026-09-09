@@ -26,16 +26,16 @@ private struct DriverTestHome {
 
 @Suite("DriverRegistry")
 struct DriverRegistryTests {
-    @Test("installBuiltins copies the four bundled files once and never overwrites a user edit")
+    @Test("installBuiltins copies the five bundled files once and never overwrites a user edit")
     func installBuiltins() async throws {
         let home = try DriverTestHome()
         defer { home.remove() }
         let registry = DriverRegistry(home: home.url)
 
         let installed = try await registry.installBuiltins()
-        #expect(Set(installed) == ["shell", "claude-code", "codex", "cursor"])
+        #expect(Set(installed) == ["shell", "claude-code", "claude-code-bypass", "codex", "cursor"])
         let files = try FileManager.default.contentsOfDirectory(atPath: home.drivers.path).sorted()
-        #expect(files == ["claude-code.json", "codex.json", "cursor.json", "shell.json"])
+        #expect(files == ["claude-code-bypass.json", "claude-code.json", "codex.json", "cursor.json", "shell.json"])
 
         // A copied file is the bundled one, kept pretty and human-editable (multi-line).
         let bundledShell = try #require(DriverRegistry.bundledProfiles().first { $0.id == "shell" })
@@ -64,7 +64,7 @@ struct DriverRegistryTests {
         try home.write("cursor.json", #"{ "id": "cursor", "name": "My Cursor", "command": "cursor-agent" }"#)
 
         let installed = try await registry.installBuiltins()
-        #expect(Set(installed) == ["shell", "claude-code"])
+        #expect(Set(installed) == ["shell", "claude-code", "claude-code-bypass"])
         let loaded = await registry.load()
         #expect(loaded.profile(id: "claude-code")?.prompt == ["{prompt}"])
         // Replaced by whatever the bundled revision currently is, not by a literal that ages.
@@ -81,7 +81,7 @@ struct DriverRegistryTests {
         defer { home.remove() }
         let loaded = await DriverRegistry(home: home.url).load()
         #expect(loaded.problems.isEmpty)
-        #expect(loaded.profiles.map(\.id) == ["shell", "claude-code", "codex", "cursor"])
+        #expect(loaded.profiles.map(\.id) == ["shell", "claude-code", "claude-code-bypass", "codex", "cursor"])
         #expect(loaded.profile(id: "codex")?.name == "Codex CLI")
         #expect(loaded.profile(id: "nope") == nil)
     }
@@ -99,7 +99,7 @@ struct DriverRegistryTests {
         #expect(claude.command == "/opt/claude")
         #expect(claude.args == ["--verbose"])
         #expect(claude.builtin == nil)
-        #expect(loaded.profiles.count == 4)
+        #expect(loaded.profiles.count == 5)
     }
 
     @Test("an invalid user file is reported and the bundled profile is used instead")
@@ -116,7 +116,7 @@ struct DriverRegistryTests {
         #expect(loaded.problems.allSatisfy { $0.message.contains("bundled") })
         #expect(loaded.profile(id: "codex")?.builtin == true)
         #expect(loaded.profile(id: "cursor")?.command == "cursor-agent")
-        #expect(loaded.profiles.count == 4)
+        #expect(loaded.profiles.count == 5)
     }
 
     @Test("an extra user profile appears, sorted by name after shell")
@@ -128,7 +128,7 @@ struct DriverRegistryTests {
 
         let loaded = await DriverRegistry(home: home.url).load()
         #expect(loaded.problems.isEmpty)
-        #expect(loaded.profiles.map(\.id) == ["shell", "aider", "claude-code", "codex", "cursor", "zeta"])
+        #expect(loaded.profiles.map(\.id) == ["shell", "aider", "claude-code", "claude-code-bypass", "codex", "cursor", "zeta"])
     }
 
     @Test("a file whose id does not match its name is reported and skipped")
@@ -148,11 +148,11 @@ struct DriverRegistryTests {
         let home = try DriverTestHome()
         defer { home.remove() }
         let registry = DriverRegistry(home: home.url)
-        #expect(await registry.load().profiles.count == 4)
+        #expect(await registry.load().profiles.count == 5)
 
         try home.write("aider.json", #"{ "id": "aider", "name": "Aider", "command": "aider" }"#)
-        #expect(await registry.load().profiles.count == 4)
-        #expect(await registry.reload().profiles.count == 5)
         #expect(await registry.load().profiles.count == 5)
+        #expect(await registry.reload().profiles.count == 6)
+        #expect(await registry.load().profiles.count == 6)
     }
 }

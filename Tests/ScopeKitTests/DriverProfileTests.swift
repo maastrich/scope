@@ -5,10 +5,10 @@ import Testing
 
 @Suite("DriverProfile")
 struct DriverProfileTests {
-    @Test("the four bundled profiles decode from Bundle.module and validate")
+    @Test("the bundled profiles decode from Bundle.module and validate")
     func bundledProfilesDecode() throws {
         let profiles = try DriverRegistry.bundledProfiles()
-        #expect(Set(profiles.map(\.id)) == ["shell", "claude-code", "codex", "cursor"])
+        #expect(Set(profiles.map(\.id)) == ["shell", "claude-code", "claude-code-bypass", "codex", "cursor"])
         for profile in profiles {
             #expect(throws: Never.self) { try profile.validate() }
             #expect(profile.builtin == true)
@@ -28,6 +28,15 @@ struct DriverProfileTests {
         let claude = try #require(profiles.first { $0.id == "claude-code" })
         #expect(claude.command == "claude")
         #expect(claude.resume == ["claude", "--resume", "{resume_id}"])
+        // The shipped Claude Code profile asks before acting. Only the opt-in twin skips the prompts, and it
+        // skips them on a resume too — a resumed session would otherwise start asking again.
+        #expect(!claude.args.contains("--dangerously-skip-permissions"))
+
+        let bypass = try #require(profiles.first { $0.id == "claude-code-bypass" })
+        #expect(bypass.command == "claude")
+        #expect(bypass.args == ["--dangerously-skip-permissions"])
+        #expect(bypass.resume == ["claude", "--resume", "{resume_id}", "--dangerously-skip-permissions"])
+        #expect(bypass.adapter?.kind == claude.adapter?.kind)
         #expect(claude.headless == ["claude", "-p", "{prompt}", "--output-format", "json"])
         // The microsession runs the light model, and only read-only tools; the prompt stays ahead of
         // `--allowedTools`, which is variadic and would otherwise swallow it.
