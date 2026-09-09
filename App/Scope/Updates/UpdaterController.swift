@@ -21,11 +21,22 @@ final class UpdaterController {
 
     /// - Parameter startingUpdater: pass `false` to call `start()` yourself later (for example after onboarding).
     init(startingUpdater: Bool = true) {
+        // A Debug build carries the release feed and `MARKETING_VERSION = 0.0.0`, so every published release
+        // looks newer: a scheduled check replaces the developer's own build inside DerivedData, and the app
+        // dies at the next launch while the bundle is half swapped. The updater never runs outside Release.
+        #if DEBUG
+        let shouldStart = false
+        #else
+        let shouldStart = startingUpdater
+        #endif
         controller = SPUStandardUpdaterController(
-            startingUpdater: startingUpdater,
+            startingUpdater: shouldStart,
             updaterDelegate: nil, // Sparkle holds its delegates weakly: keep any delegate alive yourself.
             userDriverDelegate: nil
         )
+        #if DEBUG
+        controller.updater.automaticallyChecksForUpdates = false
+        #endif
         observation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] _, change in
             let value = change.newValue ?? false
             // Sparkle mutates the property on the main thread, but the KVO closure is not statically
@@ -39,8 +50,15 @@ final class UpdaterController {
     /// The underlying updater (feed URL, last check date, `checkForUpdatesInBackground()`, ...).
     var updater: SPUUpdater { controller.updater }
 
-    /// Starts the updater when it was created with `startingUpdater: false`.
-    func start() { controller.startUpdater() }
+    /// Starts the updater when it was created with `startingUpdater: false`. No-op in Debug, where the
+    /// updater must never run (see `init`); `canCheckForUpdates` then stays false and the menu item disabled.
+    func start() {
+        #if DEBUG
+        return
+        #else
+        controller.startUpdater()
+        #endif
+    }
 
     /// User-initiated check with Sparkle's standard UI ("Check for Updates…").
     func checkForUpdates() { controller.updater.checkForUpdates() }
