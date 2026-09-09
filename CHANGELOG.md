@@ -11,6 +11,16 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.2.1](https://github.com/maastrich/scope/releases/tag/v0.2.1) - 2026-09-09
+
+### Fixed
+
+- **notifications:** post through the async notification API by @maastrich
+- **tasks:** a repository whose branch is master can have tasks again by @maastrich
+- **tasks:** show a failed New Task where the button is by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.2.0...v0.2.1
+
 ## [0.2.0](https://github.com/maastrich/scope/releases/tag/v0.2.0) - 2026-09-09
 
 ### Added
