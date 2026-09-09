@@ -24,7 +24,7 @@ struct TaskRow: View {
                     .foregroundStyle(.tertiary)
                     .frame(width: 12, height: 12)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.iconTight)
             .help(task.isExpanded ? "Collapse" : "Expand")
             .accessibilityLabel(task.isExpanded ? "Collapse \(task.name)" : "Expand \(task.name)")
 

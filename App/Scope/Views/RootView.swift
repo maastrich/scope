@@ -81,9 +81,9 @@ private struct InspectorResizeHandle: View {
                 Color.clear
                     .frame(width: 9)
                     .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-                    }
+                    // Declarative, so the cursor cannot get stuck: the push/pop pair leaked a pushed cursor
+                    // whenever the view went away while the pointer was still over it.
+                    .pointerStyle(.columnResize)
                     .gesture(
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in

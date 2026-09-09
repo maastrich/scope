@@ -105,7 +105,7 @@ struct ThreadRow: View {
                 .frame(width: 16, height: 16)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.iconTight)
         .help("Close Thread (⌘W)")
         .accessibilityLabel("Close \(model.displayTitle(for: session))")
     }

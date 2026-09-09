@@ -23,7 +23,7 @@ struct LooseThreadsRow: View {
                     .foregroundStyle(.tertiary)
                     .frame(width: 12, height: 12)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.iconTight)
             .help(scope.looseThreadsShown ? "Collapse" : "Expand")
             .accessibilityLabel(scope.looseThreadsShown ? "Collapse loose threads" : "Expand loose threads")
 
