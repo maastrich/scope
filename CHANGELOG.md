@@ -11,6 +11,24 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.2.0](https://github.com/maastrich/scope/releases/tag/v0.2.0) - 2026-09-09
+
+### Added
+
+- **sidebar:** one tree, one selection, and a state column that holds by @maastrich
+- **inspector:** a summary band that owns the task detail by @maastrich
+
+### Fixed
+
+- **updates:** never run Sparkle in a Debug build by @maastrich
+
+### Documentation
+
+- **install:** say what a missing release means by @maastrich
+- a CLAUDE.md for agents working on Scope by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.1.0...v0.2.0
+
 ## [0.1.0](https://github.com/maastrich/scope/releases/tag/v0.1.0) - 2026-09-09
 
 ### Added
