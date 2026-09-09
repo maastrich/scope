@@ -1,58 +1,30 @@
 import AppKit
 import SwiftUI
 
-/// Gives a view an AppKit cursor rectangle.
+/// Gives a view a pointer shape while the pointer is over it.
 ///
-/// SwiftUI's `.pointerStyle` compiles on this deployment target but has no effect here — measured, not
-/// assumed: neither `.link` on a button nor `.columnResize` on the inspector's drag handle changed the
-/// pointer. `NSCursor` does work, and a cursor *rect* is the form that cannot go wrong: the window owns it
-/// and resets it, so unlike `NSCursor.push()` / `.pop()` in `onHover` there is no pushed cursor left behind
-/// when the view disappears from under the pointer.
+/// Two earlier attempts are worth knowing about, because both compile and neither works here:
+///
+/// - SwiftUI's `.pointerStyle` does nothing in this app. Measured with a screenshot of the pointer, not
+///   assumed: neither `.link` over a button nor `.columnResize` over the inspector's drag handle changed it.
+/// - An AppKit cursor rect (`addCursorRect`) does nothing either: SwiftUI runs its own tracking areas and
+///   never asks a hosted `NSView` to reset its cursor rects, so the rect is never installed.
+///
+/// What does work is the hover reporting SwiftUI already drives everywhere else in this app.
+/// `onContinuousHover` fires on every move inside the view, and `NSCursor.set()` is transient — the system
+/// puts the arrow back as soon as the pointer leaves — so setting it on each move holds the shape without any
+/// push/pop bookkeeping, and nothing can stay stuck when the view disappears from under the pointer.
 extension View {
     /// The pointer takes `cursor` over this view. `nil` leaves it alone — for a control that is disabled, where
-    /// a hand would promise something that does not happen.
+    /// a shape would promise something that does not happen.
     func cursor(_ cursor: NSCursor?) -> some View {
-        overlay {
-            if let cursor {
-                CursorRect(cursor: cursor)
+        onContinuousHover { phase in
+            guard let cursor else { return }
+            switch phase {
+            case .active: cursor.set()
+            case .ended: NSCursor.arrow.set()
+            @unknown default: NSCursor.arrow.set()
             }
         }
     }
-}
-
-private struct CursorRect: NSViewRepresentable {
-    let cursor: NSCursor
-
-    func makeNSView(context: Context) -> CursorRectView {
-        CursorRectView(cursor: cursor)
-    }
-
-    func updateNSView(_ view: CursorRectView, context: Context) {
-        view.cursor = cursor
-    }
-}
-
-final class CursorRectView: NSView {
-    var cursor: NSCursor {
-        didSet {
-            guard cursor != oldValue else { return }
-            window?.invalidateCursorRects(for: self)
-        }
-    }
-
-    init(cursor: NSCursor) {
-        self.cursor = cursor
-        super.init(frame: .zero)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: cursor)
-    }
-
-    /// The overlay exists only to own a cursor rect; clicks belong to whatever is underneath. Cursor rects are
-    /// resolved by the window, not by hit testing, so they still apply.
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
