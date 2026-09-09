@@ -55,11 +55,21 @@ struct SidebarView: View {
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
         // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
         // the keyboard (the command palette already behaves this way).
+        //
+        // Both changes matter, and neither implies the other. Selecting a task moves the live thread without
+        // touching the selected row's kind; clicking a row that already shows the live thread moves the row
+        // without touching the thread — and both used to leave the keyboard in the list.
         .onChange(of: model.selectedThreadID) { _, id in
-            guard id != nil, !filterFocused else { return }
-            // One turn later: the new thread's `TerminalHost` has to be in the window before it can hold
-            // the keyboard.
-            DispatchQueue.main.async { AppDelegate.refocusTerminal() }
+            guard id != nil else { return }
+            focusTerminalAfterSelection()
+        }
+        .onChange(of: model.selection) { _, item in
+            switch item {
+            // A task row shows the terminal of its live thread, so picking one is picking where to type too.
+            case .thread, .task: focusTerminalAfterSelection()
+            // A scope or repo row shows an empty view: there is no terminal to hand the keyboard to.
+            case .scope, .repo, nil: break
+            }
         }
         .alert("Rename Scope", isPresented: isRenaming, presenting: scopeBeingRenamed) { scope in
             TextField("Name", text: $renameText)
@@ -73,6 +83,15 @@ struct SidebarView: View {
         } message: { scope in
             Text("The folder \(scope.url.path) is not renamed; only the sidebar label changes.")
         }
+    }
+
+    /// Hands the keyboard to the visible terminal, one turn later: the thread's `TerminalHost` has to be in
+    /// the window before it can hold focus. Does nothing while the filter field has the keyboard — typing a
+    /// filter must not be interrupted by the terminal stealing it back — nor when no thread is live, where
+    /// the scene shows an empty view and there is nothing to focus.
+    private func focusTerminalAfterSelection() {
+        guard !filterFocused, model.selectedThreadID != nil else { return }
+        DispatchQueue.main.async { AppDelegate.refocusTerminal() }
     }
 
     private var isRenaming: Binding<Bool> {
