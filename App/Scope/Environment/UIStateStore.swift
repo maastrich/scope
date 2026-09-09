@@ -14,13 +14,16 @@ struct UIState: Codable, Sendable, Equatable {
     var inspectorTab: InspectorTab = .graph
     /// Points; clamped to `inspectorWidthRange` on restore.
     var inspectorWidth: Double = UIState.defaultInspectorWidth
+    /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
+    /// scope you drive with Claude Code keeps giving you Claude Code.
+    var lastDrivers: [ScopeID: String] = [:]
 
     static let empty = UIState()
     static let inspectorWidthRange: ClosedRange<Double> = 320...520
     static let defaultInspectorWidth: Double = 380
 
     private enum CodingKeys: String, CodingKey {
-        case selectedItem, selectedThread, currentScope, reposShown, inspectorVisible, inspectorTab, inspectorWidth
+        case selectedItem, selectedThread, currentScope, reposShown, inspectorVisible, inspectorTab, inspectorWidth, lastDrivers
     }
 
     init() {}
@@ -35,6 +38,7 @@ struct UIState: Codable, Sendable, Equatable {
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .graph
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
+        lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
     }
 }
 

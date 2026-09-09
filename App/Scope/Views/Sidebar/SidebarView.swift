@@ -302,22 +302,24 @@ struct SidebarView: View {
 
     private func footerButtons(_ style: some LabelStyle) -> some View {
         HStack(spacing: 6) {
-            Menu {
+            // A `Menu` would draw its chrome around its label and come out half the width of its neighbour,
+            // so the driver choice hangs off the right-click menu of an ordinary button instead.
+            Button {
+                Task { await model.newThreadInCurrentContext() }
+            } label: {
+                Label("New Thread", systemImage: "plus")
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .contextMenu {
                 ForEach(model.drivers.profiles) { profile in
                     Button(profile.name) {
                         Task { await model.newThreadInCurrentContext(driverID: profile.id) }
                     }
                 }
-            } label: {
-                Label("New Thread", systemImage: "plus")
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            } primaryAction: {
-                Task { await model.newThreadInCurrentContext() }
             }
-            .menuIndicator(.hidden)
             .disabled(model.currentScope == nil)
-            .help("New Thread (⌘T) \(model.newThreadTargetDescription ?? "") — long-press or right-click to choose a driver".trimmingCharacters(in: .whitespaces))
+            .help("New Thread (⌘T) \(model.newThreadTargetDescription ?? "") — right-click to choose a driver".trimmingCharacters(in: .whitespaces))
             .accessibilityLabel("New Thread")
 
             Button {

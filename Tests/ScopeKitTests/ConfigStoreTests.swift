@@ -173,7 +173,8 @@ private func sampleConfig(home: URL) -> ScopeConfig {
         #expect(scope.sandboxes == .home)
         #expect(scope.path == home.appending(path: "x").path)
         #expect(loaded.config.preferences.branchPrefix == "wip")
-        #expect(loaded.config.preferences.defaultDriverID == "shell")
+        // No stored driver means automatic: the app picks the first agent profile rather than a shell.
+        #expect(loaded.config.preferences.defaultDriverID.isEmpty)
         #expect(loaded.config.preferences.editor == nil)
         // A config written before the caret was a preference keeps the steady default.
         #expect(loaded.config.preferences.terminalCursorStyle == .steadyUnderline)

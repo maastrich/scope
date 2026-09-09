@@ -39,10 +39,16 @@ private struct GeneralSettingsView: View {
                     }
                 }
                 Picker("Default driver", selection: preference(\.defaultDriverID)) {
+                    Text("Automatic").tag("")
+                    Divider()
                     ForEach(model.drivers.profiles) { profile in
                         Text(profile.name).tag(profile.id)
                     }
                 }
+                Text(driverCaption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("Editor") {
                 EditorPicker()
@@ -84,6 +90,15 @@ private struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// What the default actually decides: the driver a scope opens with, until you open one in it.
+    private var driverCaption: String {
+        let automatic = model.config.preferences.defaultDriverID.isEmpty
+        let name = model.preferredProfile?.name ?? "the first driver"
+        return automatic
+            ? "Automatic picks the first agent profile installed (\(name) here). A scope then keeps the driver you last opened in it — ⌘T never asks twice."
+            : "A scope keeps the driver you last opened in it; this is what a scope starts on."
     }
 
     private func preference<Value>(_ keyPath: WritableKeyPath<Preferences, Value>) -> Binding<Value> {

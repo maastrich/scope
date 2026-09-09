@@ -60,6 +60,9 @@ final class AppModel {
         didSet { if !isRestoringUIState, currentScopeID != oldValue { persistUIState() } }
     }
 
+    /// Driver last opened per scope (restored from the UI state): what ⌘T reaches for first.
+    var lastDriverByScope: [ScopeID: String] = [:]
+
     /// Drives the scene. Kept in sync with `selection`.
     var selectedThreadID: ThreadID? {
         didSet {
@@ -273,8 +276,25 @@ final class AppModel {
     /// The profile for an id, falling back to `shell`, then the first profile.
     func profile(id: String?) -> DriverProfile? {
         if let id, let profile = drivers.profile(id: id) { return profile }
-        return drivers.profile(id: "shell") ?? drivers.profiles.first
+        return preferredProfile
     }
+
+    /// The driver a new thread gets when nothing says otherwise: the one last opened in this scope, then the
+    /// preference, then the first agent profile installed.
+    ///
+    /// Reaching for the last one is what makes ⌘T stop asking: a scope you drive with Claude Code keeps
+    /// giving you Claude Code, and the shell is a choice you make rather than the one you are given.
+    var preferredProfile: DriverProfile? {
+        if let scope = currentScopeID, let id = lastDriverByScope[scope], let profile = drivers.profile(id: id) {
+            return profile
+        }
+        if let profile = drivers.profile(id: config.preferences.defaultDriverID) { return profile }
+        // No stored choice: an agent, not a shell — that is what the app is for.
+        return drivers.profiles.first { $0.id != "shell" } ?? drivers.profiles.first
+    }
+
+    /// Id of `preferredProfile`, for the views that pass a driver id around.
+    var preferredDriverID: String? { preferredProfile?.id }
 
     // MARK: Bootstrap
 
@@ -425,6 +445,7 @@ final class AppModel {
         inspectorShown = state.inspectorVisible
         inspectorTab = state.inspectorTab
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
+        lastDriverByScope = state.lastDrivers
         switch state.selectedItem {
         case .scope(let id) where scope(id) != nil:
             selection = state.selectedItem
@@ -465,6 +486,7 @@ final class AppModel {
         state.inspectorVisible = inspectorShown
         state.inspectorTab = inspectorTab
         state.inspectorWidth = inspectorWidth
+        state.lastDrivers = lastDriverByScope
         env.uiState.save(state)
     }
 
@@ -697,6 +719,8 @@ final class AppModel {
         let session = ThreadSession(record: record, profile: profile)
         register(session)
         await env.threadRecords.save(record)
+        // The next ⌘T in this scope opens the same driver.
+        lastDriverByScope[scopeID] = profile.id
         selection = .thread(session.id)
         selectedThreadID = session.id
         await launch(session, mode: .launch, initialPrompt: initialPrompt)
