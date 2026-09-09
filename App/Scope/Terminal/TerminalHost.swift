@@ -11,6 +11,7 @@ struct TerminalHost: NSViewRepresentable {
     /// hidden sessions pick the new values up when their view is re-attached.
     var fontSize: Int = 13
     var appearance: TerminalAppearanceMode = .system
+    var cursorStyle: TerminalCursorStyle = .steadyUnderline
 
     func makeNSView(context: Context) -> TerminalHostContainer {
         let container = TerminalHostContainer()
@@ -93,10 +94,12 @@ final class TerminalHostContainer: NSView {
                       height: max(0, bounds.height - insets.top - insets.bottom))
     }
 
-    /// Re-applies the font and palette after a preference change (`ThreadPane` already updated `TerminalAppearance`).
+    /// Re-applies the font, the caret and the palette after a preference change (`ThreadPane` already
+    /// updated `TerminalAppearance`).
     func applyPreferences() {
         guard let terminal = hosted as? LocalProcessTerminalView else { return }
         TerminalAppearance.applyFont(to: terminal)
+        TerminalAppearance.applyCursorStyle(to: terminal)
         applyAppearance()
     }
 

@@ -175,6 +175,23 @@ private func sampleConfig(home: URL) -> ScopeConfig {
         #expect(loaded.config.preferences.branchPrefix == "wip")
         #expect(loaded.config.preferences.defaultDriverID == "shell")
         #expect(loaded.config.preferences.editor == nil)
+        // A config written before the caret was a preference keeps the steady default.
+        #expect(loaded.config.preferences.terminalCursorStyle == .steadyUnderline)
+    }
+
+    @Test func cursorStyleRoundTripsAndBlinkIsDerived() async throws {
+        let home = try makeTempHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let store = ConfigStore(home: home)
+        var config = ScopeConfig()
+        config.preferences.terminalCursorStyle = .blinkBlock
+        await store.save(config)
+        await store.flush()
+
+        let loaded = await store.load()
+        #expect(loaded.config.preferences.terminalCursorStyle == .blinkBlock)
+        #expect(TerminalCursorStyle.allCases.filter(\.blinks).count == 3)
+        #expect(TerminalCursorStyle.steadyUnderline.title == "Underline")
     }
 
     @Test func documentWithoutVersionIsCorrupt() async throws {

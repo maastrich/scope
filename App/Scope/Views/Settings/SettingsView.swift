@@ -55,7 +55,14 @@ private struct GeneralSettingsView: View {
                     Text("Follow system").tag(TerminalAppearanceMode.system)
                     Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
                 }
-                Text("Changes apply to every open thread. Agent TUIs assume a dark terminal.")
+                Picker("Cursor", selection: preference(\.terminalCursorStyle)) {
+                    ForEach(TerminalCursorStyle.allCases, id: \.self) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                Text(model.config.preferences.terminalCursorStyle.blinks
+                     ? "Changes apply to every open thread. A blinking cursor fades in and out rather than switching on and off; a program may still ask for its own shape."
+                     : "Changes apply to every open thread. A program may still ask for its own cursor shape.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

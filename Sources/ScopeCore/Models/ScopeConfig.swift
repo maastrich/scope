@@ -26,6 +26,41 @@ public enum TerminalAppearanceMode: String, Codable, Sendable, CaseIterable {
     case alwaysDark
 }
 
+/// Shape of the terminal caret, and whether it blinks.
+///
+/// SwiftTerm's blink fades the whole caret layer in and out rather than switching it on and off, which reads
+/// as a glow — hence a steady underline by default, and a preference for those who want the classic block.
+/// A program may still ask for another shape at runtime (`DECSCUSR`); this is the shape a thread starts with
+/// and the one every live terminal goes back to when the preference changes.
+public enum TerminalCursorStyle: String, Codable, Sendable, CaseIterable {
+    case steadyUnderline
+    case blinkUnderline
+    case steadyBar
+    case blinkBar
+    case steadyBlock
+    case blinkBlock
+
+    /// What Settings shows.
+    public var title: String {
+        switch self {
+        case .steadyUnderline: "Underline"
+        case .blinkUnderline: "Underline, blinking"
+        case .steadyBar: "Bar"
+        case .blinkBar: "Bar, blinking"
+        case .steadyBlock: "Block"
+        case .blinkBlock: "Block, blinking"
+        }
+    }
+
+    /// `true` for the three blinking styles.
+    public var blinks: Bool {
+        switch self {
+        case .blinkUnderline, .blinkBar, .blinkBlock: true
+        case .steadyUnderline, .steadyBar, .steadyBlock: false
+        }
+    }
+}
+
 /// Command template used to open a folder or a file in the user's editor.
 ///
 /// Placeholders: `{path}` (folder), `{file}` (absolute file path), `{line}` (1-based line).
@@ -177,6 +212,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Terminal font size in points, clamped to `terminalFontSizeRange`; 13 by default.
     public var terminalFontSize: Int
     public var terminalAppearance: TerminalAppearanceMode
+    /// Shape of the terminal caret; a steady underline by default.
+    public var terminalCursorStyle: TerminalCursorStyle
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
@@ -199,6 +236,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         showMenuBarExtra: Bool = true,
         terminalFontSize: Int = 13,
         terminalAppearance: TerminalAppearanceMode = .system,
+        terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
         autoCloseExitedThreads: Bool = false
     ) {
         self.defaultDriverID = defaultDriverID
@@ -210,6 +248,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.showMenuBarExtra = showMenuBarExtra
         self.terminalFontSize = Preferences.clampTerminalFontSize(terminalFontSize)
         self.terminalAppearance = terminalAppearance
+        self.terminalCursorStyle = terminalCursorStyle
         self.autoCloseExitedThreads = autoCloseExitedThreads
     }
 
@@ -217,7 +256,7 @@ public struct Preferences: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, autoCloseExitedThreads
+             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads
     }
 
     public init(from decoder: any Decoder) throws {
@@ -236,6 +275,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             try container.decodeIfPresent(Int.self, forKey: .terminalFontSize) ?? defaults.terminalFontSize)
         terminalAppearance = try container.decodeIfPresent(TerminalAppearanceMode.self, forKey: .terminalAppearance)
             ?? defaults.terminalAppearance
+        terminalCursorStyle = try container.decodeIfPresent(TerminalCursorStyle.self, forKey: .terminalCursorStyle)
+            ?? defaults.terminalCursorStyle
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
     }

@@ -41,14 +41,18 @@ enum TerminalAppearance {
     /// `system` follows the appearance, `alwaysDark` forces the dark palette and ground.
     private(set) static var mode: TerminalAppearanceMode = .system
     private(set) static var fontSize: CGFloat = 13
+    /// Shape of the caret (Settings ▸ Terminal); the default is steady, see `TerminalCursorStyle`.
+    private(set) static var cursorStyle: TerminalCursorStyle = .steadyUnderline
 
     /// Records the terminal preferences; returns `true` when something changed (callers then re-apply).
     @discardableResult
     static func configure(_ preferences: Preferences) -> Bool {
         let size = CGFloat(Preferences.clampTerminalFontSize(preferences.terminalFontSize))
         let changed = size != fontSize || preferences.terminalAppearance != mode
+            || preferences.terminalCursorStyle != cursorStyle
         fontSize = size
         mode = preferences.terminalAppearance
+        cursorStyle = preferences.terminalCursorStyle
         return changed
     }
 
@@ -72,10 +76,27 @@ enum TerminalAppearance {
     /// The frame a terminal is created with, before its host lays it out (about 90×28 cells at 13 pt).
     static let initialFrame = NSRect(x: 0, y: 0, width: 800, height: 480)
 
-    /// Emulator options read once at init: 10 000 lines of scrollback, and a steady underline caret —
-    /// SwiftTerm's default block blinks by fading its whole layer in and out, which reads as a glow.
+    /// Emulator options read once at init: 10 000 lines of scrollback and the caret of the preferences.
     static var options: TerminalOptions {
-        TerminalOptions(cursorStyle: .steadyUnderline, scrollback: 10_000)
+        TerminalOptions(cursorStyle: swiftTermCursorStyle, scrollback: 10_000)
+    }
+
+    /// The preference as SwiftTerm spells it.
+    static var swiftTermCursorStyle: CursorStyle {
+        switch cursorStyle {
+        case .steadyUnderline: .steadyUnderline
+        case .blinkUnderline: .blinkUnderline
+        case .steadyBar: .steadyBar
+        case .blinkBar: .blinkBar
+        case .steadyBlock: .steadyBlock
+        case .blinkBlock: .blinkBlock
+        }
+    }
+
+    /// Puts the preferred caret back on a live terminal. A program can ask for another shape at runtime
+    /// (`DECSCUSR`) and keep it; this is what every terminal returns to when the preference changes.
+    static func applyCursorStyle(to view: LocalProcessTerminalView) {
+        view.getTerminal().setCursorStyle(swiftTermCursorStyle)
     }
 
     /// SF Mono at the preferred size, falling back to the system monospaced font.
@@ -88,6 +109,7 @@ enum TerminalAppearance {
     /// Applies colours, font and input behaviour to a freshly created view.
     static func apply(to view: LocalProcessTerminalView) {
         applyFont(to: view)
+        applyCursorStyle(to: view)
         view.optionAsMetaKey = true
         view.bellStyle = .visual
         applyColors(to: view)

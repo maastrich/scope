@@ -15,7 +15,8 @@ struct ThreadPane: View {
         return ZStack(alignment: .top) {
             Color(nsColor: TerminalAppearance.background)
                 .id(preferences.terminalAppearance)
-            TerminalHost(session: session, fontSize: preferences.terminalFontSize, appearance: preferences.terminalAppearance)
+            TerminalHost(session: session, fontSize: preferences.terminalFontSize,
+                         appearance: preferences.terminalAppearance, cursorStyle: preferences.terminalCursorStyle)
                 .id(session.id)
                 .focusable(false)
             if !session.phase.isAlive {
