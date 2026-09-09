@@ -37,7 +37,9 @@ struct RootView: View {
             Task { await model.addScopes(urls) }
         }
         .sheet(item: newTaskScope) { scope in
-            NewTaskSheet(scope: scope, defaultDriverID: model.config.preferences.defaultDriverID)
+            // The resolved driver, never the raw preference: "" means automatic, and an empty picker would
+            // leave the sheet without a driver to ask for a proposal.
+            NewTaskSheet(scope: scope, defaultDriverID: model.preferredDriverID ?? "")
                 .environment(model)
         }
         .focusedSceneValue(\.appModel, model)

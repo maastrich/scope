@@ -182,10 +182,8 @@ final class GraphModel {
 // MARK: - AppModel glue
 
 extension AppModel {
-    /// The default driver profile (Settings → Default driver), the one level 1 runs headless.
-    var defaultDriverProfile: DriverProfile? {
-        drivers.profile(id: config.preferences.defaultDriverID)
-    }
+    /// The driver level 1 runs headless: the preferred one (Settings → Default driver, or automatic).
+    var defaultDriverProfile: DriverProfile? { preferredProfile }
 
     /// Why "Analyze with AI" is unavailable, `nil` when it can run.
     var level1Unavailability: String? {
