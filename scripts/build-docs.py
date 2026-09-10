@@ -32,6 +32,7 @@ NAV = [
     ]),
     ("Reference", [
         ("drivers.html", "Driver profiles"),
+        ("cli.html", "Command line and MCP"),
         ("adapters.html", "Hooks and thread states"),
         ("reference.html", "Files, keys, updates"),
     ]),
@@ -628,6 +629,88 @@ JSON</code></pre>
 state.</p>
 """
 
+CLI = """
+<div class="eyebrow">Reference</div>
+<h1>Command line and MCP</h1>
+<p class="lede">Scope answers on the same socket its driver hooks use. <code>scope</code> is the command line
+into a running app; <code>scope mcp</code> is the same commands, spoken as MCP, so an agent can open a thread
+or sandbox a task on its own.</p>
+
+<h2 id="install">Getting <code>scope</code></h2>
+<p>Inside a thread there is nothing to do: Scope puts its own <code>Contents/Helpers</code> first on the
+<code>PATH</code> it hands the driver, so <code>scope</code> and <code>scope-hook</code> are already there.</p>
+<p>For your own terminal, <b>Settings ▸ Automation ▸ Install</b> links the tool into
+<code>/usr/local/bin</code> when that folder is writable, otherwise into <code>~/.scope/bin</code> (it then
+tells you the line to add to your shell). The link points inside the app bundle, so an update moves with the
+app.</p>
+
+<h2 id="commands">Commands</h2>
+<pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
+scope thread new [options]          <span class="c"># open a thread, print its id</span>
+scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
+scope mcp                           <span class="c"># speak MCP on stdio</span>
+scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
+<p>Every command takes <code>--json</code>. <code>--scope</code> accepts a slug, a name, an id or a path;
+omitted, it is the caller's own scope, then the scope holding the working directory, then the only scope
+there is. <code>--sock</code> and <code>--home</code> say which Scope to talk to — a Debug build listens on
+<code>~/.scope-debug/scope.sock</code>.</p>
+<pre><code>$ scope thread new --scope acme --driver claude-code -p "why is CI red?"
+thread 3f9a2c17be04 — acme [claude-code] in acme
+/Users/me/work/acme
+
+$ scope task new "fix the flaky login test" --repo api --dry-run
+would create the task “Fix the flaky login test”
+branch      fix/flaky-login-test
+slug        fix-flaky-login-test
+sandbox     ~/.scope/sandboxes/acme/fix-flaky-login-test
+repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch created)</code></pre>
+<p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
+<code>1</code> for anything else.</p>
+
+<h2 id="mcp">The MCP server</h2>
+<p><code>scope mcp</code> speaks MCP on stdio with four tools — <code>scope_list</code>,
+<code>scope_thread_new</code>, <code>scope_task_new</code>, <code>scope_ping</code>. They are the same
+commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
+<pre><code>{"mcpServers": {"scope": {"command": "scope", "args": ["mcp"]}}}</code></pre>
+<p><code>scope_task_new</code> is marked destructive and its description tells the agent to call it with
+<code>dry_run</code> first: the answer is then the title, branch, sandbox and worktrees it would create,
+with nothing written.</p>
+
+<h2 id="automation">What an agent is allowed to do</h2>
+<p>A request from your own terminal is you, and is never filtered. A request from inside a thread is an
+agent, and goes through <b>Settings ▸ Automation</b>:</p>
+<table>
+  <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
+  <tr><td>Let agents drive Scope</td><td>on</td><td>Off refuses every write from a thread.</td></tr>
+  <tr><td>Depth ceiling</td><td>1</td><td>A thread you opened is at depth 0. At 1, it may open a thread and that thread may not open another.</td></tr>
+  <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
+  <tr><td>Creating a task</td><td>after asking</td><td>A task writes a branch and a worktree per repository.</td></tr>
+</table>
+<p>Every thread records who opened it and at what depth, so the chain survives a restart —
+<code>scope list threads</code> shows it. A <code>SCOPE_THREAD</code> that names no thread the app is
+running is refused outright.</p>
+
+<div class="note warn"><p><b>The socket is your account.</b> <code>~/.scope/scope.sock</code> is a unix socket
+with mode 0600, so only your user can connect — but <i>everything</i> running as you can: any program, any
+script, any agent in any terminal. The automation settings shape what a request from a Scope thread may do;
+they are not a defence against software you chose to run. It is the posture the driver hooks have always
+had, now with answers coming back.</p></div>
+
+<h2 id="protocol">The protocol</h2>
+<p>One exchange per connection. The client writes a frame, the app answers with newline-separated JSON lines
+and closes; the last line is always the result. The header is what tells a control request apart from a hook
+message.</p>
+<pre><code>→ scope-rpc/1
+→ {"caller":{"client":"scope-cli/0.4.0"},"id":"7f2a","method":"thread.new","params":{"scope":"acme"},"rpc":1}
+← {"id":"7f2a","kind":"pending","message":"waiting for you to approve: …","rpc":1}
+← {"id":"7f2a","kind":"result","ok":true,"result":{"thread":"3f9a2c17be04",…},"rpc":1}</code></pre>
+<p>Methods: <code>ping</code>, <code>list</code>, <code>thread.new</code>, <code>task.new</code>. An unknown
+method or a newer <code>rpc</code> answers <code>unsupported</code> rather than failing to parse, so a
+<code>scope</code> binary that outlives its app says so instead of hanging. Error codes:
+<code>bad_request</code>, <code>unsupported</code>, <code>denied</code>, <code>not_found</code>,
+<code>failed</code>, <code>timeout</code>.</p>
+"""
+
 ADAPTERS = """
 <div class="eyebrow">Reference</div>
 <h1>Hooks and thread states</h1>
@@ -803,6 +886,9 @@ PAGES = [
     ("drivers.html", "Driver profiles — Scope",
      "Every tool Scope can launch is one JSON file: fields, placeholders, resolution, and how to add your own.",
      DRIVERS, False),
+    ("cli.html", "Command line and MCP — Scope",
+     "Drive Scope from your terminal with `scope`, or let an agent drive it over MCP: the same commands, "
+     "one socket, with a depth ceiling and an approval for anything that writes.", CLI, False),
     ("adapters.html", "Hooks and thread states — Scope",
      "How agent hooks reach Scope through scope-hook and a unix socket, and become live thread states.",
      ADAPTERS, False),

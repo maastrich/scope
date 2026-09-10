@@ -12,7 +12,8 @@ repository so agents never touch your checkouts.
 | Path | What |
 |---|---|
 | `App/Scope/` | the SwiftUI/AppKit app target: `Model/` (`AppModel` + extensions), `Views/`, `Terminal/`, `Commands/`, `Environment/` |
-| `Sources/Scope*/` | the ScopeKit SwiftPM package: `ScopeCore` (config, ids, watching), `ScopeGit`, `ScopeDrivers` (profiles, headless runs), `ScopeTasks` (worktrees, proposals), `ScopeGraph`, `ScopeAdapters` (hook socket), `scope-hook` (the CLI the drivers call) |
+| `Sources/Scope*/` | the ScopeKit SwiftPM package: `ScopeCore` (config, ids, watching), `ScopeGit`, `ScopeDrivers` (profiles, headless runs), `ScopeTasks` (worktrees, proposals), `ScopeGraph`, `ScopeAdapters` (socket transport + hook events), `ScopeControl` (the request/response protocol, the policy, the CLI parsing, the MCP catalogue) |
+| `Sources/scope-hook/`, `Sources/scope/` | the two helpers: the one drivers call on every event, and the command line (`scope mcp` included) |
 | `Tests/ScopeKitTests/` | Swift Testing suites — **package only**; nothing in `App/Scope/` is reachable from them |
 | `scripts/` | `release.sh`, `package.sh` (DMG), `appcast.sh` (Sparkle), `install.sh`, `build-docs.py` |
 
@@ -52,6 +53,16 @@ xcodebuild -project Scope.xcodeproj -scheme Scope -configuration Debug \
   excluded through `.git/info/exclude`. Writing it anywhere else means the driver never reads it.
 - **Microsession argv** (`headlessLight`): keep `{prompt}` *before* variadic flags like `--tools` or
   `--allowedTools`, which would otherwise swallow it.
+- **A socket callback needs `qos: .userInitiated`.** At the default QoS macOS throttles a background app's
+  dispatch queues hard: the same ping answered in 2 ms went to 5–8 s once the app had been idle a minute.
+  `UnixSocketServer` and both socket clients set it explicitly.
+- **The `scope` tool target is called `scope-cli` in `project.yml`.** The app target is `Scope`, and on a
+  case-insensitive filesystem two targets whose names differ only in case share one `Scope.build` folder —
+  the second to build wins and the first fails with *unable to open dependencies file*. `PRODUCT_NAME` keeps
+  the binary named `scope`.
+- **Anything an agent can ask for goes through `ControlService`.** The CLI and the MCP server are façades
+  over the same `ControlCall` values; put logic in `ScopeControl` (tested) or in `AppModel` (shared with the
+  UI), never in `Sources/scope/`.
 - **Never `pkill -f` the Scope binary.** It matches the user's running app too. Kill by pid.
 - **A Debug build is a different app.** It is `Scope Debug.app`, bundle id `dev.maastrich.scope.debug`, and its
   data lives in `~/.scope-debug` — so it never shares config, thread records or the hook socket with the copy in
