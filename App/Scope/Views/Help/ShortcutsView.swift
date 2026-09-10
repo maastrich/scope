@@ -32,7 +32,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌘T", title: "New Thread", note: "in the current task when one is selected"),
             ShortcutEntry(keys: "⇧⌘T", title: "New Task…", note: "Undo Close Thread while a close can be undone"),
             ShortcutEntry(keys: "⌘W", title: "Close Thread"),
-            ShortcutEntry(keys: "⌥⌘R", title: "Relaunch"),
+            ShortcutEntry(keys: "⌥⌘R", title: "Relaunch", note: "resumes the previous driver session when there is one"),
             ShortcutEntry(keys: "⌘.", title: "Stop"),
             ShortcutEntry(keys: "⌘1 … ⌘9", title: "Thread 1 … 9"),
             ShortcutEntry(keys: "⇧⌘]", title: "Next Thread"),

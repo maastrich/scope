@@ -139,8 +139,9 @@ struct ThreadRow: View {
         }
         .keyboardShortcut("r", modifiers: .command)
         .disabled(session.isAlive)
-        Button("Resume") {
-            Task { await model.resume(session.id) }
+        // Relaunch resumes when it can; this is the way to a new session instead.
+        Button("Start Fresh") {
+            Task { await model.startFresh(session.id) }
         }
         .disabled(session.isAlive || !session.canResume)
         Button("Stop") {

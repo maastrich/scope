@@ -262,8 +262,8 @@ default driver is the plain shell; the split button next to it picks another. Th
 your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
 back.</p>
 FIG_TABSTRIP
-<p>Threads survive a restart: Scope keeps a record per thread and offers <b>Relaunch</b> — or <b>Resume</b>,
-when the driver captured a session id.</p>
+<p>Threads survive a restart: Scope keeps a record per thread, and <b>Relaunch</b> picks the driver's previous
+session back up when a hook captured its id. <b>Start Fresh</b> opens a new session instead.</p>
 
 <h2 id="first-task">Create your first task</h2>
 <p><kbd>⇧⌘T</kbd>. Describe the work in a sentence, pick the repositories it touches, press <b>Continue</b>.
@@ -729,7 +729,7 @@ the agent: if Scope is not listening, it exits quietly.</p>
 thread and starts the CLI with <code>--settings</code>. The events it subscribes to:</p>
 <table>
   <tr><th>Hook</th><th>Becomes</th></tr>
-  <tr><td><code>SessionStart</code></td><td>running; the session id is captured, which is what makes <b>Resume</b> possible</td></tr>
+  <tr><td><code>SessionStart</code></td><td>running; the session id is captured, which is what lets <b>Relaunch</b> pick the session back up</td></tr>
   <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running</td></tr>
   <tr><td><code>Notification</code>, <code>PermissionRequest</code></td><td><span class="dot waiting"></span>waiting — and a macOS notification when Scope is in the background</td></tr>
   <tr><td><code>Stop</code></td><td><span class="dot done"></span>done</td></tr>

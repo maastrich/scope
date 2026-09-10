@@ -194,3 +194,31 @@ struct PlaceholderValuesTests {
         #expect(try values.expand("") == "")
     }
 }
+
+/// What Relaunch does after an app restart: the previous driver session when there is one to go back to.
+@Suite struct RelaunchModeTests {
+    static func profile(resume: String?) throws -> DriverProfile {
+        let resumeField = resume.map { #","resume":\#($0)"# } ?? ""
+        let json = #"{"id":"claude-code","name":"Claude Code","command":"claude""# + resumeField + "}"
+        return try JSONDecoder().decode(DriverProfile.self, from: Data(json.utf8))
+    }
+
+    @Test func aCapturedSessionIsPickedBackUp() throws {
+        let claude = try Self.profile(resume: #"["claude","--resume","{resume_id}"]"#)
+        #expect(LaunchMode.relaunch(profile: claude, resumeID: "4f1c2e9a-8d3b-4c7e-9a51-0b2d6e8f7c14") == .resume)
+    }
+
+    @Test func withoutACapturedSessionItStartsFresh() throws {
+        let claude = try Self.profile(resume: #"["claude","--resume","{resume_id}"]"#)
+        #expect(LaunchMode.relaunch(profile: claude, resumeID: nil) == .launch)
+        #expect(LaunchMode.relaunch(profile: claude, resumeID: "") == .launch)
+    }
+
+    /// A driver with no way to resume (a plain shell) starts fresh whatever id the record holds.
+    @Test func aDriverThatCannotResumeStartsFresh() throws {
+        let shell = try Self.profile(resume: nil)
+        #expect(LaunchMode.relaunch(profile: shell, resumeID: "abc-123") == .launch)
+        let empty = try Self.profile(resume: "[]")
+        #expect(LaunchMode.relaunch(profile: empty, resumeID: "abc-123") == .launch)
+    }
+}

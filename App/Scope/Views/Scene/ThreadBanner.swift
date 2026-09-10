@@ -4,7 +4,8 @@ import ScopeDrivers
 
 /// Non-modal banner shown over the terminal while the process is not alive:
 /// not started since the last quit, launching (shell probe / driver start), exited, or launch failure.
-/// Actions: Relaunch (⌘R), Resume (when the driver and record allow it), Close (⌘W), Show details.
+/// Actions: Relaunch (⌘R — resumes the previous driver session when there is one), Start Fresh (only then),
+/// Close (⌘W), Show details.
 struct ThreadBanner: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
@@ -97,8 +98,8 @@ struct ThreadBanner: View {
         switch session.phase {
         case .notStarted:
             return session.canResume
-                ? "Relaunch starts a fresh \(session.profile.name); Resume continues the previous session."
-                : "Relaunch starts a fresh \(session.profile.name) in \(session.record.cwd)."
+                ? "Relaunch picks the previous \(session.profile.name) session back up; Start Fresh opens a new one."
+                : "Relaunch starts \(session.profile.name) in \(session.record.cwd)."
         case .launching:
             return isProbingShell
                 ? "Running your login shell once to read PATH and the other variables agents need."
@@ -142,11 +143,12 @@ struct ThreadBanner: View {
                     Task { await model.relaunch(session.id) }
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .help("Relaunch (⌘R)")
+                .help(session.canResume ? "Relaunch (⌘R) — resumes the previous session" : "Relaunch (⌘R)")
                 if session.canResume {
-                    Button("Resume") {
-                        Task { await model.resume(session.id) }
+                    Button("Start Fresh") {
+                        Task { await model.startFresh(session.id) }
                     }
+                    .help("A new \(session.profile.name) session instead of the previous one")
                 }
                 if details != nil {
                     Button(showsDetails ? "Hide details" : "Show details") {

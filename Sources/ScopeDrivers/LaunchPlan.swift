@@ -39,6 +39,14 @@ public struct LaunchPlan: Sendable, Equatable {
 public enum LaunchMode: Sendable, Equatable {
     case launch
     case resume
+
+    /// What Relaunch does for a thread: pick the driver's previous session back up when the profile knows how
+    /// (`resume` argv) and an adapter captured the session id — exactly what an app restart leaves behind — and
+    /// start a fresh one otherwise. An empty id counts as none: `--resume ""` would only fail.
+    public static func relaunch(profile: DriverProfile, resumeID: String?) -> LaunchMode {
+        guard profile.canResume, let resumeID, !resumeID.isEmpty else { return .launch }
+        return .resume
+    }
 }
 
 /// Why a launch could not be planned or started.

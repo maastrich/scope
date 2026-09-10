@@ -85,8 +85,8 @@ default driver is the plain shell; the split button next to it picks another. Th
 your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
 back.</p>
 <figure class="plain"><img src="assets/img/tabstrip.png" alt="One tab per thread, with its live state dot." loading="lazy"><figcaption>One tab per thread, with its live state dot.</figcaption></figure>
-<p>Threads survive a restart: Scope keeps a record per thread and offers <b>Relaunch</b> — or <b>Resume</b>,
-when the driver captured a session id.</p>
+<p>Threads survive a restart: Scope keeps a record per thread, and <b>Relaunch</b> picks the driver's previous
+session back up when a hook captured its id. <b>Start Fresh</b> opens a new session instead.</p>
 
 <h2 id="first-task">Create your first task</h2>
 <p><kbd>⇧⌘T</kbd>. Describe the work in a sentence, pick the repositories it touches, press <b>Continue</b>.

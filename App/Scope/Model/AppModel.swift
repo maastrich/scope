@@ -805,14 +805,19 @@ final class AppModel {
         }
     }
 
+    /// Relaunch picks the previous driver session back up when the thread has one — the profile's `resume`
+    /// argv and a session id an adapter captured, which is exactly what an app restart leaves behind — and
+    /// starts a fresh one otherwise. A session the driver no longer has ends in its own error, and the banner
+    /// then offers Start Fresh.
     func relaunch(_ id: ThreadID) async {
         guard let session = session(id), !session.isAlive else { return }
-        await launch(session, mode: .launch)
+        await launch(session, mode: .relaunch(profile: session.profile, resumeID: session.record.resumeID))
     }
 
-    func resume(_ id: ThreadID) async {
+    /// Start Fresh: a new driver session, leaving the previous one behind on purpose.
+    func startFresh(_ id: ThreadID) async {
         guard let session = session(id), !session.isAlive else { return }
-        await launch(session, mode: session.canResume ? .resume : .launch)
+        await launch(session, mode: .launch)
     }
 
     func stop(_ id: ThreadID) {
@@ -972,7 +977,8 @@ final class AppModel {
         }
     }
 
-    /// Starts a fresh process in the same tab (or reopens the tab when it was auto-closed).
+    /// Relaunches from the exit toast, in the same tab (or reopens the tab when it was auto-closed) — resuming
+    /// the driver session like every other Relaunch.
     func relaunchExitNotice(_ id: ThreadID) async {
         guard let notice = takeExitNotice(id), scope(notice.record.scopeID) != nil else { return }
         let session: ThreadSession
@@ -984,7 +990,7 @@ final class AppModel {
         }
         selection = .thread(id)
         selectedThreadID = id
-        await launch(session, mode: .launch)
+        await launch(session, mode: .relaunch(profile: session.profile, resumeID: session.record.resumeID))
     }
 
     /// Hovering a toast holds its countdown.

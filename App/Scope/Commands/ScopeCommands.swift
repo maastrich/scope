@@ -172,9 +172,10 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(currentThread == nil || currentThread?.isAlive == true)
 
-            Button("Resume") {
+            // Relaunch already resumes when it can; this is the way out of that.
+            Button("Start Fresh Session") {
                 if let model, let id = model.selectedThreadID {
-                    Task { await model.resume(id) }
+                    Task { await model.startFresh(id) }
                 }
             }
             .disabled(currentThread == nil || currentThread?.isAlive == true || currentThread?.canResume != true)
