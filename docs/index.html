@@ -36,7 +36,7 @@
     <a class="btn" href="https://github.com/maastrich/scope/releases/latest">Download for macOS</a>
     <a class="btn ghost" href="getting-started.html">Getting started</a>
   </div>
-  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with tasks and threads, an embedded terminal, and the repository graph in the inspector"></div>
+  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with threads and tasks, an embedded terminal, and the task's diff in the inspector"></div>
 </section>
 
 <h2 id="what-it-does">What it does</h2>
@@ -45,7 +45,7 @@ Scope discovers the repos inside it, and everything else hangs off that: threads
 It reads your folders and writes nothing inside them.</p>
 
 <div class="grid">
-  <a class="card" href="concepts.html"><h3 id="threads">Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot in the tab.</p></a>
+  <a class="card" href="concepts.html"><h3 id="threads">Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot on its sidebar row.</p></a>
   <a class="card" href="tasks.html"><h3 id="tasks">Tasks</h3><p>Describe the work in a prompt; the driver proposes the branch, and each repo gets a worktree sandbox.</p></a>
   <a class="card" href="review.html"><h3 id="delta">Delta</h3><p>The diff of the task against its base, per repo — read it, commit it, push it, open the PR.</p></a>
   <a class="card" href="graph.html"><h3 id="graph">Graph</h3><p>One card per repo: purpose, stack, entry points, setup and test commands, and who depends on whom.</p></a>

@@ -57,18 +57,20 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
   <tr><td><code>SCOPE_SOCK</code></td><td>unix socket the hooks report to</td></tr>
   <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code></td><td>only in a task thread: its slug and root</td></tr>
 </table>
-<p>Stopping a thread (<kbd>⌘.</kbd>) leaves the tab greyed with an exit toast for ten seconds — long enough to
+<p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
 <kbd>⇧⌘T</kbd> undoes a close.</p>
 
 <h2 id="states">States</h2>
-<p>The dot on a tab, a sidebar row and the Dock badge all say the same thing:</p>
+<p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>
   <li><span class="dot running"></span><b>Running</b> — the agent is working.</li>
   <li><span class="dot waiting"></span><b>Waiting</b> — it asked you something: a prompt, a permission.</li>
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
+<p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
+you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p>States come from the driver's own hooks, not from guessing at terminal output. See
 <a href="adapters.html">hooks and thread states</a>.</p>
 

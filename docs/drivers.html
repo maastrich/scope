@@ -64,7 +64,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
-  <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
+  <tr><td><code>icon</code></td><td>SF Symbol shown on sidebar rows and in menus</td></tr>
   <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
 </table>
 

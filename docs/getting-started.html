@@ -77,14 +77,13 @@ pick one of:</p>
 <p>Scope walks the folder up to the discovery depth (1 by default, 0–4) and lists what it found. Nothing is
 written inside your folders.</p>
 
-<figure class="shot"><img src="assets/img/sidebar.png" alt="The sidebar: tasks and their threads first, repositories on demand." loading="lazy"><figcaption>The sidebar: tasks and their threads first, repositories on demand.</figcaption></figure>
+<figure class="shot"><img src="assets/img/sidebar.png" alt="The sidebar: loose threads, then each task with its threads; repositories on demand." loading="lazy"><figcaption>The sidebar: loose threads, then each task with its threads; repositories on demand.</figcaption></figure>
 
 <h2 id="first-thread">Open a thread</h2>
 <p><kbd>⌘T</kbd> opens a thread in whatever is selected — the scope root, a repository, a task sandbox. The
 default driver is the plain shell; the split button next to it picks another. The thread is a real terminal:
 your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
 back.</p>
-<figure class="plain"><img src="assets/img/tabstrip.png" alt="One tab per thread, with its live state dot." loading="lazy"><figcaption>One tab per thread, with its live state dot.</figcaption></figure>
 <p>Threads survive a restart: Scope keeps a record per thread, and <b>Relaunch</b> picks the driver's previous
 session back up when a hook captured its id. <b>Start Fresh</b> opens a new session instead.</p>
 

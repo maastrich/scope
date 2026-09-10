@@ -143,7 +143,7 @@ HOME = """<div class="home-wrap">
     <a class="btn" href="REPO/releases/latest">Download for macOS</a>
     <a class="btn ghost" href="getting-started.html">Getting started</a>
   </div>
-  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with tasks and threads, an embedded terminal, and the repository graph in the inspector"></div>
+  <div class="hero-shot"><img src="assets/img/hero.png" alt="The Scope window: sidebar with threads and tasks, an embedded terminal, and the task's diff in the inspector"></div>
 </section>
 
 <h2>What it does</h2>
@@ -152,7 +152,7 @@ Scope discovers the repos inside it, and everything else hangs off that: threads
 It reads your folders and writes nothing inside them.</p>
 
 <div class="grid">
-  <a class="card" href="concepts.html"><h3>Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot in the tab.</p></a>
+  <a class="card" href="concepts.html"><h3>Threads</h3><p>A driver running in a real PTY, with <code>SCOPE_*</code> in its environment and a live state dot on its sidebar row.</p></a>
   <a class="card" href="tasks.html"><h3>Tasks</h3><p>Describe the work in a prompt; the driver proposes the branch, and each repo gets a worktree sandbox.</p></a>
   <a class="card" href="review.html"><h3>Delta</h3><p>The diff of the task against its base, per repo — read it, commit it, push it, open the PR.</p></a>
   <a class="card" href="graph.html"><h3>Graph</h3><p>One card per repo: purpose, stack, entry points, setup and test commands, and who depends on whom.</p></a>
@@ -261,7 +261,6 @@ FIG_SIDEBAR
 default driver is the plain shell; the split button next to it picks another. The thread is a real terminal:
 your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
 back.</p>
-FIG_TABSTRIP
 <p>Threads survive a restart: Scope keeps a record per thread, and <b>Relaunch</b> picks the driver's previous
 session back up when a hook captured its id. <b>Start Fresh</b> opens a new session instead.</p>
 
@@ -312,18 +311,20 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
   <tr><td><code>SCOPE_SOCK</code></td><td>unix socket the hooks report to</td></tr>
   <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code></td><td>only in a task thread: its slug and root</td></tr>
 </table>
-<p>Stopping a thread (<kbd>⌘.</kbd>) leaves the tab greyed with an exit toast for ten seconds — long enough to
+<p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
 <kbd>⇧⌘T</kbd> undoes a close.</p>
 
 <h2 id="states">States</h2>
-<p>The dot on a tab, a sidebar row and the Dock badge all say the same thing:</p>
+<p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>
   <li><span class="dot running"></span><b>Running</b> — the agent is working.</li>
   <li><span class="dot waiting"></span><b>Waiting</b> — it asked you something: a prompt, a permission.</li>
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
+<p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
+you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p>States come from the driver's own hooks, not from guessing at terminal output. See
 <a href="adapters.html">hooks and thread states</a>.</p>
 
@@ -590,7 +591,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
-  <tr><td><code>icon</code></td><td>SF Symbol shown in tabs and menus</td></tr>
+  <tr><td><code>icon</code></td><td>SF Symbol shown on sidebar rows and in menus</td></tr>
   <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
 </table>
 
@@ -741,7 +742,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
 <h2 id="others">Codex and Cursor</h2>
 <p>Codex is wired through its <code>notify</code> configuration and Cursor through its hooks, with the same
 helper and the same socket. Both profiles ship with <code>adapter</code> set; a tool without one still runs
-perfectly — its tab simply shows no live state.</p>
+perfectly — its row simply shows no live state.</p>
 
 <h2 id="notifications">Notifications and the badge</h2>
 <p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Go to
@@ -789,14 +790,17 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or undo the last close)</td></tr>
   <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
   <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
-  <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread</td></tr>
+  <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread, picking the driver's session back up when it can</td></tr>
   <tr><td><kbd>⌘1</kbd>–<kbd>⌘9</kbd>, <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd></td><td>Switch threads</td></tr>
   <tr><td><kbd>⌘↩</kbd></td><td>Newline in the terminal (sent as meta <kbd>↩</kbd>)</td></tr>
+  <tr><td><kbd>⌘←</kbd> / <kbd>⌘→</kbd>, <kbd>⌘⌫</kbd> / <kbd>⌘⌦</kbd></td><td>Start / end of the line, delete back to its start / to its end (sent as <code>^A</code> <code>^E</code> <code>^U</code> <code>^K</code>)</td></tr>
+  <tr><td><kbd>⌥←</kbd> / <kbd>⌥→</kbd>, <kbd>⌥⌫</kbd> / <kbd>⌥⌦</kbd></td><td>Move and delete by word; every other <kbd>⌥</kbd> key types your layout's character</td></tr>
   <tr><td><kbd>⌘K</kbd></td><td>Command palette</td></tr>
   <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
   <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
+  <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>
   <tr><td><kbd>⌘M</kbd></td><td>Maximize the thread: it fills the window, <kbd>⌘M</kbd> again restores (minimize is <kbd>⌥⌘M</kbd>)</td></tr>
   <tr><td><kbd>⇧⌘U</kbd></td><td>Mark a waiting thread as read: its attention clears until it asks again</td></tr>
   <tr><td><kbd>⌘E</kbd> / <kbd>⇧⌘E</kbd></td><td>Open the selection / the task in your editor</td></tr>
@@ -811,9 +815,13 @@ FIG_SETTINGS
   <li><b>General</b> — config folder, default driver, editor command, terminal font size, appearance
   (follow the system, or always dark, which is what agent TUIs assume) and cursor shape — underline, bar or
   block, steady or blinking; a blinking caret fades in and out rather than switching on and off, and a program
-  can still ask for its own shape — plus notification status.</li>
+  can still ask for its own shape — whether <kbd>⌥</kbd> types the character your layout puts there (the
+  default, so a French keyboard still gets its braces) or acts as Meta, plus notification status.</li>
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
+  <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive
+  Scope, how deep agents may open agents, and whether opening a thread or creating a task asks you first. See
+  <a href="cli.html">Command line and MCP</a>.</li>
 </ul>
 <p>The editor command is a template: <code>["code", "-g", "{file}:{line}"]</code>. <code>{path}</code>,
 <code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>
@@ -850,11 +858,10 @@ FIGURES = {
     "FIG_NEWTASK": figure("newtask-proposal", "The driver’s proposal, all three fields editable."),
     "FIG_AGENT": figure("agent-thread-full", "Claude Code running in a task sandbox, prompt already sent."),
     "FIG_PALETTE": figure("palette", "The command palette: actions, files, repositories and threads in one field."),
-    "FIG_AGENT_DELTA": figure("agent-delta", "The whole window while an agent works: its terminal on the left, its diff on the right."),
+    "FIG_AGENT_DELTA": figure("agent-delta", "The whole window: a task's thread on the left, the task's diff in the inspector on the right."),
     "FIG_DELTA": figure("delta-files", "Delta groups the changed files by repository."),
     "FIG_DELTA_PANEL": figure("delta-panel", "Delta: files by repository, the diff, and commit / push / create PR."),
-    "FIG_SIDEBAR": figure("sidebar", "The sidebar: tasks and their threads first, repositories on demand."),
-    "FIG_TABSTRIP": figure("tabstrip", "One tab per thread, with its live state dot.", "plain"),
+    "FIG_SIDEBAR": figure("sidebar", "The sidebar: loose threads, then each task with its threads; repositories on demand."),
     "FIG_SETTINGS": figure("settings", "Settings → General.", "shot narrow"),
     "FIG_PROMPT": figure("newtask-prompt", "Step one: the request, the driver, the repositories."),
     "FIG_LOADING": figure("newtask-loading", "The driver runs headless while the derived name stands in."),
