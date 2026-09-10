@@ -239,6 +239,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var terminalAppearance: TerminalAppearanceMode
     /// Shape of the terminal caret; a steady underline by default.
     public var terminalCursorStyle: TerminalCursorStyle
+    /// `true` makes ⌥ send `ESC` before the key (the Meta of old terminals). Off by default, as in Terminal
+    /// and iTerm: with it on, a layout that types braces with ⌥ cannot type them at all. `⌥←`, `⌥→`, `⌥⌫`
+    /// and `⌥⌦` keep working either way (see `TerminalOptionKey`).
+    public var terminalOptionAsMeta: Bool
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
@@ -266,6 +270,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalFontSize: Int = 13,
         terminalAppearance: TerminalAppearanceMode = .system,
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
+        terminalOptionAsMeta: Bool = false,
         autoCloseExitedThreads: Bool = false,
         attentionCounter: AttentionCounterPlacement = .sidebar,
         automation: AutomationSettings? = nil
@@ -280,6 +285,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalFontSize = Preferences.clampTerminalFontSize(terminalFontSize)
         self.terminalAppearance = terminalAppearance
         self.terminalCursorStyle = terminalCursorStyle
+        self.terminalOptionAsMeta = terminalOptionAsMeta
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.attentionCounter = attentionCounter
         self.automation = automation
@@ -289,7 +295,7 @@ public struct Preferences: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads, attentionCounter,
+             terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, autoCloseExitedThreads, attentionCounter,
              automation
     }
 
@@ -311,6 +317,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.terminalAppearance
         terminalCursorStyle = try container.decodeIfPresent(TerminalCursorStyle.self, forKey: .terminalCursorStyle)
             ?? defaults.terminalCursorStyle
+        terminalOptionAsMeta = try container.decodeIfPresent(Bool.self, forKey: .terminalOptionAsMeta)
+            ?? defaults.terminalOptionAsMeta
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)

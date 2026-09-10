@@ -43,6 +43,9 @@ enum TerminalAppearance {
     private(set) static var fontSize: CGFloat = 13
     /// Shape of the caret (Settings ▸ Terminal); the default is steady, see `TerminalCursorStyle`.
     private(set) static var cursorStyle: TerminalCursorStyle = .steadyUnderline
+    /// Whether ⌥ is the Meta key rather than a way to type a character. Off by default — see
+    /// `Preferences.terminalOptionAsMeta`.
+    private(set) static var optionAsMeta = false
 
     /// Records the terminal preferences; returns `true` when something changed (callers then re-apply).
     @discardableResult
@@ -50,9 +53,11 @@ enum TerminalAppearance {
         let size = CGFloat(Preferences.clampTerminalFontSize(preferences.terminalFontSize))
         let changed = size != fontSize || preferences.terminalAppearance != mode
             || preferences.terminalCursorStyle != cursorStyle
+            || preferences.terminalOptionAsMeta != optionAsMeta
         fontSize = size
         mode = preferences.terminalAppearance
         cursorStyle = preferences.terminalCursorStyle
+        optionAsMeta = preferences.terminalOptionAsMeta
         return changed
     }
 
@@ -110,9 +115,16 @@ enum TerminalAppearance {
     static func apply(to view: LocalProcessTerminalView) {
         applyFont(to: view)
         applyCursorStyle(to: view)
-        view.optionAsMetaKey = true
+        applyOptionKey(to: view)
         view.bellStyle = .visual
         applyColors(to: view)
+    }
+
+    /// Hands ⌥ to SwiftTerm as Meta, or to macOS as a way to compose a character. SwiftTerm reads the key
+    /// *ignoring modifiers* when ⌥ is Meta, so with it on `⌥)` sends `ESC )` and the `}` it should have
+    /// typed never exists.
+    static func applyOptionKey(to view: LocalProcessTerminalView) {
+        view.optionAsMetaKey = optionAsMeta
     }
 
     /// Sets the preferred font on a live view (no-op when the size already matches: SwiftTerm re-lays out on set).

@@ -59,6 +59,13 @@ private struct GeneralSettingsView: View {
                 Stepper(value: terminalFontSize, in: Preferences.terminalFontSizeRange) {
                     LabeledContent("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
                 }
+                Toggle("Use Option as the Meta key", isOn: preference(\.terminalOptionAsMeta))
+                Text("Off, ⌥ types the character your layout puts there — `⌥(` and `⌥)` are how a French "
+                     + "keyboard types braces. On, ⌥ sends ESC first, which shells read as Meta. Either way "
+                     + "⌥← ⌥→ ⌥⌫ ⌥⌦ still move and delete by word.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Picker("Appearance", selection: preference(\.terminalAppearance)) {
                     Text("Follow system").tag(TerminalAppearanceMode.system)
                     Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)

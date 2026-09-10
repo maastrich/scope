@@ -111,6 +111,7 @@ final class TerminalHostContainer: NSView {
         guard let terminal = hosted as? LocalProcessTerminalView else { return }
         TerminalAppearance.applyFont(to: terminal)
         TerminalAppearance.applyCursorStyle(to: terminal)
+        TerminalAppearance.applyOptionKey(to: terminal)
         applyAppearance()
     }
 

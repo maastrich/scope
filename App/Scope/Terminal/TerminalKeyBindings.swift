@@ -1,4 +1,5 @@
 import AppKit
+import ScopeCore
 import SwiftTerm
 
 /// Key bindings the drivers expect and that never reach the terminal on their own.
@@ -12,6 +13,10 @@ import SwiftTerm
 /// What goes down the pty is **meta ↩**: `ESC CR` on a legacy terminal, `CSI 13;3u` once the app has asked
 /// for the Kitty keyboard protocol. That is the sequence Claude Code and friends read as "newline, do not
 /// submit".
+///
+/// The same monitor puts back `⌥←`, `⌥→`, `⌥⌫` and `⌥⌦` when ⌥ is not the Meta key (the default, so that a
+/// keyboard which types braces with ⌥ can type them). Those four compose no character, so nothing is taken
+/// from the layout by sending the word-motion sequences ourselves — see `TerminalOptionKey`.
 @MainActor
 enum TerminalKeyBindings {
     private static var monitor: Any?
@@ -21,8 +26,13 @@ enum TerminalKeyBindings {
         // The event's own values are read here (an `NSEvent` cannot cross into the isolated closure); the
         // monitor already runs on the main thread, so the hop only states what is true.
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard isNewlineReturn(keyCode: event.keyCode, flags: event.modifierFlags) else { return event }
-            return MainActor.assumeIsolated { sendMetaReturnToFocusedTerminal() } ? nil : event
+            let keyCode = event.keyCode
+            let flags = event.modifierFlags
+            if isNewlineReturn(keyCode: keyCode, flags: flags) {
+                return MainActor.assumeIsolated { sendMetaReturnToFocusedTerminal() } ? nil : event
+            }
+            guard isWordMotion(keyCode: keyCode, flags: flags) else { return event }
+            return MainActor.assumeIsolated { sendWordMotionToFocusedTerminal(keyCode: keyCode) } ? nil : event
         }
     }
 
@@ -32,6 +42,22 @@ enum TerminalKeyBindings {
         let flags = flags.intersection(.deviceIndependentFlagsMask)
         guard keyCode == 36, !flags.contains(.control), !flags.contains(.option) else { return false }
         return flags.contains(.command) || flags.contains(.shift)
+    }
+
+    /// ⌥ with one of the four navigation keys and nothing else — and only while ⌥ is not already Meta, in
+    /// which case SwiftTerm sends these itself.
+    private nonisolated static func isWordMotion(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        guard !MainActor.assumeIsolated({ TerminalAppearance.optionAsMeta }) else { return false }
+        let flags = flags.intersection(.deviceIndependentFlagsMask)
+        guard flags.contains(.option), !flags.contains(.command), !flags.contains(.control) else { return false }
+        return TerminalOptionKey.sequence(keyCode: keyCode) != nil
+    }
+
+    /// Sends the word-motion sequence; `false` when no terminal holds the keyboard.
+    private static func sendWordMotionToFocusedTerminal(keyCode: UInt16) -> Bool {
+        guard let terminal = focusedTerminal, let bytes = TerminalOptionKey.sequence(keyCode: keyCode) else { return false }
+        terminal.send(bytes)
+        return true
     }
 
     /// `false` when no terminal holds the keyboard — the event then goes on its way (⌘↩ of a dialog, say).
