@@ -11,6 +11,20 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.4.0](https://github.com/maastrich/scope/releases/tag/v0.4.0) - 2026-09-10
+
+### Added
+
+- **cli:** drive Scope from the terminal with `scope` by @maastrich
+- **cli:** create a task from the terminal with `scope task new` by @maastrich
+- **mcp:** `scope mcp` gives an agent the same commands as the terminal by @maastrich
+
+### Documentation
+
+- how to drive Scope from a terminal or an agent by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.3.1...v0.4.0
+
 ## [0.3.1](https://github.com/maastrich/scope/releases/tag/v0.3.1) - 2026-09-10
 
 ### Fixed
