@@ -35,11 +35,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Makes the current terminal first responder again so typing resumes without a click.
-    static func refocusTerminal() {
+    ///
+    /// It has to insist. SwiftUI gives the keyboard to the sidebar's `List` *after* the click that changed the
+    /// selection is processed, so a single `makeFirstResponder` loses the race and the terminal never gets the
+    /// keys. Rather than guess at the right delay, each attempt checks whether the terminal actually holds the
+    /// focus and takes it back if not, a bounded number of times.
+    static func refocusTerminal(attemptsLeft: Int = 4) {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow,
               let container = firstTerminalContainer(in: window.contentView) else { return }
         container.focusHostedView()
+        guard attemptsLeft > 1 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            guard let window = NSApp.keyWindow ?? NSApp.mainWindow,
+                  let container = firstTerminalContainer(in: window.contentView),
+                  !container.holdsFirstResponder(of: window)
+            else { return }
+            refocusTerminal(attemptsLeft: attemptsLeft - 1)
+        }
     }
+
 
     private static func firstTerminalContainer(in view: NSView?) -> TerminalHostContainer? {
         guard let view else { return nil }

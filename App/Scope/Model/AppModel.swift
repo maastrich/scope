@@ -505,12 +505,12 @@ final class AppModel {
             // The scene shows the scope's empty view / repo context; no thread is active.
             selectedThreadID = nil
         case .task(let id):
+            // Picking a task you are already inside changes nothing: you keep the thread you were reading.
+            // Coming from anywhere else — another task, a loose thread — it opens the task at its first thread,
+            // rather than leaving a terminal on screen that has nothing to do with the row you just clicked.
             let own = threads(in: id)
-            if let scopeID = task(id)?.scopeID, let last = lastThreadByScope[scopeID], own.contains(where: { $0.id == last }) {
-                selectedThreadID = last
-            } else {
-                selectedThreadID = own.first?.id
-            }
+            if let current = selectedThreadID, own.contains(where: { $0.id == current }) { return }
+            selectedThreadID = own.first?.id
         case nil:
             selectedThreadID = nil
         }

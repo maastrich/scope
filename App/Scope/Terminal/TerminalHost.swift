@@ -85,6 +85,17 @@ final class TerminalHostContainer: NSView {
         }
     }
 
+    /// `true` when the window's first responder is the hosted terminal, or something inside it.
+    func holdsFirstResponder(of window: NSWindow) -> Bool {
+        guard let hosted else { return false }
+        var view = window.firstResponder as? NSView
+        while let current = view {
+            if current === hosted { return true }
+            view = current.superview
+        }
+        return false
+    }
+
     /// The hosted view's frame: the bounds minus `TerminalAppearance.contentInsets`, never negative.
     private var contentFrame: NSRect {
         let insets = TerminalAppearance.contentInsets
