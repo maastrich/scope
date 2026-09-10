@@ -272,6 +272,6 @@ extension AppModel {
     /// "Open a shell here": a driver-less terminal in the base checkout (spec §4.5).
     func openBaseShell(repo: RepoState, in scope: ScopeState) async {
         await newThread(in: scope.id, driverID: "shell", cwdKind: .repoBase(relativePath: repo.id),
-                        title: "Shell · \(repo.shortName) (base)")
+                        title: "\(repo.shortName) (base)")
     }
 }

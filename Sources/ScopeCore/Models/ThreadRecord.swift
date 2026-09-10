@@ -26,7 +26,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// scope was removed and declared again with a new id.
     public var scopeRoot: String
     public var driverID: String
-    /// `"Shell · acme"`
+    /// Row label, without the driver name: `"acme"`, `"oauth-refresh"`. The icon carries the driver.
     public var title: String
     /// Absolute path used at launch.
     public var cwd: String

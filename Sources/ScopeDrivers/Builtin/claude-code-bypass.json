@@ -1,16 +1,52 @@
 {
-  "id" : "claude-code-bypass",
-  "name" : "Claude Code (bypass)",
-  "command" : "claude",
-  "args" : ["--dangerously-skip-permissions"],
-  "env" : {},
-  "context" : { "file" : "CLAUDE.md", "mode" : "generate" },
-  "resume" : ["claude", "--resume", "{resume_id}", "--dangerously-skip-permissions"],
-  "headless" : ["claude", "-p", "{prompt}", "--output-format", "json"],
-  "headlessLight" : ["claude", "-p", "{prompt}", "--output-format", "json", "--model", "haiku", "--tools", "Bash", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--allowedTools", "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"],
-  "prompt" : ["{prompt}"],
-  "adapter" : { "kind" : "claude-hooks" },
-  "icon" : "sparkles",
-  "builtin" : true,
-  "version" : 2
+  "id": "claude-code-bypass",
+  "name": "Claude Code (bypass)",
+  "command": "claude",
+  "args": [
+    "--dangerously-skip-permissions"
+  ],
+  "env": {},
+  "context": {
+    "file": "CLAUDE.md",
+    "mode": "generate"
+  },
+  "resume": [
+    "claude",
+    "--resume",
+    "{resume_id}",
+    "--dangerously-skip-permissions"
+  ],
+  "headless": [
+    "claude",
+    "-p",
+    "{prompt}",
+    "--output-format",
+    "json"
+  ],
+  "headlessLight": [
+    "claude",
+    "-p",
+    "{prompt}",
+    "--output-format",
+    "json",
+    "--model",
+    "haiku",
+    "--tools",
+    "Bash",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--no-session-persistence",
+    "--allowedTools",
+    "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"
+  ],
+  "prompt": [
+    "{prompt}"
+  ],
+  "adapter": {
+    "kind": "claude-hooks"
+  },
+  "icon": "asterisk",
+  "builtin": true,
+  "version": 3
 }

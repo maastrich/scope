@@ -256,7 +256,7 @@ final class AppModel {
     }
 
     /// The tab / row label: duplicates of the same title in a scope are numbered in creation order
-    /// (`Shell · acme`, `Shell 2 · acme`).
+    /// (`acme`, `acme 2`). The driver is not in the title — the row's icon says which one it is.
     func displayTitle(for session: ThreadSession) -> String {
         let twins = threads(in: session.record.scopeID).filter { $0.record.title == session.record.title }
         guard twins.count > 1, let index = twins.firstIndex(where: { $0.id == session.id }), index > 0 else { return session.title }
@@ -697,7 +697,7 @@ final class AppModel {
             cwd = scope.url.path
         }
         var kind = cwdKind
-        var title = "\(profile.name) · \(scope.name)"
+        var title = scope.name
         var resolvedCwd = cwd
         if let task {
             guard ScopeState.rootExists(task.record.threadCwd) else {
@@ -706,7 +706,7 @@ final class AppModel {
             }
             resolvedCwd = env.tasks.threadCwd(for: task.record).path
             kind = .task(slug: task.record.slug)
-            title = "\(profile.name) · \(task.name)"
+            title = task.name
         }
         if let customTitle { title = customTitle }
         let record = ThreadRecord(
