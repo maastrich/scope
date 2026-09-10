@@ -44,8 +44,11 @@ struct AutomationSettingsView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("`scope list`, `scope thread new`, `scope task new`. `scope mcp` speaks MCP on stdio, so an "
-                     + "agent can drive Scope with the same commands.")
+                // One literal, not a `+` chain: only a literal is read as Markdown, so the code spans render.
+                Text("""
+                    `scope list`, `scope thread new`, `scope task new`. `scope mcp` speaks MCP on stdio, so an \
+                    agent can drive Scope with the same commands.
+                    """)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -60,9 +60,12 @@ private struct GeneralSettingsView: View {
                     LabeledContent("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
                 }
                 Toggle("Use Option as the Meta key", isOn: preference(\.terminalOptionAsMeta))
-                Text("Off, ⌥ types the character your layout puts there — `⌥(` and `⌥)` are how a French "
-                     + "keyboard types braces. On, ⌥ sends ESC first, which shells read as Meta. Either way "
-                     + "⌥← ⌥→ ⌥⌫ ⌥⌦ still move and delete by word.")
+                // One literal, not a `+` chain: only a literal is read as Markdown, so the code spans render.
+                Text("""
+                    Off, ⌥ types the character your layout puts there — `⌥(` and `⌥)` are how a French keyboard \
+                    types braces. On, ⌥ sends ESC first, which shells read as Meta. Either way ⌥← ⌥→ ⌥⌫ ⌥⌦ still \
+                    move and delete by word.
+                    """)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
