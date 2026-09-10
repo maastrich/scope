@@ -16,7 +16,7 @@ public final class ControlSocketServer: Sendable {
     public let timeout: Duration
 
     private let server: UnixSocketServer
-    private let queue = DispatchQueue(label: "dev.scope.control.deadline")
+    private let queue = DispatchQueue(label: "dev.scope.control.deadline", qos: .userInitiated)
 
     /// - Parameters:
     ///   - path: socket file path (see `SocketPath.resolve`).

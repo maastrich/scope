@@ -4,7 +4,7 @@ import ScopeCore
 import ScopeDrivers
 import UserNotifications
 
-/// Settings window (⌘,): General, Shell environment, Drivers.
+/// Settings window (⌘,): General, Shell environment, Drivers, Automation.
 struct SettingsView: View {
     var body: some View {
         TabView {
@@ -14,6 +14,8 @@ struct SettingsView: View {
                 .tabItem { Label("Shell Environment", systemImage: "terminal") }
             DriversSettingsView()
                 .tabItem { Label("Drivers", systemImage: "cpu") }
+            AutomationSettingsView()
+                .tabItem { Label("Automation", systemImage: "terminal.fill") }
         }
         .frame(width: 600, height: 520)
     }

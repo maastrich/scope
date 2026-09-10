@@ -18,6 +18,11 @@ let package = Package(
         .executable(name: "scope-hook", targets: ["scope-hook"]),
         .executable(name: "scope", targets: ["scope"]),
     ],
+    dependencies: [
+        // The official MCP SDK, used by `scope mcp` only. It is the package's one external dependency;
+        // `swift build` fetches it once and every other target stays offline.
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.9.0"),
+    ],
     targets: [
         .target(
             name: "ScopeCore",
@@ -56,7 +61,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "scope",
-            dependencies: ["ScopeControl"],
+            dependencies: ["ScopeControl", .product(name: "MCP", package: "swift-sdk")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(

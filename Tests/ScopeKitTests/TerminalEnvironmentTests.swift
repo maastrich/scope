@@ -97,4 +97,23 @@ struct TerminalEnvironmentTests {
         #expect(TerminalEnvironment.envp(first) == TerminalEnvironment.envp(second))
         #expect(first.count >= 12)
     }
+
+    /// The app's own `Contents/Helpers` goes first on the PATH: that is what makes `scope` and `scope-hook`
+    /// work inside a thread with nothing installed.
+    @Test func theHelpersFolderLeadsThePath() {
+        let environment = TerminalEnvironment.build(
+            base: ["PATH": "/usr/bin:/bin"], shell: "/bin/zsh", cwd: "/tmp",
+            scope: TerminalEnvironment.ScopeVariables(thread: "3f9a2c17be04", scope: "acme", scopeRoot: "/tmp",
+                                                      sock: "/tmp/scope.sock", home: "/tmp/home"),
+            driverEnv: [:], appVersion: "1.0", helpers: "/Applications/Scope.app/Contents/Helpers"
+        )
+        #expect(environment["PATH"] == "/Applications/Scope.app/Contents/Helpers:/usr/bin:/bin")
+    }
+
+    /// A relaunch must not grow the variable.
+    @Test func theHelpersFolderIsAddedOnce() {
+        #expect(TerminalEnvironment.prepend("/helpers", to: "/helpers:/usr/bin") == "/helpers:/usr/bin")
+        #expect(TerminalEnvironment.prepend("/helpers", to: "") == "/helpers")
+        #expect(TerminalEnvironment.prepend("/helpers", to: "/usr/bin") == "/helpers:/usr/bin")
+    }
 }

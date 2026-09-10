@@ -125,6 +125,7 @@ public enum LaunchPlanner {
         scopeVariables: TerminalEnvironment.ScopeVariables,
         appVersion: String,
         adapterArguments: [String] = [],
+        helpers: String? = nil,
         fileExists: (String) -> Bool = { directoryExists($0) }
     ) throws(LaunchError) -> LaunchPlan {
         let rawArgv: [String]
@@ -157,7 +158,8 @@ public enum LaunchPlanner {
             cwd: values.cwd,
             scope: scopeVariables,
             driverEnv: driverEnv,
-            appVersion: appVersion
+            appVersion: appVersion,
+            helpers: helpers
         )
 
         let executableName = (executable as NSString).lastPathComponent

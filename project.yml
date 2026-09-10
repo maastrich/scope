@@ -14,6 +14,9 @@ packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
     exactVersion: 1.20.0
+  MCP: # the official Swift MCP SDK, used by `scope mcp` only
+    url: https://github.com/modelcontextprotocol/swift-sdk.git
+    from: 0.9.0
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.9.6 # binary xcframework (arm64 + x86_64); bump SPARKLE_VERSION in .github/workflows/release.yml too
@@ -40,6 +43,8 @@ targets:
     dependencies:
       - package: ScopeKit
         product: ScopeControl
+      - package: MCP
+        product: MCP
     settings:
       base:
         PRODUCT_NAME: scope

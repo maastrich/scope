@@ -53,15 +53,19 @@ public enum TerminalEnvironment {
     public static let term = "xterm-256color"
 
     /// `base` → + `TERM`, `COLORTERM`, `LANG` (kept if UTF-8, else `en_US.UTF-8`), `TERM_PROGRAM=Scope`,
-    /// `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys` → + scope variables → + `driverEnv`
-    /// (already expanded by the caller).
+    /// `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys` → + `helpers` on `PATH` → + scope
+    /// variables → + `driverEnv` (already expanded by the caller).
+    ///
+    /// `helpers` is the app's `Contents/Helpers`: putting it first on `PATH` is what makes `scope` and
+    /// `scope-hook` work inside a thread with nothing to install and nothing to configure.
     public static func build(
         base: [String: String],
         shell: String,
         cwd: String,
         scope: ScopeVariables,
         driverEnv: [String: String],
-        appVersion: String
+        appVersion: String,
+        helpers: String? = nil
     ) -> [String: String] {
         var environment = base
         environment["TERM"] = term
@@ -72,6 +76,9 @@ public enum TerminalEnvironment {
         environment["SHELL"] = shell
         environment["PWD"] = cwd
         for key in strippedKeys { environment.removeValue(forKey: key) }
+        if let helpers, !helpers.isEmpty {
+            environment["PATH"] = prepend(helpers, to: environment["PATH"] ?? "")
+        }
         for (key, value) in scope.asDictionary { environment[key] = value }
         for (key, value) in driverEnv { environment[key] = value }
         return environment
@@ -80,6 +87,13 @@ public enum TerminalEnvironment {
     /// `"KEY=VALUE"` entries sorted by key, deterministic for tests and logs.
     public static func envp(_ environment: [String: String]) -> [String] {
         environment.keys.sorted().map { "\($0)=\(environment[$0] ?? "")" }
+    }
+
+    /// `directory:PATH`, unless it is already there (a relaunch must not grow the variable).
+    public static func prepend(_ directory: String, to path: String) -> String {
+        let entries = path.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard !entries.contains(directory) else { return path }
+        return path.isEmpty ? directory : directory + ":" + path
     }
 
     /// Keeps a UTF-8 locale (`fr_FR.UTF-8`, `en_US.utf8`), replaces anything else (`C`, `POSIX`, nil) with `en_US.UTF-8`.

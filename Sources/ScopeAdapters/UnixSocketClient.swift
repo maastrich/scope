@@ -15,7 +15,7 @@ public enum UnixSocketClient {
         }
         let parameters = NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
         let connection = NWConnection(to: .unix(path: path), using: parameters)
-        let queue = DispatchQueue(label: "dev.scope.sock.client")
+        let queue = DispatchQueue(label: "dev.scope.sock.client", qos: .userInitiated)
         let outcome = Outcome()
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
@@ -70,7 +70,7 @@ public enum UnixSocketClient {
         }
         let parameters = NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
         let connection = NWConnection(to: .unix(path: path), using: parameters)
-        let queue = DispatchQueue(label: "dev.scope.sock.request")
+        let queue = DispatchQueue(label: "dev.scope.sock.request", qos: .userInitiated)
         let outcome = ReplyOutcome()
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, any Error>) in

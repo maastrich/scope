@@ -16,6 +16,12 @@ struct ThreadLauncher {
         ScopeHookLocator.locate(bundleURL: Bundle.main.bundleURL, searchPATH: searchPATH)
     }
 
+    /// `Scope.app/Contents/Helpers`, put first on the thread's PATH so `scope` and `scope-hook` are there
+    /// without the user installing anything.
+    var helpersDirectory: String? {
+        ScopeCLILocator.helpersDirectory(in: Bundle.main.bundleURL)
+    }
+
     /// `initialPrompt` fills `{prompt}` so the profile's `prompt` argv is appended (fresh launch only).
     func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode,
               initialPrompt: String? = nil) async throws(LaunchError) -> LaunchPlan {
@@ -47,7 +53,8 @@ struct ThreadLauncher {
             shellEnvironment: shell,
             scopeVariables: variables,
             appVersion: env.appVersion,
-            adapterArguments: adapterArguments
+            adapterArguments: adapterArguments,
+            helpers: helpersDirectory
         )
         if let task {
             plan.environment.merge(env.tasks.taskEnvironment(for: task)) { $1 }

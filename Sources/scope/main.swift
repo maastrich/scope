@@ -44,9 +44,14 @@ func run() async -> Int32 {
     case .version:
         write("scope \(scopeCLIVersion)", to: .standardOutput)
         return 0
-    case .mcp:
-        write("scope: `scope mcp` is not in this build yet", to: .standardError)
-        return ScopeCLIExit.failure
+    case .mcp(let options):
+        do {
+            try await ScopeMCP.run(options: options)
+            return 0
+        } catch {
+            write("scope: the MCP server stopped: \(error)", to: .standardError)
+            return ScopeCLIExit.failure
+        }
     case .call(let call, let options):
         let client = ControlClient(
             socketPath: ControlEndpoint.resolve(socket: options.socket, home: options.home),

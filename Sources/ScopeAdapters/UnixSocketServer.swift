@@ -51,7 +51,9 @@ public final class UnixSocketServer: Sendable {
     public let path: String
 
     private let listener: NWListener
-    private let queue = DispatchQueue(label: "dev.scope.sock.server")
+    // `.userInitiated`: a socket callback on a default-QoS queue is throttled hard when the app is not the
+    // one you are looking at, which turned a 2 ms answer into seconds. Hook events pay the same tax.
+    private let queue = DispatchQueue(label: "dev.scope.sock.server", qos: .userInitiated)
 
     /// Creates the server (does not listen yet; call `start()`).
     ///
