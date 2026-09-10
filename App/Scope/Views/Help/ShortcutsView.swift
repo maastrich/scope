@@ -26,6 +26,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌘R", title: "Refresh Scope"),
             ShortcutEntry(keys: "⌘,", title: "Settings…"),
             ShortcutEntry(keys: "⇧⌘W", title: "Close Window"),
+            ShortcutEntry(keys: "⌥⌘M", title: "Minimize Window", note: "⌘M is Maximize Thread"),
         ]),
         ShortcutGroup(title: "Threads", entries: [
             ShortcutEntry(keys: "⌘T", title: "New Thread", note: "in the current task when one is selected"),
@@ -36,6 +37,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌘1 … ⌘9", title: "Thread 1 … 9"),
             ShortcutEntry(keys: "⇧⌘]", title: "Next Thread"),
             ShortcutEntry(keys: "⇧⌘[", title: "Previous Thread"),
+            ShortcutEntry(keys: "⌘M", title: "Maximize Thread", note: "the thread fills the window; ⌘M again restores"),
             ShortcutEntry(keys: "⌥⌘K", title: "Clear Scrollback"),
             ShortcutEntry(keys: "⌘↩", title: "Newline in the terminal", note: "sent as meta ↩, the agents' \"do not submit\" key"),
         ]),

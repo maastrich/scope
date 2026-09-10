@@ -7,6 +7,8 @@ import ScopeCore
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var columns: NavigationSplitViewVisibility = .all
+    /// The sidebar as it was before ⌘M, put back when the thread is restored.
+    @State private var columnsBeforeMaximize: NavigationSplitViewVisibility?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
@@ -28,6 +30,26 @@ struct RootView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        // ⌘M: the sidebar goes with the inspector, and comes back as it was.
+        .onChange(of: model.threadMaximized) { _, maximized in
+            if maximized {
+                columnsBeforeMaximize = columns
+                columns = .detailOnly
+            } else if let saved = columnsBeforeMaximize {
+                columnsBeforeMaximize = nil
+                columns = saved
+            }
+        }
+        // Bringing the sidebar back by hand (its toolbar button) ends the maximized thread.
+        .onChange(of: columns) { _, visibility in
+            guard model.threadMaximized, visibility != .detailOnly else { return }
+            columnsBeforeMaximize = nil
+            model.restoreLayout()
+        }
+        // Nothing left to maximize: a window without sidebar and without thread would be a dead end.
+        .onChange(of: model.currentThread?.id) { _, id in
+            if id == nil { model.restoreLayout() }
+        }
         .overlay {
             if model.paletteShown {
                 CommandPalette()
@@ -60,10 +82,11 @@ struct RootView: View {
         )
     }
 
-    /// The inspector is hidden in the empty state (no scope) whatever the persisted preference says.
+    /// The inspector is hidden in the empty state (no scope) and while a thread is maximized, whatever the
+    /// persisted preference says.
     private var inspectorPresented: Binding<Bool> {
         Binding(
-            get: { !model.scopes.isEmpty && model.inspectorShown },
+            get: { !model.scopes.isEmpty && model.inspectorShown && !model.threadMaximized },
             set: { model.inspectorShown = $0 }
         )
     }

@@ -76,8 +76,16 @@ final class AppModel {
     }
 
     var inspectorShown = false {
-        didSet { if !isRestoringUIState { persistUIState() } }
+        didSet {
+            // Asking for the inspector is asking for the window's layout back.
+            if inspectorShown, threadMaximized { threadMaximized = false }
+            if !isRestoringUIState { persistUIState() }
+        }
     }
+
+    /// The current thread fills the window, sidebar and inspector out of the way (⌘M). Never saved: a launch
+    /// starts from the layout the user chose, not from a mode they may have forgotten they were in.
+    private(set) var threadMaximized = false
 
     var inspectorTab: InspectorTab = .graph {
         didSet { if !isRestoringUIState { persistUIState() } }
@@ -147,6 +155,30 @@ final class AppModel {
         guard let scope = currentScope else { return }
         scope.reposShown.toggle()
         persistUIState()
+    }
+
+    /// ⌘M: the current thread takes the whole window, or gives it back. Only a thread can be maximized.
+    func toggleThreadMaximized() {
+        if threadMaximized {
+            threadMaximized = false
+        } else if currentThread != nil {
+            threadMaximized = true
+        }
+    }
+
+    /// Leaves the maximized thread and touches nothing else (the sidebar came back by hand, the thread went).
+    func restoreLayout() {
+        threadMaximized = false
+    }
+
+    /// ⌥⌘I. While a thread is maximized the inspector is hidden rather than off, so the toggle means "show
+    /// it" — which brings the rest of the layout back too.
+    func toggleInspector() {
+        if threadMaximized {
+            inspectorShown = true
+        } else {
+            inspectorShown.toggle()
+        }
     }
 
     var currentThread: ThreadSession? {

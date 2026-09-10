@@ -109,8 +109,14 @@ enum PaletteModel {
             }
         })
         items.append(PaletteItem(id: "inspector", section: .actions, icon: "sidebar.right", label: "Toggle Inspector", shortcut: "⌥⌘I") {
-            model.inspectorShown.toggle()
+            model.toggleInspector()
         })
+        if model.currentThread != nil || model.threadMaximized {
+            items.append(PaletteItem(id: "maximize", section: .actions, icon: "arrow.up.left.and.arrow.down.right",
+                                     label: model.threadMaximized ? "Restore Thread" : "Maximize Thread", shortcut: "⌘M") {
+                model.toggleThreadMaximized()
+            })
+        }
         items.append(PaletteItem(id: "sidebar", section: .actions, icon: "sidebar.left", label: "Toggle Sidebar", shortcut: "⌃⌘S") {
             CommandServices.toggleSidebar()
         })

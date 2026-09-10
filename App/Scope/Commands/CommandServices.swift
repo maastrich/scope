@@ -23,6 +23,16 @@ enum CommandServices {
         NSApp.keyWindow?.performClose(nil)
     }
 
+    /// ⌥⌘M: Window ▸ Minimize, moved off ⌘M (Maximize Thread).
+    static func miniaturizeKeyWindow() {
+        NSApp.keyWindow?.performMiniaturize(nil)
+    }
+
+    /// Window ▸ Zoom, which `ScopeCommands` re-adds after replacing the window-size group.
+    static func zoomKeyWindow() {
+        NSApp.keyWindow?.performZoom(nil)
+    }
+
     /// Sends an `NSTextFinder` action to the first responder. SwiftTerm's terminal view implements
     /// `performTextFinderAction(_:)` and reads the action from the sender's `tag`, so the sender is a menu
     /// item carrying it. When the terminal is not first responder nothing responds and this is a no-op.

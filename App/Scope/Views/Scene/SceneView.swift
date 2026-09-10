@@ -78,7 +78,7 @@ struct SceneView: View {
         // Its own item, declared last: a separate pill anchored at the far right of the toolbar.
         ToolbarItem(placement: .primaryAction) {
             Button {
-                model.inspectorShown.toggle()
+                model.toggleInspector()
             } label: {
                 Label("Inspector", systemImage: "sidebar.right")
             }

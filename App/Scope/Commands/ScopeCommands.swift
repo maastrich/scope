@@ -7,7 +7,8 @@ import ScopeCore
 ///
 /// ⌘-combinations are menu key equivalents and win over the terminal; nothing an agent TUI needs uses ⌘.
 /// ⌘K opens the command palette, so "clear" is ⌥⌘K. ⌘R is Refresh Scope (platform meaning), Relaunch is
-/// ⌥⌘R; ⌘W closes the thread, ⇧⌘W the window. The full table is Help ▸ Keyboard Shortcuts… (`ShortcutCatalog`).
+/// ⌥⌘R; ⌘W closes the thread, ⇧⌘W the window; ⌘M maximizes the thread, so Minimize is ⌥⌘M. The full table is
+/// Help ▸ Keyboard Shortcuts… (`ShortcutCatalog`).
 struct ScopeCommands: Commands {
     @FocusedValue(\.appModel) private var model
 
@@ -29,6 +30,7 @@ struct ScopeCommands: Commands {
         threadMenu
         goMenu
         viewMenu
+        windowMenu
         helpMenu
     }
 
@@ -297,8 +299,14 @@ struct ScopeCommands: Commands {
 
     private var viewMenu: some Commands {
         CommandGroup(after: .sidebar) {
+            Button(model?.threadMaximized == true ? "Restore Thread" : "Maximize Thread") {
+                model?.toggleThreadMaximized()
+            }
+            .keyboardShortcut("m", modifiers: .command)
+            .disabled(model?.threadMaximized != true && currentThread == nil)
+
             Button("Toggle Inspector") {
-                model?.inspectorShown.toggle()
+                model?.toggleInspector()
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
             .disabled(model == nil)
@@ -314,6 +322,18 @@ struct ScopeCommands: Commands {
             }
             .keyboardShortcut("k", modifiers: [.command, .option])
             .disabled(currentThread == nil)
+        }
+    }
+
+    // MARK: Window
+
+    /// ⌘M belongs to Maximize Thread, so Minimize moves to ⌥⌘M — the chord macOS already gives Minimize All.
+    /// The group is replaced rather than added to: two items claiming ⌘M would leave AppKit to pick one.
+    private var windowMenu: some Commands {
+        CommandGroup(replacing: .windowSize) {
+            Button("Minimize") { CommandServices.miniaturizeKeyWindow() }
+                .keyboardShortcut("m", modifiers: [.command, .option])
+            Button("Zoom") { CommandServices.zoomKeyWindow() }
         }
     }
 
