@@ -176,7 +176,8 @@ extension AppModel {
     @discardableResult
     func createTask(
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
-        startPoint: TaskStartPoint = .defaultBranch
+        startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true,
+        threadOrigin: ThreadOrigin = .user, createdBy: String? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
@@ -187,7 +188,8 @@ extension AppModel {
                 name: proposal.title, branch: proposal.branch, slug: proposal.slug, initialPrompt: prompt,
                 in: scope.declaration, repos: repos, startPoint: startPoint,
                 pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
-                scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames
+                scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
+                createdBy: createdBy
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
@@ -201,8 +203,10 @@ extension AppModel {
         selection = .task(record.id)
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
+        guard openThread else { return state }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        await newThread(in: scopeID, driverID: driverID, taskID: record.id, initialPrompt: trimmed.isEmpty ? nil : trimmed)
+        await newThread(in: scopeID, driverID: driverID, taskID: record.id,
+                        initialPrompt: trimmed.isEmpty ? nil : trimmed, origin: threadOrigin)
         return state
     }
 

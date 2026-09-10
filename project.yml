@@ -29,7 +29,10 @@ settings:
     DEVELOPMENT_TEAM: ""
 
 targets:
-  scope:
+  # Named scope-cli, not scope: the app target is `Scope`, and on a case-insensitive filesystem the two
+  # would share one `Scope.build` intermediate directory — the second one to build wins and the first
+  # fails with "unable to open dependencies file". The binary is still `scope` (PRODUCT_NAME).
+  scope-cli:
     type: tool
     platform: macOS
     sources:
@@ -89,7 +92,7 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
-      - target: scope # the CLI; `scope --install` symlinks it onto the user's PATH
+      - target: scope-cli # the CLI; the app can symlink it onto the user's PATH
         embed: true
         codeSign: true
         copy:
@@ -171,7 +174,7 @@ schemes:
       targets:
         Scope: all
         scope-hook: all
-        scope: all
+        scope-cli: all
     run:
       config: Debug
     test:

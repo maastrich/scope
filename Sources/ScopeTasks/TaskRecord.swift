@@ -52,12 +52,17 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     /// Branch checked out in the sandbox (the task branch).
     public var branch: String
     public var state: State
+    /// `true` when the task created the branch, `false` when it checked out one that already existed, `nil`
+    /// on records written before the flag existed. What tells an undo whether deleting the branch is safe.
+    public var branchCreated: Bool?
 
-    public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active) {
+    public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active,
+                branchCreated: Bool? = nil) {
         self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
         self.sandboxPath = sandboxPath
         self.branch = branch
         self.state = state
+        self.branchCreated = branchCreated
     }
 
     public var id: String { repoRelativePath }
@@ -137,6 +142,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// The initial request the task was created from (New Task sheet); shown in the sidebar and as the
     /// "Goal" of `AGENTS.md`, and given to the first thread as its opening prompt.
     public var prompt: String?
+    /// Who asked for the task: `nil` (the user, in the app) or the control client that requested it
+    /// (`scope-cli/0.4.0`). Written so the sidebar and `scope list` can say what an agent created.
+    public var createdBy: String?
 
     public init(
         id: TaskID = .generate(),
@@ -152,7 +160,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         createdAt: Date = .now,
         archivedAt: Date? = nil,
         pullRequest: LinkedPullRequest? = nil,
-        prompt: String? = nil
+        prompt: String? = nil,
+        createdBy: String? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -169,6 +178,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.archivedAt = archivedAt
         self.pullRequest = pullRequest
         self.prompt = prompt
+        self.createdBy = createdBy
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -220,6 +230,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
+        case createdBy
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -240,5 +251,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
         pullRequest = try container.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest)
         prompt = try container.decodeIfPresent(String.self, forKey: .prompt)
+        createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
     }
 }

@@ -80,7 +80,7 @@ public actor TaskManager {
         name: String, branch: String, slug requestedSlug: String? = nil, initialPrompt: String? = nil,
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
-        contextFiles: [String] = []
+        contextFiles: [String] = [], createdBy: String? = nil
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -106,13 +106,14 @@ public actor TaskManager {
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
-            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt
+            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
             for path in requested {
-                let (repo, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: startPoint)
+                var (repo, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: startPoint)
+                repo.branchCreated = isNew
                 created.append((repo, isNew))
                 record.repos.append(repo)
             }
@@ -151,7 +152,8 @@ public actor TaskManager {
         )
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
-            let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: .pullRequest(pr))
+            var (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: .pullRequest(pr))
+            sandbox.branchCreated = isNew
             created.append((sandbox, isNew))
             record.repos.append(sandbox)
             try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)

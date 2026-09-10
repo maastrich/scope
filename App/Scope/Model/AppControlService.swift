@@ -160,9 +160,98 @@ final class AppControlService: ControlService {
         )))
     }
 
+    /// `scope task new` — the New Task sheet without the sheet: the same request resolution, the same
+    /// headless proposal, the same `TaskManager.create`. What an agent gets is what the user would have got.
     private func newTask(_ params: TaskNewParams, from origin: ControlOrigin, caller: ControlCaller,
                          progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
-        .failure(.init(.unsupported, "task.new is not in this build yet"))
+        let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
+        let resolved = ScopeResolver.resolve(params.scope, in: scopeSummaries,
+                                             callerScopeID: callerScopeID, callerCwd: caller.cwd)
+        guard case .success(let summary) = resolved else { return .failure(resolved.failureError) }
+        guard let scope = model.scopes.first(where: { $0.id.rawValue == summary.id }) else {
+            return .failure(.notFound("scope \(summary.slug) went away"))
+        }
+        let prompt = params.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return .failure(.badRequest("a task needs a prompt")) }
+
+        // What the prompt is about, before anything is created: a pull request it names wins over everything.
+        let request = await model.resolveTaskRequest(prompt: prompt, in: scope.id)
+        if let existing = request.existingTask {
+            return .failure(.init(.failed, "that pull request already has a task",
+                                  detail: "Task \(existing.rawValue) in \(summary.slug)."))
+        }
+        if let unresolved = request.unresolved {
+            return .failure(.badRequest("the pull request in the prompt could not be read", detail: unresolved))
+        }
+
+        var repos: [String] = []
+        for query in params.repos {
+            switch ScopeResolver.resolveRepo(query, in: summary) {
+            case .failure(let error): return .failure(error)
+            case .success(let path): repos.append(path)
+            }
+        }
+        if repos.isEmpty { repos = request.repos }
+
+        let evidence = await model.branchEvidence(for: repos, in: scope.id)
+        var proposal: TaskProposal
+        if let branch = params.branch, let title = params.title {
+            proposal = TaskProposal(title: title, slug: params.slug ?? title, branch: branch, repos: repos,
+                                    source: .derived(reason: "named by the client"))
+        } else {
+            progress("asking \(model.profile(id: params.driver)?.name ?? "the driver") what to call it")
+            proposal = await model.proposeTask(prompt: prompt, driverID: params.driver, repos: repos,
+                                               evidence: evidence, in: scope.id)
+            if let title = params.title { proposal.title = title }
+            if let branch = params.branch { proposal.branch = branch }
+            if let slug = params.slug { proposal.slug = slug }
+        }
+        proposal.slug = model.uniqueTaskSlug(slugify(proposal.slug), in: scope.id)
+
+        if repos.isEmpty { repos = proposal.repos }
+        if repos.isEmpty, model.repoCandidates(in: scope).count == 1 {
+            repos = model.repoCandidates(in: scope).map(\.path)
+        }
+        guard !repos.isEmpty else {
+            return .failure(.badRequest("which repository should the task sandbox?",
+                                        detail: "Name one with --repo. This scope holds:\n"
+                                            + summary.repos.map { "  \($0)" }.joined(separator: "\n")))
+        }
+
+        let startPoint = request.startPoint
+        let sandboxes = model.env.tasks.scopeSandboxesURL(scopeSlug: scope.declaration.slug)
+            .appending(path: proposal.slug, directoryHint: .isDirectory)
+        guard !params.dryRun else {
+            // Nothing is written: this is the answer an agent shows before asking for the real thing.
+            return .success(.task(TaskNewResult(
+                created: false, name: proposal.title, slug: proposal.slug, branch: proposal.branch,
+                scope: summary.name, scopeSlug: summary.slug, root: sandboxes.path,
+                repos: repos.map { TaskRepoResult(repo: $0, worktree: sandboxes.appending(path: $0).path,
+                                                  branch: proposal.branch,
+                                                  branchCreated: startPoint.requiredBranch == nil) }
+            )))
+        }
+
+        let parent: String? = if case .thread(let id, _) = origin { id.rawValue } else { nil }
+        let threadOrigin = ThreadOrigin(author: .control, parent: parent,
+                                        depth: AutomationPolicy.childDepth(of: origin), client: caller.client)
+        let state: TaskState
+        do {
+            state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
+                                               repos: repos, startPoint: startPoint, openThread: params.openThread,
+                                               threadOrigin: threadOrigin, createdBy: caller.client)
+        } catch {
+            return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
+        }
+        NSApp.requestUserAttention(.informationalRequest)
+        let record = state.record
+        return .success(.task(TaskNewResult(
+            created: true, task: record.id.rawValue, name: record.name, slug: record.slug, branch: record.branch,
+            scope: summary.name, scopeSlug: summary.slug, root: record.root,
+            repos: record.repos.map { TaskRepoResult(repo: $0.repoRelativePath, worktree: $0.sandboxPath,
+                                                     branch: $0.branch, branchCreated: $0.branchCreated ?? false) },
+            thread: model.threads(in: record.id).first?.id.rawValue
+        )))
     }
 
     /// Runs an alert and answers `false` if nobody touched it before `timeout` seconds.
