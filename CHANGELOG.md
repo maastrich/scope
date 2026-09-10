@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.4.5](https://github.com/maastrich/scope/releases/tag/v0.4.5) - 2026-09-10
+
+### Fixed
+
+- **tasks:** stop warning when a repository has its own AGENTS.md or CLAUDE.md by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.4.4...v0.4.5
+
 ## [0.4.4](https://github.com/maastrich/scope/releases/tag/v0.4.4) - 2026-09-10
 
 ### Added
