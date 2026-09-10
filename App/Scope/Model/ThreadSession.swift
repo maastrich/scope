@@ -20,9 +20,9 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private var _terminalView: LocalProcessTerminalView?
     var terminalView: LocalProcessTerminalView {
         if let _terminalView { return _terminalView }
-        let view = LocalProcessTerminalView(frame: TerminalAppearance.initialFrame,
-                                            font: TerminalAppearance.font,
-                                            options: TerminalAppearance.options)
+        let view = ScopeTerminalView(frame: TerminalAppearance.initialFrame,
+                                     font: TerminalAppearance.font,
+                                     options: TerminalAppearance.options)
         TerminalAppearance.apply(to: view)
         view.processDelegate = bridge
         _terminalView = view

@@ -135,6 +135,8 @@ final class TerminalHostContainer: NSView {
         if let terminal = hosted as? LocalProcessTerminalView {
             TerminalAppearance.applyFont(to: terminal)
             TerminalAppearance.applyColors(to: terminal, appearance: effectiveAppearance)
+            // The scroll marker is drawn in the terminal's foreground colour, which just changed.
+            (terminal as? ScopeTerminalView)?.updateScrollMarker()
         }
     }
 
