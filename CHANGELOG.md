@@ -11,6 +11,15 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.4.3](https://github.com/maastrich/scope/releases/tag/v0.4.3) - 2026-09-10
+
+### Added
+
+- **mcp:** register `scope mcp` with Claude Code, Codex and Cursor for the user by @maastrich
+- **cli:** stop, close and type into threads, and undo a task by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.4.2...v0.4.3
+
 ## [0.4.2](https://github.com/maastrich/scope/releases/tag/v0.4.2) - 2026-09-10
 
 ### Added
