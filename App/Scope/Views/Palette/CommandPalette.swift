@@ -30,7 +30,10 @@ struct CommandPalette: View {
             }
             .frame(width: 620)
             .fixedSize(horizontal: false, vertical: true)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            // Opaque, not a material: a material blurs what lies under it, and under the panel lies the dimming
+            // scrim — the panel came out grey (`#d6d9da` measured in light mode), a shade above the backdrop it is
+            // supposed to stand in front of.
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.15)))
             .shadow(color: .black.opacity(0.35), radius: 35, y: 24)
             .padding(.top, 120)
