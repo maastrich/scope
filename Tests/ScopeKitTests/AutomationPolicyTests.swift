@@ -141,3 +141,59 @@ import Testing
         #expect(AutomationPolicy.childDepth(of: external) == 1)
     }
 }
+
+/// Stopping, closing and typing into threads: an agent may touch only its own.
+@Suite struct ThreadOwnershipPolicyTests {
+    static let agent = ThreadID(rawValue: "3f9a2c17be04")!
+    static let external = ControlOrigin.externalAgent(client: "scope-mcp/0.4.3")
+
+    static let openedByAgent = ThreadOrigin(author: .control, parent: "3f9a2c17be04", depth: 1, client: "scope-mcp/0.4.3")
+    static let openedByOther = ThreadOrigin(author: .control, parent: "aaaaaaaaaaaa", depth: 1, client: "scope-mcp/0.4.3")
+    static let openedOutside = ThreadOrigin(author: .control, parent: nil, depth: 1, client: "scope-mcp/0.4.3")
+    static let openedByUserCLI = ThreadOrigin(author: .control, parent: nil, depth: 0, client: "scope-cli/0.4.3")
+
+    @Test func theUserTouchesAnything() {
+        for target in [Self.openedByAgent, Self.openedByOther, Self.openedOutside, ThreadOrigin.user] {
+            #expect(AutomationPolicy.mayTouch(target, from: .user) == nil)
+        }
+    }
+
+    @Test func anAgentTouchesOnlyTheThreadsItOpened() {
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: .thread(Self.agent, depth: 0)) == nil)
+        #expect(AutomationPolicy.mayTouch(Self.openedByOther, from: .thread(Self.agent, depth: 0))?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(.user, from: .thread(Self.agent, depth: 0))?.code == .denied)
+    }
+
+    @Test func anAgentOutsideScopeTouchesOnlyWhatAgentsOutsideScopeOpened() {
+        #expect(AutomationPolicy.mayTouch(Self.openedOutside, from: Self.external) == nil)
+        #expect(AutomationPolicy.mayTouch(Self.openedByUserCLI, from: Self.external)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: Self.external)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(.user, from: Self.external)?.code == .denied)
+    }
+
+    /// Nothing new is opened, so the depth ceiling does not stop an agent from stopping its own thread.
+    @Test func actingOnAThreadIgnoresTheDepthCeiling() {
+        let policy = AutomationPolicy(settings: AutomationSettings(maxDepth: 1))
+        let stop = ControlCall.threadStop(ThreadTargetParams(thread: "x"))
+        #expect(policy.decide(stop, from: .thread(Self.agent, depth: 5)) == .allow)
+        #expect(policy.decide(.threadSend(ThreadSendParams(thread: "x", text: "y")), from: Self.external) == .allow)
+    }
+
+    @Test func closingATaskAsksLikeCreatingOne() {
+        let close = ControlCall.taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true))
+        guard case .ask(let subject) = AutomationPolicy(settings: AutomationSettings()).decide(close, from: Self.external) else {
+            Issue.record("undoing a task from an agent asks the user")
+            return
+        }
+        #expect(subject.contains("rework-auth") && subject.contains("branch"))
+        #expect(AutomationPolicy(settings: AutomationSettings()).decide(close, from: .user) == .allow)
+    }
+
+    @Test func agentsTurnedOffCannotActEither() {
+        let off = AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false))
+        guard case .refuse = off.decide(.threadClose(ThreadTargetParams(thread: "x")), from: .thread(Self.agent, depth: 0)) else {
+            Issue.record("agents turned off means off")
+            return
+        }
+    }
+}

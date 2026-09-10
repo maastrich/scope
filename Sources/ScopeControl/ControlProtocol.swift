@@ -44,13 +44,17 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case ping
     case list
     case threadNew = "thread.new"
+    case threadStop = "thread.stop"
+    case threadClose = "thread.close"
+    case threadSend = "thread.send"
     case taskNew = "task.new"
+    case taskClose = "task.close"
 
     /// `false` for the calls that only read. Mutating calls go through `AutomationPolicy`.
     public var isMutating: Bool {
         switch self {
         case .ping, .list: false
-        case .threadNew, .taskNew: true
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose: true
         }
     }
 }
@@ -143,14 +147,22 @@ public enum ControlCall: Sendable, Equatable {
     case ping
     case list(ListParams)
     case threadNew(ThreadNewParams)
+    case threadStop(ThreadTargetParams)
+    case threadClose(ThreadTargetParams)
+    case threadSend(ThreadSendParams)
     case taskNew(TaskNewParams)
+    case taskClose(TaskCloseParams)
 
     public var method: ControlMethod {
         switch self {
         case .ping: .ping
         case .list: .list
         case .threadNew: .threadNew
+        case .threadStop: .threadStop
+        case .threadClose: .threadClose
+        case .threadSend: .threadSend
         case .taskNew: .taskNew
+        case .taskClose: .taskClose
         }
     }
 
@@ -164,8 +176,63 @@ public enum ControlCall: Sendable, Equatable {
         case .ping: .seconds(5)
         case .list: .seconds(15)
         case .threadNew: .seconds(60)
-        case .taskNew: .seconds(300)
+        case .threadStop, .threadClose, .threadSend: .seconds(30)
+        case .taskNew, .taskClose: .seconds(300)
         }
+    }
+}
+
+/// `scope thread stop|close <id>` — the thread to act on.
+public struct ThreadTargetParams: Codable, Sendable, Equatable {
+    /// The thread id (12 hex characters, as `scope list threads` shows it).
+    public var thread: String
+
+    public init(thread: String) {
+        self.thread = thread
+    }
+}
+
+/// `scope thread send <id> <text>` — typed into the thread's terminal as if at its keyboard.
+public struct ThreadSendParams: Codable, Sendable, Equatable {
+    public var thread: String
+    public var text: String
+    /// Presses ↩ after the text (the default); `false` leaves it on the line.
+    public var submit: Bool
+
+    public init(thread: String, text: String, submit: Bool = true) {
+        self.thread = thread
+        self.text = text
+        self.submit = submit
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        thread = try container.decode(String.self, forKey: .thread)
+        text = try container.decode(String.self, forKey: .text)
+        submit = try container.decodeIfPresent(Bool.self, forKey: .submit) ?? true
+    }
+}
+
+/// `scope task close <id|slug>` — the undo of a task: its threads hung up, its worktrees removed.
+public struct TaskCloseParams: Codable, Sendable, Equatable {
+    /// Task id or slug.
+    public var task: String
+    /// Deletes the task's branch too (refused when it is not merged, unless `force`).
+    public var deleteBranch: Bool
+    /// Closes even with uncommitted changes or an unmerged branch — both are lost.
+    public var force: Bool
+
+    public init(task: String, deleteBranch: Bool = false, force: Bool = false) {
+        self.task = task
+        self.deleteBranch = deleteBranch
+        self.force = force
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        task = try container.decode(String.self, forKey: .task)
+        deleteBranch = try container.decodeIfPresent(Bool.self, forKey: .deleteBranch) ?? false
+        force = try container.decodeIfPresent(Bool.self, forKey: .force) ?? false
     }
 }
 
@@ -428,12 +495,27 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
     }
 }
 
+/// What a stop, a close or a send did: one line to show, and what it acted on.
+public struct ActionResult: Codable, Sendable, Equatable {
+    public var message: String
+    public var thread: String?
+    public var task: String?
+
+    public init(message: String, thread: String? = nil, task: String? = nil) {
+        self.message = message
+        self.thread = thread
+        self.task = task
+    }
+}
+
 /// A successful answer, typed per method.
 public enum ControlResultPayload: Sendable, Equatable {
     case ping(PingResult)
     case list(ListResult)
     case thread(ThreadNewResult)
     case task(TaskNewResult)
+    /// The answer of every call that acts on something existing, with the method it answers.
+    case action(ActionResult, ControlMethod)
 
     public var method: ControlMethod {
         switch self {
@@ -441,6 +523,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .list: .list
         case .thread: .threadNew
         case .task: .taskNew
+        case .action(_, let method): method
         }
     }
 }

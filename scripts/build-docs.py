@@ -648,7 +648,11 @@ app.</p>
 <h2 id="commands">Commands</h2>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
+scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
+scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
+scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
+scope task close &lt;id|slug&gt;          <span class="c"># undo a task (--delete-branch, --force)</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
 <p>Every command takes <code>--json</code>. <code>--scope</code> accepts a slug, a name, an id or a path;
@@ -669,8 +673,10 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 <code>1</code> for anything else.</p>
 
 <h2 id="mcp">The MCP server</h2>
-<p><code>scope mcp</code> speaks MCP on stdio with four tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_task_new</code>, <code>scope_ping</code>. They are the same
+<p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_close</code>,
+<code>scope_ping</code>. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
 <p><b>Settings ▸ Automation ▸ MCP server</b> registers it with Claude Code, Codex and Cursor for your user, so
 every session you start — in Scope or in any other terminal — has it: Claude Code through its own
@@ -693,6 +699,9 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
   <tr><td>Creating a task</td><td>after asking</td><td>A task writes a branch and a worktree per repository.</td></tr>
 </table>
+<p>An agent may type into, stop or close only the threads it opened itself; an agent outside Scope, only the
+threads agents outside Scope opened. Typing into someone else's agent is a prompt it never agreed to. Closing a
+task — worktrees removed, branch deleted when asked — follows the same approval as creating one.</p>
 <p>Every thread records who opened it and at what depth, so the chain survives a restart —
 <code>scope list threads</code> shows it. A <code>SCOPE_THREAD</code> that names no thread the app is
 running is refused outright.</p>

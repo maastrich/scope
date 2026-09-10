@@ -40,7 +40,12 @@ public enum ScopeCLI {
 
       scope list [scopes|threads|tasks]   what Scope is holding right now
       scope thread new [options]          open a thread and print its id
+      scope thread stop <id>              stop the thread's process (the row stays)
+      scope thread close <id>             hang it up and remove it
+      scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
+      scope task close <id|slug>          close a task: threads hung up, worktrees removed
+                                          (--delete-branch, --force to lose uncommitted work)
       scope mcp                           speak MCP on stdio, same commands
       scope ping                          check that Scope is listening
 
@@ -108,10 +113,31 @@ public enum ScopeCLI {
             })
             return .call(.list(parameters), shared)
         case "thread":
-            guard rest.first == "new" else {
-                throw UsageError(message: "the only thread command is `scope thread new`", usage: usage)
-            }
+            let sub = rest.first
             rest = rest.dropFirst()
+            switch sub {
+            case "stop", "close":
+                var words: [String] = []
+                let shared = try options(&rest, command: "thread \(sub!)", positional: { words.append($0) })
+                guard words.count == 1 else { throw UsageError(message: "thread \(sub!) takes one thread id", usage: usage) }
+                let target = ThreadTargetParams(thread: words[0])
+                return .call(sub == "stop" ? .threadStop(target) : .threadClose(target), shared)
+            case "send":
+                var words: [String] = []
+                var submit = true
+                let shared = try options(&rest, command: "thread send", positional: { words.append($0) }, specific: { flag, _ in
+                    guard flag == "--no-enter" else { return false }
+                    submit = false
+                    return true
+                })
+                guard words.count >= 2 else { throw UsageError(message: "thread send takes a thread id and the text to type", usage: usage) }
+                return .call(.threadSend(ThreadSendParams(thread: words[0], text: words.dropFirst().joined(separator: " "),
+                                                          submit: submit)), shared)
+            case "new":
+                break
+            default:
+                throw UsageError(message: "thread commands: new, stop, close, send", usage: usage)
+            }
             var parameters = ThreadNewParams()
             let shared = try options(&rest, command: "thread new", specific: { flag, value in
                 switch flag {
@@ -127,10 +153,26 @@ public enum ScopeCLI {
             })
             return .call(.threadNew(parameters), shared)
         case "task":
-            guard rest.first == "new" else {
-                throw UsageError(message: "the only task command is `scope task new`", usage: usage)
-            }
+            let sub = rest.first
             rest = rest.dropFirst()
+            if sub == "close" {
+                var words: [String] = []
+                var parameters = TaskCloseParams(task: "")
+                let shared = try options(&rest, command: "task close", positional: { words.append($0) }, specific: { flag, _ in
+                    switch flag {
+                    case "--delete-branch": parameters.deleteBranch = true
+                    case "--force": parameters.force = true
+                    default: return false
+                    }
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "task close takes one task id or slug", usage: usage) }
+                parameters.task = words[0]
+                return .call(.taskClose(parameters), shared)
+            }
+            guard sub == "new" else {
+                throw UsageError(message: "task commands: new, close", usage: usage)
+            }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")
             let shared = try options(&rest, command: "task new", positional: { prompt.append($0) }, specific: { flag, value in
@@ -178,7 +220,9 @@ public enum ScopeCLI {
             let flagName = flag
             let value: () throws -> String = {
                 if let inlineValue { return inlineValue }
-                guard let next = remaining.first else {
+                // `--task --driver x` is a missing value, not a task called "--driver". A prompt may start with
+                // dashes; nothing else may.
+                guard let next = remaining.first, !next.hasPrefix("--") || flagName == "-p" || flagName == "--prompt" else {
                     throw UsageError(message: "\(flagName) needs a value", usage: usage)
                 }
                 remaining = remaining.dropFirst()

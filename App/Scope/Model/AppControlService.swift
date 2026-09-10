@@ -55,6 +55,62 @@ final class AppControlService: ControlService {
             return await newThread(params, from: origin, caller: caller)
         case .taskNew(let params):
             return await newTask(params, from: origin, caller: caller, progress: progress)
+        case .threadStop(let params):
+            return act(on: params.thread, from: origin) { session in
+                guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
+                model.stop(session.id)
+                return .success(.action(ActionResult(message: "stopped \(session.id.rawValue) — \(session.title)",
+                                                     thread: session.id.rawValue), .threadStop))
+            }
+        case .threadClose(let params):
+            switch target(params.thread, from: origin) {
+            case .failure(let error): return .failure(error)
+            case .success(let session):
+                // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on.
+                _ = await model.close(session.id, force: true)
+                return .success(.action(ActionResult(message: "closed \(session.id.rawValue) — \(session.title)",
+                                                     thread: session.id.rawValue), .threadClose))
+            }
+        case .threadSend(let params):
+            return act(on: params.thread, from: origin) { session in
+                guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
+                session.send(params.text + (params.submit ? "\r" : ""))
+                return .success(.action(ActionResult(message: "typed \(params.text.count) characters into \(session.id.rawValue)"
+                                                         + (params.submit ? " and pressed ↩" : ""),
+                                                     thread: session.id.rawValue), .threadSend))
+            }
+        case .taskClose(let params):
+            guard let task = model.tasks.first(where: { $0.record.id.rawValue == params.task || $0.record.slug == params.task }) else {
+                return .failure(.notFound("no task “\(params.task)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
+            }
+            let slug = task.record.slug
+            do {
+                try await model.removeTask(task.id, deleteBranch: params.deleteBranch, force: params.force)
+            } catch {
+                return .failure(.failed("could not close the task \(slug)", detail: String(describing: error)))
+            }
+            return .success(.action(ActionResult(message: "closed the task \(slug)"
+                                                     + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"),
+                                                 task: task.record.id.rawValue), .taskClose))
+        }
+    }
+
+    /// The thread `raw` names, when `origin` may act on it (`AutomationPolicy.mayTouch`).
+    private func target(_ raw: String, from origin: ControlOrigin) -> Result<ThreadSession, ControlError> {
+        guard let id = ThreadID(rawValue: raw), let session = model.session(id) else {
+            return .failure(.notFound("no thread “\(raw)”", detail: "`scope list threads` shows the ids."))
+        }
+        if let refusal = AutomationPolicy.mayTouch(session.record.resolvedOrigin, from: origin) {
+            return .failure(refusal)
+        }
+        return .success(session)
+    }
+
+    private func act(on raw: String, from origin: ControlOrigin,
+                     _ body: (ThreadSession) -> Result<ControlResultPayload, ControlError>) -> Result<ControlResultPayload, ControlError> {
+        switch target(raw, from: origin) {
+        case .failure(let error): .failure(error)
+        case .success(let session): body(session)
         }
     }
 

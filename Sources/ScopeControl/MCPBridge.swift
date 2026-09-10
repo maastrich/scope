@@ -41,7 +41,8 @@ public enum MCPBridge {
     Opening a thread hands work to another agent, which costs the user money and attention: do it when they \
     asked for it, not to parallelise on your own initiative. Scope refuses recursion past its configured \
     depth, and creating a task asks the user first — a refusal is an answer, not an error to work around. \
-    Call scope_task_new with dry_run first and show what it would create.
+    Call scope_task_new with dry_run first and show what it would create. You may stop, close or type into \
+    only the threads you opened; scope_task_close undoes a task and asks the user first.
     """
 
     public static let tools: [MCPTool] = [
@@ -108,6 +109,55 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_thread_send",
+            title: "Type into a thread",
+            description: """
+            Types text into a thread's terminal, as if at its keyboard, and presses Return unless submit is false. \
+            Only for threads you opened: it is how you hand a follow-up to the agent you started.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "thread":{"type":"string","description":"Thread id, from scope_thread_new or scope_list."},\
+            "text":{"type":"string","description":"What to type."},\
+            "submit":{"type":"boolean","description":"Press Return after the text (default true)."}\
+            },"required":["thread","text"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_thread_stop",
+            title: "Stop a thread",
+            description: "Stops the process of a thread you opened. Its row stays, so it can be relaunched.",
+            schema: #"{"type":"object","properties":{"thread":{"type":"string","description":"Thread id."}},"required":["thread"],"additionalProperties":false}"#,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_thread_close",
+            title: "Close a thread",
+            description: "Hangs up a thread you opened and removes it from Scope.",
+            schema: #"{"type":"object","properties":{"thread":{"type":"string","description":"Thread id."}},"required":["thread"],"additionalProperties":false}"#,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
+            name: "scope_task_close",
+            title: "Close a task",
+            description: """
+            Undoes a task: hangs up its threads and removes its worktrees; with delete_branch, deletes its branch \
+            too. Asks the user first. Refused when there is uncommitted work or an unmerged branch, unless force — \
+            which loses it.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug."},\
+            "delete_branch":{"type":"boolean","description":"Delete the task's branch as well."},\
+            "force":{"type":"boolean","description":"Close even with uncommitted changes or an unmerged branch."}\
+            },"required":["task"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
             name: "scope_ping",
             title: "Check Scope",
             description: "Whether Scope is listening, its version, and what agents are currently allowed to do.",
@@ -129,6 +179,14 @@ public enum MCPBridge {
                 return .success(.threadNew(try decoder.decode(ThreadNewParams.self, from: arguments)))
             case "scope_task_new":
                 return .success(.taskNew(try decoder.decode(TaskNewArguments.self, from: arguments).call))
+            case "scope_thread_send":
+                return .success(.threadSend(try decoder.decode(ThreadSendParams.self, from: arguments)))
+            case "scope_thread_stop":
+                return .success(.threadStop(try decoder.decode(ThreadTargetParams.self, from: arguments)))
+            case "scope_thread_close":
+                return .success(.threadClose(try decoder.decode(ThreadTargetParams.self, from: arguments)))
+            case "scope_task_close":
+                return .success(.taskClose(try decoder.decode(TaskCloseArguments.self, from: arguments).call))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -151,6 +209,24 @@ public enum MCPBridge {
         case .list(let result): try encoder.encode(result)
         case .thread(let result): try encoder.encode(result)
         case .task(let result): try encoder.encode(result)
+        case .action(let result, _): try encoder.encode(result)
+        }
+    }
+
+    /// `scope_task_close` arguments, snake_case like the other task tool.
+    struct TaskCloseArguments: Decodable {
+        var task: String
+        var deleteBranch: Bool?
+        var force: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case task
+            case deleteBranch = "delete_branch"
+            case force
+        }
+
+        var call: TaskCloseParams {
+            TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false, force: force ?? false)
         }
     }
 

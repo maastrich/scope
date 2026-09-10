@@ -111,3 +111,45 @@ import Testing
         #expect(ControlCall.list(ListParams()).timeout < ControlCall.taskNew(TaskNewParams(prompt: "x")).timeout)
     }
 }
+
+/// The calls that act on something existing: stop, close, type, undo a task.
+@Suite struct ControlActionCallTests {
+    static let caller = ControlCaller(client: "scope-cli/test")
+
+    @Test func everyActionCallRoundTrips() throws {
+        let calls: [ControlCall] = [
+            .threadStop(ThreadTargetParams(thread: "3f9a2c17be04")),
+            .threadClose(ThreadTargetParams(thread: "3f9a2c17be04")),
+            .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "run the tests\nplease", submit: false)),
+            .taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true, force: false)),
+        ]
+        for call in calls {
+            let request = ControlRequest(id: "abcd", caller: Self.caller, call: call)
+            #expect(try ControlRequest.decode(try request.encoded()).get() == request, "\(call.method.rawValue)")
+        }
+    }
+
+    @Test func missingFlagsTakeTheirDefaults() throws {
+        let send = Data(#"{"caller":{"client":"x"},"id":"1","method":"thread.send","params":{"thread":"3f9a2c17be04","text":"hi"},"rpc":1}"#.utf8)
+        #expect(try ControlRequest.decode(send).get().call == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "hi", submit: true)))
+        let close = Data(#"{"caller":{"client":"x"},"id":"1","method":"task.close","params":{"task":"t"},"rpc":1}"#.utf8)
+        #expect(try ControlRequest.decode(close).get().call == .taskClose(TaskCloseParams(task: "t")))
+    }
+
+    @Test func anActionWithoutParametersIsABadRequest() {
+        let body = Data(#"{"caller":{"client":"x"},"id":"9","method":"thread.stop","rpc":1}"#.utf8)
+        guard case .failure(let failure) = ControlRequest.decode(body) else {
+            Issue.record("thread.stop needs a thread")
+            return
+        }
+        #expect(failure.error.code == .badRequest)
+        #expect(failure.id == "9")
+    }
+
+    @Test func anActionResultRemembersItsMethod() throws {
+        let response = ControlResponse.result(id: "1", .action(ActionResult(message: "closed", task: "t1"), .taskClose))
+        let decoded = try ControlResponse.decode(try response.encoded(), method: .taskClose)
+        #expect(decoded.payload == .action(ActionResult(message: "closed", task: "t1"), .taskClose))
+        #expect(decoded.payload?.method == .taskClose)
+    }
+}

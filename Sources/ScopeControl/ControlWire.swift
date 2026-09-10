@@ -39,7 +39,10 @@ public struct ControlRequest: Sendable, Equatable {
         case .ping: try encoder.encode(wire(Empty?.none))
         case .list(let params): try encoder.encode(wire(params))
         case .threadNew(let params): try encoder.encode(wire(params))
+        case .threadStop(let params), .threadClose(let params): try encoder.encode(wire(params))
+        case .threadSend(let params): try encoder.encode(wire(params))
         case .taskNew(let params): try encoder.encode(wire(params))
+        case .taskClose(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -61,12 +64,23 @@ public struct ControlRequest: Sendable, Equatable {
         }
         let caller = envelope.caller ?? ControlCaller(client: "unknown")
         do {
+            /// Parameters a method cannot do without.
+            func required<T: Decodable>(_ type: T.Type) throws -> T {
+                guard let params = try decoder.decode(Params<T>.self, from: data).params else {
+                    throw ControlError.badRequest("\(method.rawValue) needs parameters")
+                }
+                return params
+            }
             let call: ControlCall = switch method {
             case .ping: .ping
             case .list: .list(try decoder.decode(Params<ListParams>.self, from: data).params ?? ListParams())
             case .threadNew: .threadNew(try decoder.decode(Params<ThreadNewParams>.self, from: data).params ?? ThreadNewParams())
             case .taskNew: .taskNew(try decoder.decode(Params<TaskNewParams>.self, from: data).params
                 ?? { throw ControlError.badRequest("task.new needs a prompt") }())
+            case .threadStop: .threadStop(try required(ThreadTargetParams.self))
+            case .threadClose: .threadClose(try required(ThreadTargetParams.self))
+            case .threadSend: .threadSend(try required(ThreadSendParams.self))
+            case .taskClose: .taskClose(try required(TaskCloseParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -150,6 +164,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .list(let result): try encoder.encode(wire(result))
         case .thread(let result): try encoder.encode(wire(result))
         case .task(let result): try encoder.encode(wire(result))
+        case .action(let result, _): try encoder.encode(wire(result))
         }
     }
 
@@ -169,6 +184,8 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
+            case .threadStop, .threadClose, .threadSend, .taskClose:
+                .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             }
         }
         return ControlResponse(rpc: line.rpc, id: line.id, kind: kind, message: line.message,

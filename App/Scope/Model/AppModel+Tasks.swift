@@ -291,6 +291,28 @@ extension AppModel {
             problems.error("Could not close \(task.name)", detail: String(describing: error), scope: task.scopeID)
             return
         }
+        forgetClosedTask(task)
+    }
+
+    /// Closes a task without asking anything — the control socket's path: its threads hung up, its sandboxes
+    /// removed, its branch deleted when asked. Throws `TaskError` (uncommitted changes, unmerged branch) where
+    /// `closeTask` would put up a dialog; `force` goes through both, losing that work.
+    func removeTask(_ taskID: TaskID, deleteBranch: Bool, force: Bool) async throws {
+        guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
+        // Refuse before hanging up anything: the sandbox check below would come too late for the threads.
+        if !force, task.dirtyRepoCount > 0 {
+            throw TaskError.uncommittedChanges(repo: task.record.slug)
+        }
+        for session in threads(in: taskID) {
+            await close(session.id, force: true)
+        }
+        try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force)
+        forgetClosedTask(task)
+    }
+
+    /// What is left to do once the task manager has removed a task.
+    private func forgetClosedTask(_ task: TaskState) {
+        let taskID = task.id
         task.stopWatching()
         tasks.removeAll { $0.id == taskID }
         if selection == .task(taskID) || currentTask?.id == taskID {

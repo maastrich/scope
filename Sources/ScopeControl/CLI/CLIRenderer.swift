@@ -14,6 +14,7 @@ public enum CLIRenderer {
         case .list(let result): try encoder.encode(result)
         case .thread(let result): try encoder.encode(result)
         case .task(let result): try encoder.encode(result)
+        case .action(let result, _): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -70,6 +71,8 @@ public enum CLIRenderer {
                 lines.append("Nothing was written. Run it again without --dry-run to create it.")
             }
             return lines.joined(separator: "\n")
+        case .action(let result, _):
+            return result.message
         }
     }
 

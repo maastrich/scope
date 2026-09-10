@@ -93,6 +93,7 @@ stdio, so an agent can open a thread or sandbox a task by itself:
 scope list                                   # scopes, threads, tasks
 scope thread new --scope acme -p "why is CI red?"
 scope task new "fix the flaky login test" --repo api --dry-run
+scope thread send 3f9a2c17be04 "run the tests"   # also: thread stop / close, task close
 ```
 
 Inside a thread there is nothing to install: Scope puts its `Contents/Helpers` first on the PATH it hands the

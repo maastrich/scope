@@ -94,18 +94,27 @@ public struct AutomationPolicy: Sendable, Equatable {
                 return .refuse(.denied("agents may not drive Scope",
                                        detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json."))
             }
-            let childDepth = depth + 1
-            guard childDepth <= settings.maxDepth else {
-                return .refuse(.denied(
-                    "\(AutomationPolicy.describe(origin, depth: depth)) may not open another",
-                    detail: "The chain would reach depth \(childDepth), past the ceiling of \(settings.maxDepth). "
-                        + "Raise preferences.automation.maxDepth if that is what you want."
-                ))
-            }
-            let approval = switch call.method {
-            case .threadNew: settings.threads
-            case .taskNew: settings.tasks
-            case .ping, .list: AutomationSettings.Approval.allow
+            let approval: AutomationSettings.Approval
+            switch call.method {
+            case .ping, .list:
+                return .allow
+            case .threadStop, .threadClose, .threadSend:
+                // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
+                // answers it against the target, once the app has found it.
+                return .allow
+            case .taskClose:
+                // Undoing a task removes worktrees and can delete a branch: the same approval as creating one.
+                approval = settings.tasks
+            case .threadNew, .taskNew:
+                let childDepth = depth + 1
+                guard childDepth <= settings.maxDepth else {
+                    return .refuse(.denied(
+                        "\(AutomationPolicy.describe(origin, depth: depth)) may not open another",
+                        detail: "The chain would reach depth \(childDepth), past the ceiling of \(settings.maxDepth). "
+                            + "Raise preferences.automation.maxDepth if that is what you want."
+                    ))
+                }
+                approval = call.method == .threadNew ? settings.threads : settings.tasks
             }
             return switch approval {
             case .allow: .allow
@@ -113,6 +122,34 @@ public struct AutomationPolicy: Sendable, Equatable {
             case .deny: .refuse(.denied("\(call.method.rawValue) is turned off for agents",
                                         detail: "Settings ▸ Automation."))
             }
+        }
+    }
+
+    /// Whether `origin` may stop, close or type into a thread that `target` says was opened by whom.
+    ///
+    /// You may touch any thread. An agent may touch only the threads it opened itself — typing into another
+    /// agent's terminal is a prompt it never agreed to — and an agent outside Scope, which has no thread of its
+    /// own to be the parent of anything, only the threads agents outside Scope opened.
+    public static func mayTouch(_ target: ThreadOrigin, from origin: ControlOrigin) -> ControlError? {
+        switch origin {
+        case .user:
+            return nil
+        case .strangerThread(let raw):
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+        case .thread(let id, _):
+            guard target.parent == id.rawValue else {
+                return .denied("an agent may only act on the threads it opened",
+                               detail: "Ask the user, or use `scope list threads` to find the ones you opened.")
+            }
+            return nil
+        case .externalAgent:
+            let openedOutside = target.author == .control && target.parent == nil
+                && (target.client ?? "").hasPrefix(ControlClientName.mcp + "/")
+            guard openedOutside else {
+                return .denied("an agent outside Scope may only act on threads agents outside Scope opened",
+                               detail: "The threads you or a Scope thread opened are not yours to stop, close or type into.")
+            }
+            return nil
         }
     }
 
@@ -132,6 +169,11 @@ public struct AutomationPolicy: Sendable, Equatable {
             "open a thread" + (params.scope.map { " in \($0)" } ?? "")
         case .taskNew(let params):
             "create the task “\(params.title ?? params.prompt.prefix(60).trimmingCharacters(in: .whitespacesAndNewlines))”"
+        case .taskClose(let params):
+            "close the task “\(params.task)”" + (params.deleteBranch ? " and delete its branch" : "")
+        case .threadStop(let params): "stop the thread \(params.thread)"
+        case .threadClose(let params): "close the thread \(params.thread)"
+        case .threadSend(let params): "type into the thread \(params.thread)"
         }
     }
 }

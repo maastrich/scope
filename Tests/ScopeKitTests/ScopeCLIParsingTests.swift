@@ -113,3 +113,49 @@ import Testing
         #expect(ControlEndpoint.resolve(environment: ["SCOPE_HOME": "/tmp/from-env"]) == "/tmp/from-env/scope.sock")
     }
 }
+
+/// The commands that act on existing threads and tasks, and the flag that no longer swallows the next one.
+@Suite struct ScopeCLIActionParsingTests {
+    static func call(_ arguments: [String]) throws -> ControlCall {
+        guard case .call(let call, _) = try ScopeCLI.parse(arguments) else {
+            throw ScopeCLI.UsageError(message: "not a call", usage: "")
+        }
+        return call
+    }
+
+    @Test func threadStopAndClose() throws {
+        #expect(try Self.call(["thread", "stop", "3f9a2c17be04"]) == .threadStop(ThreadTargetParams(thread: "3f9a2c17be04")))
+        #expect(try Self.call(["thread", "close", "3f9a2c17be04", "--json"]) == .threadClose(ThreadTargetParams(thread: "3f9a2c17be04")))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "stop"]) }
+    }
+
+    @Test func threadSendJoinsTheWordsAndPressesReturn() throws {
+        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "run", "the", "tests"])
+            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "run the tests", submit: true)))
+        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "draft", "--no-enter"])
+            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "draft", submit: false)))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "send", "3f9a2c17be04"]) }
+    }
+
+    @Test func taskCloseTakesItsFlags() throws {
+        #expect(try Self.call(["task", "close", "rework-auth"]) == .taskClose(TaskCloseParams(task: "rework-auth")))
+        #expect(try Self.call(["task", "close", "rework-auth", "--delete-branch", "--force"])
+            == .taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true, force: true)))
+    }
+
+    @Test func unknownSubcommandsAreUsageErrors() {
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "teleport", "x"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "archive", "x"]) }
+    }
+
+    /// `--task --driver shell` used to open a thread in a task called "--driver".
+    @Test func aFlagValueCannotBeTheNextFlag() {
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "new", "--task", "--driver", "shell"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "new", "x", "--repo", "--dry-run"]) }
+    }
+
+    @Test func aPromptMayStillStartWithDashes() throws {
+        #expect(try Self.call(["thread", "new", "-p", "--help is broken"])
+            == .threadNew(ThreadNewParams(prompt: "--help is broken")))
+    }
+}

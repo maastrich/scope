@@ -81,3 +81,26 @@ import Testing
         #expect(MCPBridge.instructions.lowercased().contains("depth"))
     }
 }
+
+/// The tools that act on existing threads and tasks.
+@Suite struct MCPActionToolTests {
+    static func call(_ tool: String, _ json: String) -> Result<ControlCall, ControlError> {
+        MCPBridge.call(tool: tool, arguments: Data(json.utf8))
+    }
+
+    @Test func theActionToolsMapOntoTheirCalls() {
+        #expect(Self.call("scope_thread_stop", #"{"thread":"3f9a2c17be04"}"#) == .success(.threadStop(ThreadTargetParams(thread: "3f9a2c17be04"))))
+        #expect(Self.call("scope_thread_close", #"{"thread":"3f9a2c17be04"}"#) == .success(.threadClose(ThreadTargetParams(thread: "3f9a2c17be04"))))
+        #expect(Self.call("scope_thread_send", #"{"thread":"3f9a2c17be04","text":"go"}"#)
+            == .success(.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go", submit: true))))
+        #expect(Self.call("scope_task_close", #"{"task":"t","delete_branch":true}"#)
+            == .success(.taskClose(TaskCloseParams(task: "t", deleteBranch: true, force: false))))
+    }
+
+    @Test func closingIsMarkedDestructive() {
+        let byName = Dictionary(uniqueKeysWithValues: MCPBridge.tools.map { ($0.name, $0) })
+        #expect(byName["scope_thread_close"]?.destructive == true)
+        #expect(byName["scope_task_close"]?.destructive == true)
+        #expect(byName["scope_thread_send"]?.readOnly == false)
+    }
+}
