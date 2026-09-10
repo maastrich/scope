@@ -14,7 +14,9 @@ let package = Package(
         .library(name: "ScopeAdapters", targets: ["ScopeAdapters"]),
         .library(name: "ScopeTasks", targets: ["ScopeTasks"]),
         .library(name: "ScopeGraph", targets: ["ScopeGraph"]),
+        .library(name: "ScopeControl", targets: ["ScopeControl"]),
         .executable(name: "scope-hook", targets: ["scope-hook"]),
+        .executable(name: "scope", targets: ["scope"]),
     ],
     targets: [
         .target(
@@ -38,6 +40,11 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
+            name: "ScopeControl",
+            dependencies: ["ScopeCore", "ScopeAdapters"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .target(
             name: "ScopeTasks",
             dependencies: ["ScopeCore", "ScopeGit", "ScopeDrivers"],
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -48,13 +55,18 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
+            name: "scope",
+            dependencies: ["ScopeControl"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
             name: "scope-hook",
             dependencies: ["ScopeAdapters"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "ScopeKitTests",
-            dependencies: ["ScopeCore", "ScopeGit", "ScopeDrivers", "ScopeAdapters", "ScopeTasks", "ScopeGraph"],
+            dependencies: ["ScopeCore", "ScopeGit", "ScopeDrivers", "ScopeAdapters", "ScopeTasks", "ScopeGraph", "ScopeControl"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

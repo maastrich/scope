@@ -244,6 +244,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var autoCloseExitedThreads: Bool
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement
+    /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
+    public var automation: AutomationSettings?
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -265,7 +267,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalAppearance: TerminalAppearanceMode = .system,
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
         autoCloseExitedThreads: Bool = false,
-        attentionCounter: AttentionCounterPlacement = .sidebar
+        attentionCounter: AttentionCounterPlacement = .sidebar,
+        automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -279,13 +282,15 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalCursorStyle = terminalCursorStyle
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.attentionCounter = attentionCounter
+        self.automation = automation
     }
 
     public static let `default` = Preferences()
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads, attentionCounter
+             terminalFontSize, terminalAppearance, terminalCursorStyle, autoCloseExitedThreads, attentionCounter,
+             automation
     }
 
     public init(from decoder: any Decoder) throws {
@@ -310,7 +315,11 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.autoCloseExitedThreads
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
             ?? defaults.attentionCounter
+        automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
+
+    /// The automation rules in force: what `config.json` says, or the defaults.
+    public var automationSettings: AutomationSettings { automation ?? AutomationSettings() }
 }
 
 /// The whole `config.json` document.

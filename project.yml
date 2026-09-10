@@ -29,6 +29,20 @@ settings:
     DEVELOPMENT_TEAM: ""
 
 targets:
+  scope:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/scope
+    dependencies:
+      - package: ScopeKit
+        product: ScopeControl
+    settings:
+      base:
+        PRODUCT_NAME: scope
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: YES
+
   scope-hook:
     type: tool
     platform: macOS
@@ -63,11 +77,19 @@ targets:
         product: ScopeTasks
       - package: ScopeKit
         product: ScopeGraph
+      - package: ScopeKit
+        product: ScopeControl
       - package: SwiftTerm
         product: SwiftTerm
       - package: Sparkle # embeds Sparkle.framework (Autoupdate, Updater.app, Installer.xpc, Downloader.xpc)
         product: Sparkle
       - target: scope-hook
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      - target: scope # the CLI; `scope --install` symlinks it onto the user's PATH
         embed: true
         codeSign: true
         copy:
@@ -149,6 +171,7 @@ schemes:
       targets:
         Scope: all
         scope-hook: all
+        scope: all
     run:
       config: Debug
     test:

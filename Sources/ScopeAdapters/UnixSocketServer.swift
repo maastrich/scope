@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import ScopeCore
+import Synchronization
 
 /// Errors raised by the unix socket server and client.
 public enum UnixSocketError: Error, Sendable, Equatable {
@@ -33,9 +34,15 @@ extension UnixSocketError: CustomStringConvertible, LocalizedError {
 
 /// Unix-domain stream socket server on Network.framework.
 ///
-/// One message per connection: a client connects, writes its payload, half-closes, and the whole payload is
-/// handed to `onMessage` on the server's own dispatch queue (never on the main thread). Nothing is written
-/// back. Verified on macOS 15 with both an `NWConnection` client and a plain `nc -U` client.
+/// Two shapes share the socket, told apart by `SocketFrame`.
+///
+/// A *hook message* is one payload per connection: the client connects, writes, half-closes, and the whole
+/// payload reaches `onMessage` on the server's own dispatch queue (never on the main thread). Nothing is
+/// written back. Verified on macOS 15 with both an `NWConnection` client and a plain `nc -U` client.
+///
+/// A *control frame* (`scope-rpc/1\n<json>\n`) reaches `onRequest` together with a `SocketResponder`: the
+/// client is still holding the connection open, waiting for reply lines and then end-of-file. Without an
+/// `onRequest` handler the server behaves exactly as it did before frames existed.
 public final class UnixSocketServer: Sendable {
     /// Largest message accepted from one connection; anything bigger is dropped with a log line.
     public static let maxMessageBytes = 1 << 20
@@ -57,6 +64,7 @@ public final class UnixSocketServer: Sendable {
     ///   - onFailure: called when the listener fails after `start()` (bind error, …). The app reports it as
     ///     a Problem and keeps running without adapters.
     public init(path: String, onMessage: @escaping @Sendable (Data) -> Void,
+                onRequest: (@Sendable (Data, SocketResponder) -> Void)? = nil,
                 onFailure: (@Sendable (any Error) -> Void)? = nil) throws {
         guard SocketPath.fits(path) else { throw UnixSocketError.pathTooLong(path) }
         self.path = path
@@ -72,7 +80,7 @@ public final class UnixSocketServer: Sendable {
         let queue = self.queue
         listener.newConnectionHandler = { connection in
             connection.start(queue: queue)
-            Self.receiveAll(connection, accumulated: Data(), onMessage: onMessage)
+            Self.receiveAll(connection, accumulated: Data(), onMessage: onMessage, onRequest: onRequest)
         }
         listener.stateUpdateHandler = { state in
             switch state {
@@ -102,7 +110,8 @@ public final class UnixSocketServer: Sendable {
     }
 
     private static func receiveAll(_ connection: NWConnection, accumulated: Data,
-                                   onMessage: @escaping @Sendable (Data) -> Void) {
+                                   onMessage: @escaping @Sendable (Data) -> Void,
+                                   onRequest: (@Sendable (Data, SocketResponder) -> Void)?) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
             var buffer = accumulated
             if let data { buffer.append(data) }
@@ -111,12 +120,86 @@ public final class UnixSocketServer: Sendable {
                 connection.cancel()
                 return
             }
+            if let onRequest {
+                switch SocketFrame.classify(buffer) {
+                case .frame(let version, let body):
+                    // One request per connection: the responder owns the connection from here.
+                    guard version == SocketFrame.version else {
+                        Log.hooks.warning("dropping control frame of unknown framing version \(version)")
+                        connection.cancel()
+                        return
+                    }
+                    onRequest(body, SocketResponder(connection))
+                    return
+                case .malformed(let reason):
+                    Log.hooks.warning("dropping malformed control frame: \(reason, privacy: .public)")
+                    connection.cancel()
+                    return
+                case .incomplete, .hookMessage:
+                    break
+                }
+            }
             if isComplete || error != nil {
                 if !buffer.isEmpty { onMessage(buffer) }
                 connection.cancel()
             } else {
-                receiveAll(connection, accumulated: buffer, onMessage: onMessage)
+                receiveAll(connection, accumulated: buffer, onMessage: onMessage, onRequest: onRequest)
             }
         }
+    }
+}
+
+/// The write side of one control connection: reply lines, then end-of-file.
+///
+/// Handed to the server's `onRequest` on the socket queue; the handler usually hops to the main actor and
+/// answers later, so every method is safe from any thread and `close()` is idempotent. The connection is
+/// only cancelled from inside a send completion — cancelling straight after `send` can drop bytes that
+/// have not reached the kernel yet.
+public final class SocketResponder: Sendable {
+    private let connection: NWConnection
+    private let closed = Mutex(false)
+
+    init(_ connection: NWConnection) {
+        self.connection = connection
+    }
+
+    /// Writes one reply line (a newline is appended). No-op once closed.
+    public func send(_ line: Data) {
+        guard !closed.withLock({ $0 }) else { return }
+        var payload = line
+        payload.append(0x0A)
+        write(payload, final: false, then: nil)
+    }
+
+    /// Writes a last line and closes; the client sees end-of-file. Idempotent.
+    public func finish(_ line: Data? = nil) {
+        let first = closed.withLock { flag -> Bool in
+            if flag { return false }
+            flag = true
+            return true
+        }
+        guard first else { return }
+        let connection = connection
+        let close = { @Sendable in
+            // Only cancel once the kernel has the bytes: cancelling straight after `send` drops them.
+            connection.send(content: nil, contentContext: .finalMessage, isComplete: true,
+                            completion: .contentProcessed { _ in connection.cancel() })
+        }
+        guard var payload = line else {
+            close()
+            return
+        }
+        payload.append(0x0A)
+        write(payload, final: false, then: close)
+    }
+
+    private func write(_ payload: Data, final: Bool, then next: (@Sendable () -> Void)?) {
+        connection.send(content: payload, contentContext: final ? .finalMessage : .defaultMessage, isComplete: true,
+                        completion: .contentProcessed { error in
+            if let error {
+                Log.hooks.warning("control reply failed: \(error.localizedDescription, privacy: .public)")
+            }
+            next?()
+        })
     }
 }

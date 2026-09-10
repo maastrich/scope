@@ -111,6 +111,8 @@ final class AppModel {
         self.pullRequests = PullRequestsModel(problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
+        // The CLI and the MCP server reach the app through this and nothing else.
+        env.controls.service = AppControlService(model: self)
         for problem in env.startupProblems { problems.report(problem) }
     }
 
@@ -675,7 +677,8 @@ final class AppModel {
     /// `prompt` argv; ignored by profiles without one), never on a relaunch or resume.
     @discardableResult
     func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
-                   title customTitle: String? = nil, initialPrompt: String? = nil) async -> ThreadSession? {
+                   title customTitle: String? = nil, initialPrompt: String? = nil,
+                   origin: ThreadOrigin = .user) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -716,7 +719,8 @@ final class AppModel {
             title: title,
             cwd: resolvedCwd,
             cwdKind: kind,
-            taskID: task?.id.rawValue
+            taskID: task?.id.rawValue,
+            origin: origin
         )
         let session = ThreadSession(record: record, profile: profile)
         register(session)

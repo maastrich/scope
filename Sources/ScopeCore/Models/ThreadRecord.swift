@@ -44,6 +44,9 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     public var lastState: ThreadState?
     /// Path of the thread's output log (M1); unused in M0.
     public var log: String?
+    /// Who opened the thread and how deep in the agent chain it sits; `nil` on records written before
+    /// the control socket existed, which means "the user opened it".
+    public var origin: ThreadOrigin?
 
     public init(
         id: ThreadID = .generate(),
@@ -54,7 +57,8 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         cwd: String,
         cwdKind: ThreadCwdKind,
         taskID: String? = nil,
-        createdAt: Date = .now
+        createdAt: Date = .now,
+        origin: ThreadOrigin? = nil
     ) {
         version = ThreadRecord.currentVersion
         self.id = id
@@ -72,14 +76,18 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         resumeID = nil
         lastState = nil
         log = nil
+        self.origin = origin
     }
+
+    /// The origin to reason about, defaulting to the user for records that predate the field.
+    public var resolvedOrigin: ThreadOrigin { origin ?? .unknown }
 
     /// `"<id>.json"`
     public var fileName: String { "\(id.rawValue).json" }
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, taskID, createdAt
-        case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log
+        case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
     }
 
     // Lenient decoding: only identity, driver and cwd are required.
@@ -101,5 +109,6 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         resumeID = try container.decodeIfPresent(String.self, forKey: .resumeID)
         lastState = try container.decodeIfPresent(ThreadState.self, forKey: .lastState)
         log = try container.decodeIfPresent(String.self, forKey: .log)
+        origin = try container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)
     }
 }

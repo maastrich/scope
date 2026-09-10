@@ -1,5 +1,6 @@
 import Foundation
 import ScopeAdapters
+import ScopeControl
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
@@ -35,10 +36,13 @@ final class AppEnvironment {
     private(set) var tasks: TaskManager
     /// `<home>/graph/<slug>.json` (spec §4.6).
     let graphStore: GraphStore
-    let hooks: HookSocketServer?
+    /// The one listener on `socketPath`: hook events in, control requests in and out.
+    let hooks: ControlSocketServer?
     /// Mirror of the thread ids the app owns; the socket server validates senders against it off main.
     let knownThreads: KnownThreads
     let hookSink: HookSink
+    /// Holds the `ControlService` until `AppModel` exists to provide it.
+    let controls: ControlSink
     let uiState: UIStateStore
     /// Problems met while building the environment, reported once the `ProblemCenter` exists.
     let startupProblems: [Problem]
@@ -51,9 +55,10 @@ final class AppEnvironment {
          drivers: DriverRegistry,
          shell: ShellEnvironmentResolver,
          git: GitClientRegistry,
-         hooks: HookSocketServer?,
+         hooks: ControlSocketServer?,
          knownThreads: KnownThreads,
          hookSink: HookSink,
+         controls: ControlSink,
          uiState: UIStateStore,
          startupProblems: [Problem]) {
         self.home = home
@@ -70,6 +75,7 @@ final class AppEnvironment {
         self.hooks = hooks
         self.knownThreads = knownThreads
         self.hookSink = hookSink
+        self.controls = controls
         self.uiState = uiState
         self.startupProblems = startupProblems
     }
@@ -102,12 +108,14 @@ final class AppEnvironment {
 
         let knownThreads = KnownThreads()
         let sink = HookSink()
-        var hooks: HookSocketServer?
+        let controls = ControlSink()
+        var hooks: ControlSocketServer?
         do {
-            hooks = try HookSocketServer(
+            hooks = try ControlSocketServer(
                 path: socketPath,
                 isKnownThread: { knownThreads.contains($0) },
-                sink: { event in sink.deliver(event) },
+                hookSink: { event in sink.deliver(event) },
+                controls: controls,
                 onFailure: { error in
                     Log.hooks.error("hook socket failed: \(String(describing: error), privacy: .public)")
                 }
@@ -117,7 +125,7 @@ final class AppEnvironment {
             problems.append(Problem(
                 severity: .warning,
                 title: "Adapter socket unavailable",
-                detail: "Could not listen on \(socketPath): \(String(describing: error))\n\nThreads still run; driver hooks cannot report their state.",
+                detail: "Could not listen on \(socketPath): \(String(describing: error))\n\nThreads still run; driver hooks cannot report their state and the `scope` command line cannot reach the app.",
                 actions: [.reveal(home.path)]
             ))
         }
@@ -134,6 +142,7 @@ final class AppEnvironment {
             hooks: hooks,
             knownThreads: knownThreads,
             hookSink: sink,
+            controls: controls,
             uiState: UIStateStore(),
             startupProblems: problems
         )
