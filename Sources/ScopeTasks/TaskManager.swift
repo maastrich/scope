@@ -13,9 +13,7 @@ public actor TaskManager {
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
     private var records: [TaskID: TaskRecord] = [:]
-    /// Context files a projection left alone because the repository already had one of its own, per task.
     /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
-    private var projectionSkips: [TaskID: [String]] = [:]
 
     public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore) {
         self.home = home
@@ -23,9 +21,6 @@ public actor TaskManager {
         self.store = store
     }
 
-    /// Names of the context files the last projection of `id` did not write, because a file of that name
-    /// was already there and Scope did not generate it.
-    public func projectionWarnings(for id: TaskID) -> [String] { projectionSkips[id] ?? [] }
 
     // MARK: - Records
 
@@ -417,8 +412,9 @@ public actor TaskManager {
     ///
     /// The name is a property of the *driver*, not of the task — a task's threads can run Claude Code
     /// (`CLAUDE.md`) and Codex (`AGENTS.md`) side by side — so every declared name is written, all with the
-    /// same content. A file Scope did not generate is never touched; its name is recorded in
-    /// `projectionWarnings` instead, because an agent starting without its context is worth saying out loud.
+    /// same content. A file Scope did not generate is the repository's own and is never touched: where the
+    /// driver reads a companion alongside it (`CLAUDE.local.md` next to `CLAUDE.md`), the context goes there
+    /// instead, and otherwise the agent starts from the repository's file and its prompt alone.
     ///
     /// Inside a sandbox the file is listed in `.git/info/exclude`, so the delta stays clean (spec §4.6).
     /// Adding a second repository moves the thread cwd from the sandbox up to the task root: the copies
@@ -431,19 +427,24 @@ public actor TaskManager {
         let directory = record.threadCwd
         // The thread starts inside a worktree whenever the cwd is a sandbox (always, for a repo scope).
         let sandbox = record.activeRepos.first { $0.sandboxURL.filesystemPath == directory.filesystemPath }
-        var skipped: [String] = []
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             for name in names {
                 let file = directory.appending(path: name, directoryHint: .notDirectory)
-                if let existing = try? String(contentsOf: file, encoding: .utf8), !existing.hasPrefix(TaskProjection.generatedMarker) {
-                    skipped.append(name)
+                let companion = Self.companionContextFile[name].map { directory.appending(path: $0, directoryHint: .notDirectory) }
+                guard Self.isRepositoryOwned(file) else {
+                    try markdown.write(to: file, atomically: true, encoding: .utf8)
+                    if let sandbox { try await excludeFromGit(name, in: sandbox, task: record) }
+                    // The repository's own file is gone: a companion left from before would load the context twice.
+                    if let companion, Self.isGenerated(companion) { try? FileManager.default.removeItem(at: companion) }
                     continue
                 }
-                try markdown.write(to: file, atomically: true, encoding: .utf8)
-                if let sandbox { try await excludeFromGit(name, in: sandbox, task: record) }
+                guard let companion, !Self.isRepositoryOwned(companion) else { continue }
+                try markdown.write(to: companion, atomically: true, encoding: .utf8)
+                if let sandbox { try await excludeFromGit(companion.lastPathComponent, in: sandbox, task: record) }
             }
-            try await removeGeneratedContextFiles(names, outside: directory, task: record)
+            try await removeGeneratedContextFiles(names + names.compactMap { Self.companionContextFile[$0] },
+                                                  outside: directory, task: record)
             if !record.isMonoRepo {
                 try TaskProjection.workspaceJSON(task: record).write(to: record.workspaceURL, options: [.atomic])
             }
@@ -452,7 +453,21 @@ public actor TaskManager {
         } catch {
             throw TaskError.persistence("projection write failed: \(String(describing: error))")
         }
-        projectionSkips[record.id] = skipped
+    }
+
+    /// Files a driver reads *in addition to* a context file, so the task context can sit beside a repository's
+    /// own. Only additive ones belong here: a file read instead (Codex's `AGENTS.override.md`) would shadow the
+    /// repository's rules.
+    static let companionContextFile = ["CLAUDE.md": "CLAUDE.local.md"]
+
+    /// A file that exists and was not written by Scope.
+    static func isRepositoryOwned(_ file: URL) -> Bool {
+        guard let existing = try? String(contentsOf: file, encoding: .utf8) else { return false }
+        return !existing.hasPrefix(TaskProjection.generatedMarker)
+    }
+
+    static func isGenerated(_ file: URL) -> Bool {
+        (try? String(contentsOf: file, encoding: .utf8))?.hasPrefix(TaskProjection.generatedMarker) == true
     }
 
     /// `AGENTS.md` first, then the other names the drivers declare, deduplicated: the pivot file is written

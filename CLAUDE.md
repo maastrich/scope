@@ -50,7 +50,9 @@ xcodebuild -project Scope.xcodeproj -scheme Scope -configuration Debug \
   event monitor in `App/Scope/Terminal/TerminalKeyBindings.swift` (that is how ⌘↩ sends a newline).
 - **A task's context file** (`AGENTS.md`, `CLAUDE.md`, …) is written at `TaskRecord.threadCwd` — the sandbox
   for a one-repository task, the task root otherwise — under every name the installed profiles declare, and
-  excluded through `.git/info/exclude`. Writing it anywhere else means the driver never reads it.
+  excluded through `.git/info/exclude`. Writing it anywhere else means the driver never reads it. A
+  repository's own file is never touched; the context then goes to a companion the driver reads *in addition*
+  (`CLAUDE.local.md`), never to one it reads *instead* (`AGENTS.override.md` would shadow the repo's rules).
 - **Microsession argv** (`headlessLight`): keep `{prompt}` *before* variadic flags like `--tools` or
   `--allowedTools`, which would otherwise swallow it.
 - **A socket callback needs `qos: .userInitiated`.** At the default QoS macOS throttles a background app's

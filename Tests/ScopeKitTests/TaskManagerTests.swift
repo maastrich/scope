@@ -262,14 +262,28 @@ import ScopeGit
         let delta = try await Delta.load(mode: .uncommitted, in: task.rootURL, using: baseClient)
         #expect(delta.files.isEmpty)
 
-        // A file Scope did not generate is never overwritten; it is reported instead, and the exclude is
-        // not duplicated. Scope's own file is refreshed in place.
+        // A file Scope did not generate is never overwritten, and the exclude is not duplicated. Scope's own
+        // file is refreshed in place.
         try "mine".write(to: task.contextFileURL, atomically: true, encoding: .utf8)
         try await manager.regenerateProjection(task.id, contextFiles: ["CLAUDE.md"])
         #expect(try String(contentsOf: task.contextFileURL, encoding: .utf8) == "mine")
-        #expect(await manager.projectionWarnings(for: task.id) == ["AGENTS.md"])
         #expect(try String(contentsOf: claude, encoding: .utf8).hasPrefix(TaskProjection.generatedMarker))
         #expect(try String(contentsOf: exclude, encoding: .utf8).components(separatedBy: "/AGENTS.md").count == 2)
+
+        // The repository's own CLAUDE.md: the context goes to CLAUDE.local.md, which Claude Code reads beside it.
+        let local = task.contextFileURL(named: "CLAUDE.local.md")
+        try "ours".write(to: claude, atomically: true, encoding: .utf8)
+        try await manager.regenerateProjection(task.id, contextFiles: ["CLAUDE.md"])
+        #expect(try String(contentsOf: claude, encoding: .utf8) == "ours")
+        #expect(try String(contentsOf: local, encoding: .utf8).hasPrefix(TaskProjection.generatedMarker))
+        #expect(try String(contentsOf: exclude, encoding: .utf8).contains("/CLAUDE.local.md"))
+
+        // Once the repository's file is gone the context returns to CLAUDE.md, and the companion goes with it so
+        // the agent never reads the context twice.
+        try FileManager.default.removeItem(at: claude)
+        try await manager.regenerateProjection(task.id, contextFiles: ["CLAUDE.md"])
+        #expect(try String(contentsOf: claude, encoding: .utf8).hasPrefix(TaskProjection.generatedMarker))
+        #expect(!scope.exists(local))
 
         // Archive removes the worktree (= the root); close deletes the branch.
         try await manager.archive(task.id)

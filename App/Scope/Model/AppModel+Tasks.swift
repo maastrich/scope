@@ -31,17 +31,6 @@ extension AppModel {
         }
     }
 
-    /// Says once, per task, which context files were left untouched because the repository has its own.
-    private func reportProjectionWarnings(for record: TaskRecord, scopeID: ScopeID) async {
-        let skipped = await env.tasks.projectionWarnings(for: record.id)
-        guard !skipped.isEmpty else { return }
-        problems.warn("\(record.name): \(skipped.joined(separator: ", ")) left as it is",
-                      detail: "The repository already has that file and Scope did not write it, so its agents "
-                            + "start without the task's goal, branch and sandbox rules. Rename or remove it to let "
-                            + "Scope project the task context, or paste the context in yourself.",
-                      scope: scopeID)
-    }
-
     /// Task slugs and sandbox folders already used in a scope (the proposer keeps clear of them).
     private func takenTaskSlugs(in scope: ScopeState) -> Set<String> {
         var taken = Set(tasks(in: scope.id).map(\.record.slug))
@@ -195,7 +184,6 @@ extension AppModel {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
             throw error
         }
-        await reportProjectionWarnings(for: record, scopeID: scopeID)
         let state = TaskState(record: record, git: env.git)
         tasks.append(state)
         state.startWatching()
@@ -217,7 +205,6 @@ extension AppModel {
             let summaries = await graphSummaries(for: scope)
             let record = try await env.tasks.addRepo(taskID, repo: relativePath, scopeRepos: scope.repos.map(\.id),
                                                      repoSummaries: summaries, contextFiles: contextFileNames)
-            await reportProjectionWarnings(for: record, scopeID: task.scopeID)
             task.update(record: record)
             task.stopWatching()
             task.startWatching()

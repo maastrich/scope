@@ -447,9 +447,10 @@ it has several — because a file anywhere else is a file the driver never opens
 the installed drivers read (<code>AGENTS.md</code>, and <code>CLAUDE.md</code> for Claude Code; the profile's
 <code>context</code> says which), with the same content in each. Inside a sandbox each file is added to
 <code>.git/info/exclude</code>, so it never shows up in your delta.</p>
-<p>A file Scope did not generate is never overwritten: if the repository already has its own
-<code>AGENTS.md</code>, Scope leaves it alone and says so in the Problem Center, so you know the agent is
-starting without the task's goal and rules.</p>
+<p>A file Scope did not generate is never overwritten: a repository's own <code>AGENTS.md</code> or
+<code>CLAUDE.md</code> stays exactly as it is. For Claude Code the task context then goes to
+<code>CLAUDE.local.md</code>, which Claude reads alongside the repository's file (excluded from git like the
+others); other drivers start from the repository's file and their prompt.</p>
 
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
