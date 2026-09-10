@@ -40,7 +40,7 @@ struct RootView: View {
                 columns = saved
             }
         }
-        // Bringing the sidebar back by hand (its toolbar button) ends the maximized thread.
+        // Bringing the sidebar back by hand (⌃⌘S, its toolbar button) ends the maximized thread.
         .onChange(of: columns) { _, visibility in
             guard model.threadMaximized, visibility != .detailOnly else { return }
             columnsBeforeMaximize = nil
