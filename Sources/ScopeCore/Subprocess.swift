@@ -167,6 +167,8 @@ public enum Subprocess {
         let signaller = ProcessSignaller()
         let out = DataSink()
         let err = DataSink()
+        // Set once the continuation exists, so a cancellation can still settle it (see `SubprocessCompletion`).
+        let settleOnCancel = Mutex<(@Sendable () -> Void)?>(nil)
 
         let result: ProcessResult = try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (cont: CheckedContinuation<ProcessResult, any Error>) in
@@ -194,18 +196,14 @@ public enum Subprocess {
                     process.standardInput = FileHandle.nullDevice
                 }
 
-                // Three completion events must happen before we resume: stdout EOF, stderr EOF, termination.
-                // `force` (termination after SIGTERM) resumes right away: grandchildren may hold the pipes open.
-                let pending = Mutex(3)
-                let stateBox = Mutex<(status: Int32, reason: Process.TerminationReason)?>(nil)
-                let finish: @Sendable (_ force: Bool) -> Void = { force in
-                    let done = pending.withLock { count -> Bool in
-                        guard count > 0 else { return false }
-                        count = force ? 0 : count - 1
-                        return count == 0
-                    }
-                    guard done, let final = stateBox.withLock({ $0 }) else { return }
-                    if force {
+                // Resumed exactly once, when the process has terminated and both pipes are closed — or when it has
+                // terminated after a cancellation, since grandchildren may keep the pipes open. Every event is
+                // idempotent: a pipe that reports its end twice must not finish the count before termination does.
+                let completion = Mutex(SubprocessCompletion())
+                let settle: @Sendable (SubprocessCompletion.Event) -> Void = { event in
+                    guard let outcome = completion.withLock({ $0.record(event) ? $0 : nil }),
+                          let status = outcome.status, let reason = outcome.reason else { return }
+                    if !outcome.pipesClosed {
                         stdoutPipe.fileHandleForReading.readabilityHandler = nil
                         stderrPipe.fileHandleForReading.readabilityHandler = nil
                         try? stdoutPipe.fileHandleForReading.close()
@@ -213,18 +211,19 @@ public enum Subprocess {
                     }
                     box.release()
                     cont.resume(returning: ProcessResult(
-                        exitCode: final.status,
-                        terminationReason: final.reason,
+                        exitCode: status,
+                        terminationReason: reason,
                         stdout: out.take(),
                         stderr: err.take()
                     ))
                 }
+                settleOnCancel.withLock { $0 = { settle(.cancelled) } }
 
                 stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
                     let data = handle.availableData
                     if data.isEmpty {
                         handle.readabilityHandler = nil
-                        finish(false)
+                        settle(.stdoutClosed)
                     } else {
                         out.append(data)
                     }
@@ -233,14 +232,14 @@ public enum Subprocess {
                     let data = handle.availableData
                     if data.isEmpty {
                         handle.readabilityHandler = nil
-                        finish(false)
+                        settle(.stderrClosed)
                     } else {
                         err.append(data)
                     }
                 }
                 process.terminationHandler = { proc in
-                    stateBox.withLock { $0 = (proc.terminationStatus, proc.terminationReason) }
-                    finish(signaller.isCancelled)
+                    settle(.terminated(status: proc.terminationStatus, reason: proc.terminationReason))
+                    if signaller.isCancelled { settle(.cancelled) }
                 }
 
                 do {
@@ -264,10 +263,55 @@ public enum Subprocess {
             }
         } onCancel: {
             signaller.cancel()
+            // A process that already exited gets no second termination: settle here, or wait forever on pipes a
+            // grandchild keeps open.
+            settleOnCancel.withLock { $0 }?()
         }
 
         // A cancelled task must not see a "successful" SIGTERM result.
         try Task.checkCancellation()
         return result
+    }
+}
+
+/// When the continuation of a launched process may be resumed: once, and only once.
+///
+/// Three events normally finish a run — stdout closed, stderr closed, the process terminated — and a
+/// cancellation (the timeout, or the caller going away) finishes it as soon as the process has terminated,
+/// open pipes or not. Counting events instead was wrong: `readabilityHandler` can report a pipe's end twice,
+/// the count reached zero before the termination status existed, the resume was skipped and never came back,
+/// and the git command queued behind it waited for the life of the app.
+struct SubprocessCompletion: Sendable, Equatable {
+    enum Event: Sendable, Equatable {
+        case stdoutClosed
+        case stderrClosed
+        case terminated(status: Int32, reason: Process.TerminationReason)
+        case cancelled
+    }
+
+    private(set) var stdoutClosed = false
+    private(set) var stderrClosed = false
+    private(set) var status: Int32?
+    private(set) var reason: Process.TerminationReason?
+    private(set) var cancelled = false
+    private(set) var resumed = false
+
+    var pipesClosed: Bool { stdoutClosed && stderrClosed }
+
+    /// Records `event`. `true` means "resume now" — returned at most once over the whole run.
+    mutating func record(_ event: Event) -> Bool {
+        switch event {
+        case .stdoutClosed: stdoutClosed = true
+        case .stderrClosed: stderrClosed = true
+        case .terminated(let status, let reason):
+            if self.status == nil {
+                self.status = status
+                self.reason = reason
+            }
+        case .cancelled: cancelled = true
+        }
+        guard !resumed, status != nil, pipesClosed || cancelled else { return false }
+        resumed = true
+        return true
     }
 }

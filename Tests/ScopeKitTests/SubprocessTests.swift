@@ -199,3 +199,52 @@ private struct Boom: Error {}
         }
     }
 }
+
+/// When a launched process's continuation resumes. A lost resume is a git command that never returns — and every
+/// later command on that repository queued behind it for the life of the app.
+@Suite struct SubprocessCompletionTests {
+    typealias C = SubprocessCompletion
+    static let exited = C.Event.terminated(status: 0, reason: .exit)
+
+    /// Feeds `events` in order: each "resume now?" answer, and the state left at the end.
+    static func feed(_ events: [C.Event]) -> (answers: [Bool], state: C) {
+        var completion = C()
+        let answers = events.map { completion.record($0) }
+        return (answers, completion)
+    }
+
+    @Test func theNormalOrderResumesOnce() {
+        let run = Self.feed([.stdoutClosed, .stderrClosed, Self.exited, Self.exited, .cancelled])
+        #expect(run.answers == [false, false, true, false, false])
+    }
+
+    /// The bug: a pipe reporting its end twice used to finish the count before the process had terminated.
+    @Test func aPipeClosingTwiceDoesNotFinishTheRunAlone() {
+        let run = Self.feed([.stdoutClosed, .stdoutClosed, .stderrClosed, Self.exited])
+        #expect(run.answers == [false, false, false, true], "termination must still resume once it arrives")
+    }
+
+    @Test func terminationFirstWaitsForBothPipes() {
+        let run = Self.feed([Self.exited, .stderrClosed, .stdoutClosed])
+        #expect(run.answers == [false, false, true])
+        #expect(run.state.status == 0)
+    }
+
+    /// A grandchild can keep the pipes open after the process exited; a cancellation must not wait for them.
+    @Test func cancellingAfterTheProcessExitedResumesWithPipesOpen() {
+        let run = Self.feed([Self.exited, .cancelled])
+        #expect(run.answers == [false, true])
+        #expect(!run.state.pipesClosed)
+    }
+
+    @Test func cancellingBeforeTheProcessExitedResumesWhenItDoes() {
+        let run = Self.feed([.cancelled, .stdoutClosed, .terminated(status: 15, reason: .uncaughtSignal)])
+        #expect(run.answers == [false, false, true])
+        #expect(run.state.reason == .uncaughtSignal)
+    }
+
+    @Test func theFirstTerminationStatusWins() {
+        let run = Self.feed([.terminated(status: 3, reason: .exit), .terminated(status: 0, reason: .exit)])
+        #expect(run.state.status == 3)
+    }
+}
