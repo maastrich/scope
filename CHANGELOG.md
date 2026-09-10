@@ -11,6 +11,31 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.4.2](https://github.com/maastrich/scope/releases/tag/v0.4.2) - 2026-09-10
+
+### Added
+
+- **terminal:** ⌘← ⌘→ ⌘⌫ ⌘⌦ reach the ends of the line by @maastrich
+- **view:** ⌘M maximizes the current thread inside the window by @maastrich
+- **threads:** Relaunch picks the previous driver session back up by @maastrich
+- **threads:** mark a waiting thread as read by @maastrich
+
+### Fixed
+
+- **terminal:** ⌥ types the character your keyboard puts there by @maastrich
+- **sidebar:** the New Thread button opens a loose thread, even with a task selected by @maastrich
+- **palette:** the command palette stands in front of its backdrop by @maastrich
+- **terminal:** a scroll marker when there is history, nothing when there is not by @maastrich
+- **view:** ⌃⌘S shows and hides the sidebar by @maastrich
+- **git:** a git command can no longer hang its repository for the life of the app by @maastrich
+- **settings:** code in two captions shows as code, not as backticks by @maastrich
+
+### Documentation
+
+- bring the site and its screenshots up to date with the app by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.4.1...v0.4.2
+
 ## [0.4.1](https://github.com/maastrich/scope/releases/tag/v0.4.1) - 2026-09-10
 
 ### Fixed
