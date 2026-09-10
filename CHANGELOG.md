@@ -11,6 +11,23 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.3.0](https://github.com/maastrich/scope/releases/tag/v0.3.0) - 2026-09-10
+
+### Added
+
+- **ui:** let the icon buttons answer the pointer by @maastrich
+- **threads:** name a thread after its context, not its driver by @maastrich
+
+### Fixed
+
+- **sidebar:** give the terminal the keyboard whenever the selection shows one by @maastrich
+- **ui:** follow the macOS pointer conventions by @maastrich
+- **ui:** set the pointer from SwiftUI hover, the only thing that works here by @maastrich
+- **sidebar:** a thread row can be selected again by @maastrich
+- **sidebar:** open a task at its first thread, and insist on the keyboard by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.2.2...v0.3.0
+
 ## [0.2.2](https://github.com/maastrich/scope/releases/tag/v0.2.2) - 2026-09-09
 
 ### Added
