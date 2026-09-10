@@ -38,6 +38,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⇧⌘]", title: "Next Thread"),
             ShortcutEntry(keys: "⇧⌘[", title: "Previous Thread"),
             ShortcutEntry(keys: "⌘M", title: "Maximize Thread", note: "the thread fills the window; ⌘M again restores"),
+            ShortcutEntry(keys: "⇧⌘U", title: "Mark as Read", note: "clears a waiting thread's attention until it asks again"),
             ShortcutEntry(keys: "⌥⌘K", title: "Clear Scrollback"),
             ShortcutEntry(keys: "⌘↩", title: "Newline in the terminal", note: "sent as meta ↩, the agents' \"do not submit\" key"),
         ]),

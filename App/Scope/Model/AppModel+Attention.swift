@@ -16,6 +16,15 @@ extension AppModel {
         return waitingThreads.filter { $0.record.scopeID == id }
     }
 
+    /// Mark as Read: the user has seen what the thread is asking and does not want it counted any more — the
+    /// badge, the sidebar mark and the notification go. Read is not muted: the next question the driver asks
+    /// brings the attention straight back (see `ThreadState.acknowledged`).
+    func markRead(_ id: ThreadID) {
+        guard let session = session(id), session.displayState.needsAttention else { return }
+        session.acknowledgeAttention()
+        clearNotifications(for: id)
+    }
+
     /// ⌥⌘↩: selects the next thread that wants the user and hands it the keyboard, wrapping around and crossing
     /// into another scope when the current one has nothing waiting.
     func revealNextWaitingThread() {

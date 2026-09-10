@@ -213,6 +213,13 @@ struct ScopeCommands: Commands {
             .keyboardShortcut(.return, modifiers: [.command, .option])
             .disabled((model?.waitingThreads.count ?? 0) == 0)
 
+            // Mail's chord for read / unread.
+            Button("Mark as Read") {
+                if let model, let id = model.selectedThreadID { model.markRead(id) }
+            }
+            .keyboardShortcut("u", modifiers: [.command, .shift])
+            .disabled(currentThread?.displayState.needsAttention != true)
+
             Divider()
 
             ForEach(1...9, id: \.self) { number in

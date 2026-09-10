@@ -207,6 +207,15 @@ final class ThreadSession: Identifiable {
         onRecordChanged?(record)
     }
 
+    /// Mark as Read: a `waiting` thread goes back to `idle` (`ThreadState.acknowledged`), in the record too so the
+    /// sidebar, the badge and a restart agree. Anything else is left alone.
+    func acknowledgeAttention() {
+        guard let state = adapterState, state.needsAttention else { return }
+        adapterState = state.acknowledged
+        record.lastState = adapterState
+        onRecordChanged?(record)
+    }
+
     // MARK: Callbacks from TerminalBridge / TerminalHostContainer
 
     func viewDidLayout() {

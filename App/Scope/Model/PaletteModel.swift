@@ -111,6 +111,12 @@ enum PaletteModel {
         items.append(PaletteItem(id: "inspector", section: .actions, icon: "sidebar.right", label: "Toggle Inspector", shortcut: "⌥⌘I") {
             model.toggleInspector()
         })
+        if let thread = model.currentThread, thread.displayState.needsAttention {
+            items.append(PaletteItem(id: "mark-read", section: .actions, icon: "checkmark.circle", label: "Mark as Read",
+                                     hint: thread.title) {
+                model.markRead(thread.id)
+            })
+        }
         if model.currentThread != nil || model.threadMaximized {
             items.append(PaletteItem(id: "maximize", section: .actions, icon: "arrow.up.left.and.arrow.down.right",
                                      label: model.threadMaximized ? "Restore Thread" : "Maximize Thread", shortcut: "⌘M") {

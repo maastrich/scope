@@ -106,6 +106,23 @@ import Testing
         #expect(!ProcessPhase.failed("no such file").isAlive)
         #expect(ProcessPhase.launching.pid == nil)
     }
+
+    /// Marking a thread as read: the question has been seen, so the thread stops asking for attention.
+    @Test func markingAsReadClearsTheWaitOnly() {
+        #expect(ThreadState.waiting(reason: .input).acknowledged == .idle)
+        #expect(ThreadState.waiting(reason: .permission).acknowledged == .idle)
+        #expect(!ThreadState.waiting(reason: .input).acknowledged.needsAttention)
+        for state in [ThreadState.idle, .running, .done, .exited] {
+            #expect(state.acknowledged == state, "\(state) has nothing to acknowledge")
+        }
+    }
+
+    /// Read is not muted: the next question the driver asks brings the attention straight back.
+    @Test func aNewQuestionAfterMarkingAsReadAsksAgain() {
+        let read = ThreadState.waiting(reason: .input).acknowledged
+        #expect(read.applying(.inputRequested).needsAttention)
+        #expect(read.applying(.permissionRequested) == .waiting(reason: .permission))
+    }
 }
 
 @Suite struct ExitStatusTests {

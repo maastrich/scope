@@ -37,6 +37,13 @@ public enum ThreadState: Codable, Sendable, Hashable {
         return false
     }
 
+    /// The state once the user has marked the thread as read: a `waiting` thread goes back to `idle` — seen,
+    /// no longer asking — and every other state is left as it is. The next event the driver sends moves it on
+    /// as usual, so a new question brings the attention straight back.
+    public var acknowledged: ThreadState {
+        needsAttention ? .idle : self
+    }
+
     /// Persistence-neutral name without the reason: `"idle"`, `"running"`, `"waiting"`, `"done"`, `"exited"`.
     public var name: String {
         switch self {

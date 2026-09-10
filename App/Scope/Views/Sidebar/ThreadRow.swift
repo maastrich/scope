@@ -134,6 +134,12 @@ struct ThreadRow: View {
 
     @ViewBuilder
     private var contextMenu: some View {
+        Button("Mark as Read") {
+            model.markRead(session.id)
+        }
+        .keyboardShortcut("u", modifiers: [.command, .shift])
+        .disabled(!session.displayState.needsAttention)
+        Divider()
         Button("Relaunch") {
             Task { await model.relaunch(session.id) }
         }
