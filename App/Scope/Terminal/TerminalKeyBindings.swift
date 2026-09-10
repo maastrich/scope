@@ -14,9 +14,9 @@ import SwiftTerm
 /// for the Kitty keyboard protocol. That is the sequence Claude Code and friends read as "newline, do not
 /// submit".
 ///
-/// The same monitor puts back `⌥←`, `⌥→`, `⌥⌫` and `⌥⌦` when ⌥ is not the Meta key (the default, so that a
-/// keyboard which types braces with ⌥ can type them). Those four compose no character, so nothing is taken
-/// from the layout by sending the word-motion sequences ourselves — see `TerminalOptionKey`.
+/// The same monitor carries the line-editing keys macOS users expect and SwiftTerm does not send: `⌘←`
+/// `⌘→` `⌘⌫` `⌘⌦` for the ends of the line, and `⌥←` `⌥→` `⌥⌫` `⌥⌦` for words when ⌥ is not the Meta key
+/// (the default, so that a keyboard which types braces with ⌥ can type them). See `TerminalEditingKeys`.
 @MainActor
 enum TerminalKeyBindings {
     private static var monitor: Any?
@@ -31,8 +31,8 @@ enum TerminalKeyBindings {
             if isNewlineReturn(keyCode: keyCode, flags: flags) {
                 return MainActor.assumeIsolated { sendMetaReturnToFocusedTerminal() } ? nil : event
             }
-            guard isWordMotion(keyCode: keyCode, flags: flags) else { return event }
-            return MainActor.assumeIsolated { sendWordMotionToFocusedTerminal(keyCode: keyCode) } ? nil : event
+            guard let bytes = editingSequence(keyCode: keyCode, flags: flags) else { return event }
+            return MainActor.assumeIsolated { sendToFocusedTerminal(bytes) } ? nil : event
         }
     }
 
@@ -44,18 +44,25 @@ enum TerminalKeyBindings {
         return flags.contains(.command) || flags.contains(.shift)
     }
 
-    /// ⌥ with one of the four navigation keys and nothing else — and only while ⌥ is not already Meta, in
-    /// which case SwiftTerm sends these itself.
-    private nonisolated static func isWordMotion(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
-        guard !MainActor.assumeIsolated({ TerminalAppearance.optionAsMeta }) else { return false }
+    /// The bytes an editing key must send, or `nil` to let the event through.
+    ///
+    /// ⌘ takes the ends of the line; ⌥ takes words, and only while ⌥ is not already Meta — SwiftTerm sends
+    /// those itself then. Any other modifier on top means the user is after something else.
+    private nonisolated static func editingSequence(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> [UInt8]? {
         let flags = flags.intersection(.deviceIndependentFlagsMask)
-        guard flags.contains(.option), !flags.contains(.command), !flags.contains(.control) else { return false }
-        return TerminalOptionKey.sequence(keyCode: keyCode) != nil
+        guard !flags.contains(.control) else { return nil }
+        if flags.contains(.command) {
+            guard !flags.contains(.option) else { return nil }
+            return TerminalEditingKeys.commandSequence(keyCode: keyCode)
+        }
+        guard flags.contains(.option), !MainActor.assumeIsolated({ TerminalAppearance.optionAsMeta }) else { return nil }
+        return TerminalEditingKeys.optionSequence(keyCode: keyCode)
     }
 
-    /// Sends the word-motion sequence; `false` when no terminal holds the keyboard.
-    private static func sendWordMotionToFocusedTerminal(keyCode: UInt16) -> Bool {
-        guard let terminal = focusedTerminal, let bytes = TerminalOptionKey.sequence(keyCode: keyCode) else { return false }
+    /// Writes `bytes` to the terminal under the keyboard; `false` when no terminal holds it (the event then
+    /// goes on its way — `⌘←` still walks a list).
+    private static func sendToFocusedTerminal(_ bytes: [UInt8]) -> Bool {
+        guard let terminal = focusedTerminal else { return false }
         terminal.send(bytes)
         return true
     }
