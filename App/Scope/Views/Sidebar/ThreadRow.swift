@@ -83,7 +83,6 @@ struct ThreadRow: View {
         }
         .contentShape(Rectangle())
         .help(session.record.cwd)
-        .onTapGesture(count: 2) { model.promptRenameThread(session.id) }
         .onHover { hovering in
             if reduceMotion {
                 isHovered = hovering
