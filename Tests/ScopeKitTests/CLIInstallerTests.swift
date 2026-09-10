@@ -89,3 +89,29 @@ import Testing
         #expect(CLIInstaller.pathAdvice(for: .usrLocalBin) == nil)
     }
 }
+
+/// `scope --version` is the version of the app it ships inside.
+@Suite struct ScopeCLIVersionTests {
+    @Test func theVersionComesFromTheEnclosingBundle() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appending(path: "Scope-\(UUID().uuidString.prefix(8)).app/Contents", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let helpers = root.appending(path: "Helpers", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: helpers, withIntermediateDirectories: true)
+        let plist = try PropertyListSerialization.data(
+            fromPropertyList: ["CFBundleShortVersionString": "0.4.1"], format: .xml, options: 0)
+        try plist.write(to: root.appending(path: "Info.plist"))
+
+        #expect(ScopeCLIVersion.bundleVersion(forExecutableAt: helpers.appending(path: "scope").path) == "0.4.1")
+    }
+
+    @Test func aToolOutsideABundleHasNoVersionToRead() {
+        #expect(ScopeCLIVersion.bundleVersion(forExecutableAt: "/usr/local/bin/scope") == nil)
+        #expect(ScopeCLIVersion.bundleVersion(forExecutableAt: "") == nil)
+        #expect(ScopeCLIVersion.resolve(environment: [:], executable: "/tmp/scope") == "dev")
+    }
+
+    @Test func theEnvironmentWins() {
+        #expect(ScopeCLIVersion.resolve(environment: ["SCOPE_CLI_VERSION": "9.9.9"], executable: "/tmp/scope") == "9.9.9")
+    }
+}

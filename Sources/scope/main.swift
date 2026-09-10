@@ -11,8 +11,8 @@ import ScopeControl
 // values, so neither can drift from the other. Exit codes: 64 for a usage error, 77 when Scope refused,
 // 1 for anything else.
 
-/// Version of the CLI, stamped by the build; `dev` in a plain `swift build`.
-let scopeCLIVersion = ProcessInfo.processInfo.environment["SCOPE_CLI_VERSION"] ?? "dev"
+/// Version of the CLI: the version of the app it ships inside (see `ScopeCLIVersion`).
+let scopeCLIVersion = ScopeCLIVersion.current
 
 enum ScopeCLIExit {
     static let usage: Int32 = 64
