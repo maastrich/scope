@@ -298,7 +298,8 @@ struct SidebarView: View {
         .selectionDisabled()
     }
 
-    /// Two equal-width buttons: New Thread (⌘T, in the current task when one is selected) and New Task (⇧⌘T).
+    /// Two equal-width buttons: New Thread — always a loose one, even with a task selected (a thread inside a
+    /// task comes from the task's context menu) — and New Task (⇧⌘T).
     /// Titles are shown down to `footerTitleThreshold` points, icons only below (measured, so the text is
     /// never clipped mid-word).
     private var footer: some View {
@@ -326,7 +327,7 @@ struct SidebarView: View {
             // A `Menu` would draw its chrome around its label and come out half the width of its neighbour,
             // so the driver choice hangs off the right-click menu of an ordinary button instead.
             Button {
-                Task { await model.newThreadInCurrentContext() }
+                Task { await model.newLooseThread() }
             } label: {
                 Label("New Thread", systemImage: "plus")
                     .lineLimit(1)
@@ -335,12 +336,13 @@ struct SidebarView: View {
             .contextMenu {
                 ForEach(model.drivers.profiles) { profile in
                     Button(profile.name) {
-                        Task { await model.newThreadInCurrentContext(driverID: profile.id) }
+                        Task { await model.newLooseThread(driverID: profile.id) }
                     }
                 }
             }
             .disabled(model.currentScope == nil)
-            .help("New Thread (⌘T) \(model.newThreadTargetDescription ?? "") — right-click to choose a driver".trimmingCharacters(in: .whitespaces))
+            .help("New loose thread \(model.looseThreadTargetDescription ?? "") — right-click to choose a driver; "
+                  + "a thread inside a task is on the task's own menu")
             .accessibilityLabel("New Thread")
 
             Button {

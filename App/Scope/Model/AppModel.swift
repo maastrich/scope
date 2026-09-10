@@ -254,9 +254,24 @@ final class AppModel {
         }
     }
 
-    /// `"in acme"`, `"in auth-refresh"`, `"in api (base)"` — for the New Thread tooltips and the palette hint.
-    var newThreadTargetDescription: String? {
+    /// Where the sidebar's New Thread button opens one: the current context, but never inside a task — a thread
+    /// in a task is asked for on the task itself (its context menu). A selected repository stays a base thread,
+    /// which is loose too.
+    var looseThreadTarget: NewThreadTarget? {
         switch newThreadTarget {
+        case .task(let task): scope(task.scopeID).map { .scopeRoot($0) }
+        case let other: other
+        }
+    }
+
+    /// `"in acme"`, `"in auth-refresh"`, `"in api (base)"` — for the New Thread tooltips and the palette hint.
+    var newThreadTargetDescription: String? { description(of: newThreadTarget) }
+
+    /// The same, for the sidebar's New Thread button.
+    var looseThreadTargetDescription: String? { description(of: looseThreadTarget) }
+
+    private func description(of target: NewThreadTarget?) -> String? {
+        switch target {
         case .scopeRoot(let scope): "in \(scope.name)"
         case .repoBase(let scope, let relativePath): "in \(scope.repo(relativePath: relativePath)?.shortName ?? relativePath) (base)"
         case .task(let task): "in \(task.name)"
@@ -277,7 +292,17 @@ final class AppModel {
     /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`).
     @discardableResult
     func newThreadInCurrentContext(driverID: String? = nil) async -> ThreadSession? {
-        switch newThreadTarget {
+        await newThread(at: newThreadTarget, driverID: driverID)
+    }
+
+    /// The sidebar's New Thread button: a loose thread (`looseThreadTarget`), never one inside a task.
+    @discardableResult
+    func newLooseThread(driverID: String? = nil) async -> ThreadSession? {
+        await newThread(at: looseThreadTarget, driverID: driverID)
+    }
+
+    private func newThread(at target: NewThreadTarget?, driverID: String?) async -> ThreadSession? {
+        switch target {
         case .scopeRoot(let scope):
             return await newThread(in: scope.id, driverID: driverID)
         case .repoBase(let scope, let relativePath):
