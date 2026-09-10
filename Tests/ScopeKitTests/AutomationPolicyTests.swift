@@ -94,3 +94,50 @@ import Testing
         #expect(preferences.automationSettings == AutomationSettings())
     }
 }
+
+/// `scope mcp` registered globally is reached from sessions Scope never launched: those are agents too.
+@Suite struct ExternalAgentPolicyTests {
+    static let mcp = ControlCaller(client: "scope-mcp/0.4.3")
+    static let cli = ControlCaller(client: "scope-cli/0.4.3")
+    static let known = ThreadID(rawValue: "3f9a2c17be04")!
+
+    static func origin(_ caller: ControlCaller) -> ControlOrigin {
+        AutomationPolicy.origin(of: caller) { $0 == known ? 2 : nil }
+    }
+
+    @Test func theMCPServerOutsideAThreadIsAnAgent() {
+        #expect(Self.origin(Self.mcp) == .externalAgent(client: "scope-mcp/0.4.3"))
+    }
+
+    @Test func theCommandLineOutsideAThreadIsTheUser() {
+        #expect(Self.origin(Self.cli) == .user)
+    }
+
+    @Test func aThreadIsResolvedFromTheAppsOwnRecords() {
+        let inThread = ControlCaller(thread: "3f9a2c17be04", client: "scope-mcp/0.4.3")
+        #expect(Self.origin(inThread) == .thread(Self.known, depth: 2))
+        let stranger = ControlCaller(thread: "deadbeef0000", client: "scope-cli/0.4.3")
+        #expect(Self.origin(stranger) == .strangerThread("deadbeef0000"))
+    }
+
+    @Test func anExternalAgentFollowsTheRulesOfAnAgent() {
+        let external = ControlOrigin.externalAgent(client: "scope-mcp/0.4.3")
+        let open = ControlCall.threadNew(ThreadNewParams())
+        let task = ControlCall.taskNew(TaskNewParams(prompt: "x"))
+        #expect(AutomationPolicy(settings: AutomationSettings()).decide(open, from: external) == .allow)
+        guard case .ask = AutomationPolicy(settings: AutomationSettings()).decide(task, from: external) else {
+            Issue.record("a task from an agent outside Scope must ask, like any agent's")
+            return
+        }
+        guard case .refuse = AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false)).decide(open, from: external) else {
+            Issue.record("turning agents off turns this one off too")
+            return
+        }
+        guard case .refuse(let error) = AutomationPolicy(settings: AutomationSettings(maxDepth: 0)).decide(open, from: external) else {
+            Issue.record("a ceiling of 0 stops it")
+            return
+        }
+        #expect(error.message.contains("outside Scope"))
+        #expect(AutomationPolicy.childDepth(of: external) == 1)
+    }
+}

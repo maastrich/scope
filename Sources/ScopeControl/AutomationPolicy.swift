@@ -13,6 +13,17 @@ public enum ControlOrigin: Sendable, Equatable {
     case thread(ThreadID, depth: Int)
     /// A `SCOPE_THREAD` naming no thread this app knows: a closed thread's shell, or someone guessing.
     case strangerThread(String)
+    /// `scope mcp` called from outside any Scope thread — a Claude Code, Codex or Cursor session the user started
+    /// elsewhere, with the server registered globally. An agent all the same: it gets the rules of one at depth 0.
+    case externalAgent(client: String)
+}
+
+/// The names clients give themselves in `ControlCaller.client`, before the `/version`.
+public enum ControlClientName {
+    /// The `scope` command line — the user typing.
+    public static let cli = "scope-cli"
+    /// `scope mcp` — an agent speaking MCP.
+    public static let mcp = "scope-mcp"
 }
 
 /// What to do with a request, before anything happens.
@@ -43,7 +54,23 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .user: 0
         case .thread(_, let depth): depth + 1
         case .strangerThread: 0
+        case .externalAgent: 1
         }
+    }
+
+    /// Turns what a caller claims into an origin the app can reason about.
+    ///
+    /// A `SCOPE_THREAD` is checked against the app's own threads (`threadDepth` answers for the ones it runs). No
+    /// thread at all means a terminal: the user themselves when it is the command line, an agent when it is
+    /// `scope mcp` — registered globally, the MCP server is reached from sessions Scope never launched, and those
+    /// must not inherit the free pass the user's own typing gets. The client name is the caller's word, and an
+    /// agent with a shell can still run `scope` itself: the socket belongs to the user's account either way.
+    public static func origin(of caller: ControlCaller, threadDepth: (ThreadID) -> Int?) -> ControlOrigin {
+        if let raw = caller.thread, !raw.isEmpty {
+            guard let id = ThreadID(rawValue: raw), let depth = threadDepth(id) else { return .strangerThread(raw) }
+            return .thread(id, depth: depth)
+        }
+        return caller.client.hasPrefix(ControlClientName.mcp + "/") ? .externalAgent(client: caller.client) : .user
     }
 
     /// What should happen to `call` coming from `origin`.
@@ -61,7 +88,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                 detail: "Got “\(raw)”. Only a thread Scope is running may drive it; unset SCOPE_THREAD to ask as yourself."
             ))
 
-        case .thread(_, let depth):
+        case .thread, .externalAgent:
+            let depth = AutomationPolicy.childDepth(of: origin) - 1
             guard settings.agentsMayDrive else {
                 return .refuse(.denied("agents may not drive Scope",
                                        detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json."))
@@ -69,7 +97,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             let childDepth = depth + 1
             guard childDepth <= settings.maxDepth else {
                 return .refuse(.denied(
-                    "an agent \(depth == 0 ? "opened by you" : "at depth \(depth)") may not open another",
+                    "\(AutomationPolicy.describe(origin, depth: depth)) may not open another",
                     detail: "The chain would reach depth \(childDepth), past the ceiling of \(settings.maxDepth). "
                         + "Raise preferences.automation.maxDepth if that is what you want."
                 ))
@@ -85,6 +113,14 @@ public struct AutomationPolicy: Sendable, Equatable {
             case .deny: .refuse(.denied("\(call.method.rawValue) is turned off for agents",
                                         detail: "Settings ▸ Automation."))
             }
+        }
+    }
+
+    /// Who is asking, in the words of a refusal.
+    static func describe(_ origin: ControlOrigin, depth: Int) -> String {
+        switch origin {
+        case .externalAgent: "an agent outside Scope"
+        default: depth == 0 ? "an agent opened by you" : "an agent at depth \(depth)"
         }
     }
 

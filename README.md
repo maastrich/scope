@@ -99,7 +99,9 @@ Inside a thread there is nothing to install: Scope puts its `Contents/Helpers` f
 driver. For your own terminal, Settings › Automation › Install links the tool into `/usr/local/bin` (or
 `~/.scope/bin`). Full reference: [Command line and MCP](https://maastrich.github.io/scope/cli.html).
 
-A request from your own terminal is you and is never filtered. A request from inside a thread is an agent:
+Settings › Automation › MCP server registers `scope mcp` with Claude Code, Codex and Cursor for your user, so
+sessions started outside Scope have it too. The `scope` command line in your own terminal is you and is never
+filtered. A request from inside a thread, or through `scope mcp` from anywhere, is an agent:
 Settings › Automation holds a depth ceiling (1 by default — an agent may open a thread, that thread may not
 open another) and an approval for creating a task, which writes a branch and a worktree per repository.
 

@@ -672,14 +672,20 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 <p><code>scope mcp</code> speaks MCP on stdio with four tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_task_new</code>, <code>scope_ping</code>. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
-<pre><code>{"mcpServers": {"scope": {"command": "scope", "args": ["mcp"]}}}</code></pre>
+<p><b>Settings ▸ Automation ▸ MCP server</b> registers it with Claude Code, Codex and Cursor for your user, so
+every session you start — in Scope or in any other terminal — has it: Claude Code through its own
+<code>claude mcp add --scope user</code>, Codex in <code>~/.codex/config.toml</code>, Cursor in
+<code>~/.cursor/mcp.json</code>, touching only the <code>scope</code> entry. The command is the helper inside the app
+bundle, so an update keeps it working. By hand, the same thing:</p>
+<pre><code>{"mcpServers": {"scope": {"command": "/Applications/Scope.app/Contents/Helpers/scope", "args": ["mcp"]}}}</code></pre>
 <p><code>scope_task_new</code> is marked destructive and its description tells the agent to call it with
 <code>dry_run</code> first: the answer is then the title, branch, sandbox and worktrees it would create,
 with nothing written.</p>
 
 <h2 id="automation">What an agent is allowed to do</h2>
-<p>A request from your own terminal is you, and is never filtered. A request from inside a thread is an
-agent, and goes through <b>Settings ▸ Automation</b>:</p>
+<p>The <code>scope</code> command line in your own terminal is you, and is never filtered. A request from
+inside a thread — or through <code>scope mcp</code> from anywhere, since a globally registered server is reached
+from sessions Scope never launched — is an agent, and goes through <b>Settings ▸ Automation</b>:</p>
 <table>
   <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
   <tr><td>Let agents drive Scope</td><td>on</td><td>Off refuses every write from a thread.</td></tr>

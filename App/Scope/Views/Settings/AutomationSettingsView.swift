@@ -12,6 +12,10 @@ struct AutomationSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var installMessage: String?
     @State private var installFailure: String?
+    @State private var mcpStates: [MCPRegistration.Client: MCPRegistration.State] = [:]
+    @State private var claudePath: String?
+    @State private var mcpBusy = false
+    @State private var mcpFailure: String?
 
     var body: some View {
         Form {
@@ -53,6 +57,38 @@ struct AutomationSettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            Section("MCP server") {
+                Text("""
+                    Registers `scope mcp` with the agents you run outside Scope too, so any of their sessions can \
+                    list, open threads and create tasks. They count as agents: the rules below apply to them.
+                    """)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(MCPRegistration.Client.allCases) { client in
+                    LabeledContent(client.title) {
+                        HStack(spacing: 8) {
+                            Text(mcpCaption(mcpStates[client]))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            if let title = mcpActionTitle(mcpStates[client]) {
+                                Button(title) { toggleMCP(client) }
+                                    .controlSize(.small)
+                                    .disabled(mcpBusy || toolPath == nil)
+                            }
+                        }
+                    }
+                }
+                if let mcpFailure {
+                    Text(mcpFailure)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .task { await refreshMCP() }
 
             Section("Agents") {
                 Toggle("Let agents drive Scope", isOn: automation(\.agentsMayDrive))
@@ -141,6 +177,72 @@ struct AutomationSettingsView: View {
         case .installed(let link): link
         case .foreign(let link, _): "\(link) (not Scope's)"
         case .absent: "not installed"
+        }
+    }
+
+    // MARK: MCP registration
+
+    private var registration: MCPRegistration? {
+        guard let toolPath else { return nil }
+        #if DEBUG
+        let debug = true
+        #else
+        let debug = false
+        #endif
+        return MCPRegistration(userHome: FileManager.default.homeDirectoryForCurrentUser, tool: toolPath,
+                               scopeHome: model.env.home.path, debug: debug)
+    }
+
+    private func mcpCaption(_ state: MCPRegistration.State?) -> String {
+        switch state {
+        case nil: "…"
+        case .unavailable: "not on this Mac"
+        case .absent: "not registered"
+        case .installed: "registered"
+        case .stale: "points at another Scope"
+        }
+    }
+
+    private func mcpActionTitle(_ state: MCPRegistration.State?) -> String? {
+        switch state {
+        case .absent: "Install"
+        case .stale: "Repair"
+        case .installed: "Remove"
+        case nil, .unavailable: nil
+        }
+    }
+
+    /// Reads where every client stands; `claude` is looked up on the login-shell PATH, like a driver.
+    private func refreshMCP() async {
+        let shell = await model.env.shell.environment()
+        claudePath = ExecutableResolver.resolve("claude", path: shell.path, shell: shell.shell)
+        guard let registration else { return }
+        for client in MCPRegistration.Client.allCases {
+            mcpStates[client] = registration.state(of: client, claudePath: claudePath)
+        }
+    }
+
+    private func toggleMCP(_ client: MCPRegistration.Client) {
+        guard var registration else { return }
+        let installed = mcpStates[client] == .installed
+        mcpBusy = true
+        mcpFailure = nil
+        Task {
+            let shell = await model.env.shell.environment()
+            registration = MCPRegistration(userHome: registration.userHome, tool: registration.tool,
+                                           scopeHome: registration.scopeHome, debug: registration.name == "scope-debug",
+                                           environment: shell.variables)
+            do {
+                if installed {
+                    try await registration.remove(client, claudePath: claudePath)
+                } else {
+                    try await registration.install(client, claudePath: claudePath)
+                }
+            } catch {
+                mcpFailure = String(describing: error)
+            }
+            await refreshMCP()
+            mcpBusy = false
         }
     }
 

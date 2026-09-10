@@ -55,7 +55,7 @@ func run() async -> Int32 {
     case .call(let call, let options):
         let client = ControlClient(
             socketPath: ControlEndpoint.resolve(socket: options.socket, home: options.home),
-            client: "scope-cli/\(scopeCLIVersion)"
+            client: "\(ControlClientName.cli)/\(scopeCLIVersion)"
         )
         do {
             // Progress goes to stderr: `scope list --json | jq` stays clean.

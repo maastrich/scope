@@ -13,7 +13,7 @@ enum ScopeMCP {
     static func run(options: ScopeCLI.Options) async throws {
         let client = ControlClient(
             socketPath: ControlEndpoint.resolve(socket: options.socket, home: options.home),
-            client: "scope-mcp/\(scopeCLIVersion)"
+            client: "\(ControlClientName.mcp)/\(scopeCLIVersion)"
         )
         let server = Server(
             name: MCPBridge.serverName,

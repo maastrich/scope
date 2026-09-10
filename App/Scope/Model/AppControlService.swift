@@ -23,11 +23,7 @@ final class AppControlService: ControlService {
     /// A `SCOPE_THREAD` is only worth something when it names a thread this app is running: the variable
     /// lives in a process the user owns and anything under that account can write it.
     func origin(for caller: ControlCaller) -> ControlOrigin {
-        guard let raw = caller.thread, !raw.isEmpty else { return .user }
-        guard let id = ThreadID(rawValue: raw), let session = model.session(id) else {
-            return .strangerThread(raw)
-        }
-        return .thread(id, depth: session.record.resolvedOrigin.depth)
+        AutomationPolicy.origin(of: caller) { [model] id in model.session(id)?.record.resolvedOrigin.depth }
     }
 
     func confirm(_ subject: String, from origin: ControlOrigin, caller: ControlCaller) async -> Bool {
@@ -35,6 +31,7 @@ final class AppControlService: ControlService {
         case .user: "Something on your machine"
         case .thread(let id, let depth): "The agent in thread \(id.rawValue)\(depth == 0 ? "" : " (depth \(depth))")"
         case .strangerThread(let raw): "A process claiming to be thread \(raw)"
+        case .externalAgent: "An agent running outside Scope"
         }
         let alert = NSAlert()
         alert.alertStyle = .informational
@@ -257,7 +254,15 @@ final class AppControlService: ControlService {
     /// Runs an alert and answers `false` if nobody touched it before `timeout` seconds.
     private static func ask(_ alert: NSAlert, timeout: Int) async -> Bool {
         guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) else {
-            // No window to hang a sheet on: a modal run is what the rest of the app does too.
+            // No window to hang a sheet on — likely now that `scope mcp` is reached from sessions outside Scope while
+            // the window is closed. A modal run, bounded like the sheet: a timer in the modal run loop's own mode
+            // aborts it, which reads as a refusal instead of holding the caller and the main thread forever.
+            let timer = Timer(timeInterval: TimeInterval(timeout), repeats: false) { _ in
+                MainActor.assumeIsolated { NSApp.abortModal() }
+            }
+            RunLoop.main.add(timer, forMode: .modalPanel)
+            defer { timer.invalidate() }
+            NSApp.activate()
             return alert.runModal() == .alertFirstButtonReturn
         }
         return await withCheckedContinuation { continuation in
