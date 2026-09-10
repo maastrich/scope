@@ -697,7 +697,7 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
   <tr><td>Let agents drive Scope</td><td>on</td><td>Off refuses every write from a thread.</td></tr>
   <tr><td>Depth ceiling</td><td>1</td><td>A thread you opened is at depth 0. At 1, it may open a thread and that thread may not open another.</td></tr>
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
-  <tr><td>Creating a task</td><td>after asking</td><td>A task writes a branch and a worktree per repository.</td></tr>
+  <tr><td>Creating a task</td><td>without asking</td><td>A task writes a branch and a worktree per repository, all of it undone by closing the task. Set it to after asking to confirm each one.</td></tr>
 </table>
 <p>An agent may type into, stop or close only the threads it opened itself; an agent outside Scope, only the
 threads agents outside Scope opened. Typing into someone else's agent is a prompt it never agreed to. Closing a

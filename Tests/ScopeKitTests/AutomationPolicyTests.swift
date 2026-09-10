@@ -49,9 +49,14 @@ import Testing
         #expect(Self.policy(none).decide(.list(ListParams()), from: .thread(Self.thread, depth: 0)) == .allow)
     }
 
-    @Test func creatingATaskAsksByDefault() {
-        guard case .ask(let subject) = Self.policy().decide(Self.createTask, from: .thread(Self.thread, depth: 0)) else {
-            Issue.record("a task writes branches and worktrees; it should ask")
+    @Test func creatingATaskGoesAheadByDefault() {
+        #expect(Self.policy().decide(Self.createTask, from: .thread(Self.thread, depth: 0)) == .allow)
+    }
+
+    @Test func creatingATaskAsksWhenSetTo() {
+        let asking = AutomationSettings(tasks: .ask)
+        guard case .ask(let subject) = Self.policy(asking).decide(Self.createTask, from: .thread(Self.thread, depth: 0)) else {
+            Issue.record("tasks set to ask must ask")
             return
         }
         #expect(subject.contains("fix the login test"))
@@ -82,7 +87,7 @@ import Testing
         let json = Data(#"{"maxDepth":-4,"tasks":"whenever","approvalTimeout":1}"#.utf8)
         let settings = try JSONDecoder().decode(AutomationSettings.self, from: json)
         #expect(settings.maxDepth == 0)
-        #expect(settings.tasks == .ask)          // unknown word falls back to the default
+        #expect(settings.tasks == .allow)        // unknown word falls back to the default
         #expect(settings.approvalTimeout >= 5)   // a one-second window is not an opportunity to answer
         #expect(settings.agentsMayDrive)
     }
@@ -125,8 +130,9 @@ import Testing
         let open = ControlCall.threadNew(ThreadNewParams())
         let task = ControlCall.taskNew(TaskNewParams(prompt: "x"))
         #expect(AutomationPolicy(settings: AutomationSettings()).decide(open, from: external) == .allow)
-        guard case .ask = AutomationPolicy(settings: AutomationSettings()).decide(task, from: external) else {
-            Issue.record("a task from an agent outside Scope must ask, like any agent's")
+        #expect(AutomationPolicy(settings: AutomationSettings()).decide(task, from: external) == .allow)
+        guard case .ask = AutomationPolicy(settings: AutomationSettings(tasks: .ask)).decide(task, from: external) else {
+            Issue.record("a task from an agent outside Scope follows the tasks approval, like any agent's")
             return
         }
         guard case .refuse = AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false)).decide(open, from: external) else {
@@ -181,7 +187,8 @@ import Testing
 
     @Test func closingATaskAsksLikeCreatingOne() {
         let close = ControlCall.taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true))
-        guard case .ask(let subject) = AutomationPolicy(settings: AutomationSettings()).decide(close, from: Self.external) else {
+        #expect(AutomationPolicy(settings: AutomationSettings()).decide(close, from: Self.external) == .allow)
+        guard case .ask(let subject) = AutomationPolicy(settings: AutomationSettings(tasks: .ask)).decide(close, from: Self.external) else {
             Issue.record("undoing a task from an agent asks the user")
             return
         }

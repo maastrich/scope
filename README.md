@@ -104,7 +104,8 @@ Settings › Automation › MCP server registers `scope mcp` with Claude Code, C
 sessions started outside Scope have it too. The `scope` command line in your own terminal is you and is never
 filtered. A request from inside a thread, or through `scope mcp` from anywhere, is an agent:
 Settings › Automation holds a depth ceiling (1 by default — an agent may open a thread, that thread may not
-open another) and an approval for creating a task, which writes a branch and a worktree per repository.
+open another) and an approval for opening a thread and for creating a task. Both go ahead without asking by
+default — Scope is there to let agents work unattended; set either to *after asking* to confirm each one.
 
 > **The socket is your account.** `~/.scope/scope.sock` is mode 0600, so only your user can connect — but
 > everything running as you can. The automation settings shape what a Scope thread may ask for; they are not

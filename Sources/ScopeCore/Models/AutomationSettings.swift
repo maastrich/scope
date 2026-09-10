@@ -34,7 +34,9 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public var maxDepth: Int
     /// Opening a thread from an agent.
     public var threads: Approval
-    /// Creating a task from an agent — a branch and one worktree per repository, hence `ask` by default.
+    /// Creating (and closing) a task from an agent — a branch and one worktree per repository. `allow` by
+    /// default: Scope exists to let agents work unattended, and a task is sandboxed and undone in one step;
+    /// `ask` is there for whoever would rather confirm each one.
     public var tasks: Approval
     /// How long the app waits for the user to answer an `ask` before refusing, in seconds.
     public var approvalTimeout: Int
@@ -42,7 +44,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public static let defaultApprovalTimeout = 120
 
     public init(agentsMayDrive: Bool = true, maxDepth: Int = 1, threads: Approval = .allow,
-                tasks: Approval = .ask, approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
+                tasks: Approval = .allow, approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
         self.agentsMayDrive = agentsMayDrive
         self.maxDepth = max(0, maxDepth)
         self.threads = threads

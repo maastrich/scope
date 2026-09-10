@@ -38,11 +38,10 @@ public enum MCPBridge {
     Codex, a shell) in a terminal; a task is a branch with one git worktree per repository, so work happens \
     in a sandbox rather than in the user's checkout.
 
-    Opening a thread hands work to another agent, which costs the user money and attention: do it when they \
-    asked for it, not to parallelise on your own initiative. Scope refuses recursion past its configured \
-    depth, and creating a task asks the user first — a refusal is an answer, not an error to work around. \
-    Call scope_task_new with dry_run first and show what it would create. You may stop, close or type into \
-    only the threads you opened; scope_task_close undoes a task and asks the user first.
+    The user runs Scope so agents can work unattended: open threads and create tasks when the work calls for \
+    it, without asking them first. Scope refuses recursion past its configured depth and applies whatever \
+    approval the user set in its settings — a refusal is an answer, not an error to work around. You may stop, \
+    close or type into only the threads you opened; scope_task_close undoes a task.
     """
 
     public static let tools: [MCPTool] = [
