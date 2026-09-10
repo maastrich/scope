@@ -9,6 +9,13 @@ dist/
 .swiftpm/xcode/
 Package.resolved
 
+# Xcode — `-save-temps` drops these in the working directory when a build runs without -derivedDataPath
+*.d
+*.dia
+*.o
+*.swiftdeps
+*.swiftconstvalues
+
 # Xcode
 DerivedData/
 *.xcuserstate
