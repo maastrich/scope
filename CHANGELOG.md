@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.3.1](https://github.com/maastrich/scope/releases/tag/v0.3.1) - 2026-09-10
+
+### Fixed
+
+- **terminal:** ⇧↩ inserts a newline instead of submitting by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.3.0...v0.3.1
+
 ## [0.3.0](https://github.com/maastrich/scope/releases/tag/v0.3.0) - 2026-09-10
 
 ### Added
