@@ -11,6 +11,32 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.6.0](https://github.com/maastrich/scope/releases/tag/v0.6.0) - 2026-09-11
+
+### Added
+
+- **threads:** tell running, finished, asking and failed threads apart by @maastrich
+- **tasks:** keep agents in a task from committing outside it or pushing to main by @maastrich
+- **threads:** clicking a Scope session in Vibe Island selects its thread by @maastrich
+- **threads:** bring running threads back when Scope reopens by @maastrich
+
+### Fixed
+
+- **adapters:** stop two Scope instances with deep homes sharing one socket by @maastrich
+- **control:** make thread send submit the prompt instead of pasting it by @maastrich
+- **delta:** refresh a task's delta when its branch moves, not only when files change by @maastrich
+- **threads:** stop the auto-relaunch when Scope quits mid-way by @maastrich
+
+### Changed
+
+- tighten Swift 6 concurrency in thread kill and test recorder by @maastrich
+
+### Documentation
+
+- describe the new thread states and the sandbox git guardrails by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.5.0...v0.6.0
+
 ## [0.5.0](https://github.com/maastrich/scope/releases/tag/v0.5.0) - 2026-09-11
 
 ### Added
