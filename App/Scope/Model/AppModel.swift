@@ -40,6 +40,8 @@ final class AppModel {
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
+    /// Follows Vibe Island's jump log (`AppModel+Attention`); `nil` until bootstrap.
+    @ObservationIgnored var vibeIslandJumps: VibeIslandJumpWatcher?
     /// Threads that exited live: the tab stays (greyed) while the toast shows; see `threadExited`.
     private(set) var exitNotices: [ThreadExitNotice] = []
     /// Threads closed in the last 30 s, most recent last (⇧⌘T restores the last one).
@@ -461,6 +463,7 @@ final class AppModel {
         env.knownThreads.replaceAll(Set(threads.map(\.id)))
 
         restoreUIState()
+        startFollowingVibeIsland()
         isBootstrapped = true
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }
