@@ -60,8 +60,12 @@ import Testing
         #expect(service.performed.isEmpty)
     }
 
+    /// Tasks go ahead without asking by default; "After asking" is still a setting, and this is its path.
+    static let askForTasks = AutomationSettings(tasks: .ask)
+
     @Test func anApprovedCallIsAskedForFirst() async throws {
-        let service = ServiceDouble(resolved: .thread(ThreadID(rawValue: "3f9a2c17be04")!, depth: 0))
+        let service = ServiceDouble(automation: Self.askForTasks,
+                                    resolved: .thread(ThreadID(rawValue: "3f9a2c17be04")!, depth: 0))
         let call = ControlCall.taskNew(TaskNewParams(prompt: "rework auth"))
         var progress: [String] = []
         let box = ProgressBox()
@@ -75,7 +79,8 @@ import Testing
     }
 
     @Test func aRefusedApprovalIsDenied() async throws {
-        let service = ServiceDouble(resolved: .thread(ThreadID(rawValue: "3f9a2c17be04")!, depth: 0), approval: false)
+        let service = ServiceDouble(automation: Self.askForTasks,
+                                    resolved: .thread(ThreadID(rawValue: "3f9a2c17be04")!, depth: 0), approval: false)
         let call = ControlCall.taskNew(TaskNewParams(prompt: "rework auth"))
         let response = await ControlDispatch.run(ControlRequest.decode(try Self.body(call)), service: service, progress: { _ in })
         #expect(response.error?.code == .denied)

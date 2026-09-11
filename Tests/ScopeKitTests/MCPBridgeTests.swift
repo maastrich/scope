@@ -76,9 +76,14 @@ import Testing
         #expect(structured?["thread"] as? String == "3f9a2c17be04")
     }
 
-    @Test func theInstructionsWarnAboutWhatOpeningAThreadCosts() {
-        #expect(MCPBridge.instructions.contains("dry_run"))
-        #expect(MCPBridge.instructions.lowercased().contains("depth"))
+    /// Agents are meant to act unattended: the instructions must not send them to dry-run and check first, but
+    /// still say where Scope stops them.
+    @Test func theInstructionsLetAgentsActAndNameTheLimits() {
+        let text = MCPBridge.instructions.lowercased()
+        #expect(!text.contains("dry_run"))
+        #expect(text.contains("without asking"))
+        #expect(text.contains("depth"))
+        #expect(text.contains("a refusal is an answer"))
     }
 }
 
