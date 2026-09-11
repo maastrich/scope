@@ -11,6 +11,23 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.5.0](https://github.com/maastrich/scope/releases/tag/v0.5.0) - 2026-09-11
+
+### Added
+
+- **sidebar:** one status glyph per task row, one row for a single-thread task by @maastrich
+- **tasks:** run a setup command in new sandboxes and a teardown before removing them by @maastrich
+- **delta:** comment on diff lines and send the review to the task's thread by @maastrich
+- **prs:** see a task's checks, send a failure to its thread, merge or fix conflicts by @maastrich
+- **cli:** let an agent read the terminal of a thread it opened by @maastrich
+- keep sandboxes out of Spotlight, mark files as viewed, open tasks from links by @maastrich
+
+### Fixed
+
+- **delta:** send a review at once to a thread whose hooks never reported by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.4.5...v0.5.0
+
 ## [0.4.5](https://github.com/maastrich/scope/releases/tag/v0.4.5) - 2026-09-10
 
 ### Fixed
