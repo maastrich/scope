@@ -88,7 +88,22 @@ existing GitHub authentication: title, number, author, branch, checks and review
 browser, or turn it into a task whose sandbox sits on the PR's head.</p>
 <div class="note"><p>The panel needs <code>gh auth login</code> and a GitHub remote. A repository without one
 simply shows nothing to list.</p></div>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl2" href="#prs">Pull requests</a></aside></div>
+
+<h2 id="pr-lifecycle">A task's pull request, to the merge</h2>
+<p>Once a task has a pull request — created from the Delta panel, or the one it was opened on — the summary band
+lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
+<ul>
+  <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
+  and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so
+  a thread mid-turn gets it when the turn ends. A check that is not a GitHub Actions job has no log to fetch; the
+  thread gets its link.</li>
+  <li><b>Merge</b> appears in the action bar when GitHub says the pull request merges cleanly. It uses the method
+  the repository allows (merge commit, else squash, else rebase), asks first, and then offers to close the task,
+  which removes its sandboxes and deletes the branch the task created — never a branch name it would have to guess.</li>
+  <li><b>Fix Conflicts</b> replaces it when the pull request conflicts with its base: the thread is asked to merge
+  the base into the branch, resolve, run the tests and push.</li>
+</ul>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl2" href="#prs">Pull requests</a><a class="lvl2" href="#pr-lifecycle">A task's pull request, to the merge</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

@@ -429,12 +429,12 @@ extension AppModel {
         scope(task.scopeID)?.refreshFacts()
     }
 
-    private func confirmForce(title: String, detail: String, button: String) async -> Bool {
+    func confirmForce(title: String, detail: String, button: String, destructive: Bool = true) async -> Bool {
         let alert = NSAlert()
-        alert.alertStyle = .warning
+        alert.alertStyle = destructive ? .warning : .informational
         alert.messageText = title
         alert.informativeText = detail
-        alert.addButton(withTitle: button).hasDestructiveAction = true
+        alert.addButton(withTitle: button).hasDestructiveAction = destructive
         alert.addButton(withTitle: "Cancel")
         let response: NSApplication.ModalResponse
         if let window = NSApp.keyWindow {

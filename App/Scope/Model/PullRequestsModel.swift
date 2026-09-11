@@ -30,6 +30,26 @@ final class PullRequestsModel {
     private(set) var lastRefresh: Date?
     /// Task creation in flight for this PR number (the row shows a spinner).
     private(set) var openingNumber: Int?
+    /// The bound pull request of each task as `gh pr view` last saw it: its checks, mergeability and state.
+    /// Fetched per task, whatever repository the panel lists.
+    private(set) var taskPullRequests: [TaskID: PullRequest] = [:]
+    /// Why the last fetch of a task's pull request failed.
+    private(set) var taskPullRequestErrors: [TaskID: String] = [:]
+    /// Tasks whose pull request is being merged (the button shows a spinner).
+    private(set) var merging: Set<TaskID> = []
+
+    func setTaskPullRequest(_ pr: PullRequest, for task: TaskID) {
+        taskPullRequests[task] = pr
+        taskPullRequestErrors[task] = nil
+    }
+
+    func setTaskPullRequestError(_ message: String, for task: TaskID) {
+        taskPullRequestErrors[task] = message
+    }
+
+    func setMerging(_ task: TaskID, _ on: Bool) {
+        if on { merging.insert(task) } else { merging.remove(task) }
+    }
     let gh: GhClient?
 
     @ObservationIgnored private let problems: ProblemCenter
@@ -142,8 +162,9 @@ extension AppModel {
         livePullRequest(for: task)?.checks
     }
 
-    /// The task's PR as `gh` last listed it, when the PRs panel has that repo loaded, else `nil`.
+    /// The task's PR as `gh` last saw it: its own fetch first, else the PRs panel's list when it has that repo.
     func livePullRequest(for task: TaskState) -> PullRequest? {
+        if let own = pullRequests.taskPullRequests[task.id], own.number == task.record.pullRequest?.number { return own }
         guard let pr = task.record.pullRequest, let repo = task.activeRepos.first ?? task.record.repos.first,
               pullRequests.repoURL == task.baseURL(for: repo) else { return nil }
         return pullRequests.pullRequest(number: pr.number)

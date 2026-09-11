@@ -15,6 +15,12 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         case mergeable, conflicting, unknown
     }
 
+    public enum State: String, Sendable, Equatable, Hashable {
+        case open, merged, closed
+    }
+
+    public let state: State
+
     public let number: Int
     public let title: String
     /// GitHub login of the author (`app/dependabot` for bots).
@@ -31,6 +37,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     /// Login of the owner of the head repository (the fork owner for a cross-repository PR).
     public let headOwner: String?
     public let mergeable: Mergeable
+    /// Every check of the rollup, in the order `gh` listed them; `checks` is their fold.
+    public let checkRuns: [PullRequestCheck]
 
     public var id: Int { number }
 
@@ -38,8 +46,10 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         number: Int, title: String, author: String, headRefName: String, baseRefName: String,
         isDraft: Bool = false, reviewDecision: ReviewDecision = .none, checks: Checks = .none,
         updatedAt: Date = .now, url: URL, isCrossRepository: Bool = false, headOwner: String? = nil,
-        mergeable: Mergeable = .unknown
+        mergeable: Mergeable = .unknown, checkRuns: [PullRequestCheck] = [], state: State = .open
     ) {
+        self.checkRuns = checkRuns
+        self.state = state
         self.number = number
         self.title = title
         self.author = author
@@ -58,7 +68,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     /// The fields requested from `gh`.
     public static let jsonFields = [
         "number", "title", "author", "headRefName", "baseRefName", "isDraft", "reviewDecision",
-        "statusCheckRollup", "updatedAt", "url", "isCrossRepository", "headRepositoryOwner", "mergeable",
+        "statusCheckRollup", "updatedAt", "url", "isCrossRepository", "headRepositoryOwner", "mergeable", "state",
     ].joined(separator: ",")
 
     // MARK: Parsing
@@ -82,30 +92,40 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     /// Folds the rollup entries (`CheckRun` with `status` / `conclusion`, `StatusContext` with `state`).
     static func summarize(checks: [DTO.Check]) -> Checks {
         guard !checks.isEmpty else { return .none }
-        var pending = false
-        for check in checks {
-            let state = (check.conclusion ?? check.state ?? check.status ?? "").uppercased()
-            switch state {
-            case "FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE":
-                return .failing
-            case "SUCCESS", "NEUTRAL", "SKIPPED", "STALE":
-                continue
-            case "", "PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED":
-                pending = true
-            default:
-                // A check that is not completed (no conclusion yet) is pending whatever the status literal.
-                if check.conclusion == nil, check.state == nil { pending = true }
-            }
+        let states = checks.map(state(of:))
+        if states.contains(.failing) { return .failing }
+        return states.contains(.pending) ? .pending : .passing
+    }
+
+    static func state(of check: DTO.Check) -> PullRequestCheck.State {
+        switch (check.conclusion ?? check.state ?? check.status ?? "").uppercased() {
+        case "FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE":
+            return .failing
+        case "SUCCESS":
+            return .passing
+        case "NEUTRAL", "SKIPPED", "STALE":
+            return .skipped
+        case "", "PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED":
+            return .pending
+        default:
+            // A check that is not completed (no conclusion yet) is pending whatever the status literal.
+            return check.conclusion == nil && check.state == nil ? .pending : .passing
         }
-        return pending ? .pending : .passing
     }
 
     struct DTO: Decodable {
         struct Login: Decodable { var login: String }
+        /// A `CheckRun` (name, workflowName, detailsUrl, status, conclusion) or a `StatusContext` (context,
+        /// targetUrl, state) of the rollup.
         struct Check: Decodable {
             var status: String?
             var conclusion: String?
             var state: String?
+            var name: String?
+            var context: String?
+            var workflowName: String?
+            var detailsUrl: String?
+            var targetUrl: String?
         }
         var number: Int
         var title: String
@@ -120,6 +140,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         var isCrossRepository: Bool?
         var headRepositoryOwner: Login?
         var mergeable: String?
+        var state: String?
     }
 
     init(dto: DTO) {
@@ -139,7 +160,24 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
             headRefName: dto.headRefName, baseRefName: dto.baseRefName, isDraft: dto.isDraft ?? false,
             reviewDecision: decision, checks: Self.summarize(checks: dto.statusCheckRollup ?? []),
             updatedAt: dto.updatedAt ?? .distantPast, url: dto.url, isCrossRepository: dto.isCrossRepository ?? false,
-            headOwner: dto.headRepositoryOwner?.login, mergeable: mergeable
+            headOwner: dto.headRepositoryOwner?.login, mergeable: mergeable,
+            checkRuns: (dto.statusCheckRollup ?? []).map { check in
+                PullRequestCheck(
+                    name: check.name ?? check.context ?? "check",
+                    workflow: check.workflowName.flatMap { $0.isEmpty ? nil : $0 },
+                    state: Self.state(of: check),
+                    detailsURL: (check.detailsUrl ?? check.targetUrl).flatMap { $0.isEmpty ? nil : URL(string: $0) }
+                )
+            },
+            state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open
         )
+    }
+
+    /// `owner/name` of the repository a pull request URL points into (`https://github.com/owner/name/pull/12`),
+    /// so `gh` can be told which repository to talk to whatever checkout it runs in.
+    public static func repository(fromURL url: URL) -> String? {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count >= 4, parts[2] == "pull" else { return nil }
+        return "\(parts[0])/\(parts[1])"
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeGit
 import ScopeTasks
 
 /// Bottom bar of the Delta panel: Commit… (prominent), Push, Create PR / Open PR, and a caption naming
@@ -36,6 +37,7 @@ struct DeltaActionBar: View {
                     Label("Open PR", systemImage: "arrow.triangle.pull")
                 }
                 .help(url.absoluteString)
+                pullRequestActions
             } else {
                 Button {
                     Task { await model.delta.createPR(task: task) }
@@ -56,6 +58,29 @@ struct DeltaActionBar: View {
         .controlSize(.small)
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
         .background(Color("PanelBackground"))
+    }
+
+    /// Merge when GitHub says the pull request merges, Fix Conflicts when it says it does not; nothing while its
+    /// mergeability is unknown or once it is merged.
+    @ViewBuilder private var pullRequestActions: some View {
+        if let pr = model.livePullRequest(for: task), pr.state == .open {
+            switch pr.mergeable {
+            case .conflicting:
+                ThreadPicker(task: task, title: "Fix Conflicts", systemImage: "arrow.triangle.merge", showsTitle: true) { thread in
+                    model.askToFixConflicts(of: task, to: thread)
+                }
+            case .mergeable:
+                Button {
+                    Task { await model.mergePullRequest(of: task) }
+                } label: {
+                    Label("Merge", systemImage: "arrow.triangle.merge")
+                }
+                .disabled(pr.isDraft || model.pullRequests.merging.contains(task.id))
+                .help(pr.isDraft ? "A draft cannot be merged" : "gh pr merge #\(pr.number) into \(pr.baseRefName)")
+            case .unknown:
+                EmptyView()
+            }
+        }
     }
 
     private func isDirty(_ repo: TaskRepo?) -> Bool {

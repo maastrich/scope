@@ -88,6 +88,10 @@ struct TaskSummaryBand: View {
             }
             .frame(height: 22)
 
+            if task.record.pullRequest != nil {
+                TaskPullRequestPanel(task: task)
+            }
+
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Text(prompt)
                     .font(.system(size: 11))
