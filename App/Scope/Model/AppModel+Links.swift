@@ -3,24 +3,26 @@ import Foundation
 import ScopeControl
 import ScopeCore
 
-/// `scope://task/new?scope=…&prompt=…`: a link that asks for a task.
+/// `scope://task/new?scope=…&prompt=…`: a link that asks for a task. `scope://thread?session=…&pid=…`: a link that
+/// selects a thread (`ThreadLink`).
 extension AppModel {
     /// Shows what the link asks for, then — once the user agreed — runs it through the control service's
     /// `task.new`, the path `scope task new` takes: the same request resolution, proposal and creation.
     ///
     /// A link can come from any web page, so it never gets the free pass of the user's own terminal without the
-    /// user saying so: nothing is created before the confirmation.
+    /// user saying so: nothing is created before the confirmation. Selecting a thread creates nothing, so a thread
+    /// link needs none.
     func open(url: URL) async {
+        if let link = ThreadLink(url: url) {
+            await waitForBootstrap()
+            open(link)
+            return
+        }
         guard var params = ScopeURL.taskNew(from: url) else {
             problems.warn("Scope does not know what this link asks for", detail: url.absoluteString)
             return
         }
-        // A cold launch from a link: the scopes are not loaded yet.
-        var waited = 0
-        while !isBootstrapped, waited < 100 {
-            try? await Task.sleep(for: .milliseconds(200))
-            waited += 1
-        }
+        await waitForBootstrap()
         if params.scope == nil { params.scope = currentScope?.declaration.slug }
         params.dryRun = false
         NSApp.activate()
@@ -37,6 +39,15 @@ extension AppModel {
                                            caller: ControlCaller(client: "scope-url"), progress: { _ in })
         if case .failure(let error) = result {
             problems.error("Could not create the task the link asked for", detail: error.description)
+        }
+    }
+
+    /// A cold launch from a link: the scopes and threads are not loaded yet. Gives up after 20 s.
+    private func waitForBootstrap() async {
+        var waited = 0
+        while !isBootstrapped, waited < 100 {
+            try? await Task.sleep(for: .milliseconds(200))
+            waited += 1
         }
     }
 }

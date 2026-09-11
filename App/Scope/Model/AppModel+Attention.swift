@@ -93,6 +93,39 @@ extension AppModel {
         }
     }
 
+    /// A `scope://thread?…` link: brings the app up on the thread it names. A link that matches nothing still
+    /// brings the window up, which is what the click did before the link existed.
+    func open(_ link: ThreadLink) {
+        let candidates = threads.map { ThreadLink.Candidate(id: $0.id, sessionID: $0.record.resumeID, pid: $0.pid) }
+        guard let id = link.resolve(candidates) else {
+            Log.threads.notice("thread link matched nothing: session \(link.sessionID ?? "-", privacy: .public) pid \(link.pid.map(String.init) ?? "-", privacy: .public)")
+            NSApp.activate()
+            return
+        }
+        Log.threads.notice("thread link → \(id.rawValue, privacy: .public)")
+        reveal(thread: id, showDelta: false)
+        AppDelegate.refocusTerminal()
+    }
+
+    /// A click on one of this app's cards in Vibe Island selects that thread (see `VibeIslandJump` for why this
+    /// reads Vibe Island's log rather than waiting for a link).
+    func startFollowingVibeIsland() {
+        guard vibeIslandJumps == nil else { return }
+        let watcher = VibeIslandJumpWatcher { [weak self] jump in self?.follow(jump) }
+        watcher.start()
+        vibeIslandJumps = watcher
+    }
+
+    /// Unlike a link, a jump that matches nothing is not for this app — another app's session, or a thread of
+    /// another running Scope reading the same log — so it changes nothing.
+    func follow(_ jump: VibeIslandJump) {
+        let candidates = threads.map { ThreadLink.Candidate(id: $0.id, sessionID: $0.record.resumeID, pid: $0.pid) }
+        guard let id = jump.resolve(candidates) else { return }
+        Log.threads.notice("Vibe Island jump → \(id.rawValue, privacy: .public) (session \(jump.sessionPrefix ?? "-", privacy: .public), pid \(jump.pid.map(String.init) ?? "-", privacy: .public))")
+        reveal(thread: id, showDelta: false)
+        AppDelegate.refocusTerminal()
+    }
+
     /// Pending notifications about the thread the user is looking at are stale.
     func clearNotifications(for id: ThreadID?) {
         guard let id else { return }
