@@ -42,7 +42,9 @@ public struct FSEventBatch: Sendable {
 /// - The C callback cannot capture Swift context: `self` travels through `FSEventStreamContext.info`
 ///   unretained, so the watcher must outlive the stream — `deinit` stops it.
 /// - Events are delivered on a private serial queue (`FSEventStreamSetDispatchQueue`); the only mutable
-///   field is touched on that queue, which is why the class is `@unchecked Sendable`.
+///   field is touched on that queue, which is why the class is `@unchecked Sendable`. A `Mutex` would
+///   annotate the field but not replace the queue: `queue.sync` also waits for an in-flight callback,
+///   so `stop()` and `deinit` never invalidate the stream under a running delivery.
 /// - Paths arrive resolved (`/private/tmp/…` even when `/tmp/…` was registered); callers compare against
 ///   both forms. The stream also reports temp files from atomic writes and everything under `.git/`:
 ///   filter and debounce downstream (see ``ScopeEventFilter``).

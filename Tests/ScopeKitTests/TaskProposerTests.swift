@@ -1,3 +1,4 @@
+import Synchronization
 import Foundation
 import Testing
 import ScopeCore
@@ -101,10 +102,11 @@ import ScopeGit
     }
 
     @Test func runnerGetsExpandedHeadlessArgv() async throws {
-        final class Recorder: HeadlessRunner, @unchecked Sendable {
-            var argv: [String] = []
+        final class Recorder: HeadlessRunner, Sendable {
+            private let recorded = Mutex<[String]>([])
+            var argv: [String] { recorded.withLock { $0 } }
             func run(argv: [String], cwd: URL, timeout: Duration) async throws -> ProcessResult {
-                self.argv = argv
+                recorded.withLock { $0 = argv }
                 return ProcessResult(exitCode: 0, terminationReason: .exit, stdout: Data(#"{"title":"T","slug":"t","branch":"feat/t"}"#.utf8), stderr: Data())
             }
         }
