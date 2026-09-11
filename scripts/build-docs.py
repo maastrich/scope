@@ -488,6 +488,18 @@ FIG_THREAD
 <p><kbd>⌘T</kbd> inside a task opens more threads in the same sandbox — a shell to run the tests next to the
 agent doing the work, a second agent on the same branch.</p>
 
+<h2 id="guardrails">Git guardrails</h2>
+<p>The threads of a task run git with Scope's own hooks, passed through their environment — nothing is written
+into any repository, and git run from your own terminal or editor never sees them. Two checks:</p>
+<ul>
+  <li><b>pre-commit</b> refuses a commit in your base checkout, or in another task's sandbox, of a repository
+  this task works on. A repository the task has nothing to do with is left alone.</li>
+  <li><b>pre-push</b> refuses a push from the sandbox onto the remote's default branch: the work goes through the
+  task's branch and a pull request.</li>
+</ul>
+<p>Every hook then hands over to the repository's own — husky, lefthook and pre-commit keep working. It is a
+guardrail, not a lock: <code>--no-verify</code> still walks past it.</p>
+
 <h2 id="context">AGENTS.md</h2>
 <p>Scope writes a context file generated from the prompt and the <a href="graph.html">graph</a>: the goal, and
 one section per repository with its purpose, stack, setup and test commands.</p>
@@ -842,19 +854,40 @@ the agent: if Scope is not listening, it exits quietly.</p>
 thread and starts the CLI with <code>--settings</code>. The events it subscribes to:</p>
 <table>
   <tr><th>Hook</th><th>Becomes</th></tr>
-  <tr><td><code>SessionStart</code></td><td>running; the session id is captured, which is what lets <b>Relaunch</b> pick the session back up</td></tr>
+  <tr><td><code>SessionStart</code></td><td>no change; the session id is captured, which is what lets <b>Relaunch</b> pick the session back up</td></tr>
   <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running</td></tr>
-  <tr><td><code>Notification</code>, <code>PermissionRequest</code></td><td><span class="dot waiting"></span>waiting — and a macOS notification when Scope is in the background</td></tr>
-  <tr><td><code>Stop</code></td><td><span class="dot done"></span>done</td></tr>
-  <tr><td><code>SessionEnd</code></td><td>idle</td></tr>
+  <tr><td><code>PreToolUse</code> on <code>AskUserQuestion</code> / <code>ExitPlanMode</code></td><td><span class="dot waiting"></span>waiting — <b>question</b></td></tr>
+  <tr><td><code>PermissionRequest</code>, <code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> (an elicitation dialog is a question) — and a macOS notification when Scope is in the background</td></tr>
+  <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
+  <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
 </table>
+<p>Two moments have no hook at all, and come from what you type into the thread instead: <b>Esc</b> or
+<b>Ctrl-C</b> during a turn ends it (idle), and <b>Return</b> on a permission prompt resumes it (running).
+Claude Code's <code>idle_prompt</code> notification, sent a minute after any answer you have not replied to, is
+deliberately ignored: the turn is already done, nobody is asking anything.</p>
 <p>Your own <code>~/.claude/settings.json</code> is not modified: the per-thread file lives under
 <code>~/.scope/threads/</code> and is passed on the command line.</p>
 
+<h2 id="states">What the dot says</h2>
+<table>
+  <tr><th>Dot</th><th>Meaning</th></tr>
+  <tr><td>green, breathing</td><td>running: the agent says it is working</td></tr>
+  <tr><td>square</td><td>waiting for you — a question or a permission; counted in the badge until you answer or <b>Mark as Read</b></td></tr>
+  <tr><td>diamond</td><td>failed: the turn stopped on an API error</td></tr>
+  <tr><td>blue</td><td>done: finished while you were not looking; showing the thread clears it</td></tr>
+  <tr><td>grey</td><td>idle: seen, ready for the next prompt</td></tr>
+  <tr><td>ring</td><td>exited: the process is gone</td></tr>
+</table>
+<p>The toolbar pill and the row's tooltip say which it is in words — <i>Needs your answer</i>, <i>Needs
+permission</i>, <i>Failed: rate limit</i>. A task row's glyph tells a question from a permission too, and a
+collapsed group shows the most urgent dot of its threads: waiting, then failed, running, done, idle.</p>
+
 <h2 id="others">Codex and Cursor</h2>
-<p>Codex is wired through its <code>notify</code> configuration and Cursor through its hooks, with the same
-helper and the same socket. Both profiles ship with <code>adapter</code> set; a tool without one still runs
-perfectly — its row simply shows no live state.</p>
+<p>Codex is wired through its <code>notify</code> configuration, with the same helper and the same socket.
+<code>notify</code> only reports the end of a turn, so a prompt you type into a Codex thread is what marks it
+running. Cursor's profile declares its hooks adapter, but it is not wired yet: like a shell, a Cursor thread
+only knows it is alive. A tool without an adapter still runs perfectly — its row simply shows no live
+state.</p>
 
 <h2 id="notifications">Notifications and the badge</h2>
 <p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Go to
@@ -862,7 +895,9 @@ thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threa
 item lists them, so you can leave the window behind and come back exactly when an agent needs you.</p>
 
 <h2 id="socket">The socket</h2>
-<p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code>. One JSON object per line:</p>
+<p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too
+deep for a unix socket path, at <code>$TMPDIR/scope-&lt;uid&gt;-&lt;hash of the home&gt;.sock</code>. One JSON object per
+line:</p>
 <pre><code>{"thread":"3f9a2c17be04","kind":"Notification","session_id":"…","payload":{…}}</code></pre>
 <p>Anything that can write a line to a unix socket can drive the state of a thread — a wrapper script, a CI
 watcher, your own tool. <code>scope-hook</code> is only the convenient way to do it.</p>

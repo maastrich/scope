@@ -86,7 +86,7 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 - **Créer** : choisir un driver et un cwd. Par défaut, une task (l'agent voit uniquement ses sandboxes). Sinon la racine du scope (l'agent voit les bases : à utiliser pour explorer, pas pour modifier).
 - **Terminal embarqué** : PTY complet (SwiftTerm), 256 couleurs, resize, copier/coller, scrollback, recherche. Onglets par thread, splits horizontaux et verticaux.
 - **Environnement injecté** : `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_TASK`, `SCOPE_SOCK`, `SCOPE_HOME`, plus l'env du profil de driver.
-- **États** : `idle` · `running` · `waiting` (attend une réponse ou une permission) · `done` · `exited`. Sans adaptateur, seuls `running` et `exited` sont connus.
+- **États** : `idle` · `running` · `waiting` (attend une réponse ou une permission) · `done` (tour fini, pas encore vu) · `failed` (tour arrêté sur une erreur de l'API) · `exited`. Montrer le thread ramène `done` et `failed` à `idle`. Sans adaptateur, seuls `running` et `exited` sont connus.
 - **Reprise** : au redémarrage, chaque thread propose *Reprendre* (commande de reprise du profil, ex. `claude --resume <id>`) ou *Relancer*.
 - **Plusieurs drivers côte à côte** sur le même scope, y compris sur la même task.
 
