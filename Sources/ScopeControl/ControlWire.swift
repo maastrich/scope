@@ -43,6 +43,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .threadSend(let params): try encoder.encode(wire(params))
         case .taskNew(let params): try encoder.encode(wire(params))
         case .taskClose(let params): try encoder.encode(wire(params))
+        case .threadRead(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -81,6 +82,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .threadClose: .threadClose(try required(ThreadTargetParams.self))
             case .threadSend: .threadSend(try required(ThreadSendParams.self))
             case .taskClose: .taskClose(try required(TaskCloseParams.self))
+            case .threadRead: .threadRead(try required(ThreadReadParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -165,6 +167,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .thread(let result): try encoder.encode(wire(result))
         case .task(let result): try encoder.encode(wire(result))
         case .action(let result, _): try encoder.encode(wire(result))
+        case .read(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -186,6 +189,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
             case .threadStop, .threadClose, .threadSend, .taskClose:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
+            case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             }
         }
         return ControlResponse(rpc: line.rpc, id: line.id, kind: kind, message: line.message,

@@ -26,3 +26,16 @@ final class TerminalBridge: NSObject, @MainActor LocalProcessTerminalViewDelegat
         session?.handleExit(rawWaitStatus: exitCode)
     }
 }
+
+extension TerminalBridge {
+    /// Every line the thread's terminal holds, scrollback first then the screen, and the absolute number of the
+    /// first one: SwiftTerm trims the oldest scrollback lines and counts them, so numbers stay put as it grows.
+    /// A TUI on the alternate screen has no scrollback: its screen is all there is.
+    static func transcript(of session: ThreadSession) -> (lines: [String], firstLineNumber: Int) {
+        let terminal = session.terminalView.getTerminal()
+        let text = String(decoding: terminal.getBufferAsData(kind: .active), as: UTF8.self)
+        var lines = text.components(separatedBy: "\n")
+        if text.hasSuffix("\n") { lines.removeLast() }
+        return (lines, terminal.buffer.totalLinesTrimmed)
+    }
+}

@@ -75,7 +75,7 @@ public struct AutomationPolicy: Sendable, Equatable {
 
     /// What should happen to `call` coming from `origin`.
     public func decide(_ call: ControlCall, from origin: ControlOrigin) -> PolicyDecision {
-        guard call.method.isMutating else { return .allow }
+        guard call.method.isGated else { return .allow }
 
         switch origin {
         case .user:
@@ -98,7 +98,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             switch call.method {
             case .ping, .list:
                 return .allow
-            case .threadStop, .threadClose, .threadSend:
+            case .threadStop, .threadClose, .threadSend, .threadRead:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
                 return .allow
@@ -125,7 +125,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         }
     }
 
-    /// Whether `origin` may stop, close or type into a thread that `target` says was opened by whom.
+    /// Whether `origin` may stop, close, type into or read a thread that `target` says was opened by whom.
     ///
     /// You may touch any thread. An agent may touch only the threads it opened itself — typing into another
     /// agent's terminal is a prompt it never agreed to — and an agent outside Scope, which has no thread of its
@@ -174,6 +174,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .threadStop(let params): "stop the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"
         case .threadSend(let params): "type into the thread \(params.thread)"
+        case .threadRead(let params): "read the thread \(params.thread)"
         }
     }
 }

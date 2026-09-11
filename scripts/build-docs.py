@@ -723,6 +723,7 @@ app.</p>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
 scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
+scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
@@ -743,12 +744,17 @@ branch      fix/flaky-login-test
 slug        fix-flaky-login-test
 sandbox     ~/.scope/sandboxes/acme/fix-flaky-login-test
 repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch created)</code></pre>
+<p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
+2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
+numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
+before. It is how an agent that opened a thread finds out what that thread said, without typing into it; like
+<code>thread send</code>, an agent may only read the threads it opened.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_close</code>,
 <code>scope_ping</code>. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>

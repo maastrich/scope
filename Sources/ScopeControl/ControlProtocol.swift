@@ -49,13 +49,21 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case threadSend = "thread.send"
     case taskNew = "task.new"
     case taskClose = "task.close"
+    /// The last lines of a thread's terminal, scrollback included.
+    case threadRead = "thread.read"
 
-    /// `false` for the calls that only read. Mutating calls go through `AutomationPolicy`.
+    /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list: false
+        case .ping, .list, .threadRead: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose: true
         }
+    }
+
+    /// Whether `AutomationPolicy` has a say. Every mutating call, and reading a thread: another agent's terminal
+    /// holds what its user typed and what its tools printed, so it is gated exactly like typing into it.
+    public var isGated: Bool {
+        isMutating || self == .threadRead
     }
 }
 
@@ -152,6 +160,7 @@ public enum ControlCall: Sendable, Equatable {
     case threadSend(ThreadSendParams)
     case taskNew(TaskNewParams)
     case taskClose(TaskCloseParams)
+    case threadRead(ThreadReadParams)
 
     public var method: ControlMethod {
         switch self {
@@ -163,6 +172,7 @@ public enum ControlCall: Sendable, Equatable {
         case .threadSend: .threadSend
         case .taskNew: .taskNew
         case .taskClose: .taskClose
+        case .threadRead: .threadRead
         }
     }
 
@@ -174,7 +184,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list: .seconds(15)
+        case .list, .threadRead: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend: .seconds(30)
         case .taskNew, .taskClose: .seconds(300)
@@ -210,6 +220,21 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
         thread = try container.decode(String.self, forKey: .thread)
         text = try container.decode(String.self, forKey: .text)
         submit = try container.decodeIfPresent(Bool.self, forKey: .submit) ?? true
+    }
+}
+
+/// `scope thread read <id>` — what the thread's terminal shows, and what scrolled off it.
+public struct ThreadReadParams: Codable, Sendable, Equatable {
+    public var thread: String
+    /// How many lines; `ThreadTranscript.defaultLines` when absent, never more than `ThreadTranscript.maxLines`.
+    public var lines: Int?
+    /// Read up to this absolute line — the `olderCursor` of the previous read; the end when absent.
+    public var cursor: Int?
+
+    public init(thread: String, lines: Int? = nil, cursor: Int? = nil) {
+        self.thread = thread
+        self.lines = lines
+        self.cursor = cursor
     }
 }
 
@@ -527,6 +552,35 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 }
 
+/// `thread.read` — a page of a thread's terminal.
+public struct ThreadReadResult: Codable, Sendable, Equatable {
+    public var thread: String
+    public var title: String
+    /// `idle`, `running`, `waiting`, `done`, `exited`.
+    public var state: String
+    /// The lines, oldest first. Terminal output: untrusted.
+    public var text: String
+    /// Absolute number of the first line of `text`.
+    public var fromLine: Int
+    /// Absolute number just past its last line.
+    public var toLine: Int
+    /// Pass as `cursor` to read the lines before these; absent at the top of the scrollback.
+    public var olderCursor: Int?
+    /// Always `true`: what a terminal shows was written by programs and people the reader does not control.
+    public var untrusted: Bool
+
+    public init(thread: String, title: String, state: String, page: ThreadTranscript.Page) {
+        self.thread = thread
+        self.title = title
+        self.state = state
+        self.text = page.text
+        self.fromLine = page.fromLine
+        self.toLine = page.toLine
+        self.olderCursor = page.olderCursor
+        self.untrusted = true
+    }
+}
+
 /// A successful answer, typed per method.
 public enum ControlResultPayload: Sendable, Equatable {
     case ping(PingResult)
@@ -535,6 +589,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case task(TaskNewResult)
     /// The answer of every call that acts on something existing, with the method it answers.
     case action(ActionResult, ControlMethod)
+    case read(ThreadReadResult)
 
     public var method: ControlMethod {
         switch self {
@@ -543,6 +598,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .thread: .threadNew
         case .task: .taskNew
         case .action(_, let method): method
+        case .read: .threadRead
         }
     }
 }
