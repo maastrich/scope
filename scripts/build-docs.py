@@ -543,6 +543,19 @@ open-in-editor row for the file.</p>
 (<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
 the resulting pull request to the task, so the PRs tab keeps showing it.</p>
 
+<h2 id="comments">Commenting on lines</h2>
+<p>Review the agent's work where you read it. In the diff, a <b>+</b> appears in the line-number gutter under
+the pointer: click it to comment on that line, or drag down the gutter to comment on a range. The comment
+editor opens under the lines (<kbd>⌘↩</kbd> adds it). Comments show as tinted rows under the lines they cover;
+click one to edit or delete it, or open the list from the review strip above the action bar.</p>
+<p>Comments are kept per task, under <code>~/.scope/reviews/</code> — never in the sandbox. Each remembers the
+exact text of its first line and three lines around it, so it follows the code as the agent keeps editing: a
+comment whose lines are gone is listed at the top of the file instead of pointing at the wrong place.</p>
+<p><b>Send Review</b> turns them into one message — per comment the file, the line numbers the file has
+<i>now</i>, the code around them and your text — and pastes it into the task's thread as a single input. With
+several threads running, pick one. If the thread is in the middle of a turn, the review waits and goes out as
+soon as its hooks say the turn ended. Sent comments are cleared.</p>
+
 <h2 id="base">Base</h2>
 <p><kbd>⇧⌘B</kbd>. The repository as it is on disk, outside any sandbox — the reference the agent is working
 from.</p>

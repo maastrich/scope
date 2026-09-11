@@ -420,6 +420,8 @@ extension AppModel {
     private func forgetClosedTask(_ task: TaskState) {
         let taskID = task.id
         task.stopWatching()
+        let reviews = review.store
+        Task { await reviews.delete(taskID) }
         tasks.removeAll { $0.id == taskID }
         if selection == .task(taskID) || currentTask?.id == taskID {
             selection = .scope(task.scopeID)

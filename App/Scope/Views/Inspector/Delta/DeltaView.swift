@@ -99,9 +99,14 @@ struct DeltaView: View {
                     Spacer()
                 }
             }
+            if !model.review.comments.isEmpty || model.queuedDelivery(in: task) != nil {
+                Divider()
+                ReviewBar(task: task)
+            }
             Divider()
             DeltaActionBar(task: task, showCommitSheet: $showCommitSheet)
         }
+        .task(id: task.id) { await model.review.show(task: task.id) }
         .background(Color(nsColor: .textBackgroundColor))
         .focusable()
         .focused($focused)

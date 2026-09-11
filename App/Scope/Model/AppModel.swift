@@ -31,6 +31,10 @@ final class AppModel {
     let base: BaseModel
     /// The PRs inspector (`gh pr list` of the picked repo).
     let pullRequests: PullRequestsModel
+    /// Comments on the Delta diff of the followed task.
+    let review: ReviewModel
+    /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
+    var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
     var newTaskScopeID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
@@ -120,6 +124,7 @@ final class AppModel {
         self.graph = GraphModel(env: env, problems: problems)
         self.base = BaseModel(env: env, problems: problems)
         self.pullRequests = PullRequestsModel(problems: problems)
+        self.review = ReviewModel(home: env.home, problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
         // The CLI and the MCP server reach the app through this and nothing else.
@@ -953,6 +958,7 @@ final class AppModel {
     /// the thread stays until the user closes it. With `autoCloseExitedThreads` the tab goes at once and
     /// the record is deleted when the toast goes. Exits caused by `close` or by quitting keep their own paths.
     private func threadExited(_ session: ThreadSession, status: ExitStatus) {
+        dropDeliveries(for: session)
         if status.isExecFailure {
             problems.error("\(session.profile.name) could not be started (exit 127)",
                            detail: "Check the \"command\" of the \(session.profile.id) driver profile.",
@@ -1132,6 +1138,7 @@ final class AppModel {
         guard let session = session(event.threadID), session.isAlive else { return }
         session.apply(event)
         notifyIfNeeded(event, session: session)
+        flushDeliveries(for: session)
     }
 
     // MARK: Problem actions
