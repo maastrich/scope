@@ -19,7 +19,7 @@ public enum ShellProbeMode: String, Codable, Sendable, CaseIterable {
 }
 
 /// Where the count of threads waiting for the user is shown, on top of the per-row marks that are always drawn
-/// (a square state dot, a bar down the row and the word *needs you*).
+/// (a task's status glyph, a thread's square state dot).
 ///
 /// The per-row marks only help for a row you can see; the counter is what catches a thread blocked further down a
 /// long list or inside a collapsed task. Which of the two places suits a given screen is a matter of taste, hence
@@ -144,6 +144,23 @@ public struct EditorTemplate: Codable, Sendable, Equatable {
     }
 }
 
+/// What the scope's config says about one repository's sandboxes, over what its graph card says. Every field is
+/// optional: an absent one leaves the card's value, an empty command turns the card's off.
+public struct RepoCommandOverride: Codable, Sendable, Hashable {
+    /// Runs in each new sandbox, after the files are copied and before the first thread starts.
+    public var setup: String?
+    /// Runs before a sandbox is removed (archive, close).
+    public var teardown: String?
+    /// Globs of the base checkout copied into each new sandbox; `[".env*"]` when absent.
+    public var copyFiles: [String]?
+
+    public init(setup: String? = nil, teardown: String? = nil, copyFiles: [String]? = nil) {
+        self.setup = setup
+        self.teardown = teardown
+        self.copyFiles = copyFiles
+    }
+}
+
 /// A folder the user declared as a scope (spec §4.1).
 public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     public var id: ScopeID
@@ -157,6 +174,9 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     public var discoveryDepth: Int
     public var sandboxes: SandboxLocation
     public var addedAt: Date
+    /// Per-repository overrides of the setup / teardown commands and the copied files, keyed by the repository's
+    /// path relative to the scope root (`"."` for a repo scope). Edited by hand in `config.json`.
+    public var repoCommands: [String: RepoCommandOverride]
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -168,8 +188,10 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         discoveryDepth: Int = 1,
         sandboxes: SandboxLocation = .home,
         id: ScopeID = .generate(),
-        addedAt: Date = .now
+        addedAt: Date = .now,
+        repoCommands: [String: RepoCommandOverride] = [:]
     ) {
+        self.repoCommands = repoCommands
         let normalized = ScopeDeclaration.normalizedPath(path)
         self.id = id
         self.path = normalized
@@ -202,7 +224,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, path, name, slug, discoveryDepth, sandboxes, addedAt
+        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -216,6 +238,19 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         discoveryDepth = ScopeDeclaration.clampDepth(try container.decodeIfPresent(Int.self, forKey: .discoveryDepth) ?? 1)
         sandboxes = try container.decodeIfPresent(SandboxLocation.self, forKey: .sandboxes) ?? .home
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? .now
+        repoCommands = try container.decodeIfPresent([String: RepoCommandOverride].self, forKey: .repoCommands) ?? [:]
+    }
+
+    /// The override for a repository, looked up whatever spelling the config used for its path.
+    public func commandOverride(for repoRelativePath: String) -> RepoCommandOverride? {
+        func key(_ path: String) -> String {
+            var p = path.trimmingCharacters(in: .whitespaces)
+            while p.hasPrefix("./") { p.removeFirst(2) }
+            while p.hasSuffix("/") { p.removeLast() }
+            return p.isEmpty ? "." : p
+        }
+        let wanted = key(repoRelativePath)
+        return repoCommands.first { key($0.key) == wanted }?.value
     }
 }
 

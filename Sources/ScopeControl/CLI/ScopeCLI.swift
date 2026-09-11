@@ -43,6 +43,7 @@ public enum ScopeCLI {
       scope thread stop <id>              stop the thread's process (the row stays)
       scope thread close <id>             hang it up and remove it
       scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line)
+      scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
       scope task close <id|slug>          close a task: threads hung up, worktrees removed
                                           (--delete-branch, --force to lose uncommitted work)
@@ -66,6 +67,7 @@ public enum ScopeCLI {
       --driver <id>                 driver for the first thread
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
+      --no-setup                    skip the repositories' setup commands (.env files are still copied)
 
     list:
       --scope <slug|name|id|path>   only that scope
@@ -133,10 +135,24 @@ public enum ScopeCLI {
                 guard words.count >= 2 else { throw UsageError(message: "thread send takes a thread id and the text to type", usage: usage) }
                 return .call(.threadSend(ThreadSendParams(thread: words[0], text: words.dropFirst().joined(separator: " "),
                                                           submit: submit)), shared)
+            case "read":
+                var words: [String] = []
+                var parameters = ThreadReadParams(thread: "")
+                let shared = try options(&rest, command: "thread read", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "-n", "--lines": parameters.lines = try count(try value(), flag: flag)
+                    case "--cursor": parameters.cursor = try count(try value(), flag: flag)
+                    default: return false
+                    }
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "thread read takes one thread id", usage: usage) }
+                parameters.thread = words[0]
+                return .call(.threadRead(parameters), shared)
             case "new":
                 break
             default:
-                throw UsageError(message: "thread commands: new, stop, close, send", usage: usage)
+                throw UsageError(message: "thread commands: new, stop, close, send, read", usage: usage)
             }
             var parameters = ThreadNewParams()
             let shared = try options(&rest, command: "thread new", specific: { flag, value in
@@ -186,6 +202,7 @@ public enum ScopeCLI {
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false
+                case "--no-setup": parameters.runSetup = false
                 default: return false
                 }
                 return true
@@ -198,6 +215,14 @@ public enum ScopeCLI {
         default:
             throw UsageError(message: "unknown command “\(first)”", usage: usage)
         }
+    }
+
+    /// A non-negative whole number, or a usage error naming the flag.
+    private static func count(_ text: String, flag: String) throws -> Int {
+        guard let value = Int(text), value >= 0 else {
+            throw UsageError(message: "\(flag) takes a whole number, not “\(text)”", usage: usage)
+        }
+        return value
     }
 
     /// Consumes the shared options plus whatever `specific` claims. Flags that take a value accept both

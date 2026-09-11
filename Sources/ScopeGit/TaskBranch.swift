@@ -25,4 +25,13 @@ public enum TaskBranch {
     public static func slug(for taskName: String) -> String {
         slugify(taskName, fallback: fallbackSlug)
     }
+
+    /// `name` when no branch in `taken` has it, else `name-2`, `name-3`… — the way out when the branch a task
+    /// wanted is checked out in another working tree.
+    public static func alternative(to name: String, taken: Set<String>) -> String {
+        guard taken.contains(name) else { return name }
+        var suffix = 2
+        while taken.contains("\(name)-\(suffix)") { suffix += 1 }
+        return "\(name)-\(suffix)"
+    }
 }

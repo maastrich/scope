@@ -9,15 +9,18 @@ import ScopeCore
 /// instead. It now carries a quiet, un-accented marker, and only while it is *not* the selected row — when it is,
 /// the highlight already says so.
 ///
-/// The trailing group lays out from the right: the state dot at a fixed inset, then a 16 pt gutter that is always
-/// reserved (the hover close button lands in it, so nothing moves when the pointer arrives), then the caption,
-/// which takes what is left and truncates. Nothing here has a fixed width, so a narrow sidebar shortens the
-/// caption and then the title, and never pushes the dot off the edge.
+/// A waiting thread says so once, with the dot's square shape (`StateDot`). The red bar down the row and the
+/// *needs you* caption that used to come with it made three signals for one fact.
+///
+/// The trailing group lays out from the right: the state dot at a fixed inset, then the caption, which takes what
+/// is left and truncates. The close button appears on hover over the end of the caption, which fades out under it,
+/// so no width is held open for it. Nothing here has a fixed width, so a narrow sidebar shortens the caption and
+/// then the title, and never pushes the dot off the edge.
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: ThreadSession
-    /// 0 for a scope-level thread (Threads section), 1 under a task.
+    /// 0 for a thread at the top level, 1 under a task or the loose-threads group.
     var depth = 0
     @State private var isHovered = false
 
@@ -43,12 +46,7 @@ struct ThreadRow: View {
 
             Spacer(minLength: 4)
 
-            if session.displayState.needsAttention {
-                Text(session.displayState == .waiting(reason: .permission) ? "permission" : "needs you")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color("WarningText"))
-                    .lineLimit(1)
-            } else if let caption {
+            if let caption {
                 Text(caption)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -56,31 +54,20 @@ struct ThreadRow: View {
                     .truncationMode(.tail)
             }
 
-            // Always in the layout, so the close button appearing on hover moves nothing. Not clickable while
-            // invisible: an unseen ✕ next to the state dot would close threads by accident (⌘W and the context
-            // menu stay the keyboard path).
-            closeButton
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-
             StateDot(state: session.displayState)
         }
-        .padding(.leading, CGFloat(depth) * 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
-        .overlay(alignment: .leading) {
-            // A blocked thread does nothing until you answer: it is the loudest thing the sidebar has to say, and
-            // a 6 pt dot at the far edge was the quietest way to say it.
-            if session.displayState.needsAttention {
-                // Inset and rounded so it sits inside the List's selection background rather than sticking out
-                // to the left of it when the row is also the selected one.
-                Capsule()
-                    .fill(ThreadStateStyle.waiting)
-                    .frame(width: 3)
-                    .padding(.vertical, 5)
-                    .padding(.leading, 4)
+        // The dot stays visible under the pointer: only the caption gives way to the close button.
+        .trailingFade(isHovered, width: 16 + 7, keeping: 8)
+        .overlay(alignment: .trailing) {
+            if isHovered {
+                closeButton
+                    .padding(.trailing, 8 + 7)
+                    .transition(.opacity)
             }
         }
+        .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 28)
         .contentShape(Rectangle())
         .help(session.record.cwd)
         .onHover { hovering in
@@ -90,7 +77,7 @@ struct ThreadRow: View {
                 withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
             }
         }
-        .contextMenu { contextMenu }
+        .contextMenu { ThreadMenuItems(session: session) }
         .accessibilityAddTraits(isListSelected ? .isSelected : [])
     }
 
@@ -131,9 +118,14 @@ struct ThreadRow: View {
         case .task: depth >= 1 ? nil : (model.task(of: session)?.name ?? "task")
         }
     }
+}
 
-    @ViewBuilder
-    private var contextMenu: some View {
+/// A thread's own actions: its row's context menu, and the task row's when the task has only that thread.
+struct ThreadMenuItems: View {
+    @Environment(AppModel.self) private var model
+    let session: ThreadSession
+
+    var body: some View {
         Button("Mark as Read") {
             model.markRead(session.id)
         }
@@ -176,7 +168,7 @@ struct ThreadRow: View {
             Pasteboard.copy(session.id.rawValue)
         }
         Divider()
-        Button("Close", role: .destructive) {
+        Button("Close Thread", role: .destructive) {
             Task { _ = await model.close(session.id, force: false) }
         }
         .keyboardShortcut("w", modifiers: .command)

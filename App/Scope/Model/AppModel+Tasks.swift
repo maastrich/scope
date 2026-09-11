@@ -163,9 +163,12 @@ extension AppModel {
     /// Creates the task from a proposal, selects it, starts its watcher, then opens its first thread with
     /// `driverID` and the prompt as the driver's opening request. Throws `TaskError` for the sheet to show inline.
     @discardableResult
+    ///
+    /// The sandboxes are then prepared in the background (`startSetup`): `runSetup` runs the setup commands, the
+    /// `.env*` files are copied either way, and the first thread waits for it before it launches.
     func createTask(
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
-        startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true,
+        startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
         threadOrigin: ThreadOrigin = .user, createdBy: String? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
@@ -188,6 +191,7 @@ extension AppModel {
         tasks.append(state)
         state.startWatching()
         state.refresh()
+        startSetup(for: state, runCommands: runSetup)
         selection = .task(record.id)
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
@@ -208,9 +212,98 @@ extension AppModel {
             task.update(record: record)
             task.stopWatching()
             task.startWatching()
+            startSetup(for: task, runCommands: true, only: [relativePath])
         } catch {
             problems.error("Could not add \(relativePath) to \(task.name)", detail: String(describing: error), scope: task.scopeID)
         }
+    }
+
+    // MARK: Setup and teardown
+
+    /// The setup / teardown commands and the copied files of each repository of a task: its graph card, with the
+    /// scope's config (`repoCommands` in `config.json`) over it.
+    func sandboxCommands(for record: TaskRecord) async -> [String: SandboxCommands] {
+        guard let scope = scope(record.scopeID) else { return [:] }
+        let cards = Dictionary(await graphSummaries(for: scope).map { (TaskRepo.normalize($0.path), $0) },
+                               uniquingKeysWith: { first, _ in first })
+        var commands: [String: SandboxCommands] = [:]
+        for repo in record.repos {
+            let override = scope.declaration.commandOverride(for: repo.repoRelativePath)
+            commands[repo.repoRelativePath] = SandboxCommands.resolve(
+                card: cards[repo.repoRelativePath], setupOverride: override?.setup,
+                teardownOverride: override?.teardown, copyFilesOverride: override?.copyFiles
+            )
+        }
+        return commands
+    }
+
+    /// Commands run in the login-shell environment the threads get, resolved once per app run.
+    private func commandRunner() async -> ShellCommandRunner {
+        let shell = await env.shell.environment()
+        return ShellCommandRunner(shell: shell.shell, baseEnvironment: shell.variables)
+    }
+
+    /// Prepares a task's sandboxes in the background (`TaskManager.runSetup`). Its threads wait for this before
+    /// they launch; a setup asked for while another runs goes after it.
+    func startSetup(for task: TaskState, runCommands: Bool, only: [String]? = nil) {
+        let id = task.id
+        let token = UUID()
+        let previous = setupRuns[id]?.run
+        let run = Task { [weak self] in
+            await previous?.value
+            await self?.performSetup(task, runCommands: runCommands, only: only)
+            if self?.setupRuns[id]?.token == token { self?.setupRuns[id] = nil }
+        }
+        setupRuns[id] = (token, run)
+    }
+
+    private func performSetup(_ task: TaskState, runCommands: Bool, only: [String]?) async {
+        let commands = await sandboxCommands(for: task.record)
+        let runner = await commandRunner()
+        do {
+            let record = try await env.tasks.runSetup(task.id, commands: commands, runCommands: runCommands,
+                                                      runner: runner, only: only) { record in
+                await MainActor.run { task.update(record: record) }
+            }
+            guard record.setupState == .failed else { return }
+            problems.error("The setup of \(task.name) failed", detail: SetupLog.tail(record.setup?.log ?? "", lines: 60),
+                           scope: task.scopeID,
+                           actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue)),
+                                     .reveal(record.threadCwd.path, title: "Reveal Sandbox")])
+        } catch {
+            // Closed or archived mid-setup: nothing left to report on.
+            guard !Task.isCancelled, self.task(task.id) != nil else { return }
+            problems.error("Could not run the setup of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+        }
+    }
+
+    /// A setup still running when its task goes: its commands are killed rather than left writing into a folder
+    /// about to be removed.
+    private func cancelSetup(_ taskID: TaskID) {
+        setupRuns[taskID]?.run.cancel()
+        setupRuns[taskID] = nil
+    }
+
+    private func teardown(for task: TaskState) async -> TaskManager.Teardown {
+        TaskManager.Teardown(commands: await sandboxCommands(for: task.record), runner: await commandRunner())
+    }
+
+    private func reportTeardownFailure(_ task: TaskState, repo: String, summary: String, log: String) {
+        problems.error("The teardown of \(task.name) failed; its sandboxes were kept",
+                       detail: "\(repo): \(summary)\n\n\(SetupLog.tail(log, lines: 60))", scope: task.scopeID,
+                       actions: [.reveal(task.record.threadCwd.path, title: "Reveal Sandbox")])
+    }
+
+    /// What `TaskStatus.resolve` decides from: the task's threads, its delta, its setup and its pull request.
+    func taskFacts(for task: TaskState) -> TaskFacts {
+        let pullRequest = task.record.pullRequest.map { link in
+            let live = livePullRequest(for: task)
+            return PullRequestFacts(number: link.number, isDraft: live?.isDraft ?? false,
+                                    checks: live?.checks ?? .none, mergeable: live?.mergeable ?? .unknown)
+        }
+        return TaskFacts(threads: threads(in: task.id).map(\.displayState), additions: task.totalAdditions,
+                         deletions: task.totalDeletions, isDirty: task.dirtyRepoCount > 0, setup: task.record.setupState,
+                         pullRequest: pullRequest)
     }
 
     /// Repos of the task's scope that are not part of the task yet.
@@ -222,13 +315,15 @@ extension AppModel {
     }
 
     /// Removes the worktrees, keeps the branches and the record. Refused with uncommitted changes unless forced.
-    func archiveTask(_ taskID: TaskID, force: Bool = false) async {
+    /// The teardown commands run first; when one fails nothing is removed, unless the user says to go on without.
+    func archiveTask(_ taskID: TaskID, force: Bool = false, skipTeardown: Bool = false) async {
         guard let task = task(taskID) else { return }
+        cancelSetup(taskID)
         for session in threads(in: taskID) {
             await close(session.id, force: true)
         }
         do {
-            let record = try await env.tasks.archive(taskID, force: force)
+            let record = try await env.tasks.archive(taskID, force: force, teardown: skipTeardown ? nil : await teardown(for: task))
             task.stopWatching()
             task.update(record: record)
             if selection == .task(taskID) { selection = .scope(task.scopeID) }
@@ -237,7 +332,14 @@ extension AppModel {
             if await confirmForce(title: "Archive “\(task.name)” anyway?",
                                   detail: "The sandbox of \(repo) has uncommitted changes; archiving discards them.",
                                   button: "Archive") {
-                await archiveTask(taskID, force: true)
+                await archiveTask(taskID, force: true, skipTeardown: skipTeardown)
+            }
+        } catch TaskError.teardownFailed(let repo, let summary, let log) {
+            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
+            if await confirmForce(title: "Archive “\(task.name)” without its teardown?",
+                                  detail: "The teardown command of \(repo) failed (\(summary)); what it was meant to stop may still be running.",
+                                  button: "Archive Anyway") {
+                await archiveTask(taskID, force: force, skipTeardown: true)
             }
         } catch {
             problems.error("Could not archive \(task.name)", detail: String(describing: error), scope: task.scopeID)
@@ -246,7 +348,8 @@ extension AppModel {
 
     /// Closes the task for good: threads closed, worktrees removed, record deleted. Confirmation first;
     /// `TaskError.uncommittedChanges` / `.branchNotMerged` come back as a second alert offering Force.
-    func closeTask(_ taskID: TaskID, deleteBranch: Bool, force: Bool = false, confirmed: Bool = false) async {
+    func closeTask(_ taskID: TaskID, deleteBranch: Bool, force: Bool = false, confirmed: Bool = false,
+                   skipTeardown: Bool = false) async {
         guard let task = task(taskID) else { return }
         if !confirmed {
             let running = threads(in: taskID).filter(\.isAlive).count
@@ -255,23 +358,33 @@ extension AppModel {
             if running > 0 { detail += "\n\n\(running) running \(running == 1 ? "thread" : "threads") will be hung up." }
             guard await confirmForce(title: "Close “\(task.name)”?", detail: detail, button: "Close Task") else { return }
         }
+        cancelSetup(taskID)
         for session in threads(in: taskID) {
             await close(session.id, force: true)
         }
         do {
-            try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force)
+            try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force,
+                                      teardown: skipTeardown ? nil : await teardown(for: task))
         } catch TaskError.uncommittedChanges(let repo) where !force {
             if await confirmForce(title: "Close “\(task.name)” anyway?",
                                   detail: "The sandbox of \(repo) has uncommitted changes; closing discards them.",
                                   button: "Force Close") {
-                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true)
+                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true, skipTeardown: skipTeardown)
             }
             return
         } catch TaskError.branchNotMerged(let repo, let branch) where !force {
             if await confirmForce(title: "Delete unmerged branch \(branch)?",
                                   detail: "\(repo): the branch is not merged; its commits will be lost.",
                                   button: "Delete Branch") {
-                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true)
+                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true, skipTeardown: true)
+            }
+            return
+        } catch TaskError.teardownFailed(let repo, let summary, let log) {
+            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
+            if await confirmForce(title: "Close “\(task.name)” without its teardown?",
+                                  detail: "The teardown command of \(repo) failed (\(summary)); what it was meant to stop may still be running.",
+                                  button: "Close Anyway") {
+                await closeTask(taskID, deleteBranch: deleteBranch, force: force, confirmed: true, skipTeardown: true)
             }
             return
         } catch {
@@ -290,10 +403,16 @@ extension AppModel {
         if !force, task.dirtyRepoCount > 0 {
             throw TaskError.uncommittedChanges(repo: task.record.slug)
         }
+        cancelSetup(taskID)
         for session in threads(in: taskID) {
             await close(session.id, force: true)
         }
-        try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force)
+        do {
+            try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force, teardown: await teardown(for: task))
+        } catch TaskError.teardownFailed(let repo, let summary, let log) {
+            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
+            throw TaskError.teardownFailed(repo: repo, summary: summary, log: log)
+        }
         forgetClosedTask(task)
     }
 
@@ -301,6 +420,8 @@ extension AppModel {
     private func forgetClosedTask(_ task: TaskState) {
         let taskID = task.id
         task.stopWatching()
+        let reviews = review.store
+        Task { await reviews.delete(taskID) }
         tasks.removeAll { $0.id == taskID }
         if selection == .task(taskID) || currentTask?.id == taskID {
             selection = .scope(task.scopeID)
@@ -308,12 +429,12 @@ extension AppModel {
         scope(task.scopeID)?.refreshFacts()
     }
 
-    private func confirmForce(title: String, detail: String, button: String) async -> Bool {
+    func confirmForce(title: String, detail: String, button: String, destructive: Bool = true) async -> Bool {
         let alert = NSAlert()
-        alert.alertStyle = .warning
+        alert.alertStyle = destructive ? .warning : .informational
         alert.messageText = title
         alert.informativeText = detail
-        alert.addButton(withTitle: button).hasDestructiveAction = true
+        alert.addButton(withTitle: button).hasDestructiveAction = destructive
         alert.addButton(withTitle: "Cancel")
         let response: NSApplication.ModalResponse
         if let window = NSApp.keyWindow {

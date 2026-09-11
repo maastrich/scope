@@ -69,7 +69,8 @@ import ScopeGit
         #expect(!task.isMonoRepo)
         #expect(task.threadCwd == task.rootURL)
         #expect(manager.threadCwd(for: task) == task.rootURL)
-        #expect(manager.taskEnvironment(for: task) == ["SCOPE_TASK": "auth-refresh-v2", "SCOPE_TASK_ROOT": task.root])
+        #expect(manager.taskEnvironment(for: task) == ["SCOPE_TASK": "auth-refresh-v2", "SCOPE_TASK_ROOT": task.root,
+                                                      "SCOPE_PORT": String(PortAllocator.range.lowerBound)])
 
         // Worktrees on the task branch, started from origin/main.
         for repo in task.repos {

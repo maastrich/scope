@@ -146,6 +146,45 @@ public struct GhClient: Sendable {
         return try await runJSON(arguments, in: checkout, parse: PullRequest.parse(json:)).first
     }
 
+    // MARK: Pull request lifecycle (checks, logs, merge)
+
+    /// The checks of pull request `number`, as its status rollup lists them.
+    public func prChecks(number: Int, in checkout: URL, repo: String? = nil) async throws -> [PullRequestCheck] {
+        try await prView(number: number, in: checkout, repo: repo).checkRuns
+    }
+
+    /// The log of the failed steps of an Actions run, the one job when it is known
+    /// (`gh run view <run> [--job <job>] --log-failed`).
+    public func failedLog(of job: ActionsJob, in checkout: URL, repo: String? = nil) async throws -> String {
+        var arguments = ["run", "view", String(job.run), "--log-failed"]
+        if let id = job.job { arguments += ["--job", String(id)] }
+        if let repo { arguments += ["--repo", repo] }
+        return try await run(arguments, in: checkout, timeout: .seconds(120))
+    }
+
+    /// The merge method the repository allows (`gh repo view --json …`), preferred as GitHub's merge button does.
+    public func mergeMethod(in checkout: URL, repo: String? = nil) async throws -> MergeMethod? {
+        struct Allowed: Decodable {
+            var mergeCommitAllowed: Bool?
+            var squashMergeAllowed: Bool?
+            var rebaseMergeAllowed: Bool?
+        }
+        var arguments = ["repo", "view"]
+        if let repo { arguments.append(repo) }
+        arguments += ["--json", "mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed"]
+        let allowed = try await runJSON(arguments, in: checkout) { try JSONDecoder().decode(Allowed.self, from: $0) }
+        return MergeMethod.preferred(mergeCommit: allowed.mergeCommitAllowed ?? false, squash: allowed.squashMergeAllowed ?? false,
+                                     rebase: allowed.rebaseMergeAllowed ?? false)
+    }
+
+    /// `gh pr merge <n> --<method>`. Branches are left alone: deleting one is the task's close, which knows the
+    /// branch it created rather than guessing.
+    public func prMerge(number: Int, method: MergeMethod, in checkout: URL, repo: String? = nil) async throws {
+        var arguments = ["pr", "merge", String(number), "--\(method.rawValue)"]
+        if let repo { arguments += ["--repo", repo] }
+        _ = try await run(arguments, in: checkout, timeout: .seconds(120))
+    }
+
     private func runJSON<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
         let command = "gh " + arguments.prefix(2).joined(separator: " ")
         let result = try await Subprocess.run(

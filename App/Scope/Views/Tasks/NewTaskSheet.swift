@@ -44,6 +44,9 @@ struct NewTaskSheet: View {
     @State private var appliedFields: [String] = ["", "", ""]
     @State private var proposing: Task<Void, Never>?
     @State private var isCreating = false
+    @State private var runSetup = true
+    /// The branch Create asked for is checked out in another working tree: which one, said in words.
+    @State private var checkedOut: (branch: String, holder: String)?
     @State private var error: String?
     @FocusState private var promptFocused: Bool
     @FocusState private var titleFocused: Bool
@@ -193,6 +196,17 @@ struct NewTaskSheet: View {
             .foregroundStyle(.secondary)
         }
 
+        if let busy = checkedOut {
+            Section {
+                Label("\(busy.branch) is checked out in \(busy.holder), and a branch lives in one working tree at a time.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Create on a New Branch Instead") { useNewBranch(instead: busy.branch) }
+                    .controlSize(.small)
+            }
+        }
+
         if let existing = resolution?.existingTask, let task = model.task(existing) {
             Section {
                 Label("\(task.name) already works on this pull request.", systemImage: "arrow.triangle.branch")
@@ -235,6 +249,13 @@ struct NewTaskSheet: View {
             } footer: {
                 if !repoFooter.isEmpty { Text(repoFooter) }
             }
+        }
+
+        Section {
+            Toggle("Run setup", isOn: $runSetup)
+                .toggleStyle(.checkbox)
+        } footer: {
+            Text("Runs each repository's setup command — from its Graph card, or the scope's config — in the new sandbox before the first thread starts. The .env files of the base checkout are copied either way.")
         }
 
         Section {
@@ -539,10 +560,37 @@ struct NewTaskSheet: View {
         promptFocused = true
     }
 
+    /// Leaves the busy branch to whoever holds it: the proposed name, or the next free `-2`, `-3`, off the base.
+    private func useNewBranch(instead busy: String) {
+        let base = derivedBranch.isEmpty ? busy : derivedBranch
+        let name = TaskBranch.alternative(to: base, taken: Set(evidence?.branches ?? []).union([busy]))
+        // Set before the start point: its change handler writes `derivedBranch` into the field.
+        derivedBranch = name
+        startPoint = .defaultBranch
+        branch = name
+        appliedFields[1] = name
+        checkedOut = nil
+        error = nil
+    }
+
+    /// `path` in words: a task's sandbox by the task's name, the scope's own checkout as such, else the path.
+    private func holder(of path: String) -> String {
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        func same(_ other: String) -> Bool { URL(fileURLWithPath: other).resolvingSymlinksInPath().path == resolved }
+        if let task = model.tasks.first(where: { $0.record.repos.contains { same($0.sandboxPath) } }) {
+            return "the sandbox of the task “\(task.name)”"
+        }
+        if scope.repos.contains(where: { same($0.url.path) }) || same(scope.url.path) {
+            return "your own checkout (\(path))"
+        }
+        return path
+    }
+
     private func create() {
         guard canCreate else { return }
         isCreating = true
         error = nil
+        checkedOut = nil
         let proposal = TaskProposal(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             slug: TaskBranch.slug(for: folder),
@@ -553,8 +601,11 @@ struct NewTaskSheet: View {
         let repos = repos
         Task {
             do {
-                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos, startPoint: startPoint)
+                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos,
+                                           startPoint: startPoint, runSetup: runSetup)
                 dismiss()
+            } catch TaskError.branchAlreadyCheckedOut(_, let busy, let path) {
+                checkedOut = (busy, holder(of: path))
             } catch {
                 self.error = String(describing: error)
             }

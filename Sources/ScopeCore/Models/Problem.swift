@@ -50,6 +50,8 @@ public struct ProblemAction: Identifiable, Sendable, Equatable {
         case revealFile(String)
         case rescan(ScopeID)
         case locateScope(ScopeID)
+        /// Runs a task's setup again; the payload is the task id.
+        case rerunTaskSetup(String)
         case dismiss
     }
 

@@ -28,6 +28,7 @@ public enum ScopeHome {
     }
 
     /// Creates `drivers/`, `graph/`, `sandboxes/` and `threads/` under `home` (idempotent) and returns `home`.
+    /// `sandboxes/` gets a `.metadata_never_index` marker.
     @discardableResult
     public static func ensureLayout(at home: URL) throws -> URL {
         for sub in ["drivers", "graph", "sandboxes", "threads"] {
@@ -36,7 +37,18 @@ public enum ScopeHome {
                 withIntermediateDirectories: true
             )
         }
+        // Spotlight would index every sandbox — `node_modules` and build output included, once per task — and a
+        // search for a file of your own would list each worktree's copy. The marker keeps the whole folder out.
+        let marker = spotlightMarkerURL(home: home)
+        if !FileManager.default.fileExists(atPath: marker.path) {
+            try Data().write(to: marker)
+        }
         return home
+    }
+
+    /// `<home>/sandboxes/.metadata_never_index`
+    public static func spotlightMarkerURL(home: URL) -> URL {
+        sandboxesURL(home: home).appending(path: ".metadata_never_index", directoryHint: .notDirectory)
     }
 
     /// `<home>/config.json`

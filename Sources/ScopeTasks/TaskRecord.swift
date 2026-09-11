@@ -145,6 +145,11 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Who asked for the task: `nil` (the user, in the app) or the control client that requested it
     /// (`scope-cli/0.4.0`). Written so the sidebar and `scope list` can say what an agent created.
     public var createdBy: String?
+    /// First of the task's block of `PortAllocator.blockSize` ports (`SCOPE_PORT`); `nil` on records written before
+    /// ports were handed out, until the next launch allocates one.
+    public var portBase: Int?
+    /// The setup of the sandboxes, `nil` on records written before setup existed.
+    public var setup: TaskSetupRecord?
 
     public init(
         id: TaskID = .generate(),
@@ -161,7 +166,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         archivedAt: Date? = nil,
         pullRequest: LinkedPullRequest? = nil,
         prompt: String? = nil,
-        createdBy: String? = nil
+        createdBy: String? = nil,
+        portBase: Int? = nil,
+        setup: TaskSetupRecord? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -179,6 +186,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.pullRequest = pullRequest
         self.prompt = prompt
         self.createdBy = createdBy
+        self.portBase = portBase
+        self.setup = setup
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -218,10 +227,16 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         return rootURL
     }
 
-    /// Variables injected into the task's threads: `SCOPE_TASK` (slug) and `SCOPE_TASK_ROOT` (task root path).
+    /// Variables injected into the task's threads: `SCOPE_TASK` (slug), `SCOPE_TASK_ROOT` (task root path) and,
+    /// once allocated, `SCOPE_PORT` (the first of the task's ports).
     public var environment: [String: String] {
-        ["SCOPE_TASK": slug, "SCOPE_TASK_ROOT": root]
+        var variables = ["SCOPE_TASK": slug, "SCOPE_TASK_ROOT": root]
+        if let portBase { variables["SCOPE_PORT"] = String(portBase) }
+        return variables
     }
+
+    /// `notRun` for a record that never ran a setup.
+    public var setupState: SetupState { setup?.state ?? .notRun }
 
     public func repo(at relativePath: String) -> TaskRepo? {
         let key = TaskRepo.normalize(relativePath)
@@ -230,7 +245,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy
+        case createdBy, portBase, setup
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -252,5 +267,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         pullRequest = try container.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest)
         prompt = try container.decodeIfPresent(String.self, forKey: .prompt)
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
+        portBase = try container.decodeIfPresent(Int.self, forKey: .portBase)
+        setup = try container.decodeIfPresent(TaskSetupRecord.self, forKey: .setup)
     }
 }

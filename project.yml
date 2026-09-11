@@ -120,6 +120,11 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.folder]
+        # scope://task/new?scope=…&prompt=… (AppModel.open(url:)). A Debug build answers scope-debug:// so a link
+        # never lands in whichever copy LaunchServices happens to prefer.
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes: [$(SCOPE_URL_SCHEME)]
         NSServices:
           - NSMenuItem: { default: "Open in $(SCOPE_DISPLAY_NAME)" }
             NSMessage: openInScope
@@ -155,6 +160,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope
         PRODUCT_NAME: Scope
         SCOPE_DISPLAY_NAME: Scope
+        SCOPE_URL_SCHEME: scope
         MARKETING_VERSION: "0.0.0"   # dev builds; releases: tag without "v" (scripts/package.sh)
         CURRENT_PROJECT_VERSION: "0" # dev builds; releases: git rev-list --count HEAD (scripts/package.sh)
         ENABLE_HARDENED_RUNTIME: YES
@@ -169,6 +175,7 @@ targets:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope.debug
           SCOPE_DISPLAY_NAME: Scope Debug
+          SCOPE_URL_SCHEME: scope-debug
           # The bundle on disk is renamed too, not just the display name: Spotlight indexes the file, so two
           # Scope.app would both answer to "Scope" and you could not tell which one you were opening.
           PRODUCT_NAME: Scope Debug

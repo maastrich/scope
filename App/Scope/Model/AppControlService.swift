@@ -79,6 +79,15 @@ final class AppControlService: ControlService {
                                                          + (params.submit ? " and pressed ↩" : ""),
                                                      thread: session.id.rawValue), .threadSend))
             }
+        case .threadRead(let params):
+            // The gate is `thread.send`'s: only a thread the caller opened, any thread from the user's own terminal.
+            return act(on: params.thread, from: origin) { session in
+                let transcript = TerminalBridge.transcript(of: session)
+                let page = ThreadTranscript.page(transcript.lines, firstLineNumber: transcript.firstLineNumber,
+                                                 count: params.lines, cursor: params.cursor)
+                return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title,
+                                                       state: session.displayState.name, page: page)))
+            }
         case .taskClose(let params):
             guard let task = model.tasks.first(where: { $0.record.id.rawValue == params.task || $0.record.slug == params.task }) else {
                 return .failure(.notFound("no task “\(params.task)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
@@ -292,7 +301,7 @@ final class AppControlService: ControlService {
         do {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
-                                               threadOrigin: threadOrigin, createdBy: caller.client)
+                                               runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }

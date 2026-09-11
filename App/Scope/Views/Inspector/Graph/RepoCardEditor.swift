@@ -1,7 +1,7 @@
 import SwiftUI
 import ScopeGraph
 
-/// Inline editor of a card: purpose, stack, setup and test. Save stores the card with manual
+/// Inline editor of a card: purpose, stack, setup, test and teardown. Save stores the card with manual
 /// precedence (`edited = true`); Reset drops the flag and re-runs the quick analysis.
 struct RepoCardEditor: View {
     @Environment(AppModel.self) private var model
@@ -10,6 +10,7 @@ struct RepoCardEditor: View {
     @State private var stack = ""
     @State private var setup = ""
     @State private var test = ""
+    @State private var teardown = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -30,6 +31,10 @@ struct RepoCardEditor: View {
             }
             field("Test") {
                 TextField("pnpm test", text: $test).font(.system(size: 11, design: .monospaced))
+            }
+            field("Teardown") {
+                TextField("docker compose down (before a sandbox is removed)", text: $teardown)
+                    .font(.system(size: 11, design: .monospaced))
             }
             HStack(spacing: 8) {
                 Button("Save") { Task { await save() } }
@@ -53,6 +58,7 @@ struct RepoCardEditor: View {
             stack = entry.card.stack.joined(separator: ", ")
             setup = entry.card.setup ?? ""
             test = entry.card.test ?? ""
+            teardown = entry.card.teardown ?? ""
         }
     }
 
@@ -69,6 +75,7 @@ struct RepoCardEditor: View {
         card.stack = stack.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty }
         card.setup = trimmed(setup)
         card.test = trimmed(test)
+        card.teardown = trimmed(teardown)
         await model.graph.setManual(card, for: entry.key)
     }
 

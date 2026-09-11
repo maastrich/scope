@@ -7,6 +7,8 @@ struct MonoDocument {
     var text: NSAttributedString
     /// `anchors[i]` is the range `MonoFocus(anchor: i)` scrolls to.
     var anchors: [NSRange]
+    /// Range of each line that can be picked from the gutter, by the key its `.lineKey` attribute carries.
+    var lines: [Int: NSRange] = [:]
 }
 
 /// A scroll request: which anchor, where on screen, and a token so repeating the same jump still scrolls.
@@ -23,6 +25,10 @@ extension NSAttributedString.Key {
     static let rowBackground = NSAttributedString.Key("scope.rowBackground")
     /// `Int` on a hunk header line: clicking it calls `MonoTextView.onAnchorClick`.
     static let anchorIndex = NSAttributedString.Key("scope.anchorIndex")
+    /// `Int` on a line the gutter can select (a diff line): the key of `MonoDocument.lines`.
+    static let lineKey = NSAttributedString.Key("scope.lineKey")
+    /// `String` on a comment row: clicking it calls `MonoTextView.onCommentClick` with it.
+    static let commentID = NSAttributedString.Key("scope.commentID")
 }
 
 /// Colours and font shared by the diff and the Base viewer. Asset colours with a fallback so the view
@@ -82,6 +88,13 @@ struct MonoTextView: NSViewRepresentable {
     var build: () -> MonoDocument
     var focus: MonoFocus?
     var onAnchorClick: ((Int) -> Void)?
+    /// Width in points of the line-number gutter; the gutter comment affordance lives there. 0 turns it off.
+    var gutterWidth: CGFloat = 0
+    /// A click or a drag in the gutter picked the lines whose keys are in the range; the rect covers them, in the
+    /// coordinates of the view passed along (to hang a popover on).
+    var onGutterSelection: ((ClosedRange<Int>, NSRect, NSView) -> Void)?
+    /// A comment row was clicked.
+    var onCommentClick: ((String, NSRect, NSView) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -95,7 +108,7 @@ struct MonoTextView: NSViewRepresentable {
         container.lineFragmentPadding = 0
         layout.addTextContainer(container)
 
-        let textView = NSTextView(frame: .zero, textContainer: container)
+        let textView = GutterTextView(frame: .zero, textContainer: container)
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -131,6 +144,18 @@ struct MonoTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         let coordinator = context.coordinator
         coordinator.onAnchorClick = onAnchorClick
+        coordinator.onCommentClick = onCommentClick
+        if let textView = coordinator.textView as? GutterTextView {
+            textView.gutterWidth = gutterWidth
+            if let onGutterSelection {
+                textView.onGutterSelection = { [weak textView] keys, rect in
+                    guard let textView else { return }
+                    onGutterSelection(keys, rect, textView)
+                }
+            } else {
+                textView.onGutterSelection = nil
+            }
+        }
         let identityChanged = coordinator.identity != identity
         if coordinator.version != version || identityChanged {
             coordinator.version = version
@@ -156,6 +181,7 @@ struct MonoTextView: NSViewRepresentable {
         var lastFocus: MonoFocus?
         var anchors: [NSRange] = []
         var onAnchorClick: ((Int) -> Void)?
+        var onCommentClick: ((String, NSRect, NSView) -> Void)?
 
         /// Keeps the text view at least as wide as the clip view so row tints span the visible area.
         /// Block observers are removed by the notification centre when the coordinator goes away.
@@ -180,6 +206,7 @@ struct MonoTextView: NSViewRepresentable {
         func setDocument(_ document: MonoDocument) {
             guard let textView, let storage = textView.textStorage else { return }
             anchors = document.anchors
+            (textView as? GutterTextView)?.lineRanges = document.lines
             let selected = textView.selectedRange()
             storage.beginEditing()
             storage.setAttributedString(document.text)
@@ -217,8 +244,13 @@ struct MonoTextView: NSViewRepresentable {
         }
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-            guard let storage = textView.textStorage, charIndex < storage.length,
-                  let index = storage.attribute(.anchorIndex, at: charIndex, effectiveRange: nil) as? Int else { return false }
+            guard let storage = textView.textStorage, charIndex < storage.length else { return false }
+            if let id = storage.attribute(.commentID, at: charIndex, effectiveRange: nil) as? String,
+               let gutter = textView as? GutterTextView {
+                onCommentClick?(id, gutter.lineRect(containing: charIndex), gutter)
+                return true
+            }
+            guard let index = storage.attribute(.anchorIndex, at: charIndex, effectiveRange: nil) as? Int else { return false }
             onAnchorClick?(index)
             return true
         }
@@ -245,5 +277,122 @@ final class RowBackgroundLayoutManager: NSLayoutManager {
             }
         }
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+    }
+}
+
+/// The text view of `MonoTextView`, with the diff's comment affordance: a "+" in the gutter under the pointer,
+/// and a click or a drag down the gutter picking one line or a range. The text itself stays selectable as before;
+/// only presses that start in the gutter are taken.
+final class GutterTextView: NSTextView {
+    var gutterWidth: CGFloat = 0
+    var onGutterSelection: ((ClosedRange<Int>, NSRect) -> Void)?
+    var lineRanges: [Int: NSRange] = [:]
+
+    private var hoverKey: Int? {
+        didSet { if hoverKey != oldValue { needsDisplay = true } }
+    }
+    private var drag: (start: Int, end: Int)? {
+        didSet { needsDisplay = true }
+    }
+    private var trackingArea: NSTrackingArea?
+
+    private var isActive: Bool { onGutterSelection != nil && gutterWidth > 0 }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                  owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        hoverKey = isActive && point.x < gutterWidth ? lineKey(at: point) : nil
+        super.mouseMoved(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hoverKey = nil
+        super.mouseExited(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if isActive, point.x < gutterWidth, let key = lineKey(at: point) {
+            drag = (key, key)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard var current = drag else { return super.mouseDragged(with: event) }
+        if let key = lineKey(at: convert(event.locationInWindow, from: nil)) {
+            current.end = key
+            drag = current
+        }
+        autoscroll(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let current = drag else { return super.mouseUp(with: event) }
+        drag = nil
+        let keys = min(current.start, current.end)...max(current.start, current.end)
+        onGutterSelection?(keys, lineRect(keys))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        if let current = drag {
+            NSColor.controlAccentColor.withAlphaComponent(0.2).setFill()
+            lineRect(min(current.start, current.end)...max(current.start, current.end)).fill()
+        } else if let key = hoverKey {
+            let line = lineRect(key...key)
+            let badge = NSRect(x: 2, y: line.midY - 7, width: 14, height: 14)
+            NSColor.controlAccentColor.setFill()
+            NSBezierPath(roundedRect: badge, xRadius: 3, yRadius: 3).fill()
+            let plus = NSAttributedString(string: "+", attributes: [
+                .font: NSFont.systemFont(ofSize: 12, weight: .bold), .foregroundColor: NSColor.white,
+            ])
+            let size = plus.size()
+            plus.draw(at: NSPoint(x: badge.midX - size.width / 2, y: badge.midY - size.height / 2))
+        }
+    }
+
+    /// The key of the gutter line at `point`'s height, `nil` over a hunk header, a comment row or empty space.
+    func lineKey(at point: NSPoint) -> Int? {
+        guard let layout = layoutManager, let container = textContainer, let storage = textStorage, storage.length > 0 else { return nil }
+        let local = NSPoint(x: 1, y: point.y - textContainerInset.height)
+        let glyph = layout.glyphIndex(for: local, in: container)
+        let fragment = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        guard local.y >= fragment.minY, local.y < fragment.maxY else { return nil }
+        let character = layout.characterIndexForGlyph(at: glyph)
+        guard character < storage.length else { return nil }
+        return storage.attribute(.lineKey, at: character, effectiveRange: nil) as? Int
+    }
+
+    /// Full-width rect of the lines whose keys are in `keys`, in view coordinates.
+    func lineRect(_ keys: ClosedRange<Int>) -> NSRect {
+        let ranges = keys.compactMap { lineRanges[$0] }
+        guard let first = ranges.min(by: { $0.location < $1.location }),
+              let last = ranges.max(by: { NSMaxRange($0) < NSMaxRange($1) }) else { return .zero }
+        return rect(forCharacters: NSRange(location: first.location, length: max(1, NSMaxRange(last) - first.location - 1)))
+    }
+
+    /// Full-width rect of the line holding `charIndex`.
+    func lineRect(containing charIndex: Int) -> NSRect {
+        rect(forCharacters: NSRange(location: charIndex, length: 1))
+    }
+
+    private func rect(forCharacters range: NSRange) -> NSRect {
+        guard let layout = layoutManager, let container = textContainer else { return .zero }
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        rect.origin.y += textContainerInset.height
+        rect.origin.x = 0
+        rect.size.width = max(bounds.width, frame.width)
+        return rect
     }
 }

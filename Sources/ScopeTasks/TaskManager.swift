@@ -25,10 +25,26 @@ public actor TaskManager {
     // MARK: - Records
 
     /// Loads every record from disk into the manager. Call once at startup.
+    ///
+    /// A setup still marked running was cut short by a quit and is reported as failed; a live task written before
+    /// ports were handed out gets its block now. Both are saved at once so the answer never changes.
     public func loadAll() async -> [StoreProblem] {
         let loaded = await store.loadAll()
         records = Dictionary(uniqueKeysWithValues: loaded.records.map { ($0.id, $0) })
+        for original in allTasks {
+            var record = original
+            if let setup = record.setup { record.setup = setup.normalizedAfterRestart }
+            if record.portBase == nil, !record.isArchived { record.portBase = allocatePort(excluding: record.id) }
+            guard record != original else { continue }
+            records[record.id] = record
+            try? await persist(record)
+        }
         return loaded.problems
+    }
+
+    /// A free block for a new live task: archived tasks give theirs back.
+    private func allocatePort(excluding id: TaskID? = nil) -> Int? {
+        PortAllocator.allocate(taken: records.values.filter { !$0.isArchived && $0.id != id }.compactMap(\.portBase))
     }
 
     /// Every known task, oldest first.
@@ -101,7 +117,8 @@ public actor TaskManager {
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
-            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy
+            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
+            portBase: allocatePort()
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -143,7 +160,8 @@ public actor TaskManager {
             name: name, slug: slug, branch: branch, root: root.filesystemPath,
             createdAt: TaskRecord.roundedToMilliseconds(.now),
             pullRequest: LinkedPullRequest(pr),
-            prompt: initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            prompt: initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            portBase: allocatePort()
         )
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
@@ -215,15 +233,118 @@ public actor TaskManager {
         try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
     }
 
+    // MARK: - Setup / teardown
+
+    /// Prepares the sandboxes of a task (spec §4.3): copies the base checkouts' untracked files (`.env*`) into
+    /// them, then runs each repository's setup command in its sandbox, one after the other. The state and the
+    /// output land on the record, which is saved when the run starts and when it ends; `onChange` hears both.
+    ///
+    /// `runCommands: false` copies the files and marks the setup skipped. `only` limits the run to some
+    /// repositories — a repository added to a running task. A failing command does not stop the others: the
+    /// repositories are independent, and one log with every failure beats rerunning to find the next.
+    @discardableResult
+    public func runSetup(
+        _ id: TaskID, commands: [String: SandboxCommands], runCommands: Bool, runner: any SandboxCommandRunner,
+        only: [String]? = nil, timeout: Duration = .seconds(1800),
+        onChange: @escaping @Sendable (TaskRecord) async -> Void = { _ in }
+    ) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let repos = record.activeRepos.filter { only?.map(TaskRepo.normalize).contains($0.repoRelativePath) ?? true }
+        let willRun = runCommands && repos.contains { commands[$0.repoRelativePath]?.setup != nil }
+        record.setup = TaskSetupRecord(state: willRun ? .running : .skipped, startedAt: TaskRecord.roundedToMilliseconds(.now))
+        try await persist(record)
+        records[id] = record
+        await onChange(record)
+
+        var log = ""
+        var ran = false
+        var failed = false
+        for repo in repos {
+            let repoCommands = commands[repo.repoRelativePath] ?? SandboxCommands()
+            let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
+            let name = repo.isScopeRoot ? record.scopeName : repo.repoRelativePath
+            let plan = SandboxFileCopy.plan(globs: repoCommands.copyFiles, base: base, sandbox: repo.sandboxURL)
+            let (copied, copyFailures) = SandboxFileCopy.apply(plan)
+            for path in copied {
+                log += "[\(name)] copied \(path) from the base checkout\n"
+                // A file the repository does not ignore would otherwise be one `git add -A` away from a commit.
+                if let client = try? await baseClient(for: repo.repoRelativePath, task: record),
+                   let check = try? await client.run(["-C", repo.sandboxPath, "check-ignore", "-q", path],
+                                                     timeout: .seconds(10), allowFailure: true),
+                   !check.succeeded {
+                    try? await excludeFromGit(path, in: repo, task: record)
+                }
+            }
+            for refusal in plan.refusals + copyFailures {
+                log += "[\(name)] did not copy \(refusal.path): \(refusal.reason)\n"
+            }
+            guard runCommands, let command = repoCommands.setup else { continue }
+            ran = true
+            let client = try? await baseClient(for: repo.repoRelativePath, task: record)
+            let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,
+                                                           defaultBranch: await client?.defaultBranch())
+            log += "[\(name)] $ \(command)\n"
+            let outcome = await runner.run(command, in: repo.sandboxURL, environment: environment, timeout: timeout)
+            if !outcome.output.isEmpty { log += outcome.output.hasSuffix("\n") ? outcome.output : outcome.output + "\n" }
+            log += "[\(name)] \(outcome.succeeded ? "done" : "failed: \(outcome.summary)")\n"
+            failed = failed || !outcome.succeeded
+            log = SetupLog.bounded(log)
+        }
+
+        // The task may have been closed or archived while the commands ran.
+        guard var current = records[id] else { throw TaskError.persistence("task \(id) went away during its setup") }
+        current.setup = TaskSetupRecord(
+            state: !ran ? .skipped : (failed ? .failed : .succeeded), log: SetupLog.bounded(log),
+            startedAt: record.setup?.startedAt, finishedAt: TaskRecord.roundedToMilliseconds(.now)
+        )
+        try await persist(current)
+        records[id] = current
+        await onChange(current)
+        return current
+    }
+
+    /// How the sandboxes of a task are torn down before they are removed.
+    public struct Teardown: Sendable {
+        public var commands: [String: SandboxCommands]
+        public var runner: any SandboxCommandRunner
+        public var timeout: Duration
+
+        public init(commands: [String: SandboxCommands], runner: any SandboxCommandRunner, timeout: Duration = .seconds(600)) {
+            self.commands = commands
+            self.runner = runner
+            self.timeout = timeout
+        }
+    }
+
+    /// Runs the teardown command of every active sandbox that has one. The first failure throws
+    /// `TaskError.teardownFailed` and nothing is removed: whatever the command was meant to stop is still running.
+    private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async throws {
+        guard let teardown else { return }
+        for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
+            guard let command = teardown.commands[repo.repoRelativePath]?.teardown else { continue }
+            let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
+            let client = try? await baseClient(for: repo.repoRelativePath, task: record)
+            let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,
+                                                           defaultBranch: await client?.defaultBranch())
+            let outcome = await teardown.runner.run(command, in: repo.sandboxURL, environment: environment, timeout: teardown.timeout)
+            guard outcome.succeeded else {
+                throw TaskError.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
+                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output))
+            }
+        }
+    }
+
     // MARK: - Archive / close
 
     /// Removes every sandbox but keeps the branches; the record stays, marked archived.
     /// Guardrail: `TaskError.uncommittedChanges` on the first dirty sandbox unless `force`. Nothing is
-    /// removed before every sandbox passed the check.
+    /// removed before every sandbox passed the check and its teardown ran (`TaskError.teardownFailed`).
     @discardableResult
-    public func archive(_ id: TaskID, force: Bool = false) async throws -> TaskRecord {
+    public func archive(_ id: TaskID, force: Bool = false, teardown: Teardown? = nil) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         try await guardClean(record, force: force)
+        try await runTeardown(record, teardown)
         for index in record.repos.indices where record.repos[index].state == .active {
             try await removeSandbox(record.repos[index], task: record, force: force)
             record.repos[index].state = .archived
@@ -239,9 +360,10 @@ public actor TaskManager {
     ///
     /// Guardrails: `TaskError.uncommittedChanges` for a dirty sandbox and `TaskError.branchNotMerged`
     /// for an unmerged branch (`git branch -d`), both bypassed by `force` (`-D`) once the user confirmed.
-    public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false) async throws {
+    public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false, teardown: Teardown? = nil) async throws {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         try await guardClean(record, force: force)
+        try await runTeardown(record, teardown)
         for index in record.repos.indices where record.repos[index].state == .active {
             try await removeSandbox(record.repos[index], task: record, force: force)
             record.repos[index].state = .archived

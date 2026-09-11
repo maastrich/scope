@@ -12,6 +12,26 @@ enum AppServices {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingOpen: [URL] = []
+    /// `scope://` links that arrived before the model existed (a cold launch from a link).
+    private var pendingLinks: [URL] = []
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Taken before SwiftUI's own URL handling, which would open a new window for the link rather than hand it
+        // to the model.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @objc private func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, let url = URL(string: text) else { return }
+        guard let model = AppServices.model else {
+            pendingLinks.append(url)
+            return
+        }
+        Task { await model.open(url: url) }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = self
@@ -30,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        if let model = AppServices.model, !pendingLinks.isEmpty {
+            let links = pendingLinks
+            pendingLinks = []
+            Task { for link in links { await model.open(url: link) } }
+        }
         AppServices.model?.clearNotifications(for: AppServices.model?.selectedThreadID)
         Self.refocusTerminal()
     }

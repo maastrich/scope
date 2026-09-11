@@ -145,7 +145,8 @@ public extension ScopeGraph {
     func contextSummaries() -> [RepoContextSummary] {
         repos.keys.sorted().map { key in
             let card = repos[key]!
-            return RepoContextSummary(path: key, purpose: card.purpose, stack: card.stack, setup: card.setup, test: card.test)
+            return RepoContextSummary(path: key, purpose: card.purpose, stack: card.stack, setup: card.setup, test: card.test,
+                                      teardown: card.teardown)
         }
     }
 }

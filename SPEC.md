@@ -93,7 +93,13 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 ### 4.3 Tasks et sandboxes
 
 - **Créer une task** : nom → slug, choix des repos (pour un multi-repo scope ; suggestion depuis le graph : "quels repos pour *ajouter un refresh token* ?"), branche `scope/<slug>` (préfixe configurable) depuis la base à jour (`fetch` puis branche depuis `origin/<default>`).
-- Pour chaque repo : `git -C <repo> worktree add <task-root>/<repo> -b scope/<slug> origin/<default>`, puis exécution de la **commande de setup** du repo si le graph en définit une (`pnpm i`, `bundle`, `make deps`).
+- Pour chaque repo : `git -C <repo> worktree add <task-root>/<repo> -b scope/<slug> origin/<default>`, puis préparation de la sandbox, en arrière-plan, avant que le premier thread ne démarre (il attend) :
+  1. **Copie des fichiers non versionnés** de la base vers la sandbox, par globs (`.env*` par défaut ; jokers dans le nom de fichier seulement). Refus de `..`, des chemins absolus, d'une source symlink qui sort de la base et d'une destination dont le chemin passe par un symlink ; un fichier déjà présent n'est jamais écrasé ; un fichier copié que le repo n'ignore pas est ajouté à `.git/info/exclude`.
+  2. **Commande de setup** du repo (`pnpm i`, `bundle`, `make deps`) : le champ `setup` de la carte du graph, surchargé par repo dans la config du scope (`repoCommands` dans `config.json` : `setup`, `teardown`, `copyFiles` ; une chaîne vide désactive). Lancée avec `<shell> -c` dans la sandbox, avec l'environnement du shell de login plus `SCOPE_TASK`, `SCOPE_SCOPE`, `SCOPE_SANDBOX` (le worktree), `SCOPE_BASE_PATH` (le checkout principal), `SCOPE_DEFAULT_BRANCH` et `SCOPE_PORT`.
+  - L'état du setup (`notRun` · `running` · `succeeded` · `failed` · `skipped`) et son log (borné à 64 Ko, la fin gardée) vivent sur le record de la task. Un échec va dans le Problem Center avec le log et *Relancer le setup*. Un setup interrompu par un quit est `failed` au lancement suivant.
+  - Case *Lancer le setup* dans la feuille New Task ; `scope task new --no-setup`, `run_setup` côté MCP. Décochée, les fichiers sont copiés quand même.
+- **Ports** : chaque task reçoit un bloc de 10 ports (41000–48999), stocké sur son record (stable au redémarrage), jamais partagé par deux tasks vivantes ; le premier est `SCOPE_PORT`, pour le setup comme pour les threads de la task.
+- **Teardown** : le champ `teardown` (carte du graph, config du scope) tourne dans chaque sandbox avant *Archiver* et *Clôturer*, avec les mêmes variables et 10 minutes de délai. S'il échoue, la sandbox n'est pas supprimée et l'échec est montré ; l'utilisateur peut choisir de continuer sans.
 - **Cwd du thread** : la sandbox elle-même si la task n'a qu'un repo (les drivers attendent une racine git), la racine de task sinon.
 - **Ajouter un repo** à une task en cours : crée la sandbox manquante, régénère `AGENTS.md` et le `.code-workspace`.
 - **Clôturer une task** : après merge, `worktree remove` + suppression de la branche locale ; ou *Archiver* (garde la branche, supprime la sandbox).
@@ -265,6 +271,6 @@ Détaillée en maquettes SVG à l'étape 3. Squelette :
 7. **Rendu du delta** : natif SwiftUI + parser (proposé, cohérent, plus long) ou `WKWebView` + diff2html (rapide, moins natif).
 8. **Graph L1** : quel driver par défaut ? Coût et durée acceptables par repo ?
 9. **Repos non clonés** : `gh` obligatoire, ou API GitHub avec token ?
-10. **Setup post-sandbox** : commande dans le graph (proposé) ou détection depuis les manifestes ?
+10. ~~**Setup post-sandbox** : commande dans le graph (proposé) ou détection depuis les manifestes ?~~ Tranché : commande de la carte du graph (éditable), surchargeable par repo dans la config du scope, avec un `teardown` symétrique ; Scope n'écrit rien dans les repos pour ça.
 11. **Scopes imbriqués** : autorisés (proposé) ou refusés ?
 12. **Licence** : MIT ou Apache-2.0.

@@ -15,6 +15,7 @@ public enum CLIRenderer {
         case .thread(let result): try encoder.encode(result)
         case .task(let result): try encoder.encode(result)
         case .action(let result, _): try encoder.encode(result)
+        case .read(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -73,6 +74,16 @@ public enum CLIRenderer {
             return lines.joined(separator: "\n")
         case .action(let result, _):
             return result.message
+        case .read(let result):
+            let range = result.toLine > result.fromLine ? "lines \(result.fromLine)–\(result.toLine - 1)" : "no lines"
+            var lines = ["thread \(result.thread) — \(result.title) · \(range) (\(result.state))",
+                         ThreadTranscript.untrustedNotice, ThreadTranscript.openMarker]
+            if !result.text.isEmpty { lines.append(result.text) }
+            lines.append(ThreadTranscript.closeMarker)
+            if let older = result.olderCursor {
+                lines.append("older lines: scope thread read \(result.thread) --cursor \(older)")
+            }
+            return lines.joined(separator: "\n")
         }
     }
 

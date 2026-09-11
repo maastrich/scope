@@ -45,6 +45,7 @@ app.</p>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
 scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
+scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
@@ -65,12 +66,26 @@ branch      fix/flaky-login-test
 slug        fix-flaky-login-test
 sandbox     ~/.scope/sandboxes/acme/fix-flaky-login-test
 repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch created)</code></pre>
+<p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
+2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
+numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
+before. It is how an agent that opened a thread finds out what that thread said, without typing into it; like
+<code>thread send</code>, an agent may only read the threads it opened.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
+<h2 id="links">Links</h2>
+<p>A <code>scope://</code> link asks for a task — from a README, an issue template, a bookmark:</p>
+<pre><code>scope://task/new?scope=acme&amp;repo=api&amp;prompt=Fix%20the%20flaky%20login%20test</code></pre>
+<p>It takes <code>prompt</code> (required), <code>scope</code> (default: the scope in the sidebar),
+<code>repo</code> (repeatable), <code>branch</code>, <code>title</code>, <code>slug</code>, <code>driver</code>,
+and <code>setup=0</code> to skip the setup commands. Scope shows what the link asks for and creates nothing until
+you confirm — a link can come from any web page — then takes the same path as <code>scope task new</code>. A
+Debug build answers <code>scope-debug://</code> instead.</p>
+
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_close</code>,
 <code>scope_ping</code>. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
@@ -121,7 +136,7 @@ method or a newer <code>rpc</code> answers <code>unsupported</code> rather than 
 <code>scope</code> binary that outlives its app says so instead of hanging. Error codes:
 <code>bad_request</code>, <code>unsupported</code>, <code>denied</code>, <code>not_found</code>,
 <code>failed</code>, <code>timeout</code>.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

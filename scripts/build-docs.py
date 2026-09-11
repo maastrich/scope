@@ -310,6 +310,7 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
   <tr><td><code>SCOPE_HOME</code></td><td><code>~/.scope</code>, or wherever you pointed it</td></tr>
   <tr><td><code>SCOPE_SOCK</code></td><td>unix socket the hooks report to</td></tr>
   <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code></td><td>only in a task thread: its slug and root</td></tr>
+  <tr><td><code>SCOPE_PORT</code></td><td>only in a task thread: the first of the task's ten ports</td></tr>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
@@ -323,6 +324,13 @@ relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to 
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
+<p>A task row carries one glyph instead: the most pressing thing about the task, picked in this order —
+waiting on you, running, setup running, setup failed, done, conflicts, checks failing, checks running, checks
+passed, draft pull request, pull request open, changed, clean. Each has its own symbol shape, so it reads without
+colour and on the selection highlight. The row's other side is the task's <code>+N −M</code>; rest the pointer on
+it for the branch, the repositories, the pull request and its checks, the age and the prompt. A task with a
+single thread is a single row — selecting it shows that thread's terminal — and its threads only appear nested
+from the second one on.</p>
 <p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
 you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p>States come from the driver's own hooks, not from guessing at terminal output. See
@@ -417,8 +425,9 @@ created, the work continues where it was. A pull request lives in one repository
 that repository alone. Starting a task on a pull request Scope already has a task for offers that task
 instead of a second sandbox.</p>
 <div class="note warn"><p>A branch can only live in one working tree. If the branch you start from is already
-checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it,
-rather than letting git fail.</p></div>
+checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it (the
+task, when it is one of its sandboxes), rather than letting git fail. <b>Create on a New Branch Instead</b>
+leaves that branch where it is and bases the task on a fresh one.</p></div>
 
 <h2 id="sandboxes">Sandboxes</h2>
 <p><b>Create</b> makes, for every selected repository, a git worktree on the task branch:</p>
@@ -429,8 +438,48 @@ rather than letting git fail.</p></div>
 └── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
 <p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
 in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+<p>The <code>sandboxes</code> folder carries a <code>.metadata_never_index</code> marker, so Spotlight leaves it
+alone: no indexing of every worktree's <code>node_modules</code>, and no second copy of your files in search
+results.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
+
+<h2 id="setup">Setup and teardown</h2>
+<p>A fresh worktree has the committed tree and nothing else: no <code>node_modules</code>, no <code>.env</code>.
+Right after <b>Create</b>, in the background, Scope prepares each sandbox — and the task's first thread waits for
+it before it starts:</p>
+<ol>
+  <li>It copies the files your base checkout keeps out of git, <code>.env*</code> by default. A file already in the
+  sandbox is never overwritten, and nothing is followed out of the repository: <code>..</code>, a symlink leading
+  outside, a sandbox folder that is a symlink are all refused. A copied file the repository does not ignore is
+  added to <code>.git/info/exclude</code>, so it cannot end up in a commit.</li>
+  <li>It runs the repository's <b>setup</b> command — <code>pnpm install</code>, <code>bundle</code>,
+  <code>make deps</code> — in the sandbox, with your login-shell environment.</li>
+</ol>
+<p>The command is the <b>Setup</b> field of the repository's <a href="graph.html">graph card</a>. To override it for
+one scope, or to change the copied files, edit the scope in <code>~/.scope/config.json</code>:</p>
+<pre><code>"repoCommands": {
+  "api": { "setup": "pnpm install --frozen-lockfile", "teardown": "docker compose down",
+           "copyFiles": [".env*", "config/local.json"] }
+}</code></pre>
+<p>An empty string turns the card's command off. Commands see these variables:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_SCOPE</code></td><td>the task's and the scope's slugs</td></tr>
+  <tr><td><code>SCOPE_SANDBOX</code></td><td>the worktree the command runs in</td></tr>
+  <tr><td><code>SCOPE_BASE_PATH</code></td><td>your own checkout of the repository</td></tr>
+  <tr><td><code>SCOPE_DEFAULT_BRANCH</code></td><td>its default branch</td></tr>
+  <tr><td><code>SCOPE_PORT</code></td><td>the first of ten ports that belong to this task alone</td></tr>
+</table>
+<p>Every task gets its own block of ten ports, kept across restarts and never shared by two live tasks, so two
+sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too.</p>
+<p>The task row shows a gear while the setup runs and a warning triangle if it failed; the failure lands in the
+Problem Center with the end of the log and <b>Run Setup Again</b>. Untick <b>Run setup</b> in the New Task
+sheet — or pass <code>--no-setup</code> to <code>scope task new</code>, <code>run_setup: false</code> over MCP —
+to skip the command; the files are copied anyway.</p>
+<p>The <b>Teardown</b> field is the other end: it runs in each sandbox before Archive or Close removes it, with
+the same variables and a ten-minute limit. If it fails, the sandbox stays, the failure is shown, and you choose
+whether to remove it anyway.</p>
 
 <h2 id="threads">Threads inside a task</h2>
 <p>Creating the task opens the first thread on the spot, in the sandbox, with your prompt already sent to the
@@ -498,6 +547,23 @@ open-in-editor row for the file.</p>
 (<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
 the resulting pull request to the task, so the PRs tab keeps showing it.</p>
 
+<p>The box at the end of each file row marks it as <b>viewed</b>: the row dims, so what is left to read stands
+out. The mark lasts while the file's diff stays the one you looked at; as soon as the agent changes that file
+again, it clears itself.</p>
+
+<h2 id="comments">Commenting on lines</h2>
+<p>Review the agent's work where you read it. In the diff, a <b>+</b> appears in the line-number gutter under
+the pointer: click it to comment on that line, or drag down the gutter to comment on a range. The comment
+editor opens under the lines (<kbd>⌘↩</kbd> adds it). Comments show as tinted rows under the lines they cover;
+click one to edit or delete it, or open the list from the review strip above the action bar.</p>
+<p>Comments are kept per task, under <code>~/.scope/reviews/</code> — never in the sandbox. Each remembers the
+exact text of its first line and three lines around it, so it follows the code as the agent keeps editing: a
+comment whose lines are gone is listed at the top of the file instead of pointing at the wrong place.</p>
+<p><b>Send Review</b> turns them into one message — per comment the file, the line numbers the file has
+<i>now</i>, the code around them and your text — and pastes it into the task's thread as a single input. With
+several threads running, pick one. If the thread is in the middle of a turn, the review waits and goes out as
+soon as its hooks say the turn ended. Sent comments are cleared.</p>
+
 <h2 id="base">Base</h2>
 <p><kbd>⇧⌘B</kbd>. The repository as it is on disk, outside any sandbox — the reference the agent is working
 from.</p>
@@ -517,6 +583,21 @@ existing GitHub authentication: title, number, author, branch, checks and review
 browser, or turn it into a task whose sandbox sits on the PR's head.</p>
 <div class="note"><p>The panel needs <code>gh auth login</code> and a GitHub remote. A repository without one
 simply shows nothing to list.</p></div>
+
+<h2 id="pr-lifecycle">A task's pull request, to the merge</h2>
+<p>Once a task has a pull request — created from the Delta panel, or the one it was opened on — the summary band
+lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
+<ul>
+  <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
+  and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so
+  a thread mid-turn gets it when the turn ends. A check that is not a GitHub Actions job has no log to fetch; the
+  thread gets its link.</li>
+  <li><b>Merge</b> appears in the action bar when GitHub says the pull request merges cleanly. It uses the method
+  the repository allows (merge commit, else squash, else rebase), asks first, and then offers to close the task,
+  which removes its sandboxes and deletes the branch the task created — never a branch name it would have to guess.</li>
+  <li><b>Fix Conflicts</b> replaces it when the pull request conflicts with its base: the thread is asked to merge
+  the base into the branch, resolve, run the tests and push.</li>
+</ul>
 """
 
 GRAPH = """
@@ -650,6 +731,7 @@ app.</p>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
 scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
+scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
@@ -670,12 +752,26 @@ branch      fix/flaky-login-test
 slug        fix-flaky-login-test
 sandbox     ~/.scope/sandboxes/acme/fix-flaky-login-test
 repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch created)</code></pre>
+<p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
+2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
+numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
+before. It is how an agent that opened a thread finds out what that thread said, without typing into it; like
+<code>thread send</code>, an agent may only read the threads it opened.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
+<h2 id="links">Links</h2>
+<p>A <code>scope://</code> link asks for a task — from a README, an issue template, a bookmark:</p>
+<pre><code>scope://task/new?scope=acme&amp;repo=api&amp;prompt=Fix%20the%20flaky%20login%20test</code></pre>
+<p>It takes <code>prompt</code> (required), <code>scope</code> (default: the scope in the sidebar),
+<code>repo</code> (repeatable), <code>branch</code>, <code>title</code>, <code>slug</code>, <code>driver</code>,
+and <code>setup=0</code> to skip the setup commands. Scope shows what the link asks for and creates nothing until
+you confirm — a link can come from any web page — then takes the same path as <code>scope task new</code>. A
+Debug build answers <code>scope-debug://</code> instead.</p>
+
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_close</code>,
 <code>scope_ping</code>. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>

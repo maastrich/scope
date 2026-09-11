@@ -31,6 +31,10 @@ final class AppModel {
     let base: BaseModel
     /// The PRs inspector (`gh pr list` of the picked repo).
     let pullRequests: PullRequestsModel
+    /// Comments on the Delta diff of the followed task.
+    let review: ReviewModel
+    /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
+    var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
     var newTaskScopeID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
@@ -109,6 +113,9 @@ final class AppModel {
     /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
     @ObservationIgnored private var closingThreads: Set<ThreadID> = []
     @ObservationIgnored private var isTerminating = false
+    /// Setups in flight, per task: a thread of the task waits for its task's entry before it launches. The token
+    /// tells a finished run it is still the latest one before it removes itself.
+    @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
 
     init(env: AppEnvironment) {
         self.env = env
@@ -117,6 +124,7 @@ final class AppModel {
         self.graph = GraphModel(env: env, problems: problems)
         self.base = BaseModel(env: env, problems: problems)
         self.pullRequests = PullRequestsModel(problems: problems)
+        self.review = ReviewModel(home: env.home, problems: problems)
         problems.onAction = { [weak self] action in self?.perform(action) }
         env.hookSink.handler = { [weak self] event in self?.handle(event) }
         // The CLI and the MCP server reach the app through this and nothing else.
@@ -793,6 +801,17 @@ final class AppModel {
     private func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
         guard !session.isAlive else { return }
         guard let scope = scope(session.record.scopeID) else { return }
+        if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
+            // An agent started before `pnpm install` finished works in a sandbox without its dependencies. The
+            // thread exists (callers get its id at once) and starts when the setup is over, whatever its outcome.
+            session.markLaunching()
+            session.printNotice("waiting for the setup of the task")
+            Task { [weak self] in
+                await pending.run.value
+                await self?.launch(session, mode: mode, initialPrompt: initialPrompt)
+            }
+            return
+        }
         session.markLaunching()
         do {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
@@ -939,6 +958,7 @@ final class AppModel {
     /// the thread stays until the user closes it. With `autoCloseExitedThreads` the tab goes at once and
     /// the record is deleted when the toast goes. Exits caused by `close` or by quitting keep their own paths.
     private func threadExited(_ session: ThreadSession, status: ExitStatus) {
+        dropDeliveries(for: session)
         if status.isExecFailure {
             problems.error("\(session.profile.name) could not be started (exit 127)",
                            detail: "Check the \"command\" of the \(session.profile.id) driver profile.",
@@ -1118,6 +1138,7 @@ final class AppModel {
         guard let session = session(event.threadID), session.isAlive else { return }
         session.apply(event)
         notifyIfNeeded(event, session: session)
+        flushDeliveries(for: session)
     }
 
     // MARK: Problem actions
@@ -1136,6 +1157,10 @@ final class AppModel {
             refreshScope(id)
         case .locateScope(let id):
             locateScope(id)
+        case .rerunTaskSetup(let raw):
+            if let id = TaskID(rawValue: raw), let task = task(id) {
+                startSetup(for: task, runCommands: true)
+            }
         case .dismiss:
             break
         }
