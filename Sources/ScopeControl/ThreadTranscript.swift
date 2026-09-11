@@ -34,13 +34,14 @@ public enum ThreadTranscript {
     ///   - cursor: read up to this absolute line (exclusive); the end when `nil`.
     public static func page(_ lines: [String], firstLineNumber: Int, count: Int?, cursor: Int?) -> Page {
         // The screen is a fixed grid: the rows under the last output are empty, and so is the end of every line.
-        var held = lines.map { $0.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression) }
-        while let last = held.last, last.isEmpty { held.removeLast() }
+        // Only the trailing rows and the returned lines are trimmed: a long scrollback is mostly thrown away.
+        var held = lines.count
+        while held > 0, trimmed(lines[held - 1]).isEmpty { held -= 1 }
         let first = firstLineNumber
-        let end = min(max(cursor ?? first + held.count, first), first + held.count)
+        let end = min(max(cursor ?? first + held, first), first + held)
         let wanted = min(max(count ?? defaultLines, 1), maxLines)
         var start = max(first, end - wanted)
-        var slice = Array(held[(start - first)..<(end - first)])
+        var slice = lines[(start - first)..<(end - first)].map(trimmed)
         var total = slice.reduce(0) { $0 + $1.count + 1 }
         while total > maxCharacters, slice.count > 1 {
             total -= slice.removeFirst().count + 1
@@ -51,5 +52,9 @@ public enum ThreadTranscript {
         // Output that prints the closing marker must not be able to end the quote early.
         text = text.replacingOccurrences(of: closeMarker, with: ">>>>>>>>·end of thread output")
         return Page(text: text, fromLine: start, toLine: end, olderCursor: start > first ? start : nil)
+    }
+
+    private static func trimmed(_ line: String) -> String {
+        line.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
     }
 }

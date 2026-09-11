@@ -92,4 +92,15 @@ public enum ThreadDelivery {
     public static func canDeliver(to state: ThreadState) -> Bool {
         state.isAlive && state != .running
     }
+
+    /// The same, from what the hooks reported (`nil` when nothing did) and whether the process is alive.
+    ///
+    /// No report means no turn to wait for: a shell, a driver without an adapter, an agent that has not spoken
+    /// yet and sits at its prompt. Waiting for a "turn ended" such a thread will never send would hold the message
+    /// forever.
+    public static func canDeliver(reported state: ThreadState?, alive: Bool) -> Bool {
+        guard alive else { return false }
+        guard let state else { return true }
+        return canDeliver(to: state)
+    }
 }

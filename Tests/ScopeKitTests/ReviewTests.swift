@@ -116,6 +116,14 @@ import ScopeGit
         }
     }
 
+    /// A thread whose hooks never reported has no turn to wait for: holding the review would hold it forever.
+    @Test func aThreadWithoutHookReportsTakesItAtOnce() {
+        #expect(ThreadDelivery.canDeliver(reported: nil, alive: true))
+        #expect(!ThreadDelivery.canDeliver(reported: nil, alive: false))
+        #expect(!ThreadDelivery.canDeliver(reported: .running, alive: true))
+        #expect(ThreadDelivery.canDeliver(reported: .done, alive: true))
+    }
+
     @Test func commentsAreKeptPerTaskUnderTheHome() async throws {
         let home = FileManager.default.temporaryDirectory.appending(path: "scope-review-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: home) }

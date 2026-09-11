@@ -101,7 +101,8 @@ extension AppModel {
                  onDelivered: @escaping @MainActor () -> Void = {}) -> DeliveryOutcome {
         guard let session = session(id), session.isAlive else { return .failed("the thread is not running") }
         let item = PendingDelivery(text: text, label: label, onDelivered: onDelivered)
-        guard ThreadDelivery.canDeliver(to: session.displayState), (pendingDeliveries[id] ?? []).isEmpty else {
+        guard ThreadDelivery.canDeliver(reported: session.adapterState, alive: session.isAlive),
+              (pendingDeliveries[id] ?? []).isEmpty else {
             pendingDeliveries[id, default: []].append(item)
             return .queued
         }
@@ -111,7 +112,8 @@ extension AppModel {
 
     /// Called on every hook event: the first queued message goes out when the thread is between turns again.
     func flushDeliveries(for session: ThreadSession) {
-        guard ThreadDelivery.canDeliver(to: session.displayState), var queue = pendingDeliveries[session.id],
+        guard ThreadDelivery.canDeliver(reported: session.adapterState, alive: session.isAlive),
+              var queue = pendingDeliveries[session.id],
               !queue.isEmpty else { return }
         let next = queue.removeFirst()
         pendingDeliveries[session.id] = queue.isEmpty ? nil : queue
