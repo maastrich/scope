@@ -54,7 +54,7 @@ struct ThreadRow: View {
                     .truncationMode(.tail)
             }
 
-            StateDot(state: session.displayState)
+            StateDot(state: session.displayState, pulses: session.isWorking)
         }
         // The dot stays visible under the pointer: only the caption gives way to the close button.
         .trailingFade(isHovered, width: 16 + 7, keeping: 8)
@@ -69,7 +69,7 @@ struct ThreadRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
         .contentShape(Rectangle())
-        .help(session.record.cwd)
+        .help(helpText)
         .onHover { hovering in
             if reduceMotion {
                 isHovered = hovering
@@ -111,6 +111,14 @@ struct ThreadRow: View {
         isLive && !isListSelected
     }
 
+    private var failureText: String? {
+        ThreadNotificationContent.failureDescription(session.lastFailure)
+    }
+
+    private var helpText: String {
+        "\(session.displayState.displayLabel)\(failureText.map { ": \($0)" } ?? "") — \(session.record.cwd)"
+    }
+
     private var caption: String? {
         switch session.record.cwdKind {
         case .scopeRoot: "scope root"
@@ -130,7 +138,7 @@ struct ThreadMenuItems: View {
             model.markRead(session.id)
         }
         .keyboardShortcut("u", modifiers: [.command, .shift])
-        .disabled(!session.displayState.needsAttention)
+        .disabled(session.displayState.acknowledged == session.displayState)
         Divider()
         Button("Relaunch") {
             Task { await model.relaunch(session.id) }

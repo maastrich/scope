@@ -5,51 +5,25 @@ import Testing
 
 @Suite struct ThreadStateMachineTests {
     /// The whole table, one row per (state, kind) pair.
-    static let table: [(ThreadState, HookEvent.Kind, ThreadState)] = [
-        (.idle, .turnStarted, .running),
-        (.idle, .turnEnded, .done),
-        (.idle, .inputRequested, .waiting(reason: .input)),
-        (.idle, .permissionRequested, .waiting(reason: .permission)),
-        (.idle, .threadEnded, .done),
-
-        (.running, .turnStarted, .running),
-        (.running, .turnEnded, .done),
-        (.running, .inputRequested, .waiting(reason: .input)),
-        (.running, .permissionRequested, .waiting(reason: .permission)),
-        (.running, .threadEnded, .done),
-
-        (.waiting(reason: .input), .turnStarted, .running),
-        (.waiting(reason: .input), .turnEnded, .done),
-        (.waiting(reason: .input), .inputRequested, .waiting(reason: .input)),
-        (.waiting(reason: .input), .permissionRequested, .waiting(reason: .permission)),
-        (.waiting(reason: .input), .threadEnded, .done),
-
-        (.waiting(reason: .permission), .turnStarted, .running),
-        (.waiting(reason: .permission), .turnEnded, .done),
-        (.waiting(reason: .permission), .inputRequested, .waiting(reason: .input)),
-        (.waiting(reason: .permission), .permissionRequested, .waiting(reason: .permission)),
-        (.waiting(reason: .permission), .threadEnded, .done),
-
-        (.done, .turnStarted, .running),
-        (.done, .turnEnded, .done),
-        (.done, .inputRequested, .waiting(reason: .input)),
-        (.done, .permissionRequested, .waiting(reason: .permission)),
-        (.done, .threadEnded, .done),
-
-        (.exited, .turnStarted, .exited),
-        (.exited, .turnEnded, .exited),
-        (.exited, .inputRequested, .exited),
-        (.exited, .permissionRequested, .exited),
-        (.exited, .threadEnded, .exited),
-
-        // session.started only carries the session id: no state moves.
-        (.idle, .sessionStarted, .idle),
-        (.running, .sessionStarted, .running),
-        (.waiting(reason: .input), .sessionStarted, .waiting(reason: .input)),
-        (.waiting(reason: .permission), .sessionStarted, .waiting(reason: .permission)),
-        (.done, .sessionStarted, .done),
-        (.exited, .sessionStarted, .exited),
-    ]
+    static let table: [(ThreadState, HookEvent.Kind, ThreadState)] = {
+        // Every alive state moves the same way; only `exited` absorbs, and `session.started` moves nothing.
+        let alive: [ThreadState] = [.idle, .running, .waiting(reason: .input), .waiting(reason: .permission), .done, .failed]
+        let moves: [(HookEvent.Kind, ThreadState)] = [
+            (.turnStarted, .running),
+            (.turnEnded, .done),
+            (.turnFailed, .failed),
+            (.inputRequested, .waiting(reason: .input)),
+            (.permissionRequested, .waiting(reason: .permission)),
+            (.threadEnded, .done),
+        ]
+        var rows: [(ThreadState, HookEvent.Kind, ThreadState)] = []
+        for state in alive {
+            rows += moves.map { (state, $0.0, $0.1) }
+            rows.append((state, .sessionStarted, state))
+        }
+        rows += HookEvent.Kind.allCases.map { (.exited, $0, .exited) }
+        return rows
+    }()
 
     @Test func tableCoversEveryStateAndKind() {
         #expect(Self.table.count == ThreadState.allCases.count * HookEvent.Kind.allCases.count)
@@ -122,6 +96,15 @@ import Testing
         let permission = AdapterEvent(threadID: id, kind: .permissionRequested, payload: ["reason": "input"])
         #expect(ThreadStateMachine.next(.done, on: permission) == .waiting(reason: .permission))
         #expect(ThreadStateMachine.next(.exited, on: asPermission) == .exited)
+    }
+
+    @Test func aNotifiedPermissionNeverReplacesAQuestion() {
+        let id = ThreadID.generate()
+        let notified = AdapterEvent(threadID: id, kind: .permissionRequested, payload: ["via": "notification"])
+        let requested = AdapterEvent(threadID: id, kind: .permissionRequested)
+        #expect(ThreadStateMachine.next(.waiting(reason: .input), on: notified) == .waiting(reason: .input))
+        #expect(ThreadStateMachine.next(.waiting(reason: .input), on: requested) == .waiting(reason: .permission))
+        #expect(ThreadStateMachine.next(.running, on: notified) == .waiting(reason: .permission))
     }
 
     @Test func typicalAgentTurnSequence() {

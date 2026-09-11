@@ -16,12 +16,14 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// The normalized driver events. Raw values are the strings accepted on the `scope-hook` command
     /// line and written on the wire.
     ///
-    /// The five state-changing events come from spec §4.7. `session.started` is informational: it never
-    /// moves the thread state and only exists so an adapter can hand over the driver's session id
-    /// (`payload["session_id"]`) as soon as the driver starts, before any turn.
+    /// The state-changing events come from spec §4.7, plus `turn.failed` for a turn that ended on an error
+    /// (its code in `payload["error"]`). `session.started` is informational: it never moves the thread state and
+    /// only exists so an adapter can hand over the driver's session id (`payload["session_id"]`) as soon as the
+    /// driver starts, before any turn.
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
+        case turnFailed = "turn.failed"
         case inputRequested = "input.requested"
         case permissionRequested = "permission.requested"
         case threadEnded = "thread.ended"
@@ -54,6 +56,14 @@ public struct HookEvent: Codable, Sendable, Equatable {
 extension HookEvent {
     /// Payload key under which `scope-hook` forwards a `reason=` argument (`input` or `permission`).
     public static let reasonKey = "reason"
+
+    /// Payload key saying where a derived event comes from: `notification` for one `scope-hook` derived from
+    /// Claude Code's `Notification` hook (see `ThreadStateMachine.next(_:on:)`).
+    public static let viaKey = "via"
+    public static let viaNotification = "notification"
+
+    /// Payload key under which `scope-hook` forwards the error code of a failed turn (`rate_limit`, …).
+    public static let errorKey = "error"
 
     /// Payload key under which `scope-hook` forwards the driver's own session id (lifted from the hook's
     /// stdin JSON, or given as `session_id=`). `ThreadSession` stores it as `ThreadRecord.resumeID`.

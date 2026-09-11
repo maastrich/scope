@@ -218,7 +218,7 @@ struct ScopeCommands: Commands {
                 if let model, let id = model.selectedThreadID { model.markRead(id) }
             }
             .keyboardShortcut("u", modifiers: [.command, .shift])
-            .disabled(currentThread?.displayState.needsAttention != true)
+            .disabled(currentThread.map { $0.displayState.acknowledged == $0.displayState } ?? true)
 
             Divider()
 

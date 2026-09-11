@@ -131,12 +131,18 @@ enum HookCLI {
     }
 
     /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.
-    /// An explicit `session_id=` argument wins over the one lifted from stdin.
+    /// An explicit `session_id=` (or `error=`) argument wins over the one lifted from stdin.
     static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?) -> HookEvent? {
         guard let kind = command.event.resolve(stdin: stdin) else { return nil }
         var payload = command.payload
         if payload[HookEvent.sessionIDKey] == nil, let sessionID = stdin.sessionID {
             payload[HookEvent.sessionIDKey] = sessionID
+        }
+        if command.event == .notification {
+            payload[HookEvent.viaKey] = HookEvent.viaNotification
+        }
+        if payload[HookEvent.errorKey] == nil, let error = stdin.error, !error.isEmpty {
+            payload[HookEvent.errorKey] = error
         }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }

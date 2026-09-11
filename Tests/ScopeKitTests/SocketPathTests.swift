@@ -13,8 +13,20 @@ import Testing
         let deep = "/Users/me/" + String(repeating: "abcdefghij", count: 11)   // 120+ chars
         let home = URL(fileURLWithPath: deep, isDirectory: true)
         let path = SocketPath.resolve(home: home, tmp: "/var/folders/xx/T/", uid: 501)
-        #expect(path == "/var/folders/xx/T/scope-501.sock")
+        #expect(path == "/var/folders/xx/T/scope-501-\(SocketPath.homeHash(home)).sock")
         #expect(SocketPath.fits(path))
+    }
+
+    /// Two instances with deep homes must not share a socket: the second would take the first one's messages.
+    @Test func deepHomesGetDistinctFallbacks() {
+        let first = URL(fileURLWithPath: "/Users/me/" + String(repeating: "a", count: 110), isDirectory: true)
+        let second = URL(fileURLWithPath: "/Users/me/" + String(repeating: "b", count: 110), isDirectory: true)
+        let a = SocketPath.resolve(home: first, tmp: "/tmp", uid: 501)
+        let b = SocketPath.resolve(home: second, tmp: "/tmp", uid: 501)
+        #expect(a != b)
+        // Stable: the app and the CLI derive the same name for the same home, trailing slash or not.
+        #expect(a == SocketPath.resolve(home: URL(fileURLWithPath: first.path + "/"), tmp: "/tmp", uid: 501))
+        #expect(SocketPath.homeHash(first).count == 8)
     }
 
     @Test func boundaryIsOneHundredAndThreeBytes() {
@@ -22,7 +34,7 @@ import Testing
         let fitting = "/" + String(repeating: "a", count: 91)
         let tooLong = "/" + String(repeating: "a", count: 92)
         #expect(SocketPath.resolve(home: URL(fileURLWithPath: fitting, isDirectory: true), tmp: "/tmp", uid: 1) == fitting + "/scope.sock")
-        #expect(SocketPath.resolve(home: URL(fileURLWithPath: tooLong, isDirectory: true), tmp: "/tmp", uid: 1) == "/tmp/scope-1.sock")
+        #expect(SocketPath.resolve(home: URL(fileURLWithPath: tooLong, isDirectory: true), tmp: "/tmp", uid: 1).hasPrefix("/tmp/scope-1-"))
         #expect(SocketPath.fits(String(repeating: "b", count: 103)))
         #expect(!SocketPath.fits(String(repeating: "b", count: 104)))
     }
@@ -35,13 +47,14 @@ import Testing
         let fitting = URL(fileURLWithPath: "/Users/" + String(repeating: "é", count: 20), isDirectory: true)
         let tooLong = URL(fileURLWithPath: "/Users/" + String(repeating: "é", count: 45), isDirectory: true)
         #expect(SocketPath.resolve(home: fitting, tmp: "/tmp", uid: 7).hasSuffix("/scope.sock"))
-        #expect(SocketPath.resolve(home: tooLong, tmp: "/tmp", uid: 7) == "/tmp/scope-7.sock")
+        #expect(SocketPath.resolve(home: tooLong, tmp: "/tmp", uid: 7).hasPrefix("/tmp/scope-7-"))
     }
 
     @Test func defaultsPointAtTheCurrentUserAndTemporaryDirectory() {
         let deep = "/" + String(repeating: "x", count: 150)
         let path = SocketPath.resolve(home: URL(fileURLWithPath: deep, isDirectory: true))
-        #expect(path.hasSuffix("/scope-\(getuid()).sock"))
+        #expect(path.contains("/scope-\(getuid())-"))
+        #expect(path.hasSuffix(".sock"))
         #expect(path.hasPrefix(URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).path))
         #expect(SocketPath.fits(path))
     }

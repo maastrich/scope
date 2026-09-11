@@ -16,11 +16,11 @@ extension AppModel {
         return waitingThreads.filter { $0.record.scopeID == id }
     }
 
-    /// Mark as Read: the user has seen what the thread is asking and does not want it counted any more — the
-    /// badge, the sidebar mark and the notification go. Read is not muted: the next question the driver asks
-    /// brings the attention straight back (see `ThreadState.acknowledged`).
+    /// Mark as Read: the user has seen what the thread is asking (or what it finished with) and does not want it
+    /// counted any more — the badge, the sidebar mark and the notification go. Read is not muted: the next question
+    /// the driver asks brings the attention straight back (see `ThreadState.acknowledged`).
     func markRead(_ id: ThreadID) {
-        guard let session = session(id), session.displayState.needsAttention else { return }
+        guard let session = session(id), session.displayState.acknowledged != session.displayState else { return }
         session.acknowledgeAttention()
         clearNotifications(for: id)
     }
@@ -59,9 +59,25 @@ extension AppModel {
               ThreadNotificationContent.shouldNotify(event: stateEvent, appIsActive: NSApplication.shared.isActive),
               let scope = scope(session.record.scopeID),
               let content = ThreadNotificationContent.make(event: stateEvent, driver: session.profile.name,
-                                                           scope: scope.name, task: task(of: session)?.name)
+                                                           scope: scope.name, task: task(of: session)?.name,
+                                                           failure: event.payload[HookEvent.errorKey])
         else { return }
         notifier.post(content, threadID: session.id)
+    }
+
+    /// The thread on screen is being looked at: a turn it finished is no longer news (`ThreadSession.acknowledgeResult`).
+    /// Called when an event lands, when the selection changes and when the app comes back to the front.
+    func acknowledgeShownResult() {
+        guard NSApplication.shared.isActive, let id = selectedThreadID else { return }
+        session(id)?.acknowledgeResult()
+    }
+
+    /// Coming back to the app is looking at the thread it shows.
+    func startActivationTracking() {
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.acknowledgeShownResult() }
+        }
     }
 
     /// A click on the notification (or its actions): brings the app up and shows the thread.

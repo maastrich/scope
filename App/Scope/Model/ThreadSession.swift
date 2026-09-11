@@ -25,6 +25,7 @@ final class ThreadSession: Identifiable {
                                      options: TerminalAppearance.options)
         TerminalAppearance.apply(to: view)
         view.processDelegate = bridge
+        view.onUserInput = { [weak self] bytes in self?.handleUserInput(bytes) }
         _terminalView = view
         return view
     }
@@ -32,8 +33,11 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private let bridge = TerminalBridge()
 
     private(set) var phase: ProcessPhase = .notStarted
-    /// State from adapter events; `nil` without an adapter (a plain shell).
+    /// State from adapter events (and the user's keystrokes); `nil` until the first one, and for good without an
+    /// adapter (a plain shell).
     private(set) var adapterState: ThreadState?
+    /// Error code of the turn that ended as `failed` (`rate_limit`, …); `nil` otherwise.
+    private(set) var lastFailure: String?
     /// OSC 0/2 title.
     private(set) var terminalTitle: String?
     /// OSC 7 directory, decoded from its `file://` form.
@@ -44,6 +48,7 @@ final class ThreadSession: Identifiable {
     private(set) var hasLaidOut = false
 
     @ObservationIgnored private var pendingPlan: LaunchPlan?
+    @ObservationIgnored private var inputTracker = TerminalInputTracker()
     @ObservationIgnored private var layoutFallback: Task<Void, Never>?
 
     /// Called on every record change so `AppModel` persists it.
@@ -80,15 +85,22 @@ final class ThreadSession: Identifiable {
     var pid: pid_t? { phase.pid }
     var canResume: Bool { profile.canResume && record.resumeID != nil }
 
-    /// The sidebar / tab / pill state: alive → adapter state (or `running` without an adapter);
-    /// launching → `idle`; anything else → `exited`.
+    /// The sidebar / tab / pill state: alive → adapter state (`idle` until a driver that reports events has said
+    /// anything, `running` for one that never will); launching → `idle`; anything else → `exited`.
     var displayState: ThreadState {
         switch phase {
-        case .alive: adapterState ?? .running
+        case .alive: adapterState ?? (deliversEvents ? .initial : .running)
         case .launching: .idle
         case .notStarted, .exited, .failed: .exited
         }
     }
+
+    /// `true` while the driver itself says a turn is in progress, as opposed to "alive, nothing known" (a shell,
+    /// a driver without a wired adapter). Only this one is drawn as activity.
+    var isWorking: Bool { phase.isAlive && adapterState == .running }
+
+    /// The profile's adapter reports turns (Claude Code hooks, Codex `notify`).
+    var deliversEvents: Bool { AdapterInstaller.deliversEvents(profile) }
 
     // MARK: Launch
 
@@ -148,6 +160,8 @@ final class ThreadSession: Identifiable {
             return
         }
         adapterState = nil
+        lastFailure = nil
+        inputTracker = TerminalInputTracker()
         phase = .alive(pid: view.process.shellPid, since: .now)
         record.lastLaunchedAt = .now
         record.launchCount += 1
@@ -179,6 +193,24 @@ final class ThreadSession: Identifiable {
         terminalView.send(txt: text)
     }
 
+    /// Types `text`, then presses ↩ on its own a moment later. Sent in one write, the ↩ lands in the same read as
+    /// the text and a TUI such as Claude Code takes the whole chunk for a paste: the ↩ becomes a newline in the
+    /// prompt and nothing is submitted.
+    func submit(_ text: String) {
+        guard !text.isEmpty else {
+            send("\r")
+            return
+        }
+        send(text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.submitDelay) { [weak self] in
+            guard let self, self.phase.isAlive else { return }
+            self.send("\r")
+        }
+    }
+
+    /// Long enough for the child to have read the text before the ↩ arrives.
+    static let submitDelay: TimeInterval = 0.15
+
     /// Feeds a divider line into the emulator (not to the child).
     func printNotice(_ text: String) {
         terminalView.feed(text: "\r\n\u{1b}[2m── \(text) ──\u{1b}[0m\r\n")
@@ -194,6 +226,7 @@ final class ThreadSession: Identifiable {
         guard phase.isAlive else { return }
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event)
         adapterState = next
+        lastFailure = next == .failed ? (event.payload[HookEvent.errorKey] ?? lastFailure) : nil
         record.lastState = next
         if let session = event.payload["session_id"] ?? event.payload["resume_id"], !session.isEmpty {
             record.resumeID = session
@@ -207,12 +240,33 @@ final class ThreadSession: Identifiable {
         onRecordChanged?(record)
     }
 
-    /// Mark as Read: a `waiting` thread goes back to `idle` (`ThreadState.acknowledged`), in the record too so the
-    /// sidebar, the badge and a restart agree. Anything else is left alone.
+    /// Mark as Read: a `waiting`, `done` or `failed` thread goes back to `idle` (`ThreadState.acknowledged`), in the
+    /// record too so the sidebar, the badge and a restart agree. Anything else is left alone.
     func acknowledgeAttention() {
-        guard let state = adapterState, state.needsAttention else { return }
-        adapterState = state.acknowledged
-        record.lastState = adapterState
+        guard let state = adapterState, state.acknowledged != state else { return }
+        setAdapterState(state.acknowledged)
+    }
+
+    /// The user is looking at the thread: a finished turn is no longer news. A question stays until answered.
+    func acknowledgeResult() {
+        guard let state = adapterState, state.isUnreadResult else { return }
+        setAdapterState(state.acknowledged)
+    }
+
+    /// Bytes the user typed into the terminal, on their way to the child: an interrupt, an approved permission or
+    /// a prompt submitted to a driver that never reports a turn start moves the state (`TerminalInputSignal`).
+    func handleUserInput(_ bytes: ArraySlice<UInt8>) {
+        guard phase.isAlive, deliversEvents, let signal = inputTracker.feed(bytes) else { return }
+        guard let next = ThreadStateMachine.next(adapterState ?? .initial, onUserInput: signal,
+                                                 adapterReportsTurnStart: AdapterInstaller.reportsTurnStart(profile))
+        else { return }
+        setAdapterState(next)
+    }
+
+    private func setAdapterState(_ state: ThreadState) {
+        adapterState = state
+        if state != .failed { lastFailure = nil }
+        record.lastState = state
         onRecordChanged?(record)
     }
 

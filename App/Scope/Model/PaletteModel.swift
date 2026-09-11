@@ -111,7 +111,7 @@ enum PaletteModel {
         items.append(PaletteItem(id: "inspector", section: .actions, icon: "sidebar.right", label: "Toggle Inspector", shortcut: "⌥⌘I") {
             model.toggleInspector()
         })
-        if let thread = model.currentThread, thread.displayState.needsAttention {
+        if let thread = model.currentThread, thread.displayState.acknowledged != thread.displayState {
             items.append(PaletteItem(id: "mark-read", section: .actions, icon: "checkmark.circle", label: "Mark as Read",
                                      hint: thread.title) {
                 model.markRead(thread.id)

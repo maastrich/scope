@@ -9,6 +9,7 @@ import ScopeGit
     static func facts(for status: TaskStatus) -> TaskFacts {
         switch status {
         case .waiting(let reason): TaskFacts(threads: [.waiting(reason: reason)])
+        case .failed: TaskFacts(threads: [.failed])
         case .running: TaskFacts(threads: [.running])
         case .setupRunning: TaskFacts(setup: .running)
         case .setupFailed: TaskFacts(setup: .failed)
@@ -61,7 +62,7 @@ import ScopeGit
 
     @Test func precedenceIsTheDocumentedOrder() {
         #expect(TaskStatus.precedence == [
-            .waiting(.input), .running, .setupRunning, .setupFailed, .done, .conflicted, .checksFailing,
+            .waiting(.input), .failed, .running, .setupRunning, .setupFailed, .done, .conflicted, .checksFailing,
             .checksRunning, .checksPassed, .draft, .pullRequestOpen, .changed, .clean,
         ])
     }

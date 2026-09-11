@@ -12,15 +12,19 @@ import ScopeCore
 /// |---------------------------------------|-------------------------|-----------------------|
 /// | `SessionStart`                        | `session.started`       | unchanged (session id)|
 /// | `UserPromptSubmit`                    | `turn.started`          | running               |
-/// | `PostToolUse`                         | `turn.started`          | running (after a permission was granted) |
-/// | `PermissionRequest`                   | `permission.requested`  | waiting(permission)   |
+/// | `PreToolUse` (question tools only)    | `input.requested`       | waiting(input)        |
+/// | `PostToolUse`                         | `turn.started`          | running (after a permission was granted, or a question answered) |
+/// | `PermissionRequest`                   | `permission.requested`  | waiting(permission); waiting(input) for a question tool |
 /// | `Notification` (matcher on type)      | `notification` → derived| waiting(permission / input) |
 /// | `Stop`                                | `turn.ended`            | done                  |
+/// | `StopFailure`                         | `turn.failed`           | failed                |
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 ///
-/// `PreToolUse` is deliberately not used: it fires *before* the permission check, so it could not bring the
-/// thread back to `running` once the user approved. `scope-hook` writes nothing on stdout, so no hook ever
-/// changes Claude Code's own decisions.
+/// `PreToolUse` only listens to the question tools (`ClaudeQuestionTools`): for any other tool it fires *before*
+/// the permission check, so it says nothing about whether the user is being asked. Two moments have no hook at
+/// all — an interrupt (Esc) and the approval of a permission prompt — and come from the user's keystrokes instead
+/// (`TerminalInputSignal`). `scope-hook` writes nothing on stdout, so no hook ever changes Claude Code's own
+/// decisions.
 public enum ClaudeHooksAdapter {
     /// `DriverProfile.Adapter.kind` this adapter answers to.
     public static let kind = "claude-hooks"
@@ -39,10 +43,12 @@ public enum ClaudeHooksAdapter {
     static let entries: [Entry] = [
         Entry(event: "SessionStart", matcher: nil, arguments: ["session.started", "--stdin"]),
         Entry(event: "UserPromptSubmit", matcher: nil, arguments: ["turn.started", "--stdin"]),
+        Entry(event: "PreToolUse", matcher: ClaudeQuestionTools.matcher, arguments: ["input.requested", "--stdin"]),
         Entry(event: "PostToolUse", matcher: nil, arguments: ["turn.started", "--stdin"]),
         Entry(event: "PermissionRequest", matcher: nil, arguments: ["permission.requested", "--stdin"]),
         Entry(event: "Notification", matcher: ClaudeNotificationMapping.matcher, arguments: ["notification", "--stdin"]),
         Entry(event: "Stop", matcher: nil, arguments: ["turn.ended", "--stdin"]),
+        Entry(event: "StopFailure", matcher: nil, arguments: ["turn.failed", "--stdin"]),
         Entry(event: "SessionEnd", matcher: nil, arguments: ["thread.ended", "--stdin"]),
     ]
 
@@ -123,6 +129,21 @@ public enum AdapterInstaller {
         default:
             return []
         }
+    }
+
+    /// `true` when the profile's adapter reports turns at all. `cursor-hooks` is declared but not wired yet, so a
+    /// Cursor thread knows nothing beyond "alive".
+    public static func deliversEvents(_ profile: DriverProfile) -> Bool {
+        switch profile.adapter?.kind {
+        case ClaudeHooksAdapter.kind?, "codex-notify"?: true
+        default: false
+        }
+    }
+
+    /// `true` when the adapter reports the start of a turn itself. Without it (Codex `notify`), the user
+    /// submitting a prompt is the only sign a turn has started (see `ThreadStateMachine.next(_:onUserInput:…)`).
+    public static func reportsTurnStart(_ profile: DriverProfile) -> Bool {
+        profile.adapter?.kind == ClaudeHooksAdapter.kind
     }
 
     /// Cleans up what `prepare` created for `threadID`.

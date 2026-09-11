@@ -68,7 +68,13 @@ final class TaskState: Identifiable {
     var dirtyRepoCount: Int { summaries.values.filter(\.isDirty).count }
 
     func update(record: TaskRecord) {
+        let sandboxesChanged = record.activeRepos.map(\.sandboxPath) != self.record.activeRepos.map(\.sandboxPath)
         self.record = record
+        // A repository added to the task brings a worktree directory the running watcher does not cover.
+        if sandboxesChanged, watcher != nil {
+            stopWatching()
+            startWatching()
+        }
         refresh()
     }
 
@@ -80,13 +86,17 @@ final class TaskState: Identifiable {
             await MainActor.run { self?.refresh() }
         }
         self.throttle = throttle
-        let watcher = FSEventsWatcher(paths: [record.rootURL], latency: 0.5)
+        // The sandboxes' git state (index, HEAD, branch refs) lives in the base checkouts, outside the root.
+        let gitWatch = TaskGitWatch.resolve(sandboxes: record.activeRepos.map(\.sandboxURL),
+                                            branches: record.activeRepos.map(\.branch))
+        let watcher = FSEventsWatcher(paths: [record.rootURL] + gitWatch.watchedDirectories, latency: 0.5)
         self.watcher = watcher
         watcher.start()
         pump = Task.detached(priority: .utility) {
             for await batch in watcher.events {
                 // Everything under `.git/` except index/HEAD/refs is noise (packed objects, locks).
                 let relevant = batch.paths.contains { path in
+                    if let relevance = gitWatch.relevance(of: path) { return relevance }
                     guard let range = path.range(of: "/.git/") else { return true }
                     let inside = path[range.upperBound...]
                     return inside == "index" || inside == "HEAD" || inside.hasPrefix("refs/")

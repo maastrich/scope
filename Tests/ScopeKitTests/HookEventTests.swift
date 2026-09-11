@@ -33,6 +33,7 @@ import Testing
     @Test(arguments: [
         ("turn.started", HookEvent.Kind.turnStarted),
         ("turn.ended", .turnEnded),
+        ("turn.failed", .turnFailed),
         ("input.requested", .inputRequested),
         ("permission.requested", .permissionRequested),
         ("thread.ended", .threadEnded),
@@ -47,9 +48,9 @@ import Testing
         #expect(HookEvent.Kind(rawValue: wire) == kind)
     }
 
-    @Test func allCasesCoverTheFiveEventsPlusSessionStarted() {
-        #expect(HookEvent.Kind.allCases.count == 6)
-        #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 5)
+    @Test func allCasesCoverTheStateEventsPlusSessionStarted() {
+        #expect(HookEvent.Kind.allCases.count == 7)
+        #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 6)
         #expect(!HookEvent.Kind.sessionStarted.changesState)
     }
 
