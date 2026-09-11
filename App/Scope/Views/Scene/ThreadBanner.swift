@@ -95,6 +95,9 @@ struct ThreadBanner: View {
     }
 
     private var subtitle: String? {
+        if let skip = model.autoRelaunchBlocks[session.id] {
+            return "Not relaunched when Scope opened: \(skip.reason)."
+        }
         switch session.phase {
         case .notStarted:
             return session.canResume

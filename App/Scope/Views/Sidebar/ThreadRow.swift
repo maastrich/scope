@@ -150,6 +150,11 @@ struct ThreadMenuItems: View {
             Task { await model.startFresh(session.id) }
         }
         .disabled(session.isAlive || !session.canResume)
+        Toggle("Relaunch When Scope Opens", isOn: Binding(
+            get: { session.record.relaunchesAtStartup },
+            set: { session.setRelaunchesAtStartup($0) }
+        ))
+        .disabled(!model.config.preferences.autoRelaunchThreads)
         Button("Stop") {
             model.stop(session.id)
         }

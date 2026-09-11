@@ -115,7 +115,10 @@ final class AppModel {
     @ObservationIgnored private var launcher: ThreadLauncher
     /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
     @ObservationIgnored private var closingThreads: Set<ThreadID> = []
-    @ObservationIgnored private var isTerminating = false
+    @ObservationIgnored private(set) var isTerminating = false
+    /// Threads that were running when the app went down and stayed stopped at launch for a reason the user did not
+    /// choose; the banner says which. Cleared by the thread's next launch.
+    var autoRelaunchBlocks: [ThreadID: AutoRelaunchSkip] = [:]
     /// Setups in flight, per task: a thread of the task waits for its task's entry before it launches. The token
     /// tells a finished run it is still the latest one before it removes itself.
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
@@ -372,6 +375,7 @@ final class AppModel {
     func bootstrap() async {
         startBadgeTracking()
         guard !isBootstrapped else { return }
+        let skipAutoRelaunch = AppServices.shiftHeldAtLaunch || NSEvent.modifierFlags.contains(.shift)
         startActivationTracking()
 
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
@@ -463,6 +467,7 @@ final class AppModel {
         env.knownThreads.replaceAll(Set(threads.map(\.id)))
 
         restoreUIState()
+        await autoRelaunchThreads(orphans: restore.orphans, skippedOnce: skipAutoRelaunch)
         startFollowingVibeIsland()
         isBootstrapped = true
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
@@ -733,7 +738,8 @@ final class AppModel {
 
     private func register(_ session: ThreadSession) {
         session.onRecordChanged = { [weak self] record in
-            guard let self else { return }
+            // The exits a quit causes would clear `processAlive`; `terminateNow` wrote the records it needs already.
+            guard let self, !self.isTerminating else { return }
             Task { await self.env.threadRecords.save(record) }
         }
         session.onExit = { [weak self] session, status in
@@ -803,8 +809,9 @@ final class AppModel {
         return session
     }
 
-    private func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
+    func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
         guard !session.isAlive else { return }
+        autoRelaunchBlocks[session.id] = nil
         guard let scope = scope(session.record.scopeID) else { return }
         if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
             // An agent started before `pnpm install` finished works in a sandbox without its dependencies. The
@@ -937,6 +944,7 @@ final class AppModel {
     /// The permanent part of a close: hook files, problems, the persisted record.
     private func forget(id: ThreadID, scopeID: ScopeID, profile: DriverProfile) async {
         env.knownThreads.remove(id)
+        autoRelaunchBlocks[id] = nil
         AdapterInstaller.remove(profile: profile, threadID: id, home: env.home)
         problems.dismissAll(thread: id)
         await env.threadRecords.delete(id)
@@ -1191,8 +1199,15 @@ final class AppModel {
     }
 
     /// SIGHUP to every alive thread, then flush the stores. Records are already on disk.
+    ///
+    /// Each alive record is written once more, awaited, with `processAlive` still set, before anything is hung up:
+    /// the exits that follow are not persisted (`register`), so these threads come back at the next launch however
+    /// the quit and the saves interleave.
     func terminateNow() async {
         isTerminating = true
+        for session in threads where session.isAlive {
+            await env.threadRecords.save(session.record)
+        }
         for session in threads where session.isAlive {
             session.stop(escalateAfter: 1.5)
         }

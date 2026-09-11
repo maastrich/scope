@@ -261,8 +261,13 @@ FIG_SIDEBAR
 default driver is the plain shell; the split button next to it picks another. The thread is a real terminal:
 your shell, your prompt, your colours, plus a handful of <code>SCOPE_*</code> variables so hooks can report
 back.</p>
-<p>Threads survive a restart: Scope keeps a record per thread, and <b>Relaunch</b> picks the driver's previous
-session back up when a hook captured its id. <b>Start Fresh</b> opens a new session instead.</p>
+<p>Threads survive a restart. The ones that were running when Scope quit, updated or crashed start again on
+their own when it reopens — picking the driver's previous session back up when a hook captured its id, in the
+same directory otherwise. The thread the window opens on goes first; the others follow a moment apart. Hold
+<kbd>⇧</kbd> while Scope opens to skip that once, turn it off in Settings → Threads, or untick <b>Relaunch When
+Scope Opens</b> in one thread's menu. A thread whose task was closed or whose folder is gone stays stopped, and
+its banner says why. <b>Relaunch</b> brings any stopped thread back; <b>Start Fresh</b> opens a new session
+instead.</p>
 
 <h2 id="first-task">Create your first task</h2>
 <p><kbd>⇧⌘T</kbd>. Describe the work in a sentence, pick the repositories it touches, press <b>Continue</b>.
@@ -314,7 +319,8 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
-<kbd>⇧⌘T</kbd> undoes a close.</p>
+<kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
+when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section).</p>
 
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>

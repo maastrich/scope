@@ -50,6 +50,8 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private var pendingPlan: LaunchPlan?
     @ObservationIgnored private var inputTracker = TerminalInputTracker()
     @ObservationIgnored private var layoutFallback: Task<Void, Never>?
+    /// Divider printed by the next start instead of "relaunched …" (the auto-relaunch says why it started).
+    @ObservationIgnored var nextLaunchNotice: String?
 
     /// Called on every record change so `AppModel` persists it.
     @ObservationIgnored var onRecordChanged: (@MainActor (ThreadRecord) -> Void)?
@@ -75,6 +77,21 @@ final class ThreadSession: Identifiable {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, title != record.title else { return }
         record.title = title
+        onRecordChanged?(record)
+    }
+
+    /// The thread's opt-out of auto-relaunch.
+    func setRelaunchesAtStartup(_ relaunches: Bool) {
+        guard relaunches != record.relaunchesAtStartup else { return }
+        record.relaunchesAtStartup = relaunches
+        onRecordChanged?(record)
+    }
+
+    /// The thread was running when the app went down and stays stopped this time (auto-relaunch off, skipped or
+    /// blocked): it must not come back at a later launch either.
+    func forgetProcessAlive() {
+        guard record.processAlive else { return }
+        record.processAlive = false
         onRecordChanged?(record)
     }
 
@@ -115,6 +132,8 @@ final class ThreadSession: Identifiable {
         layoutFallback = nil
         lastError = error
         phase = .failed(error.title)
+        nextLaunchNotice = nil
+        forgetProcessAlive()
     }
 
     /// Starts now when the view has been laid out at least once, otherwise on the first layout (so the
@@ -145,9 +164,12 @@ final class ThreadSession: Identifiable {
             Log.threads.error("thread \(self.id.rawValue, privacy: .public): start requested while a process is running")
             return
         }
-        if record.launchCount > 0 {
+        if let notice = nextLaunchNotice {
+            printNotice(notice)
+        } else if record.launchCount > 0 {
             printNotice("relaunched \(Date.now.formatted(date: .omitted, time: .standard))")
         }
+        nextLaunchNotice = nil
         view.startProcess(
             executable: plan.executable,
             args: plan.arguments,
@@ -167,6 +189,7 @@ final class ThreadSession: Identifiable {
         record.launchCount += 1
         record.lastExit = nil
         record.lastState = .initial
+        record.processAlive = true
         onRecordChanged?(record)
         Log.threads.info("thread \(self.id.rawValue, privacy: .public) started pid \(view.process.shellPid): \(plan.displayCommand, privacy: .public)")
     }
@@ -288,6 +311,7 @@ final class ThreadSession: Identifiable {
         adapterState = nil
         record.lastExit = status
         record.lastState = .exited
+        record.processAlive = false
         onRecordChanged?(record)
         Log.threads.info("thread \(self.id.rawValue, privacy: .public) exited: \(status.summary, privacy: .public)")
         onExit?(self, status)

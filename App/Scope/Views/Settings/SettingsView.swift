@@ -96,6 +96,11 @@ private struct GeneralSettingsView: View {
                 Text("Off: an exited thread stays in the sidebar until you close it.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                Toggle("Relaunch running threads when Scope opens", isOn: preference(\.autoRelaunchThreads))
+                Text("Threads that were running when Scope quit, updated or crashed start again, picking their driver session back up when they can. Hold ⇧ while Scope opens to skip it once.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("Threads waiting for you") {
                 Picker("Show the count", selection: preference(\.attentionCounter)) {

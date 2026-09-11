@@ -281,6 +281,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
+    /// Threads whose process was running when the app went down (quit, update, crash) start again when it opens,
+    /// resuming the driver session when they can. On by default; holding ⇧ while the app opens skips it once.
+    public var autoRelaunchThreads: Bool
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
@@ -307,6 +310,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
         terminalOptionAsMeta: Bool = false,
         autoCloseExitedThreads: Bool = false,
+        autoRelaunchThreads: Bool = true,
         attentionCounter: AttentionCounterPlacement = .sidebar,
         automation: AutomationSettings? = nil
     ) {
@@ -322,6 +326,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalCursorStyle = terminalCursorStyle
         self.terminalOptionAsMeta = terminalOptionAsMeta
         self.autoCloseExitedThreads = autoCloseExitedThreads
+        self.autoRelaunchThreads = autoRelaunchThreads
         self.attentionCounter = attentionCounter
         self.automation = automation
     }
@@ -331,7 +336,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, autoCloseExitedThreads, attentionCounter,
-             automation
+             automation, autoRelaunchThreads
     }
 
     public init(from decoder: any Decoder) throws {
@@ -356,6 +361,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.terminalOptionAsMeta
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
+        autoRelaunchThreads = try container.decodeIfPresent(Bool.self, forKey: .autoRelaunchThreads)
+            ?? defaults.autoRelaunchThreads
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
             ?? defaults.attentionCounter
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
