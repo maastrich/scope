@@ -36,7 +36,9 @@ extension AppModel {
         Task { [weak self] in
             for (index, id) in plan.launches.enumerated() {
                 if index > 0 { try? await Task.sleep(for: AutoRelaunchPlan.stagger) }
-                guard let self else { return }
+                // A quit in the middle must not fork children into the dying app; the records still say they were
+                // running, so they come back at the next launch.
+                guard let self, !self.isTerminating else { return }
                 // The user may have relaunched, stopped or closed it in the meantime.
                 guard let session = self.session(id), !session.isAlive else { continue }
                 if case .launching = session.phase { continue }

@@ -132,6 +132,7 @@ final class ThreadSession: Identifiable {
         layoutFallback = nil
         lastError = error
         phase = .failed(error.title)
+        nextLaunchNotice = nil
         forgetProcessAlive()
     }
 

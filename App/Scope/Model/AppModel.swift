@@ -115,7 +115,7 @@ final class AppModel {
     @ObservationIgnored private var launcher: ThreadLauncher
     /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
     @ObservationIgnored private var closingThreads: Set<ThreadID> = []
-    @ObservationIgnored private var isTerminating = false
+    @ObservationIgnored private(set) var isTerminating = false
     /// Threads that were running when the app went down and stayed stopped at launch for a reason the user did not
     /// choose; the banner says which. Cleared by the thread's next launch.
     var autoRelaunchBlocks: [ThreadID: AutoRelaunchSkip] = [:]
