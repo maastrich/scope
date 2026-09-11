@@ -184,7 +184,8 @@ struct MonoTextView: NSViewRepresentable {
         var onCommentClick: ((String, NSRect, NSView) -> Void)?
 
         /// Keeps the text view at least as wide as the clip view so row tints span the visible area.
-        /// Block observers are removed by the notification centre when the coordinator goes away.
+        /// The selector observer is dropped by the notification centre when the coordinator goes away
+        /// (a block observer would need its token stored and removed by hand).
         func observeClipView() {
             guard let scrollView else { return }
             NotificationCenter.default.addObserver(self, selector: #selector(clipViewChanged),

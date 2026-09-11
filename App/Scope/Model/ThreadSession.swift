@@ -180,7 +180,8 @@ final class ThreadSession: Identifiable {
         let pid = view.process.shellPid
         guard pid > 0 else { return }
         kill(pid, SIGHUP)
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
             guard let self, let view = self._terminalView, view.process.running, view.process.shellPid == pid else { return }
             Log.threads.warning("thread \(self.id.rawValue, privacy: .public): pid \(pid) ignored SIGHUP, sending SIGKILL")
             kill(pid, SIGKILL)
