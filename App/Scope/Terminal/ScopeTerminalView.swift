@@ -17,6 +17,14 @@ final class ScopeTerminalView: LocalProcessTerminalView {
     private static let inset: CGFloat = 3
     private static let thickness: CGFloat = 5
 
+    /// Every chunk the user types, before it reaches the child (see `ThreadSession.handleUserInput`).
+    var onUserInput: ((ArraySlice<UInt8>) -> Void)?
+
+    override func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        onUserInput?(data)
+        super.send(source: source, data: data)
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateScrollMarker()

@@ -8,20 +8,23 @@ public enum WaitReason: String, Codable, Sendable, CaseIterable, Hashable {
     case permission
 }
 
-/// The user-visible state of a thread (spec §4.2): `idle` · `running` · `waiting` · `done` · `exited`.
+/// The user-visible state of a thread (spec §4.2): `idle` · `running` · `waiting` · `done` · `failed` · `exited`.
 ///
-/// `waiting` carries its reason. `exited` is produced only by the PTY exit callback and absorbs
-/// every later event; a relaunch starts from `.initial` again. Without an adapter only `running`
-/// and `exited` are ever known.
+/// `waiting` carries its reason. `done` and `failed` are *unread* results: the user has not looked at the
+/// thread since its turn ended, and looking at it (`acknowledged`) brings it back to `idle`. `exited` is
+/// produced only by the PTY exit callback and absorbs every later event; a relaunch starts from `.initial`
+/// again. Without an adapter only `running`, `idle` and `exited` are ever known.
 public enum ThreadState: Codable, Sendable, Hashable {
-    /// Process alive, nothing happening (or no adapter information yet).
+    /// Process alive, nothing happening: ready for the next prompt, or no adapter information yet.
     case idle
     /// A turn is in progress.
     case running
-    /// The driver needs input or a permission.
+    /// The driver needs an answer or a permission.
     case waiting(reason: WaitReason)
-    /// The turn (or the driver session) ended and the result is ready.
+    /// The turn (or the driver session) ended and the user has not looked at the result yet.
     case done
+    /// The turn ended on an error the driver reported (rate limit, billing, overloaded API).
+    case failed
     /// The process is gone.
     case exited
 
@@ -37,33 +40,62 @@ public enum ThreadState: Codable, Sendable, Hashable {
         return false
     }
 
-    /// The state once the user has marked the thread as read: a `waiting` thread goes back to `idle` — seen,
-    /// no longer asking — and every other state is left as it is. The next event the driver sends moves it on
-    /// as usual, so a new question brings the attention straight back.
-    public var acknowledged: ThreadState {
-        needsAttention ? .idle : self
+    /// `true` for a turn that ended while the user was not looking (`done`, `failed`): what showing the thread
+    /// clears on its own, unlike a question, which only an answer or Mark as Read clears.
+    public var isUnreadResult: Bool {
+        self == .done || self == .failed
     }
 
-    /// Persistence-neutral name without the reason: `"idle"`, `"running"`, `"waiting"`, `"done"`, `"exited"`.
+    /// The state once the user has seen the thread (Mark as Read, or showing a finished thread): a `waiting`,
+    /// `done` or `failed` thread goes back to `idle` — seen, ready for the next prompt — and every other state is
+    /// left as it is. The next event the driver sends moves it on as usual, so a new question brings the attention
+    /// straight back.
+    public var acknowledged: ThreadState {
+        needsAttention || isUnreadResult ? .idle : self
+    }
+
+    /// Persistence-neutral name without the reason: `"idle"`, `"running"`, `"waiting"`, `"done"`, `"failed"`,
+    /// `"exited"`.
     public var name: String {
         switch self {
         case .idle: "idle"
         case .running: "running"
         case .waiting: "waiting"
         case .done: "done"
+        case .failed: "failed"
         case .exited: "exited"
         }
     }
 
-    /// UI label: `"Idle"`, `"Running"`, `"Waiting for input"`, `"Waiting for permission"`, `"Done"`, `"Exited"`.
+    /// UI label: `"Idle"`, `"Running"`, `"Needs your answer"`, `"Needs permission"`, `"Done"`, `"Failed"`,
+    /// `"Exited"`.
     public var label: String {
         switch self {
         case .idle: "Idle"
         case .running: "Running"
-        case .waiting(.input): "Waiting for input"
-        case .waiting(.permission): "Waiting for permission"
+        case .waiting(.input): "Needs your answer"
+        case .waiting(.permission): "Needs permission"
         case .done: "Done"
+        case .failed: "Failed"
         case .exited: "Exited"
+        }
+    }
+
+    /// The one state that stands for several threads (a task row, a collapsed group): the most urgent of them,
+    /// `waiting` > `failed` > `running` > `done` > `idle` > `exited`. `nil` for no thread at all.
+    public static func mostUrgent(_ states: some Sequence<ThreadState>) -> ThreadState? {
+        states.max { $0.urgency < $1.urgency }
+    }
+
+    private var urgency: Int {
+        switch self {
+        case .exited: 0
+        case .idle: 1
+        case .done: 2
+        case .running: 3
+        case .failed: 4
+        case .waiting(.input): 5
+        case .waiting(.permission): 6
         }
     }
 
@@ -81,6 +113,7 @@ public enum ThreadState: Codable, Sendable, Hashable {
     /// | `turnEnded` | `done` |
     /// | `inputRequested` | `waiting(input)` |
     /// | `permissionRequested` | `waiting(permission)` |
+    /// | `turnFailed` | `failed` |
     /// | `threadEnded` | `done` |
     /// | `processExited` | `exited` |
     ///
@@ -90,6 +123,7 @@ public enum ThreadState: Codable, Sendable, Hashable {
         switch event {
         case .turnStarted: return .running
         case .turnEnded: return .done
+        case .turnFailed: return .failed
         case .inputRequested: return .waiting(reason: .input)
         case .permissionRequested: return .waiting(reason: .permission)
         case .threadEnded: return .done
@@ -101,14 +135,16 @@ public enum ThreadState: Codable, Sendable, Hashable {
 extension ThreadState: CaseIterable {
     /// Every state, with both `waiting` reasons.
     public static let allCases: [ThreadState] = [
-        .idle, .running, .waiting(reason: .input), .waiting(reason: .permission), .done, .exited,
+        .idle, .running, .waiting(reason: .input), .waiting(reason: .permission), .done, .failed, .exited,
     ]
 }
 
-/// Everything that can move a `ThreadState`. The five adapter events (spec §4.7) plus the PTY exit.
+/// Everything that can move a `ThreadState`. The adapter events (spec §4.7) plus the PTY exit.
 public enum ThreadStateEvent: String, Sendable, Hashable, CaseIterable {
     case turnStarted
     case turnEnded
+    /// The turn ended on an error instead of an answer (Claude Code's `StopFailure`).
+    case turnFailed
     case inputRequested
     case permissionRequested
     case threadEnded

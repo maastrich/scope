@@ -45,7 +45,7 @@ struct LooseThreadsRow: View {
                 .foregroundStyle(.quaternary)
 
             if let state = aggregateState {
-                StateDot(state: state)
+                StateDot(state: state, pulses: aggregateIsWorking)
             } else {
                 Color.clear.frame(width: 8, height: 1)
             }
@@ -57,14 +57,13 @@ struct LooseThreadsRow: View {
         .accessibilityLabel("Loose threads, \(count)")
     }
 
-    /// The most urgent state among the group's threads, on the same ladder as `TaskRow`.
+    /// The most urgent state among the threads (`ThreadState.mostUrgent`).
     private var aggregateState: ThreadState? {
-        let states = model.scopeLevelThreads(in: scope.id).map(\.displayState)
-        guard !states.isEmpty else { return nil }
-        if let waiting = states.first(where: \.needsAttention) { return waiting }
-        if states.contains(.running) { return .running }
-        if states.contains(.done) { return .done }
-        if states.contains(.idle) { return .idle }
-        return .exited
+        ThreadState.mostUrgent(model.scopeLevelThreads(in: scope.id).map(\.displayState))
+    }
+
+    /// Breathes when the aggregate is `running` because a driver says so.
+    private var aggregateIsWorking: Bool {
+        model.scopeLevelThreads(in: scope.id).contains(where: \.isWorking)
     }
 }

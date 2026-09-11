@@ -22,6 +22,24 @@ struct HookStdinTests {
         #expect(stdin.notificationType == nil)
     }
 
+    @Test("tool_name and StopFailure's error are lifted")
+    func parsesToolNameAndError() {
+        let tool = HookStdin.parse(Data(#"{"session_id":"s","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{}}"#.utf8))
+        #expect(tool.toolName == "AskUserQuestion")
+        let failure = HookStdin.parse(Data(#"{"session_id":"s","hook_event_name":"StopFailure","error":"rate_limit"}"#.utf8))
+        #expect(failure.error == "rate_limit")
+    }
+
+    @Test("a permission request for a question tool is a question")
+    func questionToolPermission() {
+        let permission = HookCommandEvent.fixed(.permissionRequested)
+        #expect(permission.resolve(stdin: HookStdin(toolName: "AskUserQuestion")) == .inputRequested)
+        #expect(permission.resolve(stdin: HookStdin(toolName: "ExitPlanMode")) == .inputRequested)
+        #expect(permission.resolve(stdin: HookStdin(toolName: "Bash")) == .permissionRequested)
+        #expect(permission.resolve(stdin: HookStdin()) == .permissionRequested)
+        #expect(ClaudeQuestionTools.matcher == "AskUserQuestion|ExitPlanMode")
+    }
+
     @Test("empty, non-JSON or non-object stdin yields an empty value instead of failing")
     func tolerantParsing() {
         #expect(HookStdin.parse(Data()) == HookStdin())
@@ -33,7 +51,6 @@ struct HookStdinTests {
 
     @Test(arguments: [
         ("permission_prompt", HookEvent.Kind.permissionRequested),
-        ("idle_prompt", .inputRequested),
         ("agent_needs_input", .inputRequested),
         ("elicitation_dialog", .inputRequested),
     ])
@@ -45,6 +62,9 @@ struct HookStdinTests {
     @Test("informational notifications send nothing; a missing type is a plain input request")
     func informationalNotifications() {
         #expect(ClaudeNotificationMapping.kind(for: "auth_success") == nil)
+        // Sent a minute after any unanswered reply: the turn is done, nobody is being asked anything.
+        #expect(ClaudeNotificationMapping.kind(for: "idle_prompt") == nil)
+        #expect(!ClaudeNotificationMapping.matcher.split(separator: "|").contains("idle_prompt"))
         #expect(ClaudeNotificationMapping.kind(for: "agent_completed") == nil)
         #expect(ClaudeNotificationMapping.kind(for: "quota_auto_resume_fired") == nil)
         #expect(ClaudeNotificationMapping.kind(for: nil) == .inputRequested)
@@ -58,12 +78,13 @@ struct HookStdinTests {
             #expect(parsed == .fixed(kind))
             #expect(parsed?.needsStdin == false)
             #expect(parsed?.resolve(stdin: HookStdin(notificationType: "auth_success")) == kind)
+            #expect(parsed?.resolve(stdin: HookStdin(toolName: "Bash")) == kind)
         }
         let notification = HookCommandEvent(word: "notification")
         #expect(notification == .notification)
         #expect(notification?.needsStdin == true)
         #expect(notification?.resolve(stdin: HookStdin(notificationType: "permission_prompt")) == .permissionRequested)
-        #expect(notification?.resolve(stdin: HookStdin(notificationType: "idle_prompt")) == .inputRequested)
+        #expect(notification?.resolve(stdin: HookStdin(notificationType: "idle_prompt")) == nil)
         #expect(notification?.resolve(stdin: HookStdin(notificationType: "auth_success")) == nil)
         #expect(HookCommandEvent(word: "Notification") == nil)
         #expect(HookCommandEvent(word: "turn.paused") == nil)

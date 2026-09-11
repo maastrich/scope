@@ -36,7 +36,8 @@ struct ThreadToolbar: View {
                 .frame(maxWidth: 240, alignment: .leading)
                 .help(currentDirectory)
                 .accessibilityLabel("Working directory \(currentDirectory)")
-            StatePill(state: session.displayState)
+            StatePill(state: session.displayState, pulses: session.isWorking,
+                      detail: ThreadNotificationContent.failureDescription(session.lastFailure).map { "Failed: \($0)" })
                 .fixedSize()
                 .layoutPriority(2)
         }

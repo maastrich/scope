@@ -9,6 +9,7 @@ enum TaskStatusStyle {
         switch status {
         case .waiting(.permission): "hand.raised.fill"
         case .waiting(.input): "questionmark.bubble.fill"
+        case .failed: "exclamationmark.bubble.fill"
         case .running: "play.circle.fill"
         case .setupRunning: "gearshape.fill"
         case .setupFailed: "exclamationmark.triangle.fill"
@@ -29,6 +30,7 @@ enum TaskStatusStyle {
         case .waiting: AnyShapeStyle(ThreadStateStyle.waiting)
         case .running: AnyShapeStyle(ThreadStateStyle.running)
         case .done: AnyShapeStyle(ThreadStateStyle.done)
+        case .failed: AnyShapeStyle(ThreadStateStyle.failed)
         case .setupFailed, .checksFailing: AnyShapeStyle(PullRequestStyle.failing)
         case .conflicted, .checksRunning: AnyShapeStyle(PullRequestStyle.pending)
         case .checksPassed: AnyShapeStyle(PullRequestStyle.passing)

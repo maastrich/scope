@@ -75,6 +75,7 @@ final class AppModel {
                 revealThread(session)
             }
             clearNotifications(for: selectedThreadID)
+            acknowledgeShownResult()
             if !isRestoringUIState { persistUIState() }
         }
     }
@@ -369,6 +370,7 @@ final class AppModel {
     func bootstrap() async {
         startBadgeTracking()
         guard !isBootstrapped else { return }
+        startActivationTracking()
 
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
         startShellProbe()
@@ -1139,6 +1141,7 @@ final class AppModel {
         session.apply(event)
         notifyIfNeeded(event, session: session)
         flushDeliveries(for: session)
+        acknowledgeShownResult()
     }
 
     // MARK: Problem actions

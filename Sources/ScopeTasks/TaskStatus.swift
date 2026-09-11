@@ -51,6 +51,8 @@ public struct PullRequestFacts: Sendable, Equatable {
 public enum TaskStatus: Sendable, Equatable, Hashable {
     /// A thread asked a question or a permission.
     case waiting(WaitReason)
+    /// A thread's turn stopped on an error the driver reported (rate limit, billing, overloaded API).
+    case failed
     case running
     case setupRunning
     case setupFailed
@@ -69,7 +71,7 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
 
     /// The ladder, most pressing first. `waiting` stands for both reasons.
     public static let precedence: [TaskStatus] = [
-        .waiting(.input), .running, .setupRunning, .setupFailed, .done, .conflicted, .checksFailing,
+        .waiting(.input), .failed, .running, .setupRunning, .setupFailed, .done, .conflicted, .checksFailing,
         .checksRunning, .checksPassed, .draft, .pullRequestOpen, .changed, .clean,
     ]
 
@@ -77,6 +79,7 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         if let waiting = facts.threads.first(where: \.needsAttention), case .waiting(let reason) = waiting {
             return .waiting(reason)
         }
+        if facts.threads.contains(.failed) { return .failed }
         if facts.threads.contains(.running) { return .running }
         if facts.setup == .running { return .setupRunning }
         if facts.setup == .failed { return .setupFailed }
@@ -100,6 +103,7 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         switch self {
         case .waiting(.permission): "Needs permission"
         case .waiting(.input): "Needs you"
+        case .failed: "Failed"
         case .running: "Running"
         case .setupRunning: "Setting up"
         case .setupFailed: "Setup failed"
@@ -123,6 +127,7 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         let head: String = switch status {
         case .waiting(.permission): "Waiting for your permission in \(threads)"
         case .waiting(.input): "Waiting for your answer in \(threads)"
+        case .failed: "A turn stopped on an error in \(threads)"
         case .running: "An agent is working in \(threads)"
         case .setupRunning: "The setup command is running in the sandbox"
         case .setupFailed: "The setup command failed; the log is in the Problem Center"

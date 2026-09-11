@@ -30,7 +30,8 @@ struct ClaudeHooksAdapterTests {
     func settingsShape() throws {
         let document = ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath)
         let hooks = try hooks(document)
-        #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PostToolUse", "PermissionRequest", "Notification", "Stop", "SessionEnd"])
+        #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest",
+                                    "Notification", "Stop", "StopFailure", "SessionEnd"])
         for (event, groups) in hooks {
             #expect(groups.count == 1, Comment(rawValue: event))
             let entries = try #require(groups[0]["hooks"] as? [[String: Any]])
@@ -52,16 +53,19 @@ struct ClaudeHooksAdapterTests {
         #expect(try commands(document, "PermissionRequest") == ["\(Self.hookPath) permission.requested --stdin"])
         #expect(try commands(document, "Notification") == ["\(Self.hookPath) notification --stdin"])
         #expect(try commands(document, "Stop") == ["\(Self.hookPath) turn.ended --stdin"])
+        #expect(try commands(document, "StopFailure") == ["\(Self.hookPath) turn.failed --stdin"])
+        #expect(try commands(document, "PreToolUse") == ["\(Self.hookPath) input.requested --stdin"])
         #expect(try commands(document, "SessionEnd") == ["\(Self.hookPath) thread.ended --stdin"])
-        // Only Notification carries a matcher, and it selects the "someone must act" types.
+        // Only Notification and PreToolUse carry a matcher: the "someone must act" types, the question tools.
         let hooks = try hooks(document)
-        for (event, groups) in hooks where event != "Notification" {
+        for (event, groups) in hooks where event != "Notification" && event != "PreToolUse" {
             #expect(groups[0]["matcher"] == nil, Comment(rawValue: event))
         }
         let matcher = try #require(hooks["Notification"]?[0]["matcher"] as? String)
         #expect(matcher.split(separator: "|").contains("permission_prompt"))
-        #expect(matcher.split(separator: "|").contains("idle_prompt"))
+        #expect(!matcher.split(separator: "|").contains("idle_prompt"))
         #expect(!matcher.contains("auth_success"))
+        #expect(hooks["PreToolUse"]?[0]["matcher"] as? String == "AskUserQuestion|ExitPlanMode")
     }
 
     @Test("a hook path with spaces or quotes is shell-quoted")
@@ -117,6 +121,10 @@ struct ClaudeHooksAdapterTests {
         #expect(try AdapterInstaller.prepare(profile: claude, threadID: id, home: home, scopeHookPath: Self.hookPath).first == "--settings")
         #expect(try AdapterInstaller.prepare(profile: shell, threadID: id, home: home, scopeHookPath: Self.hookPath).isEmpty)
         #expect(try AdapterInstaller.prepare(profile: codex, threadID: id, home: home, scopeHookPath: Self.hookPath).isEmpty)
+        // What a thread can know: Claude Code reports turns and their start; Codex only their end; a shell nothing.
+        let cursor = DriverProfile(id: "cursor", name: "Cursor", command: "cursor-agent", adapter: .init(kind: "cursor-hooks"))
+        #expect([claude, codex, shell, cursor].map(AdapterInstaller.deliversEvents) == [true, true, false, false])
+        #expect([claude, codex, shell, cursor].map(AdapterInstaller.reportsTurnStart) == [true, false, false, false])
     }
 
     @Test("the launcher appends --settings on a fresh launch and on a resume")

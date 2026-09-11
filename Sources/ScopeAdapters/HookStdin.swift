@@ -2,9 +2,10 @@ import Foundation
 
 /// What `scope-hook` understands of a driver's own hook JSON (its stdin with `--stdin`).
 ///
-/// Only two things are read: the driver's session id, lifted into `payload["session_id"]` so the app never
-/// parses `raw`, and — for Claude Code's `Notification` hook — the `notification_type`, which decides
-/// between `permission.requested` and `input.requested`. Everything else stays verbatim in `raw`.
+/// Read: the driver's session id, lifted into `payload["session_id"]` so the app never parses `raw`; for
+/// Claude Code's `Notification` hook the `notification_type`, which decides between `permission.requested` and
+/// `input.requested`; the `tool_name` of a tool hook, so a permission request for a question tool counts as a
+/// question; and the `error` of `StopFailure`. Everything else stays verbatim in `raw`.
 public struct HookStdin: Sendable, Equatable {
     /// `session_id` (Claude Code, Cursor) or `thread-id` (Codex `notify`), whichever is present.
     public var sessionID: String?
@@ -12,11 +13,18 @@ public struct HookStdin: Sendable, Equatable {
     public var notificationType: String?
     /// The driver's own event name when it says it (`hook_event_name` for Claude Code, `type` for Codex).
     public var hookEventName: String?
+    /// Tool hooks (`PreToolUse`, `PermissionRequest`, …): the tool the driver is about to call.
+    public var toolName: String?
+    /// Claude Code `StopFailure`: the error code (`rate_limit`, `overloaded`, `billing_error`, …).
+    public var error: String?
 
-    public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil) {
+    public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
+                toolName: String? = nil, error: String? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
+        self.toolName = toolName
+        self.error = error
     }
 
     /// Keys tried, in order, for the session id.
@@ -36,6 +44,8 @@ public struct HookStdin: Sendable, Equatable {
         }
         result.notificationType = object["notification_type"] as? String
         result.hookEventName = (object["hook_event_name"] as? String) ?? (object["type"] as? String)
+        result.toolName = object["tool_name"] as? String
+        result.error = object["error"] as? String
         return result
     }
 }
@@ -50,7 +60,12 @@ public enum ClaudeNotificationMapping {
     /// Types that mean the driver is waiting for a permission decision.
     public static let permissionTypes: Set<String> = ["permission_prompt"]
     /// Types that mean the driver is waiting for the user to type something.
-    public static let inputTypes: Set<String> = ["idle_prompt", "agent_needs_input", "elicitation_dialog", "elicitation_url_dialog"]
+    ///
+    /// `idle_prompt` is deliberately left out: Claude Code sends it about a minute after *any* answer the user
+    /// has not replied to, so it turned every finished thread into one that looked like it was asking a question.
+    /// `Stop` already says the turn is over (`done`); a real question arrives as a question tool (see
+    /// `ClaudeQuestionTools`) or an elicitation dialog.
+    public static let inputTypes: Set<String> = ["agent_needs_input", "elicitation_dialog", "elicitation_url_dialog"]
 
     /// The `Notification` matcher that selects exactly the types this mapping turns into events.
     public static var matcher: String {
@@ -66,6 +81,15 @@ public enum ClaudeNotificationMapping {
         if inputTypes.contains(notificationType) { return .inputRequested }
         return nil
     }
+}
+
+/// Claude Code tools that put a question to the user and wait for the answer. Their `PreToolUse` hook is how a
+/// thread learns it is being asked something; the answer comes back as their `PostToolUse` (`turn.started`).
+public enum ClaudeQuestionTools {
+    public static let names: Set<String> = ["AskUserQuestion", "ExitPlanMode"]
+
+    /// The `PreToolUse` matcher that selects exactly these tools.
+    public static var matcher: String { names.sorted().joined(separator: "|") }
 }
 
 /// The event names `scope-hook` accepts on its command line: every `HookEvent.Kind` raw value plus
@@ -89,8 +113,11 @@ public enum HookCommandEvent: Sendable, Equatable {
     }
 
     /// The wire event for `stdin`; `nil` means "nothing to send" (a notification nobody has to act on).
+    /// A permission request for a question tool is a question: approving it *is* answering.
     public func resolve(stdin: HookStdin) -> HookEvent.Kind? {
         switch self {
+        case .fixed(.permissionRequested) where stdin.toolName.map(ClaudeQuestionTools.names.contains) == true:
+            .inputRequested
         case .fixed(let kind): kind
         case .notification: ClaudeNotificationMapping.kind(for: stdin.notificationType)
         }

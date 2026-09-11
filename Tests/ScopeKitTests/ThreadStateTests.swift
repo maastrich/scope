@@ -9,6 +9,7 @@ import Testing
         switch event {
         case .turnStarted: return .running
         case .turnEnded: return .done
+        case .turnFailed: return .failed
         case .inputRequested: return .waiting(reason: .input)
         case .permissionRequested: return .waiting(reason: .permission)
         case .threadEnded: return .done
@@ -17,8 +18,8 @@ import Testing
     }
 
     @Test func fullTransitionTable() {
-        #expect(ThreadState.allCases.count == 6)
-        #expect(ThreadStateEvent.allCases.count == 6)
+        #expect(ThreadState.allCases.count == 7)
+        #expect(ThreadStateEvent.allCases.count == 7)
         for state in ThreadState.allCases {
             for event in ThreadStateEvent.allCases {
                 #expect(state.applying(event) == ThreadStateTests.expected(state, event), "\(state) + \(event)")
@@ -73,16 +74,17 @@ import Testing
         #expect(ThreadState.running.normalizedAfterRestart == .idle)
         #expect(ThreadState.waiting(reason: .input).normalizedAfterRestart == .idle)
         #expect(ThreadState.done.normalizedAfterRestart == .idle)
+        #expect(ThreadState.failed.normalizedAfterRestart == .idle)
         #expect(ThreadState.idle.normalizedAfterRestart == .idle)
         #expect(ThreadState.exited.normalizedAfterRestart == .exited)
     }
 
     @Test func namesAndLabels() {
-        #expect(ThreadState.allCases.map(\.name) == ["idle", "running", "waiting", "waiting", "done", "exited"])
+        #expect(ThreadState.allCases.map(\.name) == ["idle", "running", "waiting", "waiting", "done", "failed", "exited"])
         #expect(ThreadState.allCases.map(\.label) == [
-            "Idle", "Running", "Waiting for input", "Waiting for permission", "Done", "Exited",
+            "Idle", "Running", "Needs your answer", "Needs permission", "Done", "Failed", "Exited",
         ])
-        #expect(ThreadState.allCases.map(\.isAlive) == [true, true, true, true, true, false])
+        #expect(ThreadState.allCases.map(\.isAlive) == [true, true, true, true, true, true, false])
     }
 
     @Test func codableRoundTripAndShape() throws {
@@ -107,14 +109,33 @@ import Testing
         #expect(ProcessPhase.launching.pid == nil)
     }
 
-    /// Marking a thread as read: the question has been seen, so the thread stops asking for attention.
-    @Test func markingAsReadClearsTheWaitOnly() {
+    /// Marking a thread as read: the question, or the finished turn, has been seen, so the thread stops asking for
+    /// attention.
+    @Test func markingAsReadClearsQuestionsAndResults() {
         #expect(ThreadState.waiting(reason: .input).acknowledged == .idle)
         #expect(ThreadState.waiting(reason: .permission).acknowledged == .idle)
+        #expect(ThreadState.done.acknowledged == .idle)
+        #expect(ThreadState.failed.acknowledged == .idle)
         #expect(!ThreadState.waiting(reason: .input).acknowledged.needsAttention)
-        for state in [ThreadState.idle, .running, .done, .exited] {
+        for state in [ThreadState.idle, .running, .exited] {
             #expect(state.acknowledged == state, "\(state) has nothing to acknowledge")
         }
+    }
+
+    /// Only a finished turn is cleared by merely showing the thread; a question waits for its answer.
+    @Test func unreadResults() {
+        #expect(ThreadState.allCases.filter(\.isUnreadResult) == [.done, .failed])
+        #expect(!ThreadState.failed.needsAttention)
+    }
+
+    @Test func mostUrgentOfSeveralThreads() {
+        #expect(ThreadState.mostUrgent([]) == nil)
+        #expect(ThreadState.mostUrgent([.idle, .running, .done]) == .running)
+        #expect(ThreadState.mostUrgent([.running, .failed, .done]) == .failed)
+        #expect(ThreadState.mostUrgent([.failed, .waiting(reason: .input)]) == .waiting(reason: .input))
+        #expect(ThreadState.mostUrgent([.waiting(reason: .input), .waiting(reason: .permission)]) == .waiting(reason: .permission))
+        #expect(ThreadState.mostUrgent([.exited, .done, .idle]) == .done)
+        #expect(ThreadState.mostUrgent([.exited]) == .exited)
     }
 
     /// Read is not muted: the next question the driver asks brings the attention straight back.
