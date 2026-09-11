@@ -179,6 +179,24 @@ final class ThreadSession: Identifiable {
         terminalView.send(txt: text)
     }
 
+    /// Types `text`, then presses ↩ on its own a moment later. Sent in one write, the ↩ lands in the same read as
+    /// the text and a TUI such as Claude Code takes the whole chunk for a paste: the ↩ becomes a newline in the
+    /// prompt and nothing is submitted.
+    func submit(_ text: String) {
+        guard !text.isEmpty else {
+            send("\r")
+            return
+        }
+        send(text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.submitDelay) { [weak self] in
+            guard let self, self.phase.isAlive else { return }
+            self.send("\r")
+        }
+    }
+
+    /// Long enough for the child to have read the text before the ↩ arrives.
+    static let submitDelay: TimeInterval = 0.15
+
     /// Feeds a divider line into the emulator (not to the child).
     func printNotice(_ text: String) {
         terminalView.feed(text: "\r\n\u{1b}[2m── \(text) ──\u{1b}[0m\r\n")

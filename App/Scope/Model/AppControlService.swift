@@ -74,7 +74,7 @@ final class AppControlService: ControlService {
         case .threadSend(let params):
             return act(on: params.thread, from: origin) { session in
                 guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
-                session.send(params.text + (params.submit ? "\r" : ""))
+                if params.submit { session.submit(params.text) } else { session.send(params.text) }
                 return .success(.action(ActionResult(message: "typed \(params.text.count) characters into \(session.id.rawValue)"
                                                          + (params.submit ? " and pressed ↩" : ""),
                                                      thread: session.id.rawValue), .threadSend))
