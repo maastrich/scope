@@ -58,6 +58,13 @@ struct ThreadLauncher {
         )
         if let task {
             plan.environment.merge(env.tasks.taskEnvironment(for: task)) { $1 }
+            // A missing guardrail must not cost the user their thread: launch without it and say so in the log.
+            do {
+                let hooks = try SandboxGitHooks.install(home: env.home)
+                plan.environment = SandboxGitHooks.environment(adding: hooks.path, to: plan.environment)
+            } catch {
+                Log.threads.error("could not install the sandbox git hooks: \(String(describing: error), privacy: .public)")
+            }
         }
         return plan
     }
