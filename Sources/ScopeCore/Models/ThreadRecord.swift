@@ -14,7 +14,8 @@ public enum ThreadCwdKind: Codable, Sendable, Equatable, Hashable {
 /// after an app restart.
 ///
 /// Written on create, on every launch, on every exit and when `resumeID` changes; deleted when the
-/// thread is closed.
+/// thread is closed. While the app quits nothing more is written, so the processes it hangs up keep
+/// `processAlive` and come back at the next launch (`AutoRelaunchPlanner`).
 public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// Schema version written by this build. Newer documents are refused, never overwritten.
     public static let currentVersion = 1
@@ -47,6 +48,14 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// Who opened the thread and how deep in the agent chain it sits; `nil` on records written before
     /// the control socket existed, which means "the user opened it".
     public var origin: ThreadOrigin?
+    /// A process of this thread is running — or was when the app last went down. Set on every start,
+    /// cleared by an exit; hanging the processes up on quit does not clear it, and neither does a crash, which
+    /// is how the next launch knows which threads to bring back. Records written before the field existed
+    /// derive it from `lastState`.
+    public var processAlive: Bool
+    /// The per-thread opt-out of auto-relaunch: `false` leaves the thread stopped when the app starts again,
+    /// whatever it was doing. `true` by default.
+    public var relaunchesAtStartup: Bool
 
     public init(
         id: ThreadID = .generate(),
@@ -77,6 +86,8 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         lastState = nil
         log = nil
         self.origin = origin
+        processAlive = false
+        relaunchesAtStartup = true
     }
 
     /// The origin to reason about, defaulting to the user for records that predate the field.
@@ -88,6 +99,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
+        case processAlive, relaunchesAtStartup
     }
 
     // Lenient decoding: only identity, driver and cwd are required.
@@ -110,5 +122,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         lastState = try container.decodeIfPresent(ThreadState.self, forKey: .lastState)
         log = try container.decodeIfPresent(String.self, forKey: .log)
         origin = try container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)
+        processAlive = try container.decodeIfPresent(Bool.self, forKey: .processAlive) ?? (lastState.map(\.isAlive) ?? false)
+        relaunchesAtStartup = try container.decodeIfPresent(Bool.self, forKey: .relaunchesAtStartup) ?? true
     }
 }

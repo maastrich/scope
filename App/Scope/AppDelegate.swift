@@ -6,6 +6,9 @@ import UserNotifications
 @MainActor
 enum AppServices {
     static var model: AppModel?
+    /// ⇧ held while the app opened: skip the auto-relaunch of threads this once (the macOS gesture for "open without
+    /// restoring"). Read as early as AppKit allows; `bootstrap` looks again in case the key went down a moment late.
+    static var shiftHeldAtLaunch = false
 }
 
 /// Finder / Dock / Services entry points and the quit sequence.
@@ -16,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingLinks: [URL] = []
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        AppServices.shiftHeldAtLaunch = NSEvent.modifierFlags.contains(.shift)
         // Taken before SwiftUI's own URL handling, which would open a new window for the link rather than hand it
         // to the model.
         NSAppleEventManager.shared().setEventHandler(
@@ -122,6 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.alertStyle = .warning
             alert.messageText = "\(running) \(running == 1 ? "thread is" : "threads are") running. Quit and hang \(running == 1 ? "it" : "them") up?"
             alert.informativeText = "Each running process receives SIGHUP, as if its terminal window closed."
+                + (model.config.preferences.autoRelaunchThreads
+                    ? " \(running == 1 ? "It starts" : "They start") again when Scope reopens, resuming the driver session when there is one."
+                    : "")
             alert.addButton(withTitle: "Quit")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }

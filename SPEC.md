@@ -87,7 +87,7 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 - **Terminal embarqué** : PTY complet (SwiftTerm), 256 couleurs, resize, copier/coller, scrollback, recherche. Onglets par thread, splits horizontaux et verticaux.
 - **Environnement injecté** : `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_TASK`, `SCOPE_SOCK`, `SCOPE_HOME`, plus l'env du profil de driver.
 - **États** : `idle` · `running` · `waiting` (attend une réponse ou une permission) · `done` (tour fini, pas encore vu) · `failed` (tour arrêté sur une erreur de l'API) · `exited`. Montrer le thread ramène `done` et `failed` à `idle`. Sans adaptateur, seuls `running` et `exited` sont connus.
-- **Reprise** : au redémarrage, chaque thread propose *Reprendre* (commande de reprise du profil, ex. `claude --resume <id>`) ou *Relancer*.
+- **Reprise** : au redémarrage, les threads qui tournaient quand l'app s'est arrêtée (quit, mise à jour, crash, reboot) repartent seuls, en reprenant la session du driver quand elle est connue (commande de reprise du profil, ex. `claude --resume <id>`), sinon dans le même cwd. Le thread sélectionné part en premier, les autres sont échelonnés. Un thread dont le scope, la task ou le cwd a disparu reste arrêté et dit pourquoi. Réglage pour désactiver, opt-out par thread, ⇧ maintenu au lancement pour sauter une fois. Tout thread arrêté propose *Relancer* (qui reprend quand il peut) ou *Nouvelle session*.
 - **Plusieurs drivers côte à côte** sur le même scope, y compris sur la même task.
 
 ### 4.3 Tasks et sandboxes
