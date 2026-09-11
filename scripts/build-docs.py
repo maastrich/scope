@@ -323,6 +323,13 @@ relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to 
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
+<p>A task row carries one glyph instead: the most pressing thing about the task, picked in this order —
+waiting on you, running, setup running, setup failed, done, conflicts, checks failing, checks running, checks
+passed, draft pull request, pull request open, changed, clean. Each has its own symbol shape, so it reads without
+colour and on the selection highlight. The row's other side is the task's <code>+N −M</code>; rest the pointer on
+it for the branch, the repositories, the pull request and its checks, the age and the prompt. A task with a
+single thread is a single row — selecting it shows that thread's terminal — and its threads only appear nested
+from the second one on.</p>
 <p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
 you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p>States come from the driver's own hooks, not from guessing at terminal output. See

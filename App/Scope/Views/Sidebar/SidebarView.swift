@@ -27,7 +27,7 @@ struct SidebarView: View {
             if model.scopes.isEmpty {
                 SidebarEmptyView()
             } else if let scope = model.currentScope {
-                List(selection: $model.selection) {
+                List(selection: listSelection) {
                     workSection(scope)
                     repositoriesSection(scope)
                 }
@@ -92,6 +92,19 @@ struct SidebarView: View {
     private func focusTerminalAfterSelection() {
         guard !filterFocused, model.selectedThreadID != nil else { return }
         DispatchQueue.main.async { AppDelegate.refocusTerminal() }
+    }
+
+    /// The model's selection as the List sees it. The only thread of a task has no row of its own — the task row
+    /// stands for it — so selecting that thread (⌘1, the palette, a notification) highlights the task row.
+    private var listSelection: Binding<SidebarItem?> {
+        Binding(
+            get: {
+                guard case .thread(let id) = model.selection, let session = model.session(id),
+                      let task = model.task(of: session), model.threads(in: task.id).count == 1 else { return model.selection }
+                return .task(task.id)
+            },
+            set: { model.selection = $0 }
+        )
     }
 
     private var isRenaming: Binding<Bool> {
@@ -197,6 +210,9 @@ struct SidebarView: View {
     /// The work of the scope as one tree, with no section header: the **Loose threads** group first — the threads
     /// that belong to no task, which used to live in a Threads section of their own — then the tasks with their
     /// own threads nested. One shape, one depth, one place to look for a thread.
+    ///
+    /// A task's threads are nested from the second one on: with a single thread the task row already is that
+    /// thread — selecting it shows the terminal and hands it the keyboard.
     private func workSection(_ scope: ScopeState) -> some View {
         Section {
             looseThreadsGroup(scope)
@@ -205,7 +221,7 @@ struct SidebarView: View {
             ForEach(tasks) { task in
                 TaskRow(task: task)
                     .tag(SidebarItem.task(task.id))
-                if task.isExpanded || isFiltering {
+                if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
                     ForEach(visibleThreads(in: task)) { session in
                         ThreadRow(session: session, depth: 1)
                             .tag(SidebarItem.thread(session.id))

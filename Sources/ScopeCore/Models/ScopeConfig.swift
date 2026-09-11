@@ -19,7 +19,7 @@ public enum ShellProbeMode: String, Codable, Sendable, CaseIterable {
 }
 
 /// Where the count of threads waiting for the user is shown, on top of the per-row marks that are always drawn
-/// (a square state dot, a bar down the row and the word *needs you*).
+/// (a task's status glyph, a thread's square state dot).
 ///
 /// The per-row marks only help for a row you can see; the counter is what catches a thread blocked further down a
 /// long list or inside a collapsed task. Which of the two places suits a given screen is a matter of taste, hence

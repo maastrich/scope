@@ -2,20 +2,75 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task: chevron, branch icon, name, at most one trailing chip and the aggregated state dot
-/// of its threads.
+/// Sidebar row for a task: one status glyph, the name, `+N −M`.
 ///
-/// The trailing group carries a single chip, chosen by priority — a refresh spinner, else the `#123` of a bound
-/// pull request (its dot = live checks state) — and then the same 16 pt gutter `ThreadRow` reserves for its hover
-/// close button, empty here, so the state dots of tasks and threads line up in one column. The `api · web` repo
-/// caption is gone: it had a fixed 64 pt frame that squeezed the name at narrow widths, and the repositories of a
-/// task now belong to the inspector's summary band.
+/// The glyph is `TaskStatus.resolve` — the single most pressing thing about the task, a thread waiting on you
+/// first — and replaces what used to be a branch icon, a PR chip and a trailing state dot that each said part of
+/// it. The name takes the whole width: the hover controls (archive, menu) are drawn over the trailing counts,
+/// which fade out under them, instead of holding a gutter open when the pointer is elsewhere. The rest — branch,
+/// repositories, pull request, prompt — is in the hover card.
+///
+/// A task with one thread is one row: selecting it already shows that thread's terminal, so a nested row with the
+/// same title only doubled the list. The chevron and the nested rows come with the second thread; until then the
+/// thread's own menu items are in this row's context menu.
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let task: TaskState
+    @State private var isHovered = false
+    @State private var showsCard = false
+    @State private var cardDelay: Task<Void, Never>?
+
+    /// Long enough that sweeping the pointer down the list opens nothing.
+    private static let cardDelay: Duration = .milliseconds(700)
 
     var body: some View {
+        let threads = model.threads(in: task.id)
+        let facts = model.taskFacts(for: task)
+        let status = TaskStatus.resolve(facts)
         HStack(spacing: 7) {
+            disclosure(shown: threads.count > 1)
+
+            TaskStatusGlyph(status: status)
+
+            Text(task.name)
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
+
+            Spacer(minLength: 4)
+
+            DeltaCounts(additions: task.totalAdditions, deletions: task.totalDeletions)
+                .lineLimit(1)
+        }
+        .trailingFade(isHovered, width: SidebarMetrics.hoverControlsWidth)
+        .overlay(alignment: .trailing) {
+            if isHovered { hoverControls }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 28)
+        .contentShape(Rectangle())
+        .onHover(perform: hover)
+        .popover(isPresented: $showsCard, arrowEdge: .trailing) {
+            TaskHoverCard(task: task, status: status, facts: facts)
+        }
+        .contextMenu { TaskContextMenu(task: task) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(task.name)
+        .accessibilityValue(TaskStatus.summary(status, facts: facts))
+        .accessibilityActions {
+            if threads.count > 1 {
+                Button(task.isExpanded ? "Collapse" : "Expand") { task.isExpanded.toggle() }
+            }
+            Button("Archive") { Task { await model.archiveTask(task.id) } }
+        }
+    }
+
+    /// The chevron, or its empty slot: task glyphs stay in one column whether or not a task has nested rows.
+    @ViewBuilder
+    private func disclosure(shown: Bool) -> some View {
+        if shown {
             Button {
                 task.isExpanded.toggle()
             } label: {
@@ -26,73 +81,72 @@ struct TaskRow: View {
             }
             .buttonStyle(.iconTight)
             .help(task.isExpanded ? "Collapse" : "Expand")
-            .accessibilityLabel(task.isExpanded ? "Collapse \(task.name)" : "Expand \(task.name)")
-
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-
-            Text(task.name)
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
-
-            Spacer(minLength: 4)
-
-            if task.isRefreshing {
-                ProgressView().controlSize(.mini)
-            } else if let pr = task.record.pullRequest {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(PullRequestStyle.color(model.liveChecks(for: task) ?? .none))
-                        .frame(width: 6, height: 6)
-                    Text(pr.label)
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 6)
-                .frame(height: 18)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
-                .help("\(pr.title)\n\(pr.url.absoluteString)")
-            }
-
-            // Empty counterpart of ThreadRow's hover gutter: it buys nothing here but the shared dot column.
-            Color.clear.frame(width: 16, height: 1)
-
-            if let state = aggregateState {
-                StateDot(state: state)
-            } else {
-                Color.clear.frame(width: 8, height: 1)
-            }
+        } else {
+            Color.clear.frame(width: 12, height: 12)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
-        .contentShape(Rectangle())
-        .help("\(task.branch) — \(task.record.root)")
-        .contextMenu { TaskContextMenu(task: task) }
     }
 
-    /// The most urgent state among the task's threads: waiting > running > done > idle > exited.
-    private var aggregateState: ThreadState? {
-        let states = model.threads(in: task.id).map(\.displayState)
-        guard !states.isEmpty else { return nil }
-        if let waiting = states.first(where: \.needsAttention) { return waiting }
-        if states.contains(.running) { return .running }
-        if states.contains(.done) { return .done }
-        if states.contains(.idle) { return .idle }
-        return .exited
+    private var hoverControls: some View {
+        HStack(spacing: 2) {
+            Button {
+                Task { await model.archiveTask(task.id) }
+            } label: {
+                Image(systemName: "archivebox")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.iconTight)
+            .help("Archive: remove the sandboxes, keep the branch")
+
+            Menu {
+                TaskContextMenu(task: task)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More")
+        }
+        .transition(.opacity)
+    }
+
+    private func hover(_ hovering: Bool) {
+        if reduceMotion {
+            isHovered = hovering
+        } else {
+            withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
+        }
+        cardDelay?.cancel()
+        guard hovering else {
+            showsCard = false
+            return
+        }
+        cardDelay = Task {
+            try? await Task.sleep(for: Self.cardDelay)
+            guard !Task.isCancelled else { return }
+            showsCard = true
+        }
     }
 }
 
-/// Context menu shared by the task row and the menu bar.
+/// Context menu of a task row and of its hover "…" menu. A task with a single thread shows that thread's own
+/// items too, since the thread has no row of its own to right-click.
 struct TaskContextMenu: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
 
     var body: some View {
+        let threads = model.threads(in: task.id)
+        if threads.count == 1, let only = threads.first {
+            ThreadMenuItems(session: only)
+            Divider()
+        }
         Button("New Thread in Task") {
             Task { _ = await model.newThread(in: task.scopeID, taskID: task.id) }
         }

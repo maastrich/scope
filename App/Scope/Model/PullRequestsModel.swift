@@ -139,9 +139,14 @@ extension AppModel {
 
     /// Live checks state of the task's PR when the PRs panel has that repo loaded, else `nil`.
     func liveChecks(for task: TaskState) -> PullRequest.Checks? {
+        livePullRequest(for: task)?.checks
+    }
+
+    /// The task's PR as `gh` last listed it, when the PRs panel has that repo loaded, else `nil`.
+    func livePullRequest(for task: TaskState) -> PullRequest? {
         guard let pr = task.record.pullRequest, let repo = task.activeRepos.first ?? task.record.repos.first,
               pullRequests.repoURL == task.baseURL(for: repo) else { return nil }
-        return pullRequests.pullRequest(number: pr.number)?.checks
+        return pullRequests.pullRequest(number: pr.number)
     }
 
     /// "Open in Scope": creates the task for the PR (or switches to the existing one) and selects it, so the

@@ -213,6 +213,17 @@ extension AppModel {
         }
     }
 
+    /// What `TaskStatus.resolve` decides from: the task's threads, its delta, its setup and its pull request.
+    func taskFacts(for task: TaskState) -> TaskFacts {
+        let pullRequest = task.record.pullRequest.map { link in
+            let live = livePullRequest(for: task)
+            return PullRequestFacts(number: link.number, isDraft: live?.isDraft ?? false,
+                                    checks: live?.checks ?? .none, mergeable: live?.mergeable ?? .unknown)
+        }
+        return TaskFacts(threads: threads(in: task.id).map(\.displayState), additions: task.totalAdditions,
+                         deletions: task.totalDeletions, isDirty: task.dirtyRepoCount > 0, pullRequest: pullRequest)
+    }
+
     /// Repos of the task's scope that are not part of the task yet.
     func candidateRepos(for task: TaskState) -> [RepoState] {
         guard let scope = scope(task.scopeID) else { return [] }

@@ -44,9 +44,6 @@ struct LooseThreadsRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.quaternary)
 
-            // Matches the gutter `ThreadRow` reserves for its close button, so the dots stay in one column.
-            Color.clear.frame(width: 16, height: 1)
-
             if let state = aggregateState {
                 StateDot(state: state)
             } else {
