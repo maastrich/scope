@@ -174,6 +174,7 @@ extension AppModel {
         tasks.append(state)
         state.startWatching()
         state.refresh()
+        startSetup(for: state, runCommands: true)
         selection = .task(record.id)
         scope.refreshFacts()
     }

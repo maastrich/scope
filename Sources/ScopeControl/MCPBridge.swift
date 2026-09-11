@@ -101,7 +101,8 @@ public enum MCPBridge {
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
-            "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."}\
+            "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
+            "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."}\
             },"required":["prompt"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -250,16 +251,19 @@ public enum MCPBridge {
         var driver: String?
         var dryRun: Bool?
         var openThread: Bool?
+        var runSetup: Bool?
 
         private enum CodingKeys: String, CodingKey {
             case prompt, scope, repos, branch, title, slug, driver
             case dryRun = "dry_run"
             case openThread = "open_thread"
+            case runSetup = "run_setup"
         }
 
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
-                          slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true)
+                          slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
+                          runSetup: runSetup ?? true)
         }
     }
 }

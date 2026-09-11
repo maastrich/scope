@@ -45,6 +45,9 @@ public struct RepoCard: Codable, Sendable, Equatable {
     public var setup: String?
     /// Command that runs the tests (`cargo test`).
     public var test: String?
+    /// Command to run before a sandbox is removed (`docker compose down`). Never generated: only a person knows
+    /// what a sandbox leaves running.
+    public var teardown: String?
     public var tags: [String]
     /// Committer date of the last commit.
     public var lastActivity: Date?
@@ -63,11 +66,13 @@ public struct RepoCard: Codable, Sendable, Equatable {
         related: [Relation] = [],
         setup: String? = nil,
         test: String? = nil,
+        teardown: String? = nil,
         tags: [String] = [],
         lastActivity: Date? = nil,
         edited: Bool = false,
         generatedBy: GenerationLevel? = nil
     ) {
+        self.teardown = teardown
         self.name = name
         self.remote = remote
         self.defaultBranch = defaultBranch
@@ -84,7 +89,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, remote, purpose, stack, entrypoints, related, setup, test, tags, edited
+        case name, remote, purpose, stack, entrypoints, related, setup, test, teardown, tags, edited
         case defaultBranch = "default_branch"
         case lastActivity = "last_activity"
         case generatedBy = "generated_by"
@@ -101,6 +106,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
         related = try c.decodeIfPresent([Relation].self, forKey: .related) ?? []
         setup = try c.decodeIfPresent(String.self, forKey: .setup)
         test = try c.decodeIfPresent(String.self, forKey: .test)
+        teardown = try c.decodeIfPresent(String.self, forKey: .teardown)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         lastActivity = try c.decodeIfPresent(Date.self, forKey: .lastActivity)
         edited = try c.decodeIfPresent(Bool.self, forKey: .edited) ?? false
@@ -120,6 +126,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
         merged.related = generated.related.isEmpty ? related : generated.related
         merged.setup = generated.setup ?? setup
         merged.test = generated.test ?? test
+        merged.teardown = generated.teardown ?? teardown
         merged.tags = generated.tags.isEmpty ? tags : generated.tags
         merged.lastActivity = generated.lastActivity ?? lastActivity
         merged.generatedBy = generated.generatedBy ?? generatedBy

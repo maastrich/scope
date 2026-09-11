@@ -109,6 +109,9 @@ final class AppModel {
     /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
     @ObservationIgnored private var closingThreads: Set<ThreadID> = []
     @ObservationIgnored private var isTerminating = false
+    /// Setups in flight, per task: a thread of the task waits for its task's entry before it launches. The token
+    /// tells a finished run it is still the latest one before it removes itself.
+    @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
 
     init(env: AppEnvironment) {
         self.env = env
@@ -793,6 +796,17 @@ final class AppModel {
     private func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
         guard !session.isAlive else { return }
         guard let scope = scope(session.record.scopeID) else { return }
+        if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
+            // An agent started before `pnpm install` finished works in a sandbox without its dependencies. The
+            // thread exists (callers get its id at once) and starts when the setup is over, whatever its outcome.
+            session.markLaunching()
+            session.printNotice("waiting for the setup of the task")
+            Task { [weak self] in
+                await pending.run.value
+                await self?.launch(session, mode: mode, initialPrompt: initialPrompt)
+            }
+            return
+        }
         session.markLaunching()
         do {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
@@ -1136,6 +1150,10 @@ final class AppModel {
             refreshScope(id)
         case .locateScope(let id):
             locateScope(id)
+        case .rerunTaskSetup(let raw):
+            if let id = TaskID(rawValue: raw), let task = task(id) {
+                startSetup(for: task, runCommands: true)
+            }
         case .dismiss:
             break
         }

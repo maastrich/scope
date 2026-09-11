@@ -57,6 +57,13 @@ struct TaskHoverCard: View {
                     }
                 }
             }
+            if let setup = setupCaption {
+                row("Setup") {
+                    Text(setup)
+                        .font(.system(size: 11))
+                        .foregroundStyle(task.record.setupState == .failed ? AnyShapeStyle(PullRequestStyle.failing) : AnyShapeStyle(.secondary))
+                }
+            }
             row("Created") {
                 Text(task.record.createdAt.formatted(.relative(presentation: .named)))
                     .font(.system(size: 11))
@@ -85,6 +92,16 @@ struct TaskHoverCard: View {
                 .frame(width: 64, alignment: .leading)
             content()
             Spacer(minLength: 0)
+        }
+    }
+
+    private var setupCaption: String? {
+        switch task.record.setupState {
+        case .notRun: nil
+        case .running: "running…"
+        case .succeeded: "done"
+        case .failed: "failed — see the Problem Center"
+        case .skipped: "skipped"
         }
     }
 

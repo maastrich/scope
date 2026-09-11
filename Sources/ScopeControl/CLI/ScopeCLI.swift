@@ -66,6 +66,7 @@ public enum ScopeCLI {
       --driver <id>                 driver for the first thread
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
+      --no-setup                    skip the repositories' setup commands (.env files are still copied)
 
     list:
       --scope <slug|name|id|path>   only that scope
@@ -186,6 +187,7 @@ public enum ScopeCLI {
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false
+                case "--no-setup": parameters.runSetup = false
                 default: return false
                 }
                 return true

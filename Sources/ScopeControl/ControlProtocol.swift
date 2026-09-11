@@ -297,10 +297,13 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public var dryRun: Bool
     /// Open the task's first thread once it exists (the app's own behaviour). `false` leaves it cold.
     public var openThread: Bool
+    /// Run the repositories' setup commands in the new sandboxes before the first thread starts (the default).
+    /// `false` still copies the `.env*` files.
+    public var runSetup: Bool
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
-                dryRun: Bool = false, openThread: Bool = true) {
+                dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true) {
         self.prompt = prompt
         self.scope = scope
         self.repos = repos
@@ -310,6 +313,22 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         self.driver = driver
         self.dryRun = dryRun
         self.openThread = openThread
+        self.runSetup = runSetup
+    }
+
+    // Lenient on everything but the prompt: a `scope` binary older than a field never sends it.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
+        repos = try container.decodeIfPresent([String].self, forKey: .repos) ?? []
+        branch = try container.decodeIfPresent(String.self, forKey: .branch)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        slug = try container.decodeIfPresent(String.self, forKey: .slug)
+        driver = try container.decodeIfPresent(String.self, forKey: .driver)
+        dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
+        openThread = try container.decodeIfPresent(Bool.self, forKey: .openThread) ?? true
+        runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
     }
 }
 

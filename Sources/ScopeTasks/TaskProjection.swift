@@ -8,13 +8,17 @@ public struct RepoContextSummary: Sendable, Equatable, Hashable {
     public var stack: [String]
     public var setup: String?
     public var test: String?
+    /// Run before the sandbox is removed (archive, close); not shown to agents.
+    public var teardown: String?
 
-    public init(path: String, purpose: String? = nil, stack: [String] = [], setup: String? = nil, test: String? = nil) {
+    public init(path: String, purpose: String? = nil, stack: [String] = [], setup: String? = nil, test: String? = nil,
+                teardown: String? = nil) {
         self.path = path
         self.purpose = purpose
         self.stack = stack
         self.setup = setup
         self.test = test
+        self.teardown = teardown
     }
 }
 

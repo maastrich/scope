@@ -292,7 +292,7 @@ final class AppControlService: ControlService {
         do {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
-                                               threadOrigin: threadOrigin, createdBy: caller.client)
+                                               runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }

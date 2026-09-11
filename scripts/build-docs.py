@@ -310,6 +310,7 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
   <tr><td><code>SCOPE_HOME</code></td><td><code>~/.scope</code>, or wherever you pointed it</td></tr>
   <tr><td><code>SCOPE_SOCK</code></td><td>unix socket the hooks report to</td></tr>
   <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code></td><td>only in a task thread: its slug and root</td></tr>
+  <tr><td><code>SCOPE_PORT</code></td><td>only in a task thread: the first of the task's ten ports</td></tr>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
@@ -438,6 +439,43 @@ rather than letting git fail.</p></div>
 in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
+
+<h2 id="setup">Setup and teardown</h2>
+<p>A fresh worktree has the committed tree and nothing else: no <code>node_modules</code>, no <code>.env</code>.
+Right after <b>Create</b>, in the background, Scope prepares each sandbox — and the task's first thread waits for
+it before it starts:</p>
+<ol>
+  <li>It copies the files your base checkout keeps out of git, <code>.env*</code> by default. A file already in the
+  sandbox is never overwritten, and nothing is followed out of the repository: <code>..</code>, a symlink leading
+  outside, a sandbox folder that is a symlink are all refused. A copied file the repository does not ignore is
+  added to <code>.git/info/exclude</code>, so it cannot end up in a commit.</li>
+  <li>It runs the repository's <b>setup</b> command — <code>pnpm install</code>, <code>bundle</code>,
+  <code>make deps</code> — in the sandbox, with your login-shell environment.</li>
+</ol>
+<p>The command is the <b>Setup</b> field of the repository's <a href="graph.html">graph card</a>. To override it for
+one scope, or to change the copied files, edit the scope in <code>~/.scope/config.json</code>:</p>
+<pre><code>"repoCommands": {
+  "api": { "setup": "pnpm install --frozen-lockfile", "teardown": "docker compose down",
+           "copyFiles": [".env*", "config/local.json"] }
+}</code></pre>
+<p>An empty string turns the card's command off. Commands see these variables:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>SCOPE_TASK</code>, <code>SCOPE_SCOPE</code></td><td>the task's and the scope's slugs</td></tr>
+  <tr><td><code>SCOPE_SANDBOX</code></td><td>the worktree the command runs in</td></tr>
+  <tr><td><code>SCOPE_BASE_PATH</code></td><td>your own checkout of the repository</td></tr>
+  <tr><td><code>SCOPE_DEFAULT_BRANCH</code></td><td>its default branch</td></tr>
+  <tr><td><code>SCOPE_PORT</code></td><td>the first of ten ports that belong to this task alone</td></tr>
+</table>
+<p>Every task gets its own block of ten ports, kept across restarts and never shared by two live tasks, so two
+sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too.</p>
+<p>The task row shows a gear while the setup runs and a warning triangle if it failed; the failure lands in the
+Problem Center with the end of the log and <b>Run Setup Again</b>. Untick <b>Run setup</b> in the New Task
+sheet — or pass <code>--no-setup</code> to <code>scope task new</code>, <code>run_setup: false</code> over MCP —
+to skip the command; the files are copied anyway.</p>
+<p>The <b>Teardown</b> field is the other end: it runs in each sandbox before Archive or Close removes it, with
+the same variables and a ten-minute limit. If it fails, the sandbox stays, the failure is shown, and you choose
+whether to remove it anyway.</p>
 
 <h2 id="threads">Threads inside a task</h2>
 <p>Creating the task opens the first thread on the spot, in the sandbox, with your prompt already sent to the

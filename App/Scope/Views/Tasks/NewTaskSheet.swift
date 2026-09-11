@@ -44,6 +44,7 @@ struct NewTaskSheet: View {
     @State private var appliedFields: [String] = ["", "", ""]
     @State private var proposing: Task<Void, Never>?
     @State private var isCreating = false
+    @State private var runSetup = true
     @State private var error: String?
     @FocusState private var promptFocused: Bool
     @FocusState private var titleFocused: Bool
@@ -235,6 +236,13 @@ struct NewTaskSheet: View {
             } footer: {
                 if !repoFooter.isEmpty { Text(repoFooter) }
             }
+        }
+
+        Section {
+            Toggle("Run setup", isOn: $runSetup)
+                .toggleStyle(.checkbox)
+        } footer: {
+            Text("Runs each repository's setup command — from its Graph card, or the scope's config — in the new sandbox before the first thread starts. The .env files of the base checkout are copied either way.")
         }
 
         Section {
@@ -553,7 +561,8 @@ struct NewTaskSheet: View {
         let repos = repos
         Task {
             do {
-                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos, startPoint: startPoint)
+                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos,
+                                           startPoint: startPoint, runSetup: runSetup)
                 dismiss()
             } catch {
                 self.error = String(describing: error)
