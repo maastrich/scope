@@ -92,8 +92,9 @@ created, the work continues where it was. A pull request lives in one repository
 that repository alone. Starting a task on a pull request Scope already has a task for offers that task
 instead of a second sandbox.</p>
 <div class="note warn"><p>A branch can only live in one working tree. If the branch you start from is already
-checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it,
-rather than letting git fail.</p></div>
+checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it (the
+task, when it is one of its sandboxes), rather than letting git fail. <b>Create on a New Branch Instead</b>
+leaves that branch where it is and bases the task on a fresh one.</p></div>
 
 <h2 id="sandboxes">Sandboxes</h2>
 <p><b>Create</b> makes, for every selected repository, a git worktree on the task branch:</p>
@@ -104,6 +105,9 @@ rather than letting git fail.</p></div>
 └── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
 <p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
 in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+<p>The <code>sandboxes</code> folder carries a <code>.metadata_never_index</code> marker, so Spotlight leaves it
+alone: no indexing of every worktree's <code>node_modules</code>, and no second copy of your files in search
+results.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
 

@@ -56,6 +56,10 @@ open-in-editor row for the file.</p>
 (<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
 the resulting pull request to the task, so the PRs tab keeps showing it.</p>
 
+<p>The box at the end of each file row marks it as <b>viewed</b>: the row dims, so what is left to read stands
+out. The mark lasts while the file's diff stays the one you looked at; as soon as the agent changes that file
+again, it clears itself.</p>
+
 <h2 id="comments">Commenting on lines</h2>
 <p>Review the agent's work where you read it. In the diff, a <b>+</b> appears in the line-number gutter under
 the pointer: click it to comment on that line, or drag down the gutter to comment on a range. The comment

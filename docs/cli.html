@@ -74,6 +74,15 @@ before. It is how an agent that opened a thread finds out what that thread said,
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
+<h2 id="links">Links</h2>
+<p>A <code>scope://</code> link asks for a task — from a README, an issue template, a bookmark:</p>
+<pre><code>scope://task/new?scope=acme&amp;repo=api&amp;prompt=Fix%20the%20flaky%20login%20test</code></pre>
+<p>It takes <code>prompt</code> (required), <code>scope</code> (default: the scope in the sidebar),
+<code>repo</code> (repeatable), <code>branch</code>, <code>title</code>, <code>slug</code>, <code>driver</code>,
+and <code>setup=0</code> to skip the setup commands. Scope shows what the link asks for and creates nothing until
+you confirm — a link can come from any web page — then takes the same path as <code>scope task new</code>. A
+Debug build answers <code>scope-debug://</code> instead.</p>
+
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
@@ -127,7 +136,7 @@ method or a newer <code>rpc</code> answers <code>unsupported</code> rather than 
 <code>scope</code> binary that outlives its app says so instead of hanging. Error codes:
 <code>bad_request</code>, <code>unsupported</code>, <code>denied</code>, <code>not_found</code>,
 <code>failed</code>, <code>timeout</code>.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

@@ -161,6 +161,7 @@ struct DeltaFileList: View {
 
     private func fileRow(repo: TaskRepo, ref: DeltaFileRef, file: DiffFile) -> some View {
         let selected = model.delta.selectedFile == ref
+        let viewed = model.delta.isViewed(ref, file)
         return HStack(spacing: 8) {
             Text(statusLetter(file.status))
                 .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
@@ -170,8 +171,20 @@ struct DeltaFileList: View {
                 .font(.system(size: 11.5, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .opacity(viewed ? 0.5 : 1)
             Spacer(minLength: 4)
             DeltaCounts(additions: file.additions, deletions: file.deletions)
+                .opacity(viewed ? 0.5 : 1)
+            Button {
+                model.delta.toggleViewed(ref, file)
+            } label: {
+                Image(systemName: viewed ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 11))
+                    .foregroundStyle(viewed ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+            }
+            .buttonStyle(.plain)
+            .help(viewed ? "Viewed — click to unmark" : "Mark as viewed (cleared when this file's diff changes)")
+            .accessibilityLabel(viewed ? "Viewed, \(file.path)" : "Mark \(file.path) as viewed")
             Button {
                 model.openInEditorOrCopy(path: repo.sandboxPath, file: repo.sandboxURL.appending(path: file.path).path,
                                          line: file.hunks.first?.newStart)

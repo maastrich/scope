@@ -36,6 +36,14 @@ final class DeltaModel {
     var focusedHunk: Int?
     /// PR of the current branch per repo (`prView`), looked up once per task.
     private(set) var prURLs: [String: URL] = [:]
+    /// Files marked as viewed, per task and mode, with the digest of their diff when marked (`DiffDigest`): a mark
+    /// stands while the diff is the one that was looked at.
+    private(set) var viewed: [TaskID: [ViewedKey: String]] = [:]
+
+    struct ViewedKey: Hashable {
+        let mode: DeltaMode
+        let ref: DeltaFileRef
+    }
     let gh: GhClient?
 
     @ObservationIgnored private let env: AppEnvironment
@@ -85,6 +93,32 @@ final class DeltaModel {
     func toggleHunk(_ ref: DeltaFileRef, _ index: Int) {
         let key = hunkKey(ref, index)
         if collapsedHunks.contains(key) { collapsedHunks.remove(key) } else { collapsedHunks.insert(key) }
+    }
+
+    // MARK: Viewed
+
+    func isViewed(_ ref: DeltaFileRef, _ file: DiffFile) -> Bool {
+        guard let taskID, let digest = viewed[taskID]?[ViewedKey(mode: mode, ref: ref)] else { return false }
+        return digest == DiffDigest.of(file)
+    }
+
+    func toggleViewed(_ ref: DeltaFileRef, _ file: DiffFile) {
+        guard let taskID else { return }
+        let key = ViewedKey(mode: mode, ref: ref)
+        if isViewed(ref, file) {
+            viewed[taskID]?[key] = nil
+        } else {
+            viewed[taskID, default: [:]][key] = DiffDigest.of(file)
+        }
+    }
+
+    /// Drops the marks of files whose diff changed (or went away) since: the agent touched them again.
+    private func pruneViewed() {
+        guard let taskID, var marks = viewed[taskID] else { return }
+        for (key, digest) in marks where key.mode == mode {
+            if file(key.ref).map(DiffDigest.of) != digest { marks[key] = nil }
+        }
+        viewed[taskID] = marks
     }
 
     // MARK: Keyboard
@@ -146,6 +180,7 @@ final class DeltaModel {
         repos = loaded
         isLoading = false
         hasLoaded = true
+        pruneViewed()
         if let selectedFile, file(selectedFile) == nil { self.selectedFile = nil }
         if selectedFile == nil, mode != .baseVsOrigin { selectedFile = orderedFiles.first }
     }

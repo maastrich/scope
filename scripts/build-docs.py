@@ -425,8 +425,9 @@ created, the work continues where it was. A pull request lives in one repository
 that repository alone. Starting a task on a pull request Scope already has a task for offers that task
 instead of a second sandbox.</p>
 <div class="note warn"><p>A branch can only live in one working tree. If the branch you start from is already
-checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it,
-rather than letting git fail.</p></div>
+checked out — in the base clone, or in another task — Scope says so, and names the checkout holding it (the
+task, when it is one of its sandboxes), rather than letting git fail. <b>Create on a New Branch Instead</b>
+leaves that branch where it is and bases the task on a fresh one.</p></div>
 
 <h2 id="sandboxes">Sandboxes</h2>
 <p><b>Create</b> makes, for every selected repository, a git worktree on the task branch:</p>
@@ -437,6 +438,9 @@ rather than letting git fail.</p></div>
 └── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
 <p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
 in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+<p>The <code>sandboxes</code> folder carries a <code>.metadata_never_index</code> marker, so Spotlight leaves it
+alone: no indexing of every worktree's <code>node_modules</code>, and no second copy of your files in search
+results.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
 
@@ -542,6 +546,10 @@ open-in-editor row for the file.</p>
 <p>The footer of the panel carries the three actions, per repository, with the state next to them
 (<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
 the resulting pull request to the task, so the PRs tab keeps showing it.</p>
+
+<p>The box at the end of each file row marks it as <b>viewed</b>: the row dims, so what is left to read stands
+out. The mark lasts while the file's diff stays the one you looked at; as soon as the agent changes that file
+again, it clears itself.</p>
 
 <h2 id="comments">Commenting on lines</h2>
 <p>Review the agent's work where you read it. In the diff, a <b>+</b> appears in the line-number gutter under
@@ -751,6 +759,15 @@ before. It is how an agent that opened a thread finds out what that thread said,
 <code>thread send</code>, an agent may only read the threads it opened.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
+
+<h2 id="links">Links</h2>
+<p>A <code>scope://</code> link asks for a task — from a README, an issue template, a bookmark:</p>
+<pre><code>scope://task/new?scope=acme&amp;repo=api&amp;prompt=Fix%20the%20flaky%20login%20test</code></pre>
+<p>It takes <code>prompt</code> (required), <code>scope</code> (default: the scope in the sidebar),
+<code>repo</code> (repeatable), <code>branch</code>, <code>title</code>, <code>slug</code>, <code>driver</code>,
+and <code>setup=0</code> to skip the setup commands. Scope shows what the link asks for and creates nothing until
+you confirm — a link can come from any web page — then takes the same path as <code>scope task new</code>. A
+Debug build answers <code>scope-debug://</code> instead.</p>
 
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
