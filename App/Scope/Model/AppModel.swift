@@ -842,7 +842,8 @@ final class AppModel {
         do {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
                                                scope: scope.declaration, task: task(of: session)?.record, mode: mode,
-                                               initialPrompt: initialPrompt)
+                                               initialPrompt: initialPrompt,
+                                               claudeUsesTerminalPalette: config.preferences.claudeUsesTerminalPalette)
             session.launch(plan)
         } catch {
             session.fail(error)

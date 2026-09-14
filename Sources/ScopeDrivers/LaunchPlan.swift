@@ -167,7 +167,8 @@ public enum LaunchPlanner {
             scope: scopeVariables,
             driverEnv: driverEnv,
             appVersion: appVersion,
-            helpers: helpers
+            helpers: helpers,
+            theme: values.theme
         )
 
         let executableName = (executable as NSString).lastPathComponent

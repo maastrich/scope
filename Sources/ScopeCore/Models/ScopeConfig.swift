@@ -278,6 +278,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// and iTerm: with it on, a layout that types braces with ⌥ cannot type them at all. `⌥←`, `⌥→`, `⌥⌫`
     /// and `⌥⌦` keep working either way (see `TerminalOptionKey`).
     public var terminalOptionAsMeta: Bool
+    /// Claude Code draws with the terminal's 16 ANSI colours (its `dark-ansi` / `light-ansi` theme, picked to
+    /// match the palette at launch) instead of its own true-colour theme, so its output follows the app's
+    /// appearance. On by default. Off leaves Claude Code's own theme setting alone.
+    public var claudeUsesTerminalPalette: Bool
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
@@ -309,6 +313,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalAppearance: TerminalAppearanceMode = .system,
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
         terminalOptionAsMeta: Bool = false,
+        claudeUsesTerminalPalette: Bool = true,
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
         attentionCounter: AttentionCounterPlacement = .sidebar,
@@ -325,6 +330,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalAppearance = terminalAppearance
         self.terminalCursorStyle = terminalCursorStyle
         self.terminalOptionAsMeta = terminalOptionAsMeta
+        self.claudeUsesTerminalPalette = claudeUsesTerminalPalette
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
         self.attentionCounter = attentionCounter
@@ -335,7 +341,8 @@ public struct Preferences: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, autoCloseExitedThreads, attentionCounter,
+             terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
+             attentionCounter,
              automation, autoRelaunchThreads
     }
 
@@ -359,6 +366,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.terminalCursorStyle
         terminalOptionAsMeta = try container.decodeIfPresent(Bool.self, forKey: .terminalOptionAsMeta)
             ?? defaults.terminalOptionAsMeta
+        claudeUsesTerminalPalette = try container.decodeIfPresent(Bool.self, forKey: .claudeUsesTerminalPalette)
+            ?? defaults.claudeUsesTerminalPalette
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
         autoRelaunchThreads = try container.decodeIfPresent(Bool.self, forKey: .autoRelaunchThreads)

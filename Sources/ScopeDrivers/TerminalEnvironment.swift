@@ -1,5 +1,20 @@
 import Foundation
 
+/// The ground a thread's terminal is drawn on when it launches. Tools that adapt to their terminal read it two
+/// ways: `COLORFGBG` (the convention iTerm2 and Konsole set; Claude Code's `theme: auto` falls back to it)
+/// and the `{theme}` placeholder in a driver profile's argv.
+public enum TerminalTheme: String, Sendable, Equatable, CaseIterable {
+    case dark, light
+
+    /// `COLORFGBG`: `<foreground>;<background>` as ANSI indexes — `15;0` white on black, `0;15` black on white.
+    public var colorFGBG: String {
+        switch self {
+        case .dark: "15;0"
+        case .light: "0;15"
+        }
+    }
+}
+
 /// Builds the complete environment of a PTY child.
 ///
 /// SwiftTerm's `startProcess(environment:)` *replaces* the environment (raw `execve` envp), so every
@@ -52,9 +67,9 @@ public enum TerminalEnvironment {
     /// `TERM` value for every thread.
     public static let term = "xterm-256color"
 
-    /// `base` → + `TERM`, `COLORTERM`, `LANG` (kept if UTF-8, else `en_US.UTF-8`), `TERM_PROGRAM=Scope`,
-    /// `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys` → + `helpers` on `PATH` → + scope
-    /// variables → + `driverEnv` (already expanded by the caller).
+    /// `base` → + `TERM`, `COLORTERM`, `COLORFGBG` (from `theme`), `LANG` (kept if UTF-8, else `en_US.UTF-8`),
+    /// `TERM_PROGRAM=Scope`, `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys` → + `helpers` on
+    /// `PATH` → + scope variables → + `driverEnv` (already expanded by the caller).
     ///
     /// `helpers` is the app's `Contents/Helpers`: putting it first on `PATH` is what makes `scope` and
     /// `scope-hook` work inside a thread with nothing to install and nothing to configure.
@@ -65,11 +80,13 @@ public enum TerminalEnvironment {
         scope: ScopeVariables,
         driverEnv: [String: String],
         appVersion: String,
-        helpers: String? = nil
+        helpers: String? = nil,
+        theme: TerminalTheme = .dark
     ) -> [String: String] {
         var environment = base
         environment["TERM"] = term
         environment["COLORTERM"] = "truecolor"
+        environment["COLORFGBG"] = theme.colorFGBG
         environment["LANG"] = utf8Locale(environment["LANG"])
         environment["TERM_PROGRAM"] = "Scope"
         environment["TERM_PROGRAM_VERSION"] = appVersion

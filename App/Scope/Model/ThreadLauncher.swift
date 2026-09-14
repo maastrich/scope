@@ -23,11 +23,15 @@ struct ThreadLauncher {
     }
 
     /// `initialPrompt` fills `{prompt}` so the profile's `prompt` argv is appended (fresh launch only).
+    /// `claudeUsesTerminalPalette` is the preference: on, Claude Code gets the terminal's theme in its settings file.
     func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode,
-              initialPrompt: String? = nil) async throws(LaunchError) -> LaunchPlan {
+              initialPrompt: String? = nil, claudeUsesTerminalPalette: Bool = true) async throws(LaunchError) -> LaunchPlan {
         let shell = await env.shell.environment()
         let scopeHook = scopeHookPath(searchPATH: shell.path)
-        let adapterArguments = try AdapterInstaller.prepare(profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook)
+        let theme: TerminalTheme = TerminalAppearance.palette().isDark ? .dark : .light
+        let adapterArguments = try AdapterInstaller.prepare(
+            profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook,
+            theme: claudeUsesTerminalPalette ? theme : nil)
         let values = PlaceholderValues(
             threadID: record.id.rawValue,
             resumeID: record.resumeID,
@@ -36,7 +40,8 @@ struct ThreadLauncher {
             task: task?.root,
             home: env.home.path,
             prompt: initialPrompt,
-            scopeHook: scopeHook
+            scopeHook: scopeHook,
+            theme: theme
         )
         let variables = TerminalEnvironment.ScopeVariables(
             thread: record.id.rawValue,

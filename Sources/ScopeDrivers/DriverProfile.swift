@@ -231,6 +231,10 @@ public enum DriverPlaceholder: String, CaseIterable, Sendable {
     case prompt = "prompt"
     /// Absolute path of the `scope-hook` binary (embedded in the app, or found on PATH).
     case scopeHook = "scope_hook"
+    /// `dark` or `light`: the terminal palette the thread is drawn on at launch (`TerminalTheme`). Lets a
+    /// driver pick the matching theme — Claude Code's `dark-ansi` / `light-ansi`, which colour with the
+    /// terminal's 16 ANSI colours, are what makes its output follow the app's appearance.
+    case theme = "theme"
 
     /// Every `{name}`-shaped token in `string`, in order, including unknown names (for validation).
     public static func referencedNames(in string: String) -> [String] {
@@ -297,6 +301,8 @@ public struct PlaceholderValues: Sendable {
     public var prompt: String?
     /// `{scope_hook}` — absolute path of the `scope-hook` binary (see `ScopeHookLocator`).
     public var scopeHook: String?
+    /// `{theme}` — the terminal palette at launch; dark unless the caller says otherwise (headless runs).
+    public var theme: TerminalTheme
 
     public init(
         threadID: String,
@@ -306,7 +312,8 @@ public struct PlaceholderValues: Sendable {
         task: String? = nil,
         home: String,
         prompt: String? = nil,
-        scopeHook: String? = nil
+        scopeHook: String? = nil,
+        theme: TerminalTheme = .dark
     ) {
         self.threadID = threadID
         self.resumeID = resumeID
@@ -316,6 +323,7 @@ public struct PlaceholderValues: Sendable {
         self.home = home
         self.prompt = prompt
         self.scopeHook = scopeHook
+        self.theme = theme
     }
 
     /// The value for one placeholder, nil when it has no value in this context.
@@ -329,6 +337,7 @@ public struct PlaceholderValues: Sendable {
         case .home: return home
         case .prompt: return prompt
         case .scopeHook: return scopeHook
+        case .theme: return theme.rawValue
         }
     }
 

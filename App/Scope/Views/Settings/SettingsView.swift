@@ -73,6 +73,11 @@ private struct GeneralSettingsView: View {
                     Text("Follow system").tag(TerminalAppearanceMode.system)
                     Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
                 }
+                Toggle("Claude Code follows the terminal palette", isOn: preference(\.claudeUsesTerminalPalette))
+                Text("Claude Code draws with the terminal's 16 colours, matched to the appearance, instead of its own theme. Applies to threads launched from now on.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Picker("Cursor", selection: preference(\.terminalCursorStyle)) {
                     ForEach(TerminalCursorStyle.allCases, id: \.self) { style in
                         Text(style.title).tag(style)

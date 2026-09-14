@@ -57,8 +57,11 @@ public enum ClaudeHooksAdapter {
         ScopeHome.threadsURL(home: home).appending(path: "\(threadID.rawValue).claude-settings.json", directoryHint: .notDirectory)
     }
 
-    /// The settings document, as the JSON object Claude Code reads (`{"hooks": {...}}`).
-    public static func settings(scopeHookPath: String) -> [String: Any] {
+    /// The settings document, as the JSON object Claude Code reads (`{"hooks": {...}}`), plus `theme` when the
+    /// thread wants Claude Code on the terminal's palette: `dark-ansi` / `light-ansi` colour with the 16 ANSI
+    /// colours alone, which the app sets to match its appearance. It rides in this file because `--settings`
+    /// is given once per launch; a second flag would drop the hooks.
+    public static func settings(scopeHookPath: String, theme: TerminalTheme? = nil) -> [String: Any] {
         var hooks: [String: Any] = [:]
         for entry in entries {
             var group: [String: Any] = [
@@ -71,12 +74,14 @@ public enum ClaudeHooksAdapter {
             if let matcher = entry.matcher { group["matcher"] = matcher }
             hooks[entry.event] = [group]
         }
-        return ["hooks": hooks]
+        var document: [String: Any] = ["hooks": hooks]
+        if let theme { document["theme"] = "\(theme.rawValue)-ansi" }
+        return document
     }
 
     /// The settings document serialized (sorted keys, pretty-printed).
-    public static func settingsData(scopeHookPath: String) throws -> Data {
-        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath),
+    public static func settingsData(scopeHookPath: String, theme: TerminalTheme? = nil) throws -> Data {
+        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath, theme: theme),
                                    options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
     }
 
@@ -99,11 +104,11 @@ public enum ClaudeHooksAdapter {
     /// Writes (or rewrites) the settings file for `threadID` and returns the arguments to append to the
     /// `claude` argv: `["--settings", <path>]`. Idempotent; rewriting keeps the file in step with the
     /// current `scope-hook` path after an app update.
-    public static func install(home: URL, threadID: ThreadID, scopeHookPath: String) throws(LaunchError) -> [String] {
+    public static func install(home: URL, threadID: ThreadID, scopeHookPath: String, theme: TerminalTheme? = nil) throws(LaunchError) -> [String] {
         let url = settingsURL(home: home, threadID: threadID)
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try settingsData(scopeHookPath: scopeHookPath).write(to: url, options: .atomic)
+            try settingsData(scopeHookPath: scopeHookPath, theme: theme).write(to: url, options: .atomic)
         } catch {
             throw .adapterSetupFailed("Could not write \(url.path): \(error.localizedDescription)")
         }
@@ -122,10 +127,12 @@ public enum ClaudeHooksAdapter {
 /// Only `claude-hooks` needs code. `codex-notify` is expressed in the profile itself through the
 /// `{scope_hook}` placeholder (`-c notify=[...]`), and `cursor-hooks` is not wired yet.
 public enum AdapterInstaller {
-    public static func prepare(profile: DriverProfile, threadID: ThreadID, home: URL, scopeHookPath: String) throws(LaunchError) -> [String] {
+    /// `theme` is the terminal palette Claude Code should draw with, `nil` to leave its own theme alone.
+    public static func prepare(profile: DriverProfile, threadID: ThreadID, home: URL, scopeHookPath: String,
+                               theme: TerminalTheme? = nil) throws(LaunchError) -> [String] {
         switch profile.adapter?.kind {
         case ClaudeHooksAdapter.kind?:
-            return try ClaudeHooksAdapter.install(home: home, threadID: threadID, scopeHookPath: scopeHookPath)
+            return try ClaudeHooksAdapter.install(home: home, threadID: threadID, scopeHookPath: scopeHookPath, theme: theme)
         default:
             return []
         }
