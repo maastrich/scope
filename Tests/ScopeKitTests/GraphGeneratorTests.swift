@@ -48,10 +48,12 @@ import ScopeTasks
         #expect(graph.repos["web"]?.stack == ["rust"] && graph.repos["web"]?.remote?.contains("web") == true)
         #expect(graph.cacheKeys.count == 2 && graph.generatedAt != nil)
         #expect(await store.load(slug: "acme").graph == graph)
-        // Progress order with concurrency 1: api L0, api done, web L0, web done — index/total carried.
-        #expect(events.all.map { "\($0.repo):\($0.index)/\($0.total):\($0.phase)" } == [
-            "api:1/2:level0", "api:1/2:done", "web:2/2:level0", "web:2/2:done",
-        ])
+        // Each repo goes L0 then done, with its index/total carried. Which repo the semaphore admits first is
+        // not a contract: the task group starts its children in any order, so the interleaving is not asserted.
+        let byRepo = Dictionary(grouping: events.all, by: \.repo)
+        #expect(byRepo["api"]?.map { "\($0.index)/\($0.total):\($0.phase)" } == ["1/2:level0", "1/2:done"])
+        #expect(byRepo["web"]?.map { "\($0.index)/\($0.total):\($0.phase)" } == ["2/2:level0", "2/2:done"])
+        #expect(events.all.count == 4)
 
         // Nothing changed: both skipped, file untouched apart from generatedAt.
         let second = Events()
