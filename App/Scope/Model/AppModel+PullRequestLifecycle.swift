@@ -22,14 +22,44 @@ extension AppModel {
                                  repo: PullRequest.repository(fromURL: link.url))
     }
 
-    /// `gh pr view` for the task's pull request: checks, mergeability, state.
+    /// Keeps the task and its pull request in step. A task without one is bound to the pull request of its
+    /// branch when there is one — the thread ran `gh pr create`, or the PR was opened on GitHub — since the
+    /// record only ever learnt about a PR at creation or from the Delta panel's own **Create PR**. A bound task
+    /// gets `gh pr view`: checks, mergeability, state, and the title the chip shows, which GitHub lets drift.
     func refreshTaskPullRequest(_ task: TaskState) async {
+        if task.record.pullRequest == nil { await adoptPullRequest(of: task) }
         guard let target = pullRequestTarget(task) else { return }
         do {
             let pr = try await target.gh.prView(number: target.number, in: target.checkout, repo: target.repo)
             pullRequests.setTaskPullRequest(pr, for: task.id)
+            if task.record.pullRequest?.number == pr.number, task.record.pullRequest?.title != pr.title {
+                await link(pr, to: task)
+            }
         } catch {
             pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
+        }
+    }
+
+    /// `gh pr view` in each sandbox, the first repository whose branch has a pull request wins.
+    private func adoptPullRequest(of task: TaskState) async {
+        guard let gh = pullRequests.gh else { return }
+        for repo in task.record.activeRepos {
+            guard let url = try? await gh.prView(in: repo.sandboxURL), let number = Int(url.lastPathComponent),
+                  let pr = try? await gh.prView(number: number, in: repo.sandboxURL, repo: PullRequest.repository(fromURL: url))
+            else { continue }
+            // Bound meanwhile (Create PR, or an earlier refresh): the first binding stands.
+            guard task.record.pullRequest == nil else { return }
+            await link(pr, to: task)
+            return
+        }
+    }
+
+    private func link(_ pr: PullRequest, to task: TaskState) async {
+        do {
+            let record = try await env.tasks.linkPullRequest(LinkedPullRequest(pr), to: task.id)
+            task.update(record: record)
+        } catch {
+            problems.warn("Could not bind #\(pr.number) to the task", detail: String(describing: error), scope: task.scopeID)
         }
     }
 

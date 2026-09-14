@@ -112,7 +112,17 @@ struct TaskSummaryBand: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color("PanelBackground"))
+        // On the band, not on the checks panel: a task without a pull request has no panel, and this is what
+        // notices the PR its thread opened and binds it.
+        .task(id: task.id) {
+            while !Task.isCancelled {
+                await model.refreshTaskPullRequest(task)
+                try? await Task.sleep(for: Self.pullRequestRefreshInterval)
+            }
+        }
     }
+
+    static let pullRequestRefreshInterval: Duration = .seconds(60)
 }
 
 /// One repo of the task: name, sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / See Delta.

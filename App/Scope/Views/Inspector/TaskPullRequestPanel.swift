@@ -8,14 +8,12 @@ import ScopeGit
 /// fifty jobs leaves the prompt and the repo rows under it where they are.
 ///
 /// A row is: state, name, a link to the check's page, and for a failed one **Send to Thread** — the end of its
-/// log and a sentence naming it, pasted into the task's thread. Refreshed when the band shows and every minute
-/// while it does.
+/// log and a sentence naming it, pasted into the task's thread. The band that holds the panel drives the refresh.
 struct TaskPullRequestPanel: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
     @State private var expanded = false
 
-    static let refreshInterval: Duration = .seconds(60)
     static let rowHeight: CGFloat = 20
     /// Rows shown before the list scrolls: enough to read a burst of failures, not enough to bury the band.
     static let visibleRows = 8
@@ -40,12 +38,6 @@ struct TaskPullRequestPanel: View {
                     .foregroundStyle(Color("WarningText"))
                     .lineLimit(2)
                     .help(error)
-            }
-        }
-        .task(id: task.id) {
-            while !Task.isCancelled {
-                await model.refreshTaskPullRequest(task)
-                try? await Task.sleep(for: Self.refreshInterval)
             }
         }
     }
