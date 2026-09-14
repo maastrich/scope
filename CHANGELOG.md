@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.7.0](https://github.com/maastrich/scope/releases/tag/v0.7.0) - 2026-09-14
+
+### Added
+
+- **inspector:** preview image files and compare image diffs by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.6.0...v0.7.0
+
 ## [0.6.0](https://github.com/maastrich/scope/releases/tag/v0.6.0) - 2026-09-11
 
 ### Added
