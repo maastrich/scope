@@ -2,42 +2,33 @@ import SwiftUI
 import ScopeCore
 import ScopeGit
 
-/// The checks of the task's pull request, under its chip in the summary band. One summary row — `✓ n ✗ n ● n`
-/// and a chevron — then the rows that matter: the failing checks alone while collapsed, every check (failures
-/// first) once expanded. The list never grows past `visibleRows`: past that it scrolls on its own, so a PR with
-/// fifty jobs leaves the prompt and the repo rows under it where they are.
+/// The checks of a task's pull request, on the Pull Request tab. One summary row — `✓ n ✗ n ● n` — then the
+/// rows: every check, failures first, in the `.full` layout the tab uses; the failing ones alone until unfolded,
+/// capped at `visibleRows` before it scrolls, in `.compact` — the shape it had under the summary band, kept for
+/// any host that needs the list to stay short.
 ///
 /// A row is: state, name, a link to the check's page, and for a failed one **Send to Thread** — the end of its
-/// log and a sentence naming it, pasted into the task's thread. The band that holds the panel drives the refresh.
+/// log and a sentence naming it, pasted into the task's thread. The summary band drives the refresh.
 struct TaskPullRequestPanel: View {
+    enum Layout { case compact, full }
+
     @Environment(AppModel.self) private var model
     let task: TaskState
-    @State private var expanded = false
+    let pullRequest: PullRequest
+    var layout: Layout = .compact
+    @State private var unfolded = false
 
     static let rowHeight: CGFloat = 20
-    /// Rows shown before the list scrolls: enough to read a burst of failures, not enough to bury the band.
+    /// Rows shown before the compact list scrolls: enough to read a burst of failures, not enough to bury a band.
     static let visibleRows = 8
 
+    private var expanded: Bool { layout == .full || unfolded }
+
     var body: some View {
-        let pr = model.pullRequests.taskPullRequests[task.id]
         VStack(alignment: .leading, spacing: 0) {
-            if let pr {
-                if pr.state != .open {
-                    Label(pr.state == .merged ? "Merged" : "Closed", systemImage: pr.state == .merged ? "checkmark.circle.fill" : "xmark.circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .frame(height: Self.rowHeight)
-                }
-                if !pr.checkRuns.isEmpty {
-                    summary(pr.checkRuns)
-                    list(Self.shown(pr.checkRuns, expanded: expanded))
-                }
-            } else if let error = model.pullRequests.taskPullRequestErrors[task.id] {
-                Text(error)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Color("WarningText"))
-                    .lineLimit(2)
-                    .help(error)
+            if !pullRequest.checkRuns.isEmpty {
+                summary(pullRequest.checkRuns)
+                list(Self.shown(pullRequest.checkRuns, expanded: expanded))
             }
         }
     }
@@ -62,8 +53,8 @@ struct TaskPullRequestPanel: View {
         let counts = Dictionary(grouping: checks, by: \.state).mapValues(\.count)
         let hidden = checks.count - Self.shown(checks, expanded: false).count
         return Button {
-            guard hidden > 0 else { return }
-            withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+            guard hidden > 0, layout == .compact else { return }
+            withAnimation(.easeOut(duration: 0.15)) { unfolded.toggle() }
         } label: {
             HStack(spacing: 8) {
                 ForEach([PullRequestCheck.State.failing, .pending, .passing, .skipped], id: \.self) { state in
@@ -81,7 +72,7 @@ struct TaskPullRequestPanel: View {
                 }
                 Spacer(minLength: 4)
                 // Nothing to unfold when every check fails: the chevron would toggle between identical lists.
-                if hidden > 0 {
+                if hidden > 0, layout == .compact {
                     Text(expanded ? "Failures only" : "All \(checks.count)")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.tertiary)
@@ -95,8 +86,8 @@ struct TaskPullRequestPanel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(expanded ? "Show the failing checks only" : "Show every check")
-        .accessibilityLabel(expanded ? "Show the failing checks only" : "Show all \(checks.count) checks")
+        .help(layout == .full ? "\(checks.count) checks" : (expanded ? "Show the failing checks only" : "Show every check"))
+        .accessibilityLabel(layout == .full ? "\(checks.count) checks" : (expanded ? "Show the failing checks only" : "Show all \(checks.count) checks"))
     }
 
     @ViewBuilder private func list(_ checks: [PullRequestCheck]) -> some View {
@@ -108,7 +99,7 @@ struct TaskPullRequestPanel: View {
                     }
                 }
             }
-            .frame(height: CGFloat(min(checks.count, Self.visibleRows)) * Self.rowHeight)
+            .frame(height: layout == .full ? nil : CGFloat(min(checks.count, Self.visibleRows)) * Self.rowHeight)
         }
     }
 

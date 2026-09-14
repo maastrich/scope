@@ -94,8 +94,22 @@ final class AppModel {
     /// starts from the layout the user chose, not from a mode they may have forgotten they were in.
     private(set) var threadMaximized = false
 
-    var inspectorTab: InspectorTab = .graph {
+    var inspectorTab: InspectorTab = .delta {
         didSet { if !isRestoringUIState { persistUIState() } }
+    }
+
+    /// The scope-wide sheet over the window, if one is up. Never persisted: a sheet is a look, not a layout.
+    var globalSheet: GlobalSheet?
+
+    /// Shows a task's panel in the inspector (⌘D, ⇧⌘B, the task's menu, a notification).
+    func showInspector(_ tab: InspectorTab) {
+        inspectorTab = tab
+        inspectorShown = true
+    }
+
+    /// Opens the Graph sheet (the sidebar button, ⌥⌘G, the palette, a repo's "See Graph").
+    func presentGraph() {
+        globalSheet = .graph
     }
 
     /// Width of the inspector column in points (320…520).

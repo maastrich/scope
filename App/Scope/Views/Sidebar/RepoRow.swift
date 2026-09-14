@@ -74,9 +74,8 @@ struct RepoRow: View {
             model.showBase(repo: repo, in: scope)
         }
         Button("See Graph") {
-            model.selection = .repo(scope.id, relativePath: repo.id)
-            model.inspectorTab = .graph
-            model.inspectorShown = true
+            model.graph.highlightedKey = GraphModel.key(for: repo)
+            model.presentGraph()
         }
         Divider()
         Button("Reveal in Finder") {

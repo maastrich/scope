@@ -3,6 +3,7 @@ import SwiftUI
 import ScopeCore
 
 /// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
+/// the two scope-wide views as buttons (`GlobalViewsRow`: Pull Requests and Graph, each a sheet over the window),
 /// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
 /// of `SidebarItem`s as **one tree** — a **Loose threads** group holding the threads that belong to no task, then
 /// the tasks with their own threads nested — followed by **Repositories** (collapsed by default,
@@ -41,6 +42,7 @@ struct SidebarView: View {
                             renameText = scope.name
                             scopeBeingRenamed = scope
                         }
+                        GlobalViewsRow(scope: scope)
                         filterField
                         if model.config.preferences.attentionCounter == .sidebar {
                             AttentionBanner()

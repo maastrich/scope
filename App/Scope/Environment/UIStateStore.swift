@@ -13,7 +13,7 @@ struct UIState: Codable, Sendable, Equatable {
     /// Scopes whose "Loose threads" group is collapsed (expanded by default, so the set holds the exceptions).
     var looseThreadsCollapsed: Set<ScopeID> = []
     var inspectorVisible = false
-    var inspectorTab: InspectorTab = .graph
+    var inspectorTab: InspectorTab = .delta
     /// Points; clamped to `inspectorWidthRange` on restore.
     var inspectorWidth: Double = UIState.defaultInspectorWidth
     /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
@@ -40,7 +40,7 @@ struct UIState: Codable, Sendable, Equatable {
         reposShown = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .reposShown)) ?? []
         looseThreadsCollapsed = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .looseThreadsCollapsed)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
-        inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .graph
+        inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .delta
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
     }

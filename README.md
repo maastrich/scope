@@ -8,7 +8,7 @@ Scope reads your folders and writes nothing inside them.
 
 **Documentation: https://maastrich.github.io/scope/**
 
-Scopes and repo discovery, threads with live terminals and hook-driven states, prompt-driven tasks with one git worktree per repository, the Delta / Base / Graph / Pull-request inspector, notifications and the command palette. `SPEC.md` is the reference; `docs/` is the site.
+Scopes and repo discovery, threads with live terminals and hook-driven states, prompt-driven tasks with one git worktree per repository, the Delta / Pull Request / Base inspector, the Pull Requests and Graph sheets, notifications and the command palette. `SPEC.md` is the reference; `docs/` is the site.
 
 ## Install
 

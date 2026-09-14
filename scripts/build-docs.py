@@ -354,15 +354,21 @@ FIG_SETTINGS
 task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
-<p>The right-hand panel, four tabs, always about the current selection:</p>
+<p>The right-hand panel, three tabs, all about the selected task. A band at the top names the task and says
+where its branch stands: the base it forked from, the fork commit, how many commits it has made since, and
+whether the base has moved on underneath it.</p>
 <table>
   <tr><th>Tab</th><th>Shows</th><th>Key</th></tr>
-  <tr><td><b>Graph</b></td><td>one card per repository of the scope</td><td></td></tr>
   <tr><td><b>Delta</b></td><td>the diff of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
-  <tr><td><b>Base</b></td><td>the untouched checkout: files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
-  <tr><td><b>PRs</b></td><td>open pull requests of the repository</td><td><kbd>⇧⌘P</kbd></td></tr>
+  <tr><td><b>Pull Request</b></td><td>the task's pull request and every one of its checks</td><td></td></tr>
+  <tr><td><b>Base</b></td><td>the untouched checkout of the task's repositories: branch and HEAD, files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
 </table>
-<p>Drag its left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+<p>Without a task, Base follows the selected repository. Drag the panel's left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+
+<h2 id="global-views">Pull Requests and Graph</h2>
+<p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
+the window: <b>Pull Requests</b> (<kbd>⇧⌘P</kbd>) lists the open pull requests of a repository through
+<code>gh</code>; <b>Graph</b> (<kbd>⌥⌘G</kbd>) shows one card per repository.</p>
 """
 
 TASKS = """
@@ -529,8 +535,8 @@ others); other drivers start from the repository's file and their prompt.</p>
 not merged. Scope prunes stale worktrees on every launch.</p>
 
 <h2 id="from-pr">Starting from a pull request</h2>
-<p>Two ways in, one result. Name the pull request in the prompt, or open it from the <b>PRs</b> tab, which
-lists the open pull requests of a repository through <code>gh</code>. Either way the sandbox sits on the PR's
+<p>Two ways in, one result. Name the pull request in the prompt, or open it from the <b>Pull Requests</b> sheet
+(<kbd>⇧⌘P</kbd>), which lists the open pull requests of a repository through <code>gh</code>. Either way the sandbox sits on the PR's
 head branch — including a fork's head — the task is bound to the pull request, and you review and push back
 without touching your own checkout.</p>
 """
@@ -563,7 +569,7 @@ open-in-editor row for the file.</p>
 <h3 id="publish">Commit, push, open the PR</h3>
 <p>The footer of the panel carries the three actions, per repository, with the state next to them
 (<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
-the resulting pull request to the task, so the PRs tab keeps showing it.</p>
+the resulting pull request to the task, so the Pull Request tab keeps showing it and its checks.</p>
 
 <p>The box at the end of each file row marks it as <b>viewed</b>: the row dims, so what is left to read stands
 out. The mark lasts while the file's diff stays the one you looked at; as soon as the agent changes that file

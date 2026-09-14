@@ -88,8 +88,7 @@ extension AppModel {
             selectedThreadID = id
         }
         if showDelta {
-            inspectorTab = .delta
-            inspectorShown = true
+            showInspector(.delta)
         }
     }
 

@@ -1,8 +1,8 @@
 import SwiftUI
 import ScopeGraph
 
-/// The Graph inspector panel (spec §4.6, design §6): header with the Analyze split button and the
-/// generation progress, then one card per repo of the current scope.
+/// The Graph panel of the sidebar's sheet (spec §4.6, design §6): header with the Analyze split button and the
+/// generation progress, then the repo cards of the current scope in a grid.
 struct GraphView: View {
     @Environment(AppModel.self) private var model
 
@@ -130,19 +130,20 @@ struct GraphView: View {
     private func cards(_ scope: ScopeState) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 10, alignment: .top)],
+                          alignment: .leading, spacing: 10) {
                     ForEach(model.graph.filteredCards) { entry in
                         RepoCardView(scope: scope, entry: entry)
                             .id(entry.key)
                     }
-                    if model.graph.filteredCards.isEmpty {
-                        Text("No card matches “\(model.graph.filter)”.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 12)
-                    }
                 }
                 .padding(EdgeInsets(top: 8, leading: 14, bottom: 12, trailing: 14))
+                if model.graph.filteredCards.isEmpty {
+                    Text("No card matches “\(model.graph.filter)”.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                }
             }
             .onChange(of: model.graph.highlightedKey) { _, key in
                 guard let key else { return }

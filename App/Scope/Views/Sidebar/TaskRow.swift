@@ -173,8 +173,7 @@ struct TaskContextMenu: View {
         .keyboardShortcut("e", modifiers: [.command, .shift])
         Button("See Delta") {
             model.selection = .task(task.id)
-            model.inspectorTab = .delta
-            model.inspectorShown = true
+            model.showInspector(.delta)
         }
         if let pr = task.record.pullRequest {
             Button("Open Pull Request \(pr.label) on GitHub") { model.openOnGitHub(pr.url) }

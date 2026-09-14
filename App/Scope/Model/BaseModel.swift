@@ -271,11 +271,24 @@ extension AppModel {
         return scope.repos.first
     }
 
-    /// Shows the Base panel for a repo (card link, sidebar "See Base", ⌘⇧B).
+    /// Shows the Base panel for a repo (card link, sidebar "See Base", ⌘⇧B). Closes the sheet the link may sit
+    /// on: the inspector is behind it.
     func showBase(repo: RepoState, in scope: ScopeState) {
         base.pickedRepo[scope.id] = repo.id
-        inspectorTab = .base
-        inspectorShown = true
+        globalSheet = nil
+        showInspector(.base)
+    }
+
+    /// The repos the Base header offers: the task's own while a task is selected — the panel is about the task —
+    /// every repo of the scope otherwise. A repo picked from elsewhere (a graph card) stays listed while shown.
+    func baseRepoCandidates(in scope: ScopeState) -> [RepoState] {
+        var candidates = scope.repos
+        if let task = currentTask {
+            let keys = Set(task.activeRepos.map(\.repoRelativePath))
+            candidates = scope.repos.filter { keys.contains(GraphModel.key(for: $0)) }
+            if let shown = baseRepo, !candidates.contains(where: { $0.id == shown.id }) { candidates.append(shown) }
+        }
+        return candidates
     }
 
     /// "Open a shell here": a driver-less terminal in the base checkout (spec §4.5).

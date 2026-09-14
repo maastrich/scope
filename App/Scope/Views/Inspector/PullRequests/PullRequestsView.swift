@@ -1,8 +1,8 @@
 import SwiftUI
 import ScopeGit
 
-/// The PRs inspector panel: repo picker, header (refresh, Open on GitHub), then the open pull requests of
-/// the picked base checkout. `gh` missing / not logged in / no GitHub remote each get their own empty state.
+/// The Pull Requests panel of the sidebar's sheet: repo picker, header (refresh, Open on GitHub), then the open
+/// pull requests of the picked base checkout. `gh` missing / not logged in / no GitHub remote each get their own empty state.
 struct PullRequestsView: View {
     @Environment(AppModel.self) private var model
 

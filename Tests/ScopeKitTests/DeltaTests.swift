@@ -38,6 +38,7 @@ private struct DeltaFixture {
 
         #expect(delta.mode == .task)
         #expect(delta.base == f.baseSHA)
+        #expect(delta.upstream == "origin/main")
         #expect(delta.ahead == 1 && delta.behind == 0)
         #expect(delta.files.map(\.path) == ["README.md", "blob.bin", "feature.swift", "notes/todo.txt"])
 
