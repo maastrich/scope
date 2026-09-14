@@ -29,31 +29,30 @@ struct SceneView: View {
                     .padding(.horizontal, 12)
             }
         }
-        .toolbar(removing: .title)
+        // The window's own title and subtitle, not a custom item: the system truncates them to the room left
+        // and draws them bare (a custom `.principal` view overflowed on a long path and got a glass capsule
+        // around the state pill's own on macOS 26).
+        .navigationTitle(model.currentThread.map(ThreadTitle.title) ?? model.contextDescription ?? "Scope")
+        .navigationSubtitle(model.currentThread.map { ThreadTitle.subtitle($0, scope: model.currentScope) } ?? "")
         .toolbar { toolbar }
+    }
+
+    /// macOS 26 gives every toolbar item a glass capsule of its own.
+    private static var toolbarDrawsCapsules: Bool {
+        if #available(macOS 26, *) { return true }
+        return false
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         if let session = model.currentThread {
-            // macOS 26 wraps every toolbar item in a glass capsule; the title group is text with its own state
-            // pill inside, and a capsule around a capsule reads as a broken control. Drawn bare instead.
-            if #available(macOS 26, *) {
-                ToolbarItem(placement: .principal) {
-                    ThreadToolbar(session: session, scope: model.currentScope)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .principal) {
-                    ThreadToolbar(session: session, scope: model.currentScope)
-                }
-            }
-        } else {
+            // The state alone, centred: on macOS 26 the toolbar's capsule is its background, so the pill draws none.
             ToolbarItem(placement: .principal) {
-                Text(model.contextDescription ?? "Scope")
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                StatePill(state: session.displayState, pulses: session.isWorking,
+                          detail: ThreadNotificationContent.failureDescription(session.lastFailure).map { "Failed: \($0)" },
+                          bare: Self.toolbarDrawsCapsules)
+                    .help(ThreadTitle.currentDirectory(session))
+                    .accessibilityLabel("Thread state \(session.displayState.displayLabel), working directory \(ThreadTitle.currentDirectory(session))")
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {

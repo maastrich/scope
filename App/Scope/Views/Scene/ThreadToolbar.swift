@@ -1,67 +1,29 @@
-import SwiftUI
+import Foundation
 import ScopeCore
 
-/// Title group of the scene toolbar: driver icon · driver name · scope · cwd (mono, OSC 7 when reported) ·
-/// state pill. The right-hand buttons live in `SceneView`'s toolbar so they stay in the toolbar's
-/// `.primaryAction` slot.
-struct ThreadToolbar: View {
-    let session: ThreadSession
-    let scope: ScopeState?
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Driver name and state pill never collapse; scope and cwd give way first.
-            Image(systemName: session.profile.icon ?? "terminal")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(session.profile.name)
-                .font(.system(size: 13, weight: .semibold))
-                .fixedSize()
-                .layoutPriority(2)
-            if let scope {
-                separator
-                Text(scope.name)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            separator
-            Text(abbreviatedDirectory)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.head)
-                .frame(minWidth: 0, maxWidth: 240, alignment: .leading)
-                .help(currentDirectory)
-                .accessibilityLabel("Working directory \(currentDirectory)")
-            StatePill(state: session.displayState, pulses: session.isWorking,
-                      detail: ThreadNotificationContent.failureDescription(session.lastFailure).map { "Failed: \($0)" })
-                .fixedSize()
-                .layoutPriority(2)
-        }
-        .padding(.leading, 4)
-        // Capped, so the principal item never outgrows the toolbar and pushes the trailing buttons off; the
-        // scope and the cwd truncate instead. Drawn as one unit by the system (a capsule on macOS 26).
-        .frame(maxWidth: 560)
+/// What the window title says about the current thread: the driver as the title, `scope · cwd` as the
+/// subtitle. Drawn by the system as the window's own title (`navigationTitle` / `navigationSubtitle`), which
+/// truncates on its own and never gets the glass capsule macOS 26 puts around a custom toolbar item — a custom
+/// `.principal` view did both wrong: it outgrew the toolbar on a long path and sat in a capsule around the
+/// state pill's own capsule.
+@MainActor
+enum ThreadTitle {
+    static func title(_ session: ThreadSession) -> String {
+        session.profile.name
     }
 
-    private var separator: some View {
-        Text("·")
-            .font(.system(size: 13))
-            .foregroundStyle(.tertiary)
+    /// `@acme · …/api/auth-refresh`; the scope alone when the cwd is the home folder.
+    static func subtitle(_ session: ThreadSession, scope: ScopeState?) -> String {
+        [scope?.name, abbreviatedDirectory(currentDirectory(session))].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private var currentDirectory: String {
+    static func currentDirectory(_ session: ThreadSession) -> String {
         session.reportedDirectory ?? session.record.cwd
     }
 
     /// The last two path components (`…/acme/auth-refresh`); `~` for home and home-relative when shorter.
-    /// The full path lives in the tooltip.
-    private var abbreviatedDirectory: String {
+    static func abbreviatedDirectory(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let path = currentDirectory
         if path == home { return "~" }
         let relative = path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
         let components = relative.split(separator: "/", omittingEmptySubsequences: true)
