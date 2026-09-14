@@ -91,8 +91,6 @@ struct StatePill: View {
     var pulses = false
     /// Replaces the label when there is more to say (the error of a failed turn).
     var detail: String?
-    /// No capsule of its own: for a host that already draws one (a macOS 26 toolbar item).
-    var bare = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -102,9 +100,9 @@ struct StatePill: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
-        .padding(.leading, bare ? 2 : 8)
-        .padding(.trailing, bare ? 2 : 9)
+        .padding(.leading, 8)
+        .padding(.trailing, 9)
         .frame(height: 22)
-        .background(bare ? Color.clear : Color.primary.opacity(0.05), in: Capsule())
+        .background(Color.primary.opacity(0.05), in: Capsule())
     }
 }

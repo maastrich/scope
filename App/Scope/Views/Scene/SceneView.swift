@@ -30,29 +30,30 @@ struct SceneView: View {
             }
         }
         // The window's own title and subtitle, not a custom item: the system truncates them to the room left
-        // and draws them bare (a custom `.principal` view overflowed on a long path and got a glass capsule
-        // around the state pill's own on macOS 26).
+        // and draws them bare (a custom `.principal` view overflowed on a long path).
         .navigationTitle(model.currentThread.map(ThreadTitle.title) ?? model.contextDescription ?? "Scope")
         .navigationSubtitle(model.currentThread.map { ThreadTitle.subtitle($0, scope: model.currentScope) } ?? "")
         .toolbar { toolbar }
     }
 
-    /// macOS 26 gives every toolbar item a glass capsule of its own.
-    private static var toolbarDrawsCapsules: Bool {
-        if #available(macOS 26, *) { return true }
-        return false
+    private func statePill(_ session: ThreadSession) -> some View {
+        StatePill(state: session.displayState, pulses: session.isWorking,
+                  detail: ThreadNotificationContent.failureDescription(session.lastFailure).map { "Failed: \($0)" })
+            .help(ThreadTitle.currentDirectory(session))
+            .accessibilityLabel("Thread state \(session.displayState.displayLabel), working directory \(ThreadTitle.currentDirectory(session))")
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         if let session = model.currentThread {
-            // The state alone, centred: on macOS 26 the toolbar's capsule is its background, so the pill draws none.
-            ToolbarItem(placement: .principal) {
-                StatePill(state: session.displayState, pulses: session.isWorking,
-                          detail: ThreadNotificationContent.failureDescription(session.lastFailure).map { "Failed: \($0)" },
-                          bare: Self.toolbarDrawsCapsules)
-                    .help(ThreadTitle.currentDirectory(session))
-                    .accessibilityLabel("Thread state \(session.displayState.displayLabel), working directory \(ThreadTitle.currentDirectory(session))")
+            // The state alone, centred. On macOS 26 the toolbar wraps a custom item in a 36 pt glass capsule,
+            // which turned the 22 pt pill into a round blob taller than the title and out of line with the
+            // trailing buttons; hiding the item's shared background leaves the pill its own quiet capsule.
+            if #available(macOS 26, *) {
+                ToolbarItem(placement: .principal) { statePill(session) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .principal) { statePill(session) }
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
