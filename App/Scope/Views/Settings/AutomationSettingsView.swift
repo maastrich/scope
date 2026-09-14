@@ -16,6 +16,8 @@ struct AutomationSettingsView: View {
     @State private var claudePath: String?
     @State private var mcpBusy = false
     @State private var mcpFailure: String?
+    @State private var skillStates: [SkillInstaller.Client: SkillInstaller.State] = [:]
+    @State private var skillFailure: String?
 
     var body: some View {
         Form {
@@ -89,6 +91,45 @@ struct AutomationSettingsView: View {
                 }
             }
             .task { await refreshMCP() }
+
+            Section("Skills") {
+                Text("""
+                    Installs the **Scope tasks** skill for your user, so every session of these agents knows how to \
+                    put work in a task, open threads in it and close it — by name or slug, through `scope` or the \
+                    MCP tools. One folder per agent, next to your other skills.
+                    """)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(SkillInstaller.Client.allCases) { client in
+                    LabeledContent(client.title) {
+                        HStack(spacing: 8) {
+                            Text(skillCaption(skillStates[client]))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            if let title = skillActionTitle(skillStates[client]) {
+                                Button(title) { toggleSkill(client) }
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+                if let skillFailure {
+                    Text(skillFailure)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button("Reveal Skill Text") {
+                    Reveal.inFinder(skillInstaller.skillFile(.claudeCode).deletingLastPathComponent())
+                }
+                .controlSize(.small)
+                .disabled(skillStates[.claudeCode] != .installed && skillStates[.claudeCode] != .outdated)
+            }
+            .task { refreshSkills() }
 
             Section("Agents") {
                 Toggle("Let agents drive Scope", isOn: automation(\.agentsMayDrive))
@@ -244,6 +285,58 @@ struct AutomationSettingsView: View {
             await refreshMCP()
             mcpBusy = false
         }
+    }
+
+    // MARK: Skills
+
+    private var skillInstaller: SkillInstaller {
+        #if DEBUG
+        let debug = true
+        #else
+        let debug = false
+        #endif
+        return SkillInstaller(userHome: FileManager.default.homeDirectoryForCurrentUser, debug: debug)
+    }
+
+    private func skillCaption(_ state: SkillInstaller.State?) -> String {
+        switch state {
+        case nil: "…"
+        case .unavailable: "not on this Mac"
+        case .absent: "not installed"
+        case .installed: skillInstaller.skillDirectory(.claudeCode).path.replacingOccurrences(
+            of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+        case .outdated: "installed, older text"
+        case .foreign: "a skill of that name that is not Scope's"
+        }
+    }
+
+    private func skillActionTitle(_ state: SkillInstaller.State?) -> String? {
+        switch state {
+        case nil, .unavailable, .foreign: nil
+        case .absent: "Install"
+        case .outdated: "Update"
+        case .installed: "Remove"
+        }
+    }
+
+    private func refreshSkills() {
+        for client in SkillInstaller.Client.allCases {
+            skillStates[client] = skillInstaller.state(of: client)
+        }
+    }
+
+    private func toggleSkill(_ client: SkillInstaller.Client) {
+        skillFailure = nil
+        do {
+            if skillStates[client] == .installed {
+                try skillInstaller.remove(client)
+            } else {
+                try skillInstaller.install(client)
+            }
+        } catch {
+            skillFailure = String(describing: error)
+        }
+        refreshSkills()
     }
 
     private func install() {

@@ -182,6 +182,13 @@ struct TaskContextMenu: View {
         Button("Reveal in Finder") {
             Reveal.inFinder(task.record.rootURL)
         }
+        // The name is how you refer to the task in a prompt; the slug is what `scope --task` takes.
+        Button("Copy Task Name") {
+            Pasteboard.copy(task.name)
+        }
+        Button("Copy Task Slug") {
+            Pasteboard.copy(task.record.slug)
+        }
         Button("Copy Task Root Path") {
             Pasteboard.copyPath(task.record.rootURL)
         }

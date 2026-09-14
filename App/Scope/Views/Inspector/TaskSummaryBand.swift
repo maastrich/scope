@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ScopeTasks
 
@@ -24,6 +25,11 @@ struct TaskSummaryBand: View {
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
+                CopyButton(label: "Copy task name") {
+                    NSEvent.modifierFlags.contains(.option) ? task.record.slug : task.name
+                }
+                .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
                 Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)

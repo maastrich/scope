@@ -809,6 +809,15 @@ bundle, so an update keeps it working. By hand, the same thing:</p>
 <code>dry_run</code> first: the answer is then the title, branch, sandbox and worktrees it would create,
 with nothing written.</p>
 
+<h3 id="skill">The Scope tasks skill</h3>
+<p><b>Settings ▸ Automation ▸ Skills</b> installs a <code>scope-tasks</code> skill for your user — one
+<code>SKILL.md</code> under <code>~/.claude/skills</code>, <code>~/.codex/skills</code> or
+<code>~/.cursor/skills</code> — so every session of those agents knows when to put work in a task, how to
+refer to one by name or slug, how to open a thread in it, read it, hand it a prompt, and close it. An app
+update that changes the text shows <i>Update</i> next to the agent; a folder of the same name that Scope did
+not write is never touched. A task's name and slug are one right-click away in the sidebar (<i>Copy Task
+Name</i>, <i>Copy Task Slug</i>) and a click on the copy button next to the name in the inspector.</p>
+
 <h2 id="automation">What an agent is allowed to do</h2>
 <p>The <code>scope</code> command line in your own terminal is you, and is never filtered. A request from
 inside a thread — or through <code>scope mcp</code> from anywhere, since a globally registered server is reached
