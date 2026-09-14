@@ -16,6 +16,8 @@ struct BaseFileViewer: View {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
             case .unavailable(let message):
                 placeholder(message)
+            case .image(let data):
+                imageViewer(data, path: base.selectedPath ?? "")
             case .text(let text):
                 // The term is highlighted for files opened from a search jump (the jump sets `targetLine`).
                 viewer(text, path: base.selectedPath ?? "", target: base.targetLine, term: base.targetLine == nil ? "" : base.query)
@@ -43,6 +45,28 @@ struct BaseFileViewer: View {
         let text: String
         let target: Int?
         let term: String
+    }
+
+    private func imageViewer(_ data: Data, path: String) -> some View {
+        let image = DecodedImage(data: data)
+        return VStack(spacing: 0) {
+            HStack {
+                Text(path)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Text(image?.caption ?? "undecodable image").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
+            Divider()
+            if let image {
+                ImageCanvas(image: image)
+            } else {
+                placeholder("This image could not be decoded.")
+            }
+        }
     }
 
     private func viewer(_ text: String, path: String, target: Int?, term: String) -> some View {
