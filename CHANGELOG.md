@@ -11,6 +11,22 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.9.0](https://github.com/maastrich/scope/releases/tag/v0.9.0) - 2026-09-14
+
+### Added
+
+- **ui:** keep the inspector on the task, open the graph and pull requests from the sidebar by @maastrich
+- **terminal:** let Claude Code draw with the terminal palette by @maastrich
+- **terminal:** build the palette from the system colours of the appearance by @maastrich
+- **automation:** install the Scope tasks skill for your agents, copy a task's name by @maastrich
+
+### Fixed
+
+- **ui:** keep the thread title inside the toolbar and README tables out of the graph cards by @maastrich
+- **ui:** draw the thread title as the window title, not a custom toolbar item by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.8.0...v0.9.0
+
 ## [0.8.0](https://github.com/maastrich/scope/releases/tag/v0.8.0) - 2026-09-14
 
 ### Added
