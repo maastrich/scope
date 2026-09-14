@@ -73,9 +73,10 @@ enum PaletteModel {
                 }
             }
             if !scope.repos.isEmpty {
+                items.append(PaletteItem(id: "show-graph", section: .actions, icon: "point.3.connected.trianglepath.dotted",
+                                         label: "Show Graph", hint: scope.name, shortcut: "⌥⌘G") { model.presentGraph() })
                 items.append(PaletteItem(id: "analyze", section: .actions, icon: "sparkles", label: "Analyze Graph", hint: scope.name) {
-                    model.inspectorTab = .graph
-                    model.inspectorShown = true
+                    model.presentGraph()
                     Task { await model.analyzeGraph(scope: scope, withAI: false) }
                 })
             }

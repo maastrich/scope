@@ -173,8 +173,7 @@ struct TaskContextMenu: View {
         .keyboardShortcut("e", modifiers: [.command, .shift])
         Button("See Delta") {
             model.selection = .task(task.id)
-            model.inspectorTab = .delta
-            model.inspectorShown = true
+            model.showInspector(.delta)
         }
         if let pr = task.record.pullRequest {
             Button("Open Pull Request \(pr.label) on GitHub") { model.openOnGitHub(pr.url) }
@@ -182,6 +181,13 @@ struct TaskContextMenu: View {
         Divider()
         Button("Reveal in Finder") {
             Reveal.inFinder(task.record.rootURL)
+        }
+        // The name is how you refer to the task in a prompt; the slug is what `scope --task` takes.
+        Button("Copy Task Name") {
+            Pasteboard.copy(task.name)
+        }
+        Button("Copy Task Slug") {
+            Pasteboard.copy(task.record.slug)
         }
         Button("Copy Task Root Path") {
             Pasteboard.copyPath(task.record.rootURL)

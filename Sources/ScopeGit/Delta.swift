@@ -36,6 +36,9 @@ public struct Delta: Sendable, Equatable {
     /// The ref the diff was computed against: the merge-base sha (`.task`), `"HEAD"` (`.uncommitted`),
     /// `origin/<default>` (`.baseVsOrigin`).
     public let base: String?
+    /// The ref `ahead` / `behind` count against — `origin/<default>` or the local `<default>` — for `.task` and
+    /// `.baseVsOrigin`; `nil` for `.uncommitted`. What the summary band names as the task's base.
+    public let upstream: String?
     /// Commits on `HEAD` not on `origin/<default>` (`.baseVsOrigin` only; also filled for `.task`).
     public let ahead: Int
     /// Commits on `origin/<default>` not on `HEAD` (`.baseVsOrigin` only; also filled for `.task`).
@@ -46,13 +49,14 @@ public struct Delta: Sendable, Equatable {
     public let commitsBehind: [DeltaCommit]
 
     public init(
-        mode: DeltaMode, files: [DiffFile] = [], base: String? = nil,
+        mode: DeltaMode, files: [DiffFile] = [], base: String? = nil, upstream: String? = nil,
         ahead: Int = 0, behind: Int = 0, commitsAhead: [DeltaCommit] = [], commitsBehind: [DeltaCommit] = []
     ) {
         self.mode = mode
         self.files = files
         self.summary = DiffSummary(files)
         self.base = base
+        self.upstream = upstream
         self.ahead = ahead
         self.behind = behind
         self.commitsAhead = commitsAhead
@@ -98,14 +102,16 @@ public struct Delta: Sendable, Equatable {
             let tracked = try await patch(c + diffArguments + [mergeBase], numstat: c + diffArguments + ["--numstat", "-z", mergeBase], using: client)
             let untracked = try await untrackedFiles(c: c, checkout: checkout, using: client)
             let counts = (try? await aheadBehind(c: c, upstream: upstream, using: client)) ?? (0, 0)
-            return Delta(mode: .task, files: sorted(tracked + untracked), base: mergeBase, ahead: counts.0, behind: counts.1)
+            return Delta(mode: .task, files: sorted(tracked + untracked), base: mergeBase, upstream: upstream,
+                         ahead: counts.0, behind: counts.1)
 
         case .baseVsOrigin:
             let upstream = try await upstreamRef(c: c, using: client, defaultBranch: defaultBranch)
             let counts = try await aheadBehind(c: c, upstream: upstream, using: client)
             let ahead = try await log(c: c, range: "\(upstream)..HEAD", using: client)
             let behind = try await log(c: c, range: "HEAD..\(upstream)", using: client)
-            return Delta(mode: .baseVsOrigin, base: upstream, ahead: counts.0, behind: counts.1, commitsAhead: ahead, commitsBehind: behind)
+            return Delta(mode: .baseVsOrigin, base: upstream, upstream: upstream, ahead: counts.0, behind: counts.1,
+                         commitsAhead: ahead, commitsBehind: behind)
         }
     }
 

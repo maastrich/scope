@@ -88,6 +88,15 @@ struct ClaudeHooksAdapterTests {
         #expect(!text.contains("\\/"), "slashes are not escaped, the file stays readable")
     }
 
+    @Test("the theme rides in the settings file, as dark-ansi / light-ansi, only when asked")
+    func themeInSettings() throws {
+        #expect(ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath)["theme"] == nil)
+        #expect(ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath, theme: .dark)["theme"] as? String == "dark-ansi")
+        #expect(ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath, theme: .light)["theme"] as? String == "light-ansi")
+        let document = ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath, theme: .light)
+        #expect(try commands(document, "Stop") == ["\(Self.hookPath) turn.ended --stdin"], "the hooks stay next to the theme")
+    }
+
     @Test("install writes <home>/threads/<id>.claude-settings.json and returns --settings <path>")
     func install() throws {
         let home = try Self.temporaryHome()

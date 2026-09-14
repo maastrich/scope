@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Right-hand inspector: two segmented controls in a 30 pt header — Delta / PRs, which follow the selected task,
-/// and Base / Graph, which follow the scope and its repositories — then the task summary band on the first pair,
-/// then the panel pinned to the top. ⌘D / ⌘⇧B switch tabs.
+/// Right-hand inspector, about the selection alone: one segmented control in a 30 pt header — Delta, Pull
+/// Request, Base — then the summary band naming the subject, then the panel pinned to the top. ⌘D / ⇧⌘B
+/// switch tabs.
 ///
-/// The header used to carry `contextDescription` as its caption, which is derived from `newThreadTarget`: the
-/// panel labelled itself with ⌘T's next destination rather than with what it was showing. `TaskSummaryBand` says
-/// it properly now, so the caption is gone.
+/// Delta and Pull Request follow the selected task; Base follows the task's repositories, or the selected repo
+/// when no task is selected, so a repo row or a loose thread still has a Base to show. The scope-wide views
+/// that used to share this header — the graph, a repo's open pull requests — moved to sheets opened from the
+/// sidebar: with them here the tabs followed two subjects at once and nothing said which applied.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
@@ -15,11 +16,8 @@ struct InspectorView: View {
         VStack(spacing: 0) {
             // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
-                // Two groups, because the tabs follow two different subjects: Delta and PRs are about the selected
-                // task, Base and Graph about the scope and its repositories. Without the split, selecting a task
-                // while sitting on Graph silently keeps showing something else.
-                Picker("Task", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases.filter(\.followsTask), id: \.self) { tab in
+                Picker("Panel", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases, id: \.self) { tab in
                         Text(tab.title).tag(tab)
                     }
                 }
@@ -27,20 +25,6 @@ struct InspectorView: View {
                 .labelsHidden()
                 .controlSize(.small)
                 .fixedSize()
-                .disabled(model.currentTask == nil)
-                .help(model.currentTask == nil ? "Select a task or one of its threads" : "The selected task")
-
-                Picker("Scope", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases.filter { !$0.followsTask }, id: \.self) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
-                .help("The scope and its repositories")
-
                 Spacer(minLength: 4)
             }
             .padding(.horizontal, 10)
@@ -48,27 +32,61 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity)
             .background(Color("PanelBackground"))
             Divider()
-            // Only under the tabs that follow a task: Base and Graph are about the scope and its repos, and give
-            // the height back to their own content.
-            if model.inspectorTab.followsTask, let task = model.currentTask {
+            if let task = model.currentTask {
                 TaskSummaryBand(task: task)
+                Divider()
+            } else if let repo = model.baseRepo {
+                RepoSummaryBand(repo: repo)
                 Divider()
             }
             Group {
                 switch model.inspectorTab {
-                case .graph:
-                    GraphView()
                 case .delta:
                     DeltaView()
+                case .pullRequest:
+                    TaskPullRequestView()
                 case .base:
                     BaseView()
-                case .pullRequests:
-                    PullRequestsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        // A task-only tab left showing with no task would sit on an empty state forever; Base always has a subject.
+        .onChange(of: model.currentTask == nil, initial: true) { _, noTask in
+            if noTask, model.inspectorTab.needsTask { model.inspectorTab = .base }
+        }
+    }
+}
+
+/// The band under the tab row when no task is selected: the repo the Base panel shows, so the panel still says
+/// *what* it is about. The task band's counterpart, one row tall.
+private struct RepoSummaryBand: View {
+    let repo: RepoState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Text(repo.shortName)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text("repository")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 4)
+            Text("No task selected")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(height: 22)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color("PanelBackground"))
+        .help(repo.url.path)
     }
 }

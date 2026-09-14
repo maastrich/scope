@@ -30,28 +30,35 @@ enum SidebarItem: Hashable, Codable, Sendable {
 }
 
 /// The inspector panels: Graph / Delta / Base / PRs.
+/// The inspector's three panels, every one about what is selected: the task's delta, the task's pull request
+/// and its checks, and the base checkout of the task's repositories (or of the selected repo when no task is).
+/// The scope-wide views — the graph, a repo's open pull requests — are `GlobalSheet`s opened from the sidebar.
 enum InspectorTab: String, CaseIterable, Codable, Sendable, Hashable {
-    case graph, delta, base, pullRequests
+    case delta, pullRequest, base
 
     /// Segmented-control label.
     var title: String {
         switch self {
-        case .graph: "Graph"
         case .delta: "Delta"
+        case .pullRequest: "Pull Request"
         case .base: "Base"
-        case .pullRequests: "PRs"
         }
     }
 
-    /// Whether the panel is about the selected *task* (Delta, PRs) rather than the scope and its repositories
-    /// (Base, Graph). The inspector shows its task summary band only for the first kind, and greys out the tabs
-    /// that have no subject for the current selection.
-    var followsTask: Bool {
+    /// Whether the panel needs a task: Delta and Pull Request have no subject without one, Base falls back
+    /// to the selected repo.
+    var needsTask: Bool {
         switch self {
-        case .delta, .pullRequests: true
-        case .base, .graph: false
+        case .delta, .pullRequest: true
+        case .base: false
         }
     }
+}
+
+/// The scope-wide views, shown as a sheet over the window from the sidebar's buttons (⇧⌘P, ⌥⌘G, the palette).
+enum GlobalSheet: String, Identifiable, Sendable, Hashable {
+    case pullRequests, graph
+    var id: String { rawValue }
 }
 
 /// Where ⌘T opens the next thread, derived from the sidebar selection (`AppModel.newThreadTarget`).

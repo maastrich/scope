@@ -2,8 +2,9 @@ import AppKit
 import ScopeCore
 import SwiftTerm
 
-/// Terminal colours: a light and a dark palette, picked from `NSAppearance` (or forced dark by the
-/// `terminalAppearance` preference) and re-applied live by `TerminalHostContainer` when either changes.
+/// Terminal colours: a light and a dark palette built from the system colours of each appearance, picked from
+/// `NSAppearance` (or forced dark by the `terminalAppearance` preference) and re-applied live by
+/// `TerminalHostContainer` when either changes.
 /// `ThreadPane` pushes the preferences here before the host is built (`configure(_:)`).
 @MainActor
 enum TerminalAppearance {
@@ -17,24 +18,65 @@ enum TerminalAppearance {
         let isDark: Bool
     }
 
-    /// `#1e1e21` on `#e6e6ea`.
-    static let dark = Palette(
-        background: rgb(0x1e1e21),
-        foreground: rgb(0xe6e6ea),
-        selection: asset("TerminalSelectionDark", fallback: 0x44475a),
-        ansi: [0x1e1e21, 0xff5f5f, 0x5fd75f, 0xe5c07b, 0x61afef, 0xc678dd, 0x56b6c2, 0xc8c8cc,
-               0x6c6c73, 0xff8787, 0x87e787, 0xf2d58c, 0x82c4ff, 0xd7a3ee, 0x7fd5e0, 0xffffff].map(ansi),
-        isDark: true)
+    /// The two palettes, built once each from the system colours of their appearance (`build(dark:)`).
+    private static var cache: [Bool: Palette] = [:]
 
-    /// `#ffffff` on `#1d1d1f`, ANSI colours darkened for a white ground (bright red / yellow / magenta / cyan
-    /// reuse the normal values: the "bright" ones drop below 4:1 on white).
-    static let light = Palette(
-        background: rgb(0xffffff),
-        foreground: rgb(0x1d1d1f),
-        selection: asset("TerminalSelectionLight", fallback: 0x9cc7ff),
-        ansi: [0x1d1d1f, 0xc41a16, 0x1a7f37, 0x9a6700, 0x0550ae, 0x8250df, 0x0e7c86, 0x8e8e93,
-               0x6e6e73, 0xcf222e, 0x2da44e, 0x9a6700, 0x2f81f7, 0x8250df, 0x0e7c86, 0x1d1d1f].map(ansi),
-        isDark: false)
+    /// The palette of one appearance, from the colours the rest of the window is drawn with, so the terminal
+    /// reads as part of the app rather than as a black box set into it: the ground is the window background,
+    /// the text the label colour, and the sixteen ANSI colours the system's red, green, yellow, blue, purple
+    /// and teal — the sober hues macOS uses everywhere — resolved for that appearance. The bright eight are the
+    /// same hues lifted a little in the dark, and the normal ones again on white, where a brighter red or
+    /// yellow would only lose contrast. Programs that colour with the ANSI set (Claude Code on its `-ansi`
+    /// theme, ls, git) then look like the app; the ones that bring their own true colour are untouched.
+    private static func build(dark: Bool) -> Palette {
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua) ?? NSAppearance.currentDrawing()
+        var palette: Palette?
+        appearance.performAsCurrentDrawingAppearance {
+            let background = resolve(.windowBackgroundColor, over: nil)
+            let foreground = resolve(.labelColor, over: background)
+            let secondary = resolve(.secondaryLabelColor, over: background)
+            let tertiary = resolve(.tertiaryLabelColor, over: background)
+            let red = resolve(.systemRed, over: background)
+            let green = resolve(.systemGreen, over: background)
+            // System yellow is a warning colour, not a text colour: on white it needs darkening to be read.
+            let yellow = dark ? resolve(.systemYellow, over: background) : mix(resolve(.systemYellow, over: background), with: .black, 0.38)
+            let blue = resolve(.systemBlue, over: background)
+            let magenta = resolve(.systemPurple, over: background)
+            let cyan = resolve(.systemTeal, over: background)
+            // Black is a shade darker than the ground in the dark, so a black-on-default run still shows.
+            let black = dark ? mix(background, with: .black, 0.45) : foreground
+            let white = dark ? secondary : resolve(.systemGray, over: background)
+            let lift: (NSColor) -> NSColor = { dark ? mix($0, with: .white, 0.18) : $0 }
+            let normal = [black, red, green, yellow, blue, magenta, cyan, white]
+            let bright = [dark ? tertiary : secondary, lift(red), lift(green), lift(yellow), lift(blue), lift(magenta), lift(cyan), foreground]
+            palette = Palette(
+                background: background,
+                foreground: foreground,
+                selection: asset(dark ? "TerminalSelectionDark" : "TerminalSelectionLight", fallback: dark ? 0x44475a : 0x9cc7ff),
+                ansi: (normal + bright).map(ansi),
+                isDark: dark)
+        }
+        return palette ?? Palette(background: rgb(dark ? 0x1e1e21 : 0xffffff), foreground: rgb(dark ? 0xe6e6ea : 0x1d1d1f),
+                                  selection: rgb(dark ? 0x44475a : 0x9cc7ff), ansi: [], isDark: dark)
+    }
+
+    /// The colour as sRGB under the current drawing appearance, its alpha composited over `ground` (label
+    /// colours are translucent; a terminal wants opaque cells).
+    private static func resolve(_ color: NSColor, over ground: NSColor?) -> NSColor {
+        let srgb = color.usingColorSpace(.sRGB) ?? color
+        guard let ground, srgb.alphaComponent < 1 else { return srgb.withAlphaComponent(1) }
+        return mix(ground, with: srgb.withAlphaComponent(1), srgb.alphaComponent)
+    }
+
+    /// `base` moved `fraction` of the way to `other`, in sRGB.
+    private static func mix(_ base: NSColor, with other: NSColor, _ fraction: CGFloat) -> NSColor {
+        let a = base.usingColorSpace(.sRGB) ?? base
+        let b = other.usingColorSpace(.sRGB) ?? other
+        return NSColor(srgbRed: a.redComponent + (b.redComponent - a.redComponent) * fraction,
+                       green: a.greenComponent + (b.greenComponent - a.greenComponent) * fraction,
+                       blue: a.blueComponent + (b.blueComponent - a.blueComponent) * fraction,
+                       alpha: 1)
+    }
 
     // MARK: Preferences
 
@@ -64,10 +106,17 @@ enum TerminalAppearance {
     /// The palette for a given appearance (defaults to the app's effective appearance); always `dark` under
     /// the `alwaysDark` preference.
     static func palette(for appearance: NSAppearance? = nil) -> Palette {
-        if mode == .alwaysDark { return dark }
-        let appearance = appearance ?? NSApp.effectiveAppearance
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return isDark ? dark : light
+        let isDark: Bool
+        if mode == .alwaysDark {
+            isDark = true
+        } else {
+            let appearance = appearance ?? NSApp.effectiveAppearance
+            isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        }
+        if let cached = cache[isDark] { return cached }
+        let built = build(dark: isDark)
+        cache[isDark] = built
+        return built
     }
 
     /// A dynamic background colour, for SwiftUI/AppKit surfaces that must match the terminal ground.
@@ -157,9 +206,10 @@ enum TerminalAppearance {
         NSColor(named: name) ?? rgb(hex)
     }
 
-    private nonisolated static func ansi(_ hex: UInt32) -> SwiftTerm.Color {
-        SwiftTerm.Color(red: UInt16((hex >> 16) & 0xff) * 257,
-                        green: UInt16((hex >> 8) & 0xff) * 257,
-                        blue: UInt16(hex & 0xff) * 257)
+    private static func ansi(_ color: NSColor) -> SwiftTerm.Color {
+        let srgb = color.usingColorSpace(.sRGB) ?? color
+        return SwiftTerm.Color(red: UInt16(max(0, min(1, srgb.redComponent)) * 65535),
+                               green: UInt16(max(0, min(1, srgb.greenComponent)) * 65535),
+                               blue: UInt16(max(0, min(1, srgb.blueComponent)) * 65535))
     }
 }

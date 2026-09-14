@@ -134,8 +134,7 @@ struct ScopeSwitcher: View {
         }
         .keyboardShortcut("r", modifiers: [.command, .option])
         Button("Analyze Graph") {
-            model.inspectorTab = .graph
-            model.inspectorShown = true
+            model.presentGraph()
             Task { await model.analyzeGraph(scope: scope, withAI: false) }
         }
         .disabled(scope.repos.isEmpty || model.graph.isGenerating)

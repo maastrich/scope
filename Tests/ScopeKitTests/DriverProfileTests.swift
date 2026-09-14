@@ -141,8 +141,10 @@ struct PlaceholderValuesTests {
 
     @Test("expands every placeholder")
     func expandsAll() throws {
-        let template = "{thread_id}|{resume_id}|{cwd}|{scope}|{task}|{home}|{prompt}"
-        #expect(try values.expand(template) == "3f9a2c17be04|sess-1|/tmp/work|/tmp/scope|/tmp/scope/task|/tmp/home|hello world")
+        let template = "{thread_id}|{resume_id}|{cwd}|{scope}|{task}|{home}|{prompt}|{theme}"
+        #expect(try values.expand(template) == "3f9a2c17be04|sess-1|/tmp/work|/tmp/scope|/tmp/scope/task|/tmp/home|hello world|dark")
+        // JSON around a placeholder stays JSON: what the Claude Code profiles pass to `--settings`.
+        #expect(try values.expand("{\"theme\":\"{theme}-ansi\"}") == "{\"theme\":\"dark-ansi\"}")
         #expect(try values.expand(["a", "{cwd}/b", "{{home}}"]) == ["a", "/tmp/work/b", "{/tmp/home}"])
         #expect(try values.expand(["K": "{scope}", "L": "plain"]) == ["K": "/tmp/scope", "L": "plain"])
     }

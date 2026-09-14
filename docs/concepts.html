@@ -95,16 +95,22 @@ Codex CLI, Cursor CLI — and copied into <code>~/.scope/drivers/</code> on firs
 task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
-<p>The right-hand panel, four tabs, always about the current selection:</p>
+<p>The right-hand panel, three tabs, all about the selected task. A band at the top names the task and says
+where its branch stands: the base it forked from, the fork commit, how many commits it has made since, and
+whether the base has moved on underneath it.</p>
 <table>
   <tr><th>Tab</th><th>Shows</th><th>Key</th></tr>
-  <tr><td><b>Graph</b></td><td>one card per repository of the scope</td><td></td></tr>
   <tr><td><b>Delta</b></td><td>the diff of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
-  <tr><td><b>Base</b></td><td>the untouched checkout: files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
-  <tr><td><b>PRs</b></td><td>open pull requests of the repository</td><td><kbd>⇧⌘P</kbd></td></tr>
+  <tr><td><b>Pull Request</b></td><td>the task's pull request and every one of its checks</td><td></td></tr>
+  <tr><td><b>Base</b></td><td>the untouched checkout of the task's repositories: branch and HEAD, files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
 </table>
-<p>Drag its left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a></aside></div>
+<p>Without a task, Base follows the selected repository. Drag the panel's left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+
+<h2 id="global-views">Pull Requests and Graph</h2>
+<p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
+the window: <b>Pull Requests</b> (<kbd>⇧⌘P</kbd>) lists the open pull requests of a repository through
+<code>gh</code>; <b>Graph</b> (<kbd>⌥⌘G</kbd>) shows one card per repository.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Pull Requests and Graph</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

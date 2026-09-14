@@ -65,8 +65,7 @@ struct ScopeCommands: Commands {
 
             Button("Analyze Graph") {
                 if let model, let scope = model.currentScope {
-                    model.inspectorTab = .graph
-                    model.inspectorShown = true
+                    model.presentGraph()
                     Task { await model.analyzeGraph(scope: scope, withAI: false) }
                 }
             }
@@ -277,17 +276,23 @@ struct ScopeCommands: Commands {
 
             Divider()
 
-            Button("Graph") { show(.graph) }
-                .disabled(model == nil)
-            Button("Delta") { show(.delta) }
+            Button("Delta") { model?.showInspector(.delta) }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(model == nil)
-            Button("Base") { show(.base) }
+            Button("Pull Request") { model?.showInspector(.pullRequest) }
+                .disabled(model == nil)
+            Button("Base") { model?.showInspector(.base) }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 .disabled(model == nil)
-            Button("Pull Requests") { show(.pullRequests) }
+
+            Divider()
+
+            Button("Pull Requests…") { model?.showPullRequests() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .disabled(model == nil)
+                .disabled(model?.currentScope == nil)
+            Button("Graph…") { model?.presentGraph() }
+                .keyboardShortcut("g", modifiers: [.command, .option])
+                .disabled(model?.currentScope == nil)
 
             Divider()
 
@@ -388,8 +393,5 @@ struct ScopeCommands: Commands {
         return model.selection != nil
     }
 
-    private func show(_ tab: InspectorTab) {
-        model?.inspectorTab = tab
-        model?.inspectorShown = true
-    }
+
 }

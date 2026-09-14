@@ -141,11 +141,10 @@ extension AppModel {
         return baseRepo
     }
 
-    /// Shows the PRs panel for a repo (⌘⇧P, palette).
+    /// Opens the Pull Requests sheet, on a repo when one is given (the sidebar button, ⇧⌘P, the palette).
     func showPullRequests(repo: RepoState? = nil, in scope: ScopeState? = nil) {
         if let repo, let scope { pullRequests.pickedRepo[scope.id] = repo.id }
-        inspectorTab = .pullRequests
-        inspectorShown = true
+        globalSheet = .pullRequests
     }
 
     /// The task bound to pull request `number` of `repo` in `scope`, if any.
@@ -201,9 +200,11 @@ extension AppModel {
     }
 
     /// "Switch": selects the task (its last thread comes along, see `syncThreadFromSelection`).
+    /// Selects the task; closes the Pull Requests sheet the row sits on, since the point is to look at the task.
     func switchToTask(_ task: TaskState) {
         task.isExpanded = true
         selection = .task(task.id)
+        globalSheet = nil
     }
 
     func openOnGitHub(_ url: URL) {

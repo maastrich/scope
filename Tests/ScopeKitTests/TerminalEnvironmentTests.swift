@@ -23,6 +23,7 @@ struct TerminalEnvironmentTests {
         #expect(env["HOME"] == "/Users/me")
         #expect(env["TERM"] == "xterm-256color")
         #expect(env["COLORTERM"] == "truecolor")
+        #expect(env["COLORFGBG"] == "15;0", "dark unless told otherwise")
         #expect(env["TERM_PROGRAM"] == "Scope")
         #expect(env["TERM_PROGRAM_VERSION"] == "0.1.0")
         #expect(env["SHELL"] == "/opt/homebrew/bin/fish", "SHELL follows the resolved login shell")

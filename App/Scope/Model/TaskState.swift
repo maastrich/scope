@@ -3,14 +3,29 @@ import ScopeCore
 import ScopeGit
 import ScopeTasks
 
-/// What the sidebar shows for one repo of a task: `+N −M` against the merge-base, the number of
-/// uncommitted files, and whether the sandbox folder is still there.
+/// What the sidebar and the summary band show for one repo of a task: `+N −M` against the merge-base, the
+/// number of uncommitted files, whether the sandbox folder is still there, and where the branch stands —
+/// the ref it forked from, the fork commit, and how far the two have moved apart since.
 struct RepoDeltaSummary: Equatable, Sendable {
     enum SandboxState: Equatable, Sendable { case clean, dirty(Int), missing }
 
     var additions = 0
     var deletions = 0
     var sandbox: SandboxState = .clean
+    /// `origin/main` (or the local `main`): the ref the task branch is measured against.
+    var upstream: String?
+    /// The merge-base commit — the base as it was when the task forked, or last rebased.
+    var mergeBase: String?
+    /// Commits on the task branch since the merge-base.
+    var ahead = 0
+    /// Commits the base gained since the merge-base: how stale the task's starting point is.
+    var behind = 0
+
+    /// `main` from `origin/main`: the base branch as the user names it.
+    var upstreamBranch: String? {
+        guard let upstream else { return nil }
+        return upstream.hasPrefix("origin/") ? String(upstream.dropFirst("origin/".count)) : upstream
+    }
 
     var isDirty: Bool { if case .dirty = sandbox { return true } else { return false } }
 }
@@ -162,6 +177,10 @@ final class TaskState: Identifiable {
         if let delta = try? await Delta.load(mode: .task, in: repo.sandboxURL, using: client) {
             summary.additions = delta.summary.additions
             summary.deletions = delta.summary.deletions
+            summary.upstream = delta.upstream
+            summary.mergeBase = delta.base
+            summary.ahead = delta.ahead
+            summary.behind = delta.behind
         }
         if let uncommitted = try? await Delta.load(mode: .uncommitted, in: repo.sandboxURL, using: client) {
             summary.sandbox = uncommitted.files.isEmpty ? .clean : .dirty(uncommitted.files.count)

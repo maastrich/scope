@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var columnsBeforeMaximize: NavigationSplitViewVisibility?
 
     var body: some View {
+        @Bindable var model = model
         NavigationSplitView(columnVisibility: $columns) {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 400)
@@ -57,6 +58,10 @@ struct RootView: View {
         }
         .folderDropTarget { urls in
             Task { await model.addScopes(urls) }
+        }
+        .sheet(item: $model.globalSheet) { sheet in
+            GlobalSheetView(sheet: sheet)
+                .environment(model)
         }
         .sheet(item: newTaskScope) { scope in
             // The resolved driver, never the raw preference: "" means automatic, and an empty picker would
