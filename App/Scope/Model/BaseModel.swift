@@ -13,6 +13,8 @@ enum BaseSection: String, CaseIterable, Hashable {
 enum BaseFileContent: Equatable {
     case loading
     case text(String)
+    /// Encoded bytes of an image file (`ImageFiles.isImage`); decoded by the viewer.
+    case image(Data)
     case unavailable(String)
 }
 
@@ -154,11 +156,18 @@ final class BaseModel {
         Task.detached(priority: .userInitiated) {
             let loaded: BaseFileContent
             do {
-                loaded = .text(try BaseFiles.readFile(at: url.appending(path: path)))
+                let file = url.appending(path: path)
+                if ImageFiles.isImage(path), let data = try ImageFiles.read(at: file) {
+                    loaded = .image(data)
+                } else {
+                    loaded = .text(try BaseFiles.readFile(at: file))
+                }
             } catch let error as BaseError {
                 switch error {
                 case .binaryFile: loaded = .unavailable("Binary file — not shown.")
-                case .fileTooLarge(_, let bytes): loaded = .unavailable("File is larger than 1 MiB (\(bytes) bytes) — not shown.")
+                case .fileTooLarge(_, let bytes):
+                    let limit = ImageFiles.isImage(path) ? "\(ImageFiles.maxBytes / 1_048_576) MiB" : "1 MiB"
+                    loaded = .unavailable("File is larger than \(limit) (\(bytes) bytes) — not shown.")
                 default: loaded = .unavailable(String(describing: error))
                 }
             } catch {

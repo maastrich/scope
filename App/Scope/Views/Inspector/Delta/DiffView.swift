@@ -22,7 +22,9 @@ struct DiffView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if file.isBinary {
+            if file.isBinary, ImageFiles.isImage(file.path) {
+                ImageDiffView(repo: repo, ref: ref, file: file, base: model.delta.repos.first { $0.id == ref.repo }?.delta?.base)
+            } else if file.isBinary {
                 placeholder("Binary file")
             } else if !file.hasHunks {
                 placeholder(file.status == .added ? "Empty or too large to inline" : "No textual change (mode or rename only)")
@@ -96,7 +98,7 @@ struct DiffView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "doc.text")
+            Image(systemName: ImageFiles.isImage(file.path) ? "photo" : "doc.text")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
             Text("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
