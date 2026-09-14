@@ -36,8 +36,17 @@ struct SceneView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         if let session = model.currentThread {
-            ToolbarItem(placement: .principal) {
-                ThreadToolbar(session: session, scope: model.currentScope)
+            // macOS 26 wraps every toolbar item in a glass capsule; the title group is text with its own state
+            // pill inside, and a capsule around a capsule reads as a broken control. Drawn bare instead.
+            if #available(macOS 26, *) {
+                ToolbarItem(placement: .principal) {
+                    ThreadToolbar(session: session, scope: model.currentScope)
+                }
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .principal) {
+                    ThreadToolbar(session: session, scope: model.currentScope)
+                }
             }
         } else {
             ToolbarItem(placement: .principal) {

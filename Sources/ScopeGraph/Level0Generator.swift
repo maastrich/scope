@@ -108,7 +108,9 @@ public enum Level0Generator {
         return analysis
     }
 
-    /// First non-heading paragraph of a README, badges and HTML stripped, at most three sentences.
+    /// First non-heading paragraph of a README, badges, HTML and tables stripped, at most three sentences. A
+    /// README that opens with a package table (a monorepo's) yields its first prose paragraph after it, not the
+    /// table's cells run together.
     public static func firstParagraph(ofReadme text: String) -> String? {
         var paragraph: [String] = []
         var inFence = false
@@ -138,7 +140,8 @@ public enum Level0Generator {
             let isBlank = cleaned.isEmpty
             let isHeading = line.hasPrefix("#") || isUnderline(line)
             let isBadgeOrImage = isBadgeLine(line)
-            if isBlank || isHeading || isBadgeOrImage {
+            let isTable = line.hasPrefix("|")
+            if isBlank || isHeading || isBadgeOrImage || isTable {
                 if !paragraph.isEmpty { break }
                 continue
             }
@@ -286,6 +289,7 @@ public enum Level0Generator {
         s = s.replacing(/!\[[^\]]*\]\([^)]*\)/, with: "")
         s = s.replacing(/\[([^\]]*)\]\([^)]*\)/) { m in String(m.output.1) }
         s = s.replacing(/\*\*|__/, with: "")
+        s = s.replacing(/`([^`]*)`/) { m in String(m.output.1) }
         s = s.replacingOccurrences(of: "\t", with: " ")
         return s.trimmingCharacters(in: .whitespaces)
     }

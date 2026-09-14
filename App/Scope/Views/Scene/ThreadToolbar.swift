@@ -33,7 +33,7 @@ struct ThreadToolbar: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
-                .frame(maxWidth: 240, alignment: .leading)
+                .frame(minWidth: 0, maxWidth: 240, alignment: .leading)
                 .help(currentDirectory)
                 .accessibilityLabel("Working directory \(currentDirectory)")
             StatePill(state: session.displayState, pulses: session.isWorking,
@@ -42,6 +42,9 @@ struct ThreadToolbar: View {
                 .layoutPriority(2)
         }
         .padding(.leading, 4)
+        // Capped, so the principal item never outgrows the toolbar and pushes the trailing buttons off; the
+        // scope and the cwd truncate instead. Drawn as one unit by the system (a capsule on macOS 26).
+        .frame(maxWidth: 560)
     }
 
     private var separator: some View {

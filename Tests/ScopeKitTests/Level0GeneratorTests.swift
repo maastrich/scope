@@ -39,6 +39,20 @@ import ScopeGit
         #expect(Level0Generator.firstParagraph(ofReadme: "```sh\nnpm i\n```\nAfter the fence.") == "After the fence.")
     }
 
+    @Test func readmeFirstParagraphSkipsTablesAndInlineCode() throws {
+        let readme = """
+        # Front
+
+        | Package | Description |
+        | --- | --- |
+        | `react-ui` | Design system |
+
+        Shared `react` packages of the front. Built with `pnpm`.
+        """
+        #expect(Level0Generator.firstParagraph(ofReadme: readme) == "Shared react packages of the front. Built with pnpm.")
+        #expect(Level0Generator.firstParagraph(ofReadme: "| a | b |\n|---|---|\n") == nil)
+    }
+
     @Test func packageJSONInference() throws {
         let repo = try tempRepo([
             "README.md": "# web\n\nThe web front.\n",
