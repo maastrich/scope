@@ -42,7 +42,8 @@ public enum ScopeCLI {
       scope thread new [options]          open a thread and print its id
       scope thread stop <id>              stop the thread's process (the row stays)
       scope thread close <id>             hang it up and remove it
-      scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line)
+      scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line);
+                                          from a thread, the message says which thread sent it
       scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
       scope task close <id|slug>          close a task: threads hung up, worktrees removed
@@ -53,7 +54,7 @@ public enum ScopeCLI {
     thread new:
       --scope <slug|name|id|path>   which scope (default: the caller's, else the one holding the cwd)
       --driver <id>                 driver profile (default: the scope's usual one)
-      --task <id|slug>              open it inside that task's sandbox
+      --task <id|slug>              open it inside that task's sandbox (any scope; --scope settles a shared slug)
       --repo <relative/path>        open it in that repository
       --title <text>                row label
       -p, --prompt <text>           first thing the driver is asked

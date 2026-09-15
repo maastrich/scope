@@ -416,9 +416,11 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     public var openedBy: String
     /// 0 for a thread a human opened, +1 for each generation of agent below it.
     public var depth: Int
+    /// The thread whose agent opened this one, when one did: the one to answer.
+    public var parent: String?
 
     public init(id: String, title: String, driver: String, scope: String, scopeSlug: String, task: String?,
-                cwd: String, state: String, alive: Bool, openedBy: String, depth: Int) {
+                cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -430,6 +432,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.alive = alive
         self.openedBy = openedBy
         self.depth = depth
+        self.parent = parent
     }
 }
 

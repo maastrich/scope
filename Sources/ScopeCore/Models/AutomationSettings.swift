@@ -26,8 +26,28 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         }
     }
 
+    /// Which threads an agent may read, type into, stop or close.
+    public enum ThreadReach: String, Codable, Sendable, CaseIterable {
+        /// Every thread Scope runs — another task's, another scope's, the user's own.
+        case any
+        /// Only the threads the agent opened itself.
+        case own
+
+        /// What Settings shows.
+        public var title: String {
+            switch self {
+            case .any: "Any thread"
+            case .own: "Only the ones it opened"
+            }
+        }
+    }
+
     /// `false` refuses every mutating request coming from a thread. The user's own terminal keeps working.
     public var agentsMayDrive: Bool
+    /// Which threads an agent may act on. `any` by default: threads are how agents hand work to each other
+    /// across tasks, and every message says who sent it. `own` is the old rule, for whoever wants each agent
+    /// fenced into the threads it opened.
+    public var threadReach: ThreadReach
     /// How deep the chain of agents opening agents may go. A thread the user opened is at depth 0, so the
     /// default of 1 lets an agent open a thread and stops that thread from opening another: recursion is a
     /// choice you make on purpose, not something a prompt discovers.
@@ -43,9 +63,11 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
 
     public static let defaultApprovalTimeout = 120
 
-    public init(agentsMayDrive: Bool = true, maxDepth: Int = 1, threads: Approval = .allow,
-                tasks: Approval = .allow, approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
+    public init(agentsMayDrive: Bool = true, threadReach: ThreadReach = .any, maxDepth: Int = 1,
+                threads: Approval = .allow, tasks: Approval = .allow,
+                approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
         self.agentsMayDrive = agentsMayDrive
+        self.threadReach = threadReach
         self.maxDepth = max(0, maxDepth)
         self.threads = threads
         self.tasks = tasks
@@ -53,7 +75,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case agentsMayDrive, maxDepth, threads, tasks, approvalTimeout
+        case agentsMayDrive, threadReach, maxDepth, threads, tasks, approvalTimeout
     }
 
     /// Lenient: every key is optional and an unknown approval word falls back to the default, so hand-editing
@@ -62,6 +84,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = AutomationSettings()
         agentsMayDrive = try container.decodeIfPresent(Bool.self, forKey: .agentsMayDrive) ?? defaults.agentsMayDrive
+        threadReach = (try? container.decodeIfPresent(ThreadReach.self, forKey: .threadReach)).flatMap { $0 } ?? defaults.threadReach
         maxDepth = max(0, try container.decodeIfPresent(Int.self, forKey: .maxDepth) ?? defaults.maxDepth)
         threads = (try? container.decodeIfPresent(Approval.self, forKey: .threads)).flatMap { $0 } ?? defaults.threads
         tasks = (try? container.decodeIfPresent(Approval.self, forKey: .tasks)).flatMap { $0 } ?? defaults.tasks

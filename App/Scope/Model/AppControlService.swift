@@ -74,13 +74,17 @@ final class AppControlService: ControlService {
         case .threadSend(let params):
             return act(on: params.thread, from: origin) { session in
                 guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
-                if params.submit { session.submit(params.text) } else { session.send(params.text) }
+                // A message from an agent says who sent it; keystrokes (no ↩) and the user's own typing go as they are.
+                let sender = params.submit ? sender(of: origin, caller: caller, to: session) : nil
+                let text = sender.map { ThreadMessage.envelope(params.text, from: $0) } ?? params.text
+                if params.submit { session.submit(text) } else { session.send(text) }
+                let signed = sender.map { ", signed as \($0.thread?.id ?? $0.client)" } ?? ""
                 return .success(.action(ActionResult(message: "typed \(params.text.count) characters into \(session.id.rawValue)"
-                                                         + (params.submit ? " and pressed ↩" : ""),
+                                                         + (params.submit ? " and pressed ↩" : "") + signed,
                                                      thread: session.id.rawValue), .threadSend))
             }
         case .threadRead(let params):
-            // The gate is `thread.send`'s: only a thread the caller opened, any thread from the user's own terminal.
+            // The gate is `thread.send`'s: the same reach, and any thread from the user's own terminal.
             return act(on: params.thread, from: origin) { session in
                 let transcript = TerminalBridge.transcript(of: session)
                 let page = ThreadTranscript.page(transcript.lines, firstLineNumber: transcript.firstLineNumber,
@@ -109,10 +113,28 @@ final class AppControlService: ControlService {
         guard let id = ThreadID(rawValue: raw), let session = model.session(id) else {
             return .failure(.notFound("no thread “\(raw)”", detail: "`scope list threads` shows the ids."))
         }
-        if let refusal = AutomationPolicy.mayTouch(session.record.resolvedOrigin, from: origin) {
+        if let refusal = AutomationPolicy.mayTouch(session.record.resolvedOrigin, id: session.id, from: origin,
+                                                   reach: automation.threadReach) {
             return .failure(refusal)
         }
         return .success(session)
+    }
+
+    /// Who signs a message typed into `target` — an agent, never the user, whose typing is their own.
+    private func sender(of origin: ControlOrigin, caller: ControlCaller, to target: ThreadSession) -> ThreadMessage.Sender? {
+        switch origin {
+        case .user, .strangerThread:
+            return nil
+        case .externalAgent(let client):
+            return ThreadMessage.Sender(client: client)
+        case .thread(let id, _):
+            guard let session = model.session(id) else { return ThreadMessage.Sender(client: caller.client) }
+            let record = session.record
+            let task = record.taskID.flatMap { taskID in model.tasks.first { $0.record.id.rawValue == taskID } }
+            let scope = record.scopeID == target.record.scopeID ? nil : model.scope(record.scopeID)?.declaration.slug
+            return ThreadMessage.Sender(thread: .init(id: id.rawValue, title: session.title, task: task?.record.slug,
+                                                      scope: scope), client: caller.client)
+        }
     }
 
     private func act(on raw: String, from origin: ControlOrigin,
@@ -156,7 +178,7 @@ final class AppControlService: ControlService {
             scope: scope?.name ?? session.record.scopeRoot, scopeSlug: scope?.declaration.slug ?? "",
             task: session.record.taskID, cwd: session.record.cwd,
             state: session.displayState.name, alive: session.isAlive,
-            openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth
+            openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent
         )
     }
 
@@ -175,7 +197,15 @@ final class AppControlService: ControlService {
     private func newThread(_ params: ThreadNewParams, from origin: ControlOrigin,
                            caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
         let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
-        let resolved = ScopeResolver.resolve(params.scope, in: scopeSummaries,
+        // A task names its scope: `--task` alone reaches a task of any scope, the caller's when two share a slug.
+        var task: TaskState?
+        if let query = params.task {
+            switch resolveTask(query, scope: params.scope, callerScopeID: callerScopeID, callerCwd: caller.cwd) {
+            case .failure(let error): return .failure(error)
+            case .success(let found): task = found
+            }
+        }
+        let resolved = ScopeResolver.resolve(task?.scopeID.rawValue ?? params.scope, in: scopeSummaries,
                                              callerScopeID: callerScopeID, callerCwd: caller.cwd)
         guard case .success(let scope) = resolved else {
             return .failure(resolved.failureError)
@@ -190,12 +220,7 @@ final class AppControlService: ControlService {
 
         var cwdKind = ThreadCwdKind.scopeRoot
         var taskID: TaskID?
-        if let query = params.task {
-            guard let task = model.tasks.first(where: { $0.record.id.rawValue == query || $0.record.slug == query }),
-                  task.scopeID == scopeID else {
-                return .failure(.notFound("no task “\(query)” in \(scope.slug)",
-                                          detail: model.tasks.filter { $0.scopeID == scopeID }.map(\.record.slug).joined(separator: ", ")))
-            }
+        if let task {
             taskID = task.record.id
         } else if let repo = params.repo {
             switch ScopeResolver.resolveRepo(repo, in: scope) {
@@ -220,6 +245,36 @@ final class AppControlService: ControlService {
             scope: scope.name, scopeSlug: scope.slug, cwd: session.record.cwd,
             task: session.record.taskID, depth: threadOrigin.depth
         )))
+    }
+
+    /// The task `query` names by id or slug. With `scope`, only in that scope; without, in any scope — the
+    /// caller's own when the same slug exists in several.
+    private func resolveTask(_ query: String, scope: String?, callerScopeID: String?,
+                             callerCwd: String?) -> Result<TaskState, ControlError> {
+        var candidates = model.tasks.filter { $0.record.id.rawValue == query || $0.record.slug == query }
+        if let scope {
+            let resolved = ScopeResolver.resolve(scope, in: scopeSummaries, callerScopeID: callerScopeID, callerCwd: callerCwd)
+            guard case .success(let only) = resolved else { return .failure(resolved.failureError) }
+            candidates = candidates.filter { $0.scopeID.rawValue == only.id }
+            guard let task = candidates.first else {
+                return .failure(.notFound("no task “\(query)” in \(only.slug)",
+                                          detail: model.tasks.filter { $0.scopeID.rawValue == only.id }.map(\.record.slug).joined(separator: ", ")))
+            }
+            return .success(task)
+        }
+        if candidates.count > 1, let own = candidates.first(where: { $0.scopeID.rawValue == callerScopeID }) {
+            return .success(own)
+        }
+        guard candidates.count <= 1 else {
+            return .failure(.badRequest("“\(query)” names a task in several scopes",
+                                        detail: "Say which with --scope: "
+                                            + candidates.map { "\($0.record.scopeSlug)/\($0.record.slug)" }.joined(separator: ", ")))
+        }
+        guard let task = candidates.first else {
+            return .failure(.notFound("no task “\(query)”",
+                                      detail: "`scope list tasks` shows every task; ids and slugs both work."))
+        }
+        return .success(task)
     }
 
     /// `scope task new` — the New Task sheet without the sheet: the same request resolution, the same

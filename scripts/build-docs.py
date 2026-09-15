@@ -779,8 +779,13 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 <p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
-before. It is how an agent that opened a thread finds out what that thread said, without typing into it; like
-<code>thread send</code>, an agent may only read the threads it opened.</p>
+before. It is how an agent finds out what another thread said, without typing into it — its own child, or a
+thread in another task or scope.</p>
+<p><code>scope thread send</code> from a thread is a message: it lands in the other terminal under a line
+naming its sender (thread id, title, task), so the receiving agent knows whom to answer and that the request
+is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
+itself. <code>scope thread new --task</code> finds a task in any scope; <code>--scope</code> settles a slug two
+scopes share.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
@@ -826,12 +831,16 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
   <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
   <tr><td>Let agents drive Scope</td><td>on</td><td>Off refuses every write from a thread.</td></tr>
   <tr><td>Depth ceiling</td><td>1</td><td>A thread you opened is at depth 0. At 1, it may open a thread and that thread may not open another.</td></tr>
+  <tr><td>Talking to threads</td><td>any thread</td><td>Which threads an agent may read, type into, stop or close: any, in every task and scope, or only the ones it opened.</td></tr>
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
   <tr><td>Creating a task</td><td>without asking</td><td>A task writes a branch and a worktree per repository, all of it undone by closing the task. Set it to after asking to confirm each one.</td></tr>
 </table>
-<p>An agent may type into, stop or close only the threads it opened itself; an agent outside Scope, only the
-threads agents outside Scope opened. Typing into someone else's agent is a prompt it never agreed to. Closing a
-task — worktrees removed, branch deleted when asked — follows the same approval as creating one.</p>
+<p>Threads talk to each other: by default an agent may read and type into any thread Scope runs — another
+task's, another scope's, yours — and every message it sends is signed with its thread id, so the receiver
+knows who is asking and can answer back. Only its own terminal is off limits. <i>Only the ones it opened</i>
+is the fence for whoever wants each agent confined to the threads it started; an agent outside Scope is then
+confined to the threads agents outside Scope opened. Closing a task — worktrees removed, branch deleted when
+asked — follows the same approval as creating one.</p>
 <p>Every thread records who opened it and at what depth, so the chain survives a restart —
 <code>scope list threads</code> shows it. A <code>SCOPE_THREAD</code> that names no thread the app is
 running is refused outright.</p>

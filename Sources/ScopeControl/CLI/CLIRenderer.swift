@@ -30,7 +30,8 @@ public enum CLIRenderer {
             home        \(result.home)
             methods     \(result.methods.joined(separator: ", "))
             automation  agents \(automation.agentsMayDrive ? "may drive" : "may not drive"), \
-            depth ≤ \(automation.maxDepth), threads \(automation.threads.rawValue), tasks \(automation.tasks.rawValue)
+            depth ≤ \(automation.maxDepth), threads \(automation.threads.rawValue), tasks \(automation.tasks.rawValue), \
+            reach \(automation.threadReach.rawValue)
             """
         case .list(let result):
             var blocks: [String] = []
@@ -45,9 +46,9 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "BY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug,
-                     $0.depth == 0 ? $0.openedBy : "\($0.openedBy) (depth \($0.depth))"]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "BY"], result.threads.map {
+                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "",
+                     ($0.parent.map { "thread \($0)" } ?? $0.openedBy) + ($0.depth == 0 ? "" : " (depth \($0.depth))")]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
