@@ -45,10 +45,15 @@ enum TerminalAppearance {
             let cyan = resolve(.systemTeal, over: background)
             // Black is a shade darker than the ground in the dark, so a black-on-default run still shows.
             let black = dark ? mix(background, with: .black, 0.45) : foreground
-            let white = dark ? secondary : resolve(.systemGray, over: background)
+            // On white, the two whites are the light greys of a classic light terminal, a step below the
+            // ground, not text colours: programs use them as *backgrounds* there. Claude Code's `light-ansi`
+            // theme paints the user's prompt on `white` and expanded tool output on `whiteBright`, and writes
+            // `black` over both; a grey `white` and a near-black `whiteBright` gave dark blocks in light mode.
+            let white = dark ? secondary : mix(background, with: .black, 0.16)
+            let whiteBright = dark ? foreground : mix(background, with: .black, 0.07)
             let lift: (NSColor) -> NSColor = { dark ? mix($0, with: .white, 0.18) : $0 }
             let normal = [black, red, green, yellow, blue, magenta, cyan, white]
-            let bright = [dark ? tertiary : secondary, lift(red), lift(green), lift(yellow), lift(blue), lift(magenta), lift(cyan), foreground]
+            let bright = [dark ? tertiary : secondary, lift(red), lift(green), lift(yellow), lift(blue), lift(magenta), lift(cyan), whiteBright]
             palette = Palette(
                 background: background,
                 foreground: foreground,
