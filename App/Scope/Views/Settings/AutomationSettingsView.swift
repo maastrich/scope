@@ -144,6 +144,14 @@ struct AutomationSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Picker("Talking to threads", selection: automation(\.threadReach)) {
+                    ForEach(AutomationSettings.ThreadReach.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Text("Which threads an agent may read, type into, stop or close — in any task or scope, or only "
+                     + "the ones it opened. A message from an agent always says which thread sent it.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Picker("Opening a thread", selection: automation(\.threads)) {
                     ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
                 }

@@ -125,29 +125,39 @@ public struct AutomationPolicy: Sendable, Equatable {
         }
     }
 
-    /// Whether `origin` may stop, close, type into or read a thread that `target` says was opened by whom.
+    /// Whether `origin` may stop, close, type into or read the thread `id`, which `target` says was opened by whom.
     ///
-    /// You may touch any thread. An agent may touch only the threads it opened itself — typing into another
-    /// agent's terminal is a prompt it never agreed to — and an agent outside Scope, which has no thread of its
-    /// own to be the parent of anything, only the threads agents outside Scope opened.
-    public static func mayTouch(_ target: ThreadOrigin, from origin: ControlOrigin) -> ControlError? {
+    /// You may touch any thread. With `reach` at `any`, so may an agent — bar itself: a thread typing into its
+    /// own terminal is a prompt loop with no one at the keyboard. With `own`, an agent may touch only the threads
+    /// it opened itself, and an agent outside Scope, which has no thread of its own to be the parent of anything,
+    /// only the threads agents outside Scope opened.
+    public static func mayTouch(_ target: ThreadOrigin, id: ThreadID? = nil, from origin: ControlOrigin,
+                                reach: AutomationSettings.ThreadReach = .own) -> ControlError? {
         switch origin {
         case .user:
             return nil
         case .strangerThread(let raw):
             return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
-        case .thread(let id, _):
-            guard target.parent == id.rawValue else {
+        case .thread(let own, _):
+            if let id, id == own {
+                return .badRequest("a thread may not act on itself",
+                                   detail: "The message would land in your own terminal. Pick another thread from `scope list threads`.")
+            }
+            guard reach == .own else { return nil }
+            guard target.parent == own.rawValue else {
                 return .denied("an agent may only act on the threads it opened",
-                               detail: "Ask the user, or use `scope list threads` to find the ones you opened.")
+                               detail: "Ask the user, or use `scope list threads` to find the ones you opened. "
+                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.")
             }
             return nil
         case .externalAgent:
+            guard reach == .own else { return nil }
             let openedOutside = target.author == .control && target.parent == nil
                 && (target.client ?? "").hasPrefix(ControlClientName.mcp + "/")
             guard openedOutside else {
                 return .denied("an agent outside Scope may only act on threads agents outside Scope opened",
-                               detail: "The threads you or a Scope thread opened are not yours to stop, close or type into.")
+                               detail: "The threads you or a Scope thread opened are not yours to stop, close or type into. "
+                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.")
             }
             return nil
         }

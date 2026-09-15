@@ -148,33 +148,64 @@ import Testing
     }
 }
 
-/// Stopping, closing and typing into threads: an agent may touch only its own.
+/// Stopping, closing, reading and typing into threads: any thread by default, only its own when fenced.
 @Suite struct ThreadOwnershipPolicyTests {
     static let agent = ThreadID(rawValue: "3f9a2c17be04")!
+    static let other = ThreadID(rawValue: "aaaaaaaaaaaa")!
     static let external = ControlOrigin.externalAgent(client: "scope-mcp/0.4.3")
 
     static let openedByAgent = ThreadOrigin(author: .control, parent: "3f9a2c17be04", depth: 1, client: "scope-mcp/0.4.3")
     static let openedByOther = ThreadOrigin(author: .control, parent: "aaaaaaaaaaaa", depth: 1, client: "scope-mcp/0.4.3")
     static let openedOutside = ThreadOrigin(author: .control, parent: nil, depth: 1, client: "scope-mcp/0.4.3")
     static let openedByUserCLI = ThreadOrigin(author: .control, parent: nil, depth: 0, client: "scope-cli/0.4.3")
+    static let every = [openedByAgent, openedByOther, openedOutside, openedByUserCLI, ThreadOrigin.user]
 
     @Test func theUserTouchesAnything() {
-        for target in [Self.openedByAgent, Self.openedByOther, Self.openedOutside, ThreadOrigin.user] {
-            #expect(AutomationPolicy.mayTouch(target, from: .user) == nil)
+        for target in Self.every {
+            #expect(AutomationPolicy.mayTouch(target, from: .user, reach: .own) == nil)
+            #expect(AutomationPolicy.mayTouch(target, from: .user, reach: .any) == nil)
         }
     }
 
-    @Test func anAgentTouchesOnlyTheThreadsItOpened() {
-        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: .thread(Self.agent, depth: 0)) == nil)
-        #expect(AutomationPolicy.mayTouch(Self.openedByOther, from: .thread(Self.agent, depth: 0))?.code == .denied)
-        #expect(AutomationPolicy.mayTouch(.user, from: .thread(Self.agent, depth: 0))?.code == .denied)
+    @Test func anyThreadIsTheDefault() {
+        #expect(AutomationSettings().threadReach == .any)
+        for target in Self.every {
+            #expect(AutomationPolicy.mayTouch(target, id: Self.other, from: .thread(Self.agent, depth: 0), reach: .any) == nil)
+            #expect(AutomationPolicy.mayTouch(target, id: Self.other, from: Self.external, reach: .any) == nil)
+        }
     }
 
-    @Test func anAgentOutsideScopeTouchesOnlyWhatAgentsOutsideScopeOpened() {
-        #expect(AutomationPolicy.mayTouch(Self.openedOutside, from: Self.external) == nil)
-        #expect(AutomationPolicy.mayTouch(Self.openedByUserCLI, from: Self.external)?.code == .denied)
-        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: Self.external)?.code == .denied)
-        #expect(AutomationPolicy.mayTouch(.user, from: Self.external)?.code == .denied)
+    /// The one thread an agent may never type into is its own: the prompt would loop with nobody at the keyboard.
+    @Test func aThreadNeverActsOnItself() {
+        let refusal = AutomationPolicy.mayTouch(.user, id: Self.agent, from: .thread(Self.agent, depth: 0), reach: .any)
+        #expect(refusal?.code == .badRequest)
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, id: Self.agent, from: .thread(Self.agent, depth: 0), reach: .own)?.code == .badRequest)
+        // Without an id to compare there is nothing to refuse on: the old callers keep working.
+        #expect(AutomationPolicy.mayTouch(Self.openedByOther, from: .thread(Self.agent, depth: 0), reach: .any) == nil)
+    }
+
+    @Test func fencedAnAgentTouchesOnlyTheThreadsItOpened() {
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: .thread(Self.agent, depth: 0), reach: .own) == nil)
+        #expect(AutomationPolicy.mayTouch(Self.openedByOther, from: .thread(Self.agent, depth: 0), reach: .own)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(.user, from: .thread(Self.agent, depth: 0), reach: .own)?.code == .denied)
+    }
+
+    @Test func fencedAnAgentOutsideScopeTouchesOnlyWhatAgentsOutsideScopeOpened() {
+        #expect(AutomationPolicy.mayTouch(Self.openedOutside, from: Self.external, reach: .own) == nil)
+        #expect(AutomationPolicy.mayTouch(Self.openedByUserCLI, from: Self.external, reach: .own)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: Self.external, reach: .own)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(.user, from: Self.external, reach: .own)?.code == .denied)
+    }
+
+    @Test func aStrangerTouchesNothingWhateverTheReach() {
+        #expect(AutomationPolicy.mayTouch(Self.openedOutside, from: .strangerThread("zzz"), reach: .any)?.code == .denied)
+    }
+
+    @Test func theReachSurvivesAHalfWrittenConfig() throws {
+        let decoded = try JSONDecoder().decode(AutomationSettings.self, from: Data(#"{"threadReach":"sideways"}"#.utf8))
+        #expect(decoded.threadReach == .any)
+        let own = try JSONDecoder().decode(AutomationSettings.self, from: Data(#"{"threadReach":"own"}"#.utf8))
+        #expect(own.threadReach == .own)
     }
 
     /// Nothing new is opened, so the depth ceiling does not stop an agent from stopping its own thread.
@@ -202,5 +233,32 @@ import Testing
             Issue.record("agents turned off means off")
             return
         }
+    }
+}
+
+/// What the receiving agent reads above a message another agent sent.
+@Suite struct ThreadMessageTests {
+    @Test func aThreadSignsWithItsIdTitleAndTask() {
+        let sender = ThreadMessage.Sender(thread: .init(id: "3f9a2c17be04", title: "review", task: "rate-limiting"),
+                                          client: "scope-cli/0.9.0")
+        let text = ThreadMessage.envelope("run the tests again", from: sender)
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines.count == 2)
+        #expect(lines[0].hasPrefix("[Scope: message from thread 3f9a2c17be04 “review”, task rate-limiting;"))
+        #expect(lines[0].contains("scope thread send 3f9a2c17be04"))
+        #expect(lines[1] == "run the tests again")
+    }
+
+    @Test func anotherScopeIsNamedOnlyWhenItDiffers() {
+        let near = ThreadMessage.header(for: .init(thread: .init(id: "a", title: "t"), client: "c"))
+        #expect(!near.contains(", scope "))
+        let far = ThreadMessage.header(for: .init(thread: .init(id: "a", title: "t", task: "x", scope: "acme"), client: "c"))
+        #expect(far.contains("task x, scope acme"))
+    }
+
+    @Test func anAgentOutsideScopeHasNoThreadToAnswer() {
+        let header = ThreadMessage.header(for: .init(client: "scope-mcp/0.9.0"))
+        #expect(header.contains("outside Scope (scope-mcp/0.9.0)"))
+        #expect(!header.contains("scope thread send"))
     }
 }

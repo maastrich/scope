@@ -93,7 +93,7 @@ stdio, so an agent can open a thread or sandbox a task by itself:
 scope list                                   # scopes, threads, tasks
 scope thread new --scope acme -p "why is CI red?"
 scope task new "fix the flaky login test" --repo api --dry-run
-scope thread send 3f9a2c17be04 "run the tests"   # also: thread stop / close, task close
+scope thread send 3f9a2c17be04 "run the tests"   # any thread, any task; also: thread stop / close, task close
 ```
 
 Inside a thread there is nothing to install: Scope puts its `Contents/Helpers` first on the PATH it hands the
@@ -104,8 +104,11 @@ Settings › Automation › MCP server registers `scope mcp` with Claude Code, C
 sessions started outside Scope have it too. The `scope` command line in your own terminal is you and is never
 filtered. A request from inside a thread, or through `scope mcp` from anywhere, is an agent:
 Settings › Automation holds a depth ceiling (1 by default — an agent may open a thread, that thread may not
-open another) and an approval for opening a thread and for creating a task. Both go ahead without asking by
-default — Scope is there to let agents work unattended; set either to *after asking* to confirm each one.
+open another), an approval for opening a thread and for creating a task, and how far an agent reaches into
+other threads. Everything goes ahead without asking by default — Scope is there to let agents work unattended;
+set an approval to *after asking* to confirm each one. Threads talk to each other: an agent may read and type
+into any thread, in any task or scope, and a message it sends is signed with its thread id so the receiver
+knows whom to answer. *Only the ones it opened* fences each agent into the threads it started.
 
 > **The socket is your account.** `~/.scope/scope.sock` is mode 0600, so only your user can connect — but
 > everything running as you can. The automation settings shape what a Scope thread may ask for; they are not

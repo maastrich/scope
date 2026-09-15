@@ -32,7 +32,7 @@ public struct SkillInstaller: Sendable {
     public let serverName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 1
+    public static let version = 2
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -160,8 +160,27 @@ public struct SkillInstaller: Sendable {
         scope thread close <id>               # hang up and remove
         ```
 
-        You may type into, stop or close only the threads you opened. A thread's working directory is the
-        task's sandbox, so an agent opened there commits on the task branch and never touches the base checkout.
+        A thread's working directory is the task's sandbox, so an agent opened there commits on the task branch
+        and never touches the base checkout. `--task` finds a task in any scope, so a thread can be opened in
+        another task than yours.
+
+        ## Talking to other threads
+
+        Every thread can read and type into every other one, in any task or scope (Settings ▸ Automation ▸
+        Talking to threads can fence an agent into the threads it opened). `scope list threads` shows them all,
+        with their task and who opened them:
+
+        ```sh
+        scope list threads --scope acme         # every thread of that scope, any task
+        scope thread read <id> -n 80            # what another agent is doing, before interrupting it
+        scope thread send <id> "the API contract changed: see api/openapi.yaml on branch feat/rate-limit"
+        ```
+
+        A submitted message lands in the other terminal under a line naming its sender — your thread id, title
+        and task — so the receiver knows whom to answer. When a message arrives that way, answer it with
+        `scope thread send <sender id> "…"` only if it asked for something; do not acknowledge for the sake of
+        it, two agents thanking each other never stop. Sending to your own thread is refused. Another agent's
+        thread is its work: stop or close it only when the user or that agent asked you to.
 
         ## Finishing
 
