@@ -75,7 +75,7 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 
 ### 4.1 Scopes
 
-- **Déclarer un scope** : glisser un dossier sur l'app, `⌘O`, ou depuis le Finder (extension "Ouvrir dans Scope"). Aucune racine, aucune hiérarchie : la sidebar liste les scopes déclarés, dans l'ordre choisi.
+- **Déclarer un scope** : `⌘O`, ou depuis le Finder (extension "Ouvrir dans Scope"). Pas de glisser-déposer : un drop dans la fenêtre va au terminal, qui insère le chemin sur la ligne de commande. Aucune racine, aucune hiérarchie : la sidebar liste les scopes déclarés, dans l'ordre choisi.
 - **Découverte** : Scope repère les repos (dossiers contenant `.git`) à profondeur 1, réglable par scope. Le remote `origin` sert à afficher `owner/repo` et à détecter les orgs.
 - **Watcher** FSEvents sur chaque scope + rafraîchissement manuel.
 - **Repos distants non clonés** : si le scope correspond à une org GitHub et que `gh` est présent, `gh repo list <org>` alimente le graph avec des repos grisés et un bouton *Cloner*.

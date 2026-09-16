@@ -106,7 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func addScopes(_ urls: [URL]) {
-        let folders = directoriesOnly(urls)
+        // Finder hands over files too; only directories can become scopes.
+        let folders = urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
         guard !folders.isEmpty else { return }
         guard let model = AppServices.model else {
             pendingOpen.append(contentsOf: folders)

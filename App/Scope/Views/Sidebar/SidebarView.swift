@@ -33,9 +33,6 @@ struct SidebarView: View {
                     repositoriesSection(scope)
                 }
                 .listStyle(.sidebar)
-                .folderDropTarget { urls in
-                    Task { await model.addScopes(urls) }
-                }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         ScopeSwitcher(scope: scope) { scope in
