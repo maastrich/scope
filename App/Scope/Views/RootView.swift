@@ -56,9 +56,6 @@ struct RootView: View {
                 CommandPalette()
             }
         }
-        .folderDropTarget { urls in
-            Task { await model.addScopes(urls) }
-        }
         .sheet(item: $model.globalSheet) { sheet in
             GlobalSheetView(sheet: sheet)
                 .environment(model)

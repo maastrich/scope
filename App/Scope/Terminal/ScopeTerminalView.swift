@@ -20,9 +20,41 @@ final class ScopeTerminalView: LocalProcessTerminalView {
     /// Every chunk the user types, before it reaches the child (see `ThreadSession.handleUserInput`).
     var onUserInput: ((ArraySlice<UInt8>) -> Void)?
 
+    override init(frame: CGRect, font: NSFont?, options: TerminalOptions) {
+        super.init(frame: frame, font: font, options: options)
+        registerForDraggedTypes([.fileURL])
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        registerForDraggedTypes([.fileURL])
+    }
+
     override func send(source: TerminalView, data: ArraySlice<UInt8>) {
         onUserInput?(data)
         super.send(source: source, data: data)
+    }
+
+    // MARK: Drops
+
+    /// A file or folder dragged from the Finder lands on the command line as an escaped path, the way
+    /// Terminal.app does it. SwiftTerm has no drop handling of its own, and nothing above the terminal may
+    /// claim the drag: the window used to turn a dropped folder into a new scope.
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        droppedURLs(sender).isEmpty ? [] : .copy
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let urls = droppedURLs(sender)
+        guard !urls.isEmpty else { return false }
+        window?.makeFirstResponder(self)
+        // Through `send(source:data:)`, like keystrokes, so the thread sees it as the user typing.
+        send(source: self, data: ArraySlice(Array(ShellEscaping.droppedPaths(urls).utf8)))
+        return true
+    }
+
+    private func droppedURLs(_ sender: any NSDraggingInfo) -> [URL] {
+        (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
     }
 
     override func setFrameSize(_ newSize: NSSize) {

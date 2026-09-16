@@ -1,71 +1,68 @@
 import SwiftUI
 
-/// First-launch scene (UI direction A §7): a dashed drop zone inviting the user to declare a scope.
+/// First-launch scene (UI direction A §7): a card inviting the user to declare a scope. No drop target: a
+/// drag into the window must reach the terminal (a dropped file becomes a path on the command line), so
+/// the folder picker is the one way in.
 struct SceneEmptyView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        FolderDropZone { urls in
-            Task { await model.addScopes(urls) }
-        } content: { isTargeted in
-            VStack(spacing: 14) {
-                Image(systemName: "folder")
-                    .font(.system(size: 44, weight: .thin))
-                    .foregroundStyle(.tertiary)
-                Text("Drop a folder to declare a scope")
-                    .font(.system(size: 20, weight: .semibold))
-                    .tracking(-0.2)
-                Text("A scope is any folder: a cloned GitHub org, a folder of projects, or a single repo. Scope reads it and writes nothing inside.")
-                    .font(.system(size: 13))
-                    .lineSpacing(6)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 420)
-                Button {
-                    Task {
-                        let urls = await FolderPicker.chooseFolders()
-                        await model.addScopes(urls)
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("Choose Folder…")
-                        Text("⌘O")
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .keyboardShortcut("o", modifiers: .command)
-                // One line when it fits, otherwise two centred lines (never a ragged wrap).
-                ViewThatFits {
-                    HStack(spacing: 8) {
-                        Text("Repos are discovered one level deep")
-                        Text("·")
-                        Text("Agents work in sandboxes, never in your checkout")
-                    }
-                    .fixedSize()
-                    VStack(spacing: 4) {
-                        Text("Repos are discovered one level deep")
-                        Text("Agents work in sandboxes, never in your checkout")
-                    }
-                    .multilineTextAlignment(.center)
-                }
-                .font(.system(size: 11.5))
+        VStack(spacing: 14) {
+            Image(systemName: "folder")
+                .font(.system(size: 44, weight: .thin))
+                .foregroundStyle(.tertiary)
+            Text("Declare a scope")
+                .font(.system(size: 20, weight: .semibold))
+                .tracking(-0.2)
+            Text("A scope is any folder: a cloned GitHub org, a folder of projects, or a single repo. Scope reads it and writes nothing inside.")
+                .font(.system(size: 13))
+                .lineSpacing(6)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+            Button {
+                Task {
+                    let urls = await FolderPicker.chooseFolders()
+                    await model.addScopes(urls)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Choose Folder…")
+                    Text("⌘O")
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 56)
-            .frame(width: 560)
-            .background {
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                    .foregroundStyle(isTargeted ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary.opacity(0.18)))
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .keyboardShortcut("o", modifiers: .command)
+            // One line when it fits, otherwise two centred lines (never a ragged wrap).
+            ViewThatFits {
+                HStack(spacing: 8) {
+                    Text("Repos are discovered one level deep")
+                    Text("·")
+                    Text("Agents work in sandboxes, never in your checkout")
+                }
+                .fixedSize()
+                VStack(spacing: 4) {
+                    Text("Repos are discovered one level deep")
+                    Text("Agents work in sandboxes, never in your checkout")
+                }
+                .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .contentShape(Rectangle())
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 40)
+        .padding(.vertical, 56)
+        .frame(width: 560)
+        .background {
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(lineWidth: 1)
+                .foregroundStyle(.primary.opacity(0.12))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
