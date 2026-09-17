@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.10.2](https://github.com/maastrich/scope/releases/tag/v0.10.2) - 2026-09-17
+
+### Fixed
+
+- **threads:** deliver multiline messages whole instead of cutting them at a line break by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.10.1...v0.10.2
+
 ## [0.10.1](https://github.com/maastrich/scope/releases/tag/v0.10.1) - 2026-09-16
 
 ### Fixed
