@@ -3,6 +3,7 @@ import Foundation
 import ScopeAdapters
 import ScopeCore
 import ScopeDrivers
+import ScopeTasks
 import SwiftTerm
 
 /// One thread: its record, its driver profile, the terminal view it owns for its whole life, and the
@@ -217,23 +218,30 @@ final class ThreadSession: Identifiable {
         terminalView.send(txt: text)
     }
 
-    /// Types `text`, then presses ↩ on its own a moment later. Sent in one write, the ↩ lands in the same read as
-    /// the text and a TUI such as Claude Code takes the whole chunk for a paste: the ↩ becomes a newline in the
-    /// prompt and nothing is submitted.
+    /// Types `text` as one input — a paste when the program enabled bracketed paste, so a multiline message is not
+    /// submitted at its first line break — then presses ↩ on its own once the program had time to read it
+    /// (`ThreadDelivery.submitDelay`). Sent in one write, the ↩ lands in the same read as the text and a TUI such
+    /// as Claude Code takes it for part of the paste: a newline in the prompt and nothing submitted.
+    ///
+    /// Submissions go out one after the other: a second message typed before the first one's ↩ would join it.
     func submit(_ text: String) {
-        guard !text.isEmpty else {
-            send("\r")
-            return
-        }
-        send(text)
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.submitDelay) { [weak self] in
+        let previous = pendingSubmit
+        pendingSubmit = Task { @MainActor [weak self] in
+            await previous?.value
             guard let self, self.phase.isAlive else { return }
+            guard !text.isEmpty else {
+                self.send("\r")
+                return
+            }
+            let input = ThreadDelivery.input(text, bracketedPasteMode: self.terminalView.getTerminal().bracketedPasteMode)
+            self.send(input)
+            try? await Task.sleep(for: ThreadDelivery.submitDelay(forByteCount: input.utf8.count))
+            guard self.phase.isAlive else { return }
             self.send("\r")
         }
     }
 
-    /// Long enough for the child to have read the text before the ↩ arrives.
-    static let submitDelay: TimeInterval = 0.15
+    @ObservationIgnored private var pendingSubmit: Task<Void, Never>?
 
     /// Feeds a divider line into the emulator (not to the child).
     func printNotice(_ text: String) {
