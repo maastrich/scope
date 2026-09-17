@@ -93,7 +93,7 @@ extension AppModel {
         case failed(String)
     }
 
-    /// Hands `text` to a thread as one input — what `thread.send` types, wrapped in a bracketed paste — now when
+    /// Hands `text` to a thread as one input — what `thread.send` types (`ThreadSession.submit`) — now when
     /// the thread is between turns, otherwise once its turn ends. Messages to one thread go out one per turn, in
     /// order.
     @discardableResult
@@ -136,14 +136,7 @@ extension AppModel {
     }
 
     private func paste(_ item: PendingDelivery, into session: ThreadSession) {
-        session.send(ThreadDelivery.bracketedPaste(item.text))
-        // Return goes on its own, a beat later: a TUI still busy digesting a long paste can take a Return that
-        // arrives with it as part of the paste rather than as "submit".
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            guard session.isAlive else { return }
-            session.send("\r")
-        }
+        session.submit(item.text)
         item.onDelivered()
     }
 

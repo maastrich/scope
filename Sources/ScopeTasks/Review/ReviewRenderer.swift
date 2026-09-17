@@ -87,6 +87,27 @@ public enum ThreadDelivery {
         return start + clean + end
     }
 
+    /// The bytes that type `text` as one input into a terminal program, the way a terminal pastes it.
+    ///
+    /// Line breaks become `\r`, what Terminal.app and iTerm send for a pasted newline. When the program enabled
+    /// bracketed paste (`bracketedPasteMode`, DECSET 2004) the text goes inside the envelope, so every line break
+    /// stays in the prompt. Typed bare, a TUI reads a long message in several chunks, takes a chunk it does not
+    /// recognise as a paste for keystrokes and submits at its first line break: the rest of the message is cut
+    /// off. A program that did not enable it (a plain `read`, a shell without line editing) gets the text alone:
+    /// the markers would be noise, and its line breaks already mean ↩ there.
+    public static func input(_ text: String, bracketedPasteMode: Bool) -> String {
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\r").replacingOccurrences(of: "\n", with: "\r")
+        return bracketedPasteMode ? bracketedPaste(lines) : lines
+    }
+
+    /// How long to wait between typing `byteCount` bytes and pressing ↩. A ↩ that lands in the same read as the
+    /// text, or while the program is still digesting a long paste, is taken as part of the text: a newline in the
+    /// prompt and nothing submitted. Longer input takes longer to digest, up to a ceiling that keeps a send snappy.
+    public static func submitDelay(forByteCount byteCount: Int) -> Duration {
+        let base = 150, perKilobyte = 50, ceiling = 1_000
+        return .milliseconds(min(ceiling, base + perKilobyte * byteCount / 1_024))
+    }
+
     /// Whether a thread can take a message now: alive and not in the middle of a turn. A running agent would
     /// read a paste as typing into its own work; it waits for the turn to end (done, idle, or asking something).
     public static func canDeliver(to state: ThreadState) -> Bool {
