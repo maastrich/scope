@@ -61,9 +61,9 @@ private struct ExitToast: View {
         .padding(.leading, 14)
         .padding(.trailing, 10)
         .padding(.vertical, 9)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.14), radius: 4, y: 1)
         .frame(maxWidth: 560)
         .onHover { model.holdExitNotice(notice.id, $0 || showsDetails) }
         .onChange(of: showsDetails) { _, open in model.holdExitNotice(notice.id, open) }

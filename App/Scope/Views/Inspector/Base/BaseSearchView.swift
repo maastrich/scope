@@ -135,7 +135,7 @@ struct BaseSearchView: View {
         .padding(.horizontal, 7)
         .frame(height: 24)
         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(focused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(focused ? Color.accentColor.opacity(0.6) : Surface.stroke))
     }
 
     private func subpathField(base: Bindable<BaseModel>) -> some View {
@@ -153,7 +153,7 @@ struct BaseSearchView: View {
         .padding(.horizontal, 7)
         .frame(height: 22)
         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Surface.stroke))
     }
 
     private func toggle(_ title: String, help: String, isOn: Binding<Bool>) -> some View {
@@ -164,7 +164,7 @@ struct BaseSearchView: View {
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(isOn.wrappedValue ? Color.accentColor : .secondary)
                 .frame(width: 22, height: 16)
-                .background(isOn.wrappedValue ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 4))
+                .background(isOn.wrappedValue ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 4))
         }
         .buttonStyle(.plain)
         .help(help)
@@ -178,7 +178,7 @@ struct BaseSearchView: View {
             .foregroundStyle(.tertiary)
             .padding(.horizontal, 4)
             .frame(height: 16)
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
             .help(toolHelp)
             .accessibilityLabel("Search tool: \(model.base.searchTool.displayName)")
     }
@@ -279,7 +279,7 @@ struct BaseSearchView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 5)
                     .frame(height: 15)
-                    .background(Color.primary.opacity(0.07), in: Capsule())
+                    .background(Fill.quiet, in: Capsule())
             }
             .contentShape(Rectangle())
         }
@@ -306,7 +306,7 @@ struct BaseSearchView: View {
             .padding(.leading, 12)
             .padding(.vertical, 1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(highlighted ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 4))
+            .background(highlighted ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

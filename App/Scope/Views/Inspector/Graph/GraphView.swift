@@ -117,7 +117,7 @@ struct GraphView: View {
         }
         .padding(.horizontal, 8)
         .frame(height: 24)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 6))
         .padding(EdgeInsets(top: 0, leading: 14, bottom: 8, trailing: 14))
         .accessibilityIdentifier("graph-filter")
     }

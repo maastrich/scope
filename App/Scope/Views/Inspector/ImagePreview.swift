@@ -31,7 +31,7 @@ struct Checkerboard: View {
     var body: some View {
         Canvas { context, size in
             let cell: CGFloat = 8
-            let dark = Color.primary.opacity(0.07)
+            let dark = Fill.quiet
             var y: CGFloat = 0
             var row = 0
             while y < size.height {

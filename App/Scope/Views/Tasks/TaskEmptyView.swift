@@ -44,6 +44,6 @@ struct TaskEmptyView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

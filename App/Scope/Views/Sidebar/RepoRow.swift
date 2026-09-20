@@ -35,7 +35,7 @@ struct RepoRow: View {
                     .truncationMode(.tail)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
             }
 
             // The gutter `ThreadRow` reserves for its close button, so every row's trailing marker lands in the

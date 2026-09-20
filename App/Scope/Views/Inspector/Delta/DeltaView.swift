@@ -163,7 +163,7 @@ struct DeltaView: View {
         row
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(focused ? Color.accentColor.opacity(0.55) : .clear, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(focused ? Color.accentColor : .clear, lineWidth: 1))
             .padding(.horizontal, -6)
             .padding(.vertical, -3)
             .contentShape(Rectangle())
@@ -186,7 +186,7 @@ struct DeltaSkeleton: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(0..<6, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(Fill.quiet)
                     .frame(width: index == 0 ? 120 : CGFloat(180 + (index * 37) % 120), height: 12)
             }
             Spacer()

@@ -79,7 +79,7 @@ struct TaskSummaryBand: View {
                         }
                         .padding(.horizontal, 6)
                         .frame(height: 18)
-                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
                     // A real URL link, which is what the pointing hand means on macOS.
@@ -159,7 +159,7 @@ struct TaskVersionStrip: View {
                     .lineLimit(1)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
                     .help("The task branch is measured against \(lead?.upstream ?? base)")
             }
             if let sha = lead?.mergeBase {
@@ -248,7 +248,7 @@ private struct TaskRepoRow: View {
         }
         .padding(.horizontal, 6)
         .frame(height: 24)
-        .background(hovering ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: 5))
         .padding(.horizontal, -6)
         .onHover { hovering = $0 }
         .help(repo.sandboxPath)

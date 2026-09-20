@@ -117,7 +117,7 @@ private struct ReviewCommentList: View {
                 TextEditor(text: $draft)
                     .font(.system(size: 12))
                     .frame(height: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
                 HStack {
                     Spacer()
                     Button("Cancel") { editing = nil }

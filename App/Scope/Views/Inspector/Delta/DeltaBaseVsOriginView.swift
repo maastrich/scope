@@ -22,7 +22,7 @@ struct DeltaBaseVsOriginView: View {
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 26)
-                    .background(Color.primary.opacity(0.03))
+                    .background(Fill.quiet)
                     if let error = repo.error {
                         Text(error)
                             .font(.system(size: 11))

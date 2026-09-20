@@ -45,8 +45,9 @@ struct ThreadBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.08)))
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.14), radius: 4, y: 1)
         .environment(\.colorScheme, terminalIsDark ? .dark : .light)
         .frame(maxWidth: 720)
     }

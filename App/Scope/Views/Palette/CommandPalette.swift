@@ -33,9 +33,9 @@ struct CommandPalette: View {
             // Opaque, not a material: a material blurs what lies under it, and under the panel lies the dimming
             // scrim — the panel came out grey (`#d6d9da` measured in light mode), a shade above the backdrop it is
             // supposed to stand in front of.
-            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.15)))
-            .shadow(color: .black.opacity(0.35), radius: 35, y: 24)
+            .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+            .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+            .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
             .padding(.top, 120)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             .onKeyPress(.upArrow) { move(-1, count: items.count); return .handled }
@@ -85,7 +85,7 @@ struct CommandPalette: View {
                     .padding(.horizontal, 6)
                     .frame(height: 20)
                     .frame(maxWidth: 220)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
             }
         }
         .padding(.horizontal, 16)
@@ -236,7 +236,7 @@ private struct PaletteRow: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(highlighted ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .background(highlighted ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 6))
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)

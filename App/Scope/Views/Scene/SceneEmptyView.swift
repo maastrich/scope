@@ -60,9 +60,9 @@ struct SceneEmptyView: View {
         .background {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(lineWidth: 1)
-                .foregroundStyle(.primary.opacity(0.12))
+                .foregroundStyle(Surface.stroke)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

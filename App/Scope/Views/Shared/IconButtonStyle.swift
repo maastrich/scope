@@ -40,8 +40,8 @@ struct IconButtonStyle: ButtonStyle {
 
         private var fill: Color {
             guard isEnabled else { return .clear }
-            if configuration.isPressed { return Color.primary.opacity(0.14) }
-            return hovering ? Color.primary.opacity(0.075) : .clear
+            if configuration.isPressed { return Fill.pressed }
+            return hovering ? Fill.hover : .clear
         }
     }
 }

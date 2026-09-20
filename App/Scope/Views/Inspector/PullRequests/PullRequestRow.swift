@@ -91,7 +91,7 @@ struct PullRequestRow: View {
             .controlSize(.small)
         }
         .padding(EdgeInsets(top: 9, leading: 14, bottom: 9, trailing: 12))
-        .background(hovering ? Color.primary.opacity(0.03) : .clear)
+        .background(hovering ? Fill.hover : .clear)
         .onHover { hovering = $0 }
         .contextMenu {
             if let task = boundTask {

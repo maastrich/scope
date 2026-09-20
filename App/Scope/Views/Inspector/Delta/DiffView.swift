@@ -192,7 +192,7 @@ struct CommentEditor: View {
                 .font(.system(size: 12))
                 .frame(width: 340, height: 90)
                 .focused($focused)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
             HStack(spacing: 8) {
                 if let onDelete {
                     Button("Delete", role: .destructive, action: onDelete)

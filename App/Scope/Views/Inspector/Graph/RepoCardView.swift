@@ -78,7 +78,7 @@ struct RepoCardView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
             }
             if let date = card.lastActivity {
                 Text(date.formatted(.relative(presentation: .named)))
@@ -102,7 +102,7 @@ struct RepoCardView: View {
                         .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
                         .padding(.horizontal, 6)
                         .frame(height: 18)
-                        .background(active ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.06),
+                        .background(active ? Fill.selectedTint : Fill.quiet,
                                     in: RoundedRectangle(cornerRadius: 4))
                 }
                 .buttonStyle(.plain)

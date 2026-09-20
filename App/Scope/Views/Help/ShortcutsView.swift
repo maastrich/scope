@@ -108,6 +108,6 @@ struct ShortcutsView: View {
             .padding(20)
         }
         .frame(width: 520, height: 560)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

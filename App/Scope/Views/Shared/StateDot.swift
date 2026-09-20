@@ -97,6 +97,6 @@ struct StatePill: View {
         .padding(.leading, 8)
         .padding(.trailing, 9)
         .frame(height: 22)
-        .background(Color.primary.opacity(0.05), in: Capsule())
+        .background(Fill.quiet, in: Capsule())
     }
 }

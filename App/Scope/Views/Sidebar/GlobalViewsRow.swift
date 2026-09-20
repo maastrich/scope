@@ -26,7 +26,7 @@ struct GlobalViewsRow: View {
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .padding(.horizontal, 4)
                             .frame(height: 15)
-                            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                            .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
                     }
                 }
                 .frame(maxWidth: .infinity)

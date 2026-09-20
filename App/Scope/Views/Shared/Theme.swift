@@ -6,7 +6,7 @@ import ScopeGit
 // for one.
 //
 // Two tiers. `Surface` / `Fill` / `Ink` are the *surface* tier, and they are what the app was missing: before
-// them, roughly twenty-five views hand-wrote `Color.primary.opacity(0.06)` against a ground they could not
+// them, roughly twenty-five views hand-wrote `Fill.quiet` against a ground they could not
 // know, and the sidebar was translucent because nothing said what it should be painted with instead.
 // `ThreadStateStyle` and `PullRequestStyle` are the *semantic* tier — they already existed and are unchanged
 // beyond moving here.
@@ -49,7 +49,7 @@ enum Fill {
     /// `isSelected` trait, exactly as it is in Finder.
     static let selectedInactive = Color("SelectionInactive")
     /// The selected row of a secondary list — delta files, palette results, base search. Opaque, where this
-    /// used to be `Color.accentColor.opacity(0.12)`.
+    /// used to be `Fill.selectedTint`.
     static let selectedTint = Color("SelectionTint")
 }
 

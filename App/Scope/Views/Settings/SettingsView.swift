@@ -374,7 +374,7 @@ private struct DriversSettingsView: View {
                                 .font(.system(size: 10, weight: .medium))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .background(Color.primary.opacity(0.06), in: Capsule())
+                                .background(Fill.quiet, in: Capsule())
                                 .foregroundStyle(.secondary)
                         }
                     }

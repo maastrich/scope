@@ -52,7 +52,7 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
         // A task-only tab left showing with no task would sit on an empty state forever; Base always has a subject.
         .onChange(of: model.currentTask == nil, initial: true) { _, noTask in
             if noTask, model.inspectorTab.needsTask { model.inspectorTab = .base }

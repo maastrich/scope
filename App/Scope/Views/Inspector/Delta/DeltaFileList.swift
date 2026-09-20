@@ -155,7 +155,7 @@ struct DeltaFileList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.primary.opacity(0.03))
+        .background(Fill.quiet)
         .accessibilityLabel("\(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name), \(shown) files, \(collapsedRepos.contains(repo.id) ? "collapsed" : "expanded")")
     }
 
@@ -199,7 +199,7 @@ struct DeltaFileList: View {
         }
         .padding(EdgeInsets(top: 0, leading: 30, bottom: 0, trailing: 14))
         .frame(height: 26)
-        .background(selected ? Color.accentColor.opacity(0.12) : .clear)
+        .background(selected ? Fill.selectedTint : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
             model.delta.selectedFile = ref
