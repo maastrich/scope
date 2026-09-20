@@ -19,7 +19,7 @@ struct ScopeSwitcher: View {
                 HStack(spacing: 6) {
                     Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
                         .font(.scopeBody)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     Text(scope.name)
                         .font(.scopeTitle)
                         .lineLimit(1)
@@ -27,7 +27,7 @@ struct ScopeSwitcher: View {
                         .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                 }
                 .contentShape(Rectangle())
             }

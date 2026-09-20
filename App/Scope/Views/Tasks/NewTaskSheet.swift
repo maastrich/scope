@@ -104,7 +104,7 @@ struct NewTaskSheet: View {
                 if prompt.isEmpty {
                     Text("What should the agent do? e.g. Add a refresh-token flow to the auth service…")
                         .font(.scopeBody)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .padding(.top, 8)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
@@ -135,14 +135,14 @@ struct NewTaskSheet: View {
             }
             Text(driverCaption)
                 .font(.scopeRow)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
 
         Section {
             Label(repoHint, systemImage: repoHintSymbol)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -172,7 +172,7 @@ struct NewTaskSheet: View {
             LabeledContent("Sandbox") {
                 Text(sandboxPath)
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -193,7 +193,7 @@ struct NewTaskSheet: View {
                 }
             }
             .font(.scopeRow)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
         }
 
         if let busy = checkedOut {
@@ -228,7 +228,7 @@ struct NewTaskSheet: View {
                             if let branch = repo.branchLabel {
                                 Text(branch)
                                     .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Ink.secondary)
                             }
                         }
                     }
@@ -261,14 +261,14 @@ struct NewTaskSheet: View {
         Section {
             Text(prompt.trimmingCharacters(in: .whitespacesAndNewlines))
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(4)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             LabeledContent("Opens") {
                 Text("\(selectedProfile?.name ?? "Shell") in \(repoCaption)")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
             .font(.system(size: 12))
         } header: {
@@ -282,7 +282,7 @@ struct NewTaskSheet: View {
                 ProgressView().controlSize(.small)
                 Text("Creating \(repoCount) \(repoCount == 1 ? "sandbox" : "sandboxes") — fetching origin…")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
             Spacer()

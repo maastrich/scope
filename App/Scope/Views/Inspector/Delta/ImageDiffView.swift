@@ -61,7 +61,7 @@ struct ImageDiffView: View {
             HStack(spacing: 6) {
                 Text(label).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(label == "Added" ? DeltaCounts.added : DeltaCounts.removed)
-                Text(image.caption).font(.scopeCaption).foregroundStyle(.secondary)
+                Text(image.caption).font(.scopeCaption).foregroundStyle(Ink.secondary)
                 Spacer()
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
@@ -81,9 +81,9 @@ struct ImageDiffView: View {
                 .controlSize(.small)
                 .fixedSize()
                 if mode == .onionSkin {
-                    Text("Before").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    Text("Before").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
                     Slider(value: $opacity, in: 0...1).controlSize(.small).frame(maxWidth: 200)
-                    Text("After").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    Text("After").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
                 }
                 Spacer()
                 if old.pixelSize != new.pixelSize {
@@ -111,7 +111,7 @@ struct ImageDiffView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Text(label).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(tint)
-                Text(image.caption).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                Text(image.caption).font(.system(size: 10.5)).foregroundStyle(Ink.secondary).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
@@ -123,7 +123,7 @@ struct ImageDiffView: View {
     private func placeholder(_ text: String) -> some View {
         VStack {
             Spacer()
-            Text(text).font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(text).font(.system(size: 12)).foregroundStyle(Ink.secondary).multilineTextAlignment(.center)
             Spacer()
         }
         .frame(maxWidth: .infinity)

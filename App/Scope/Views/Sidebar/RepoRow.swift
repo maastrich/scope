@@ -13,7 +13,7 @@ struct RepoRow: View {
         HStack(spacing: 7) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.scopeBody)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .frame(width: 16)
 
             Text(repo.shortName)
@@ -30,7 +30,7 @@ struct RepoRow: View {
             } else if let branch = repo.branchLabel {
                 Text(branch)
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .padding(.horizontal, 6)

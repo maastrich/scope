@@ -79,7 +79,7 @@ private struct ProblemRowView: View {
                 Spacer(minLength: 8)
                 Text(problem.createdAt, format: .relative(presentation: .named))
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 Button {
                     model.problems.dismiss(problem.id)
                 } label: {
@@ -87,14 +87,14 @@ private struct ProblemRowView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("Dismiss")
                 .accessibilityLabel("Dismiss \(problem.title)")
             }
             if let detail = problem.detail, !detail.isEmpty {
                 Text(detail)
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .textSelection(.enabled)
                     .lineLimit(8)
                     .fixedSize(horizontal: false, vertical: true)

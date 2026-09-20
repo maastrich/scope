@@ -28,7 +28,7 @@ struct ReviewBar: View {
                 Label("\(queued.delivery.label.capitalizedFirst) waits for \(model.displayTitle(for: queued.session)) to finish its turn",
                       systemImage: "clock")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }

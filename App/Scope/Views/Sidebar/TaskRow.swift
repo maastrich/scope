@@ -83,7 +83,7 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: task.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 12, height: 12)
             }
             .buttonStyle(.iconTight)
@@ -100,7 +100,7 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: "archivebox")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
@@ -112,7 +112,7 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
             }
             .menuStyle(.borderlessButton)

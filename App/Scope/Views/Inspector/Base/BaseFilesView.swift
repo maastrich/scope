@@ -29,7 +29,7 @@ struct BaseFilesView: View {
             } else {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Listing files…").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("Listing files…").font(.system(size: 12)).foregroundStyle(Ink.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
             }

@@ -20,7 +20,7 @@ struct TaskSummaryBand: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 Text(task.name)
                     .font(.scopeTitle)
                     .lineLimit(1)
@@ -32,7 +32,7 @@ struct TaskSummaryBand: View {
                 .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
                 Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
@@ -43,7 +43,7 @@ struct TaskSummaryBand: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .disabled(model.config.preferences.editor == nil)
                 .help("Open Task in Editor (⇧⌘E)")
                 .accessibilityLabel("Open \(task.name) in Editor")
@@ -54,7 +54,7 @@ struct TaskSummaryBand: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("Reveal in Finder")
                 .accessibilityLabel("Reveal \(task.name) in Finder")
             }
@@ -73,7 +73,7 @@ struct TaskSummaryBand: View {
                                 .frame(width: 6, height: 6)
                             Text("\(pr.label) \(pr.title)")
                                 .font(.system(size: 10.5))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -99,7 +99,7 @@ struct TaskSummaryBand: View {
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Text(prompt)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
@@ -152,10 +152,10 @@ struct TaskVersionStrip: View {
             if let base = lead?.upstreamBranch {
                 Text("from")
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                 Text(base)
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
@@ -165,17 +165,17 @@ struct TaskVersionStrip: View {
             if let sha = lead?.mergeBase {
                 Text("@")
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                 Text(String(sha.prefix(7)))
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .help("Merge-base: the base as it was when the task forked — \(sha)")
             }
             Spacer(minLength: 4)
             if ahead > 0 {
                 Text("↑\(ahead)")
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .help("\(ahead) \(ahead == 1 ? "commit" : "commits") on the task branch since the base")
             }
             if behind > 0 {
@@ -220,7 +220,7 @@ private struct TaskRepoRow: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("Open in Editor (⌥-click copies the path)")
                 .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
@@ -231,7 +231,7 @@ private struct TaskRepoRow: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("See Delta (⌘D)")
                 .accessibilityLabel("See Delta of \(repoName)")
             }

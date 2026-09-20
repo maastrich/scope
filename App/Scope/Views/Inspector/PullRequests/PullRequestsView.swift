@@ -131,7 +131,7 @@ struct PullRequestsView: View {
             let count = model.pullRequests.pullRequests.count
             Text(count == 1 ? "1 open" : "\(count) open")
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .padding(.horizontal, 6)
                 .frame(height: 18)
                 .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))

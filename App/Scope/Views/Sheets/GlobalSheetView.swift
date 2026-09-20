@@ -16,7 +16,7 @@ struct GlobalSheetView: View {
                 if let scope = model.currentScope {
                     Text(scope.name)
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }

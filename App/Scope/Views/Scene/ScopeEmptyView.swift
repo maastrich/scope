@@ -25,19 +25,19 @@ struct ScopeEmptyView: View {
         VStack(spacing: 14) {
             Image(systemName: "terminal")
                 .font(.system(size: 36, weight: .thin))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             (Text("No thread in ") + Text(scope.name).italic())
                 .font(.system(size: 20, weight: .semibold))
             if scope.kind == .missing {
                 Text("The folder \(scope.url.path) is missing. Threads open once it is back.")
                     .font(.scopeBody)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             } else {
                 Text("Threads run in \(threadCwd.path) with SCOPE_SCOPE, SCOPE_THREAD and the login-shell environment injected.")
                     .font(.scopeBody)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }

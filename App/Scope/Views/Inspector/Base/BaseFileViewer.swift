@@ -29,7 +29,7 @@ struct BaseFileViewer: View {
     private func placeholder(_ message: String) -> some View {
         Text(message)
             .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
             .multilineTextAlignment(.center)
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,11 +53,11 @@ struct BaseFileViewer: View {
             HStack {
                 Text(path)
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Text(image?.caption ?? "undecodable image").font(.scopeCaption).foregroundStyle(.secondary)
+                Text(image?.caption ?? "undecodable image").font(.scopeCaption).foregroundStyle(Ink.secondary)
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
             Divider()
@@ -75,11 +75,11 @@ struct BaseFileViewer: View {
             HStack {
                 Text(path)
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Text("\(lineCount) lines").font(.scopeCaption).foregroundStyle(.secondary)
+                Text("\(lineCount) lines").font(.scopeCaption).foregroundStyle(Ink.secondary)
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
             Divider()

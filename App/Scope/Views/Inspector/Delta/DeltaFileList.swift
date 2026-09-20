@@ -43,7 +43,7 @@ struct DeltaFileList: View {
         HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField("Filter files", text: $filter)
                 .textFieldStyle(.plain)
@@ -65,7 +65,7 @@ struct DeltaFileList: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.scopeCaption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                 }
                 .buttonStyle(.plain)
                 .help("Clear filters")
@@ -139,7 +139,7 @@ struct DeltaFileList: View {
             HStack(spacing: 6) {
                 Image(systemName: collapsedRepos.contains(repo.id) ? "chevron.right" : "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 11)
                 Text(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name)
                     .font(.system(size: 12, weight: .semibold))
@@ -147,7 +147,7 @@ struct DeltaFileList: View {
                 Spacer(minLength: 4)
                 Text(shown == delta.files.count ? "\(delta.files.count) \(delta.files.count == 1 ? "file" : "files")" : "\(shown) of \(delta.files.count) files")
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                 DeltaCounts(additions: delta.summary.additions, deletions: delta.summary.deletions)
             }
             .padding(.horizontal, 14)
@@ -191,7 +191,7 @@ struct DeltaFileList: View {
             } label: {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
             }
             .buttonStyle(.plain)
             .help("Open in Editor (⌥-click copies the path)")
@@ -211,7 +211,7 @@ struct DeltaFileList: View {
         guard let slash = path.lastIndex(of: "/") else { return Text(path) }
         let directory = String(path[...slash])
         let name = String(path[path.index(after: slash)...])
-        return Text(directory).foregroundStyle(.tertiary) + Text(name)
+        return Text(directory).foregroundStyle(Ink.tertiary) + Text(name)
     }
 
     static func letter(_ status: DiffFile.Status) -> String {

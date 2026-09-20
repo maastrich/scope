@@ -127,7 +127,7 @@ struct SidebarView: View {
         return HStack(spacing: 5) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.scopeCaption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField("Filter", text: $ui.sidebarFilter)
                 .textFieldStyle(.plain)
@@ -146,14 +146,14 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.scopeCaption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear filter")
             } else {
                 Text("⌥⌘F")
                     .font(.system(size: 10))
-                    .foregroundStyle(.quaternary)
+                    .foregroundStyle(Ink.tertiary)
             }
         }
         .padding(.horizontal, 7)
@@ -194,17 +194,17 @@ struct SidebarView: View {
             Text(title)
             if let count {
                 Text("· \(count)")
-                    .foregroundStyle(.quaternary)
+                    .foregroundStyle(Ink.tertiary)
             }
         }
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Ink.tertiary)
     }
 
     private func hintRow(_ text: String) -> some View {
         Text(text)
             .font(.scopeCaption)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Ink.tertiary)
             .lineLimit(1)
             .truncationMode(.tail)
             .selectionDisabled()
@@ -300,7 +300,7 @@ struct SidebarView: View {
             }
         }
         .font(.scopeCaption)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Ink.tertiary)
         .selectionDisabled()
     }
 

@@ -23,7 +23,7 @@ struct RepoCardView: View {
                     Text(purpose)
                         .font(.system(size: 12))
                         .lineSpacing(3)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !card.stack.isEmpty { chips(card.stack) }
@@ -31,7 +31,7 @@ struct RepoCardView: View {
                 if !card.tags.isEmpty {
                     HStack(spacing: 5) {
                         ForEach(card.tags, id: \.self) { tag in
-                            Text("#\(tag)").font(.scopeCaption).foregroundStyle(.secondary)
+                            Text("#\(tag)").font(.scopeCaption).foregroundStyle(Ink.secondary)
                         }
                     }
                 }
@@ -57,7 +57,7 @@ struct RepoCardView: View {
                 if let remote = card.remote, remote != card.name {
                     Text(remote)
                         .font(.scopeCaption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -75,7 +75,7 @@ struct RepoCardView: View {
             if let branch = card.defaultBranch {
                 Text(branch)
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
                     .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
@@ -83,7 +83,7 @@ struct RepoCardView: View {
             if let date = card.lastActivity {
                 Text(date.formatted(.relative(presentation: .named)))
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .help("Last commit \(date.formatted(date: .abbreviated, time: .shortened))")
             }
@@ -157,7 +157,7 @@ struct RepoCardView: View {
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.scopeCaption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
             .frame(width: 52, alignment: .leading)
     }
 
@@ -180,7 +180,7 @@ struct RepoCardView: View {
             } else {
                 Text("not in the scope any more")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
             Spacer(minLength: 0)
             Button {

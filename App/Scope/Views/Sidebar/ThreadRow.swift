@@ -89,7 +89,7 @@ struct ThreadRow: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .frame(width: 16, height: 16)
                 .contentShape(Rectangle())
         }

@@ -50,7 +50,7 @@ private struct ExitToast: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
@@ -122,7 +122,7 @@ private struct ExitDetails: View {
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
             Text(label)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .gridColumnAlignment(.trailing)
             Text(value)
                 .textSelection(.enabled)

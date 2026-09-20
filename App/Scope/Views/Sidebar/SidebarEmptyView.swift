@@ -12,7 +12,7 @@ struct SidebarEmptyView: View {
                 .font(.scopeCaption)
                 .multilineTextAlignment(.center)
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Ink.secondary)
         .padding(.horizontal, 24)
         .padding(.vertical, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

@@ -23,7 +23,7 @@ struct CommitSheet: View {
                     LabeledContent("Branch") {
                         Text(repo.branch)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }

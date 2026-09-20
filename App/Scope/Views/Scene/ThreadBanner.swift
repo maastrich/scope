@@ -27,7 +27,7 @@ struct ThreadBanner: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(showsDetails ? nil : 2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -38,7 +38,7 @@ struct ThreadBanner: View {
             if showsDetails, let details {
                 Text(details)
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -73,7 +73,7 @@ struct ThreadBanner: View {
                 .foregroundStyle(Color("WarningText"))
         default:
             Image(systemName: "moon.zzz")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
         }
     }
 

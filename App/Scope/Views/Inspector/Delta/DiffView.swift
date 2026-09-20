@@ -100,7 +100,7 @@ struct DiffView: View {
         HStack(spacing: 8) {
             Image(systemName: ImageFiles.isImage(file.path) ? "photo" : "doc.text")
                 .font(.scopeBody)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
             Text("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
                 .font(.system(size: 11.5, design: .monospaced))
                 .lineLimit(1)
@@ -108,7 +108,7 @@ struct DiffView: View {
             if let old = file.oldPath, old != file.path {
                 Text("← \(old)")
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -135,7 +135,7 @@ struct DiffView: View {
     private func placeholder(_ text: String) -> some View {
         VStack {
             Spacer()
-            Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(text).font(.system(size: 12)).foregroundStyle(Ink.secondary)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -185,7 +185,7 @@ struct CommentEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             TextEditor(text: $text)

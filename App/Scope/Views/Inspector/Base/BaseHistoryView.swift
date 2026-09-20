@@ -12,7 +12,7 @@ struct BaseHistoryView: View {
                 if base.isLoadingHistory {
                     ProgressView().controlSize(.small)
                 } else {
-                    Text("No commits").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("No commits").font(.system(size: 12)).foregroundStyle(Ink.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -34,7 +34,7 @@ struct BaseHistoryView: View {
                         Text(commit.date.formatted(.relative(presentation: .named)))
                     }
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                 }
                 .padding(.vertical, 2)

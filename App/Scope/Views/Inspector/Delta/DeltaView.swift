@@ -75,10 +75,10 @@ struct DeltaView: View {
                     Spacer()
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 28, weight: .thin))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Text("No changes")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     ForEach(delta.repos.filter { $0.error != nil }) { repo in
                         Text("\(repo.repo.name): \(repo.error ?? "")")
                             .font(.scopeCaption)
@@ -138,7 +138,7 @@ struct DeltaView: View {
         return keyboardHint(HStack(spacing: 6) {
             Text(modeCaption)
                 .font(.scopeCaption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 4)
             Image(systemName: "keyboard")
@@ -148,12 +148,12 @@ struct DeltaView: View {
             if delta.mode == .baseVsOrigin {
                 Text("↑\(delta.ahead) ↓\(delta.behind)")
                     .font(.scopeValue)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             } else {
                 let summary = delta.summary
                 Text("\(summary.files) \(summary.files == 1 ? "file" : "files")")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 DeltaCounts(additions: summary.additions, deletions: summary.deletions)
             }
         })

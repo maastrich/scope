@@ -69,7 +69,7 @@ struct CommandPalette: View {
         HStack(spacing: 10) {
             Image(systemName: mode == .files ? "doc.text.magnifyingglass" : "magnifyingglass")
                 .font(.system(size: 16))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField(mode == .files ? FileFinderChrome.placeholder : "Type a command, a file, a repo or a thread…", text: $query)
                 .textFieldStyle(.plain)
@@ -79,7 +79,7 @@ struct CommandPalette: View {
             if let context = contextLabel {
                 Text(context)
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .padding(.horizontal, 6)
@@ -102,7 +102,7 @@ struct CommandPalette: View {
                         } else {
                             Text("No match")
                                 .font(.scopeBody)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Ink.tertiary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 24)
                         }
@@ -112,7 +112,7 @@ struct CommandPalette: View {
                         case .header(let section):
                             Text(section.rawValue)
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Ink.tertiary)
                                 .padding(EdgeInsets(top: 10, leading: 20, bottom: 4, trailing: 20))
                                 .accessibilityAddTraits(.isHeader)
                         case .item(let index, let item):
@@ -168,7 +168,7 @@ struct CommandPalette: View {
             Text("esc")
         }
         .font(.scopeCaption)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Ink.tertiary)
         .padding(.horizontal, 16)
         .frame(height: 30)
     }
@@ -210,7 +210,7 @@ private struct PaletteRow: View {
             } else {
                 Image(systemName: item.icon)
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 15)
                     .accessibilityHidden(true)
             }
@@ -222,7 +222,7 @@ private struct PaletteRow: View {
             if let hint = item.hint {
                 Text(hint)
                     .font(.scopeCaption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: 220, alignment: .trailing)
@@ -230,7 +230,7 @@ private struct PaletteRow: View {
             if let shortcut = item.shortcut {
                 Text(shortcut)
                     .font(.scopeRow)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(minWidth: 34, alignment: .trailing)
             }
         }

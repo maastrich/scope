@@ -75,7 +75,7 @@ struct SceneView: View {
                             .font(.system(size: 12, weight: .medium))
                         Text("⌘E")
                             .font(.scopeCaption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     }
                 }
                 .disabled(model.config.preferences.editor == nil)

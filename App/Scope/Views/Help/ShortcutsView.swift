@@ -82,7 +82,7 @@ struct ShortcutsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(group.title)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .padding(.bottom, 2)
                         ForEach(group.entries) { entry in
                             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -95,7 +95,7 @@ struct ShortcutsView: View {
                                 if let note = entry.note {
                                     Text(note)
                                         .font(.scopeCaption)
-                                        .foregroundStyle(.tertiary)
+                                        .foregroundStyle(Ink.tertiary)
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 0)

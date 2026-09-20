@@ -10,14 +10,14 @@ struct SceneEmptyView: View {
         VStack(spacing: 14) {
             Image(systemName: "folder")
                 .font(.system(size: 44, weight: .thin))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             Text("Declare a scope")
                 .font(.system(size: 20, weight: .semibold))
                 .tracking(-0.2)
             Text("A scope is any folder: a cloned GitHub org, a folder of projects, or a single repo. Scope reads it and writes nothing inside.")
                 .font(.scopeBody)
                 .lineSpacing(6)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
             Button {
@@ -52,7 +52,7 @@ struct SceneEmptyView: View {
                 .multilineTextAlignment(.center)
             }
             .font(.scopeRow)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
         }
         .padding(.horizontal, 40)
         .padding(.vertical, 56)

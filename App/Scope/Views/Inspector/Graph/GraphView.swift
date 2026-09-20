@@ -29,7 +29,7 @@ struct GraphView: View {
                         .controlSize(.small)
                     Text(progress.caption)
                         .font(.scopeCaption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                 }
                 .padding(EdgeInsets(top: 0, leading: 14, bottom: 8, trailing: 14))
@@ -60,12 +60,12 @@ struct GraphView: View {
                     Text(scope.name).font(.system(size: 12, weight: .semibold))
                     Text("· \(repos) \(repos == 1 ? "repo" : "repos") · \(remotes) \(remotes == 1 ? "remote" : "remotes")")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                 }
                 .lineLimit(1)
                 Text(generatedCaption)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -101,7 +101,7 @@ struct GraphView: View {
         @Bindable var graph = model.graph
         return HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
             TextField("Filter by path or stack", text: $graph.filter)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
@@ -109,7 +109,7 @@ struct GraphView: View {
                 Button {
                     graph.filter = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Ink.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Clear filter")
@@ -141,7 +141,7 @@ struct GraphView: View {
                 if model.graph.filteredCards.isEmpty {
                     Text("No card matches “\(model.graph.filter)”.")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .padding(.top, 12)
                 }
             }

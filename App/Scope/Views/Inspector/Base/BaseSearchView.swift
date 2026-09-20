@@ -90,7 +90,7 @@ struct BaseSearchView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.scopeCaption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField(model.base.searchOptions.regex ? "Search (regex)" : "Search", text: base.query)
                 .textFieldStyle(.plain)
@@ -111,7 +111,7 @@ struct BaseSearchView: View {
             } else if !model.base.results.isEmpty {
                 Text(countLabel)
                     .font(.system(size: 10.5, design: .rounded))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .monospacedDigit()
                     .lineLimit(1)
                     .accessibilityLabel("\(model.base.results.count) matches")
@@ -142,7 +142,7 @@ struct BaseSearchView: View {
         HStack(spacing: 6) {
             Image(systemName: "folder")
                 .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField("Subpath, e.g. src/lib (optional)", text: base.searchSubpath)
                 .textFieldStyle(.plain)
@@ -175,7 +175,7 @@ struct BaseSearchView: View {
     private var toolChip: some View {
         Text(model.base.searchTool.displayName)
             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Ink.tertiary)
             .padding(.horizontal, 4)
             .frame(height: 16)
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
@@ -216,7 +216,7 @@ struct BaseSearchView: View {
             } else {
                 Text(text)
                     .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -229,7 +229,7 @@ struct BaseSearchView: View {
                 .foregroundStyle(Color(nsColor: .systemRed))
             Text(message)
                 .font(.scopeValue)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .textSelection(.enabled)
                 .lineLimit(6)
             Button("Retry") { runNow() }
@@ -266,7 +266,7 @@ struct BaseSearchView: View {
             HStack(spacing: 6) {
                 Image(systemName: collapsed.contains(group.path) ? "chevron.right" : "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 10)
                     .accessibilityHidden(true)
                 pathText(group.path)
@@ -276,7 +276,7 @@ struct BaseSearchView: View {
                 Spacer(minLength: 4)
                 Text("+\(group.matches.count)")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .padding(.horizontal, 5)
                     .frame(height: 15)
                     .background(Fill.quiet, in: Capsule())
@@ -295,7 +295,7 @@ struct BaseSearchView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(match.line)")
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(minWidth: 28, alignment: .trailing)
                 Text(Self.snippet(match))
                     .font(.system(size: 11.5, design: .monospaced))
@@ -332,7 +332,7 @@ struct BaseSearchView: View {
 
     private func pathText(_ path: String) -> Text {
         guard let slash = path.lastIndex(of: "/") else { return Text(path) }
-        return Text(String(path[...slash])).foregroundStyle(.tertiary) + Text(String(path[path.index(after: slash)...]))
+        return Text(String(path[...slash])).foregroundStyle(Ink.tertiary) + Text(String(path[path.index(after: slash)...]))
     }
 
     // MARK: Actions

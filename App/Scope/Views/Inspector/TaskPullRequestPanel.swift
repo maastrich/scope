@@ -65,7 +65,7 @@ struct TaskPullRequestPanel: View {
                                 .foregroundStyle(Self.color(state))
                             Text("\(count)")
                                 .font(.scopeValue)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                         }
                         .accessibilityLabel("\(count) \(state.rawValue)")
                     }
@@ -75,10 +75,10 @@ struct TaskPullRequestPanel: View {
                 if hidden > 0, layout == .compact {
                     Text(expanded ? "Failures only" : "All \(checks.count)")
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
             }
@@ -128,7 +128,7 @@ struct TaskPullRequestPanel: View {
                         .font(.scopeCaption)
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help(url.absoluteString)
                 .accessibilityLabel("Open \(check.title)")
             }

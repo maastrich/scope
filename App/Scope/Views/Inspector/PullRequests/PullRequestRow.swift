@@ -19,7 +19,7 @@ struct PullRequestRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: "#\(pr.number)")
                         .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     Text(pr.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(2)
@@ -28,17 +28,17 @@ struct PullRequestRow: View {
                 HStack(spacing: 6) {
                     Text(pr.author)
                         .font(.scopeCaption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                     Text(verbatim: "\(pr.headRefName) → \(pr.baseRefName)")
                         .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if pr.isCrossRepository, let owner = pr.headOwner {
                         Text("fork · \(owner)")
                             .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                             .lineLimit(1)
                     }
                 }
@@ -58,7 +58,7 @@ struct PullRequestRow: View {
                     Spacer(minLength: 0)
                     Text(pr.updatedAt, format: .relative(presentation: .named))
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .layoutPriority(-1)
                 }
@@ -83,7 +83,7 @@ struct PullRequestRow: View {
                     Image(systemName: "arrow.up.right.square")
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .cursor(.pointingHand)
                 .help(pr.url.absoluteString)
                 .opacity(hovering ? 1 : 0.55)

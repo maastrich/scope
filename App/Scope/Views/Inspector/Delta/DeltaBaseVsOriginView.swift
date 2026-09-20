@@ -17,7 +17,7 @@ struct DeltaBaseVsOriginView: View {
                         if let delta = repo.delta {
                             Text("↑\(delta.ahead) ahead · ↓\(delta.behind) behind")
                                 .font(.scopeValue)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -33,7 +33,7 @@ struct DeltaBaseVsOriginView: View {
                         if delta.commitsAhead.isEmpty, delta.commitsBehind.isEmpty {
                             Text("In sync with \(delta.base ?? "origin")")
                                 .font(.scopeCaption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Ink.tertiary)
                                 .padding(.horizontal, 30)
                                 .frame(height: 24)
                         }
@@ -58,7 +58,7 @@ struct DeltaBaseVsOriginView: View {
                 HStack(spacing: 8) {
                     Text(commit.shortSHA)
                         .font(.scopeValue)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Text(commit.subject)
                         .font(.scopeRow)
                         .lineLimit(1)

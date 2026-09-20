@@ -39,7 +39,7 @@ struct BaseView: View {
                     .help(model.currentTask == nil ? "The repositories of the scope" : "The repositories of the task")
                     Text("base checkout")
                         .font(.scopeCaption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Spacer(minLength: 0)
                     if model.base.isFetching || model.base.isPulling {
                         ProgressView().controlSize(.small)
@@ -107,7 +107,7 @@ struct BaseView: View {
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 16))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
@@ -122,25 +122,25 @@ struct BaseView: View {
                     if let head {
                         Text(head.short)
                             .font(.scopeValue)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                         Text(head.subject)
                             .font(.scopeCaption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text("· \(head.date.formatted(.relative(presentation: .named)))")
                             .font(.scopeCaption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                             .lineLimit(1)
                             .fixedSize()
                     } else if model.base.isLoadingHistory {
                         Text("Loading HEAD…")
                             .font(.scopeCaption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     } else {
                         Text("No commit yet")
                             .font(.scopeCaption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     }
                 }
                 .help(head.map { "\($0.sha)\n\($0.subject)\n\($0.author), \($0.date.formatted(date: .abbreviated, time: .shortened))" } ?? "")

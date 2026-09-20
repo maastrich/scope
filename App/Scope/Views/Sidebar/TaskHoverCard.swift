@@ -21,7 +21,7 @@ struct TaskHoverCard: View {
             }
             Text(TaskStatus.summary(status, facts: facts))
                 .font(.scopeRow)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Divider()
@@ -37,7 +37,7 @@ struct TaskHoverCard: View {
                     HStack(spacing: 6) {
                         Text(sandboxCaption(repo))
                             .font(.scopeCaption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                         DeltaCounts(additions: task.summary(for: repo)?.additions ?? 0,
                                     deletions: task.summary(for: repo)?.deletions ?? 0)
                     }
@@ -67,13 +67,13 @@ struct TaskHoverCard: View {
             row("Created") {
                 Text(task.record.createdAt.formatted(.relative(presentation: .named)))
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Divider()
                 Text(prompt)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(5)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
@@ -87,7 +87,7 @@ struct TaskHoverCard: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
                 .frame(width: 64, alignment: .leading)
             content()

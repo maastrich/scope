@@ -25,7 +25,7 @@ struct AutomationSettingsView: View {
                 LabeledContent("Inside a thread") {
                     Text("`scope` is already on the PATH")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                 }
                 LabeledContent("Your own terminal") {
                     HStack(spacing: 8) {
@@ -46,7 +46,7 @@ struct AutomationSettingsView: View {
                 } else if let installMessage {
                     Text(installMessage)
                         .font(.scopeCaption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -56,7 +56,7 @@ struct AutomationSettingsView: View {
                     agent can drive Scope with the same commands.
                     """)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -66,14 +66,14 @@ struct AutomationSettingsView: View {
                     list, open threads and create tasks. They count as agents: the rules below apply to them.
                     """)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(MCPRegistration.Client.allCases) { client in
                     LabeledContent(client.title) {
                         HStack(spacing: 8) {
                             Text(mcpCaption(mcpStates[client]))
                                 .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                             if let title = mcpActionTitle(mcpStates[client]) {
                                 Button(title) { toggleMCP(client) }
                                     .controlSize(.small)
@@ -99,14 +99,14 @@ struct AutomationSettingsView: View {
                     MCP tools. One folder per agent, next to your other skills.
                     """)
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(SkillInstaller.Client.allCases) { client in
                     LabeledContent(client.title) {
                         HStack(spacing: 8) {
                             Text(skillCaption(skillStates[client]))
                                 .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             if let title = skillActionTitle(skillStates[client]) {
@@ -135,14 +135,14 @@ struct AutomationSettingsView: View {
                 Toggle("Let agents drive Scope", isOn: automation(\.agentsMayDrive))
                 Text("Requests from a thread Scope is running. Your own terminal is always allowed.")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 Stepper(value: automation(\.maxDepth), in: 0...5) {
                     LabeledContent("Depth ceiling", value: depthCaption)
                 }
                 Text("A thread you opened is at depth 0. The ceiling is how far a chain of agents opening "
                      + "agents may go.")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Picker("Talking to threads", selection: automation(\.threadReach)) {
                     ForEach(AutomationSettings.ThreadReach.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -150,7 +150,7 @@ struct AutomationSettingsView: View {
                 Text("Which threads an agent may read, type into, stop or close — in any task or scope, or only "
                      + "the ones it opened. A message from an agent always says which thread sent it.")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Picker("Opening a thread", selection: automation(\.threads)) {
                     ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -160,7 +160,7 @@ struct AutomationSettingsView: View {
                 }
                 Text("A task writes a branch and one worktree per repository, which is why it asks by default.")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -175,7 +175,7 @@ struct AutomationSettingsView: View {
                 Text("The socket is 0600 in your Scope home: every program running as you can drive Scope "
                      + "through it, exactly as the driver hooks always could.")
                     .font(.scopeCaption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
