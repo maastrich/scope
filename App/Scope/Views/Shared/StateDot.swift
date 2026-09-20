@@ -55,19 +55,6 @@ struct StateDot: View {
     }
 }
 
-/// Colours of the state legend: catalogue colours with light/dark variants, every one at least 3:1 on its
-/// ground (WCAG 1.4.11). `done` is pinned to blue rather than the accent so it keeps its meaning under a
-/// graphite or red system accent.
-enum ThreadStateStyle {
-    static let idle = Color("StateIdle")
-    static let running = Color("StateRunning")
-    static let waiting = Color("StateWaiting")
-    static let done = Color("StateDone")
-    static let failed = Color("ChecksFailing")
-    /// Reads on both the sidebar and the dark terminal.
-    static let exitedRing = Color("ExitedRing")
-}
-
 extension ThreadState {
     /// Toolbar pill label: Idle / Running / Needs your answer / Needs permission / Done / Failed / Exited.
     var displayLabel: String { label }

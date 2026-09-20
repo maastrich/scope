@@ -57,7 +57,7 @@ struct DeltaActionBar: View {
         }
         .controlSize(.small)
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
     }
 
     /// Merge when GitHub says the pull request merges, Fix Conflicts when it says it does not; nothing while its

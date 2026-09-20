@@ -26,7 +26,7 @@ struct GlobalSheetView: View {
                     .controlSize(.small)
             }
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
-            .background(Color("PanelBackground"))
+            .background(Surface.panel)
             Divider()
             Group {
                 switch sheet {

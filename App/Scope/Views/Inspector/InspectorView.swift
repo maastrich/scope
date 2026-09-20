@@ -30,7 +30,7 @@ struct InspectorView: View {
             .padding(.horizontal, 10)
             .frame(height: 30)
             .frame(maxWidth: .infinity)
-            .background(Color("PanelBackground"))
+            .background(Surface.panel)
             Divider()
             if let task = model.currentTask {
                 TaskSummaryBand(task: task)
@@ -86,7 +86,7 @@ private struct RepoSummaryBand: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
         .help(repo.url.path)
     }
 }

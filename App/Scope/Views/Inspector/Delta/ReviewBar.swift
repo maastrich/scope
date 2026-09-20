@@ -54,7 +54,7 @@ struct ReviewBar: View {
         }
         .controlSize(.small)
         .padding(EdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14))
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
     }
 
     private func send(to thread: ThreadID) {

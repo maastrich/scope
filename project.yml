@@ -159,6 +159,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope
         PRODUCT_NAME: Scope
+        # Without this, Color.accentColor resolves to the user's System Settings accent and
+        # AccentColor.colorset is never read — the app would keep following a graphite or red system
+        # accent whatever the catalogue says.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SCOPE_DISPLAY_NAME: Scope
         SCOPE_URL_SCHEME: scope
         MARKETING_VERSION: "0.0.0"   # dev builds; releases: tag without "v" (scripts/package.sh)

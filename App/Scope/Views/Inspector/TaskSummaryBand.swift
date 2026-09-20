@@ -115,7 +115,7 @@ struct TaskSummaryBand: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
         // On the band, which is up under every tab: this is what notices the PR a thread opened and binds it, and
         // what keeps the checks fresh for the Pull Request tab.
         .task(id: task.id) {

@@ -127,39 +127,3 @@ struct PullRequestChip: View {
             .fixedSize()
     }
 }
-
-/// Colours and glyphs of the PR chips: semantic assets (`ChecksPassing` #1f7a3a, `ChecksFailing` #b3261e,
-/// `ChecksPending` #a84c00 in light, lifted in dark) so they keep AA contrast on both appearances.
-enum PullRequestStyle {
-    static let passing = Color("ChecksPassing")
-    static let failing = Color("ChecksFailing")
-    static let pending = Color("ChecksPending")
-    static let neutral = Color(nsColor: .tertiaryLabelColor)
-
-    static func color(_ checks: PullRequest.Checks) -> Color {
-        switch checks {
-        case .passing: passing
-        case .failing: failing
-        case .pending: pending
-        case .none: neutral
-        }
-    }
-
-    static func glyph(_ checks: PullRequest.Checks) -> String {
-        switch checks {
-        case .passing: "✓"
-        case .failing: "✗"
-        case .pending: "●"
-        case .none: "–"
-        }
-    }
-
-    static func review(_ decision: PullRequest.ReviewDecision) -> (text: String, color: Color)? {
-        switch decision {
-        case .approved: ("Approved", passing)
-        case .changesRequested: ("Changes requested", failing)
-        case .reviewRequired: ("Review needed", Color.secondary)
-        case .none: nil
-        }
-    }
-}
