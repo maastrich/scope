@@ -61,7 +61,7 @@ struct ImageDiffView: View {
             HStack(spacing: 6) {
                 Text(label).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(label == "Added" ? DeltaCounts.added : DeltaCounts.removed)
-                Text(image.caption).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(image.caption).font(.scopeCaption).foregroundStyle(.secondary)
                 Spacer()
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
@@ -88,7 +88,7 @@ struct ImageDiffView: View {
                 Spacer()
                 if old.pixelSize != new.pixelSize {
                     Text("\(old.dimensions) → \(new.dimensions)")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.scopeValue)
                         .foregroundStyle(Color(nsColor: .systemOrange))
                 }
             }

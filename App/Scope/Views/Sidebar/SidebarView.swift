@@ -126,7 +126,7 @@ struct SidebarView: View {
         @Bindable var ui = model.searchUI
         return HStack(spacing: 5) {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.tertiary)
                 .accessibilityHidden(true)
             TextField("Filter", text: $ui.sidebarFilter)
@@ -145,7 +145,7 @@ struct SidebarView: View {
                     model.searchUI.sidebarFilter = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
@@ -203,7 +203,7 @@ struct SidebarView: View {
 
     private func hintRow(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(.scopeCaption)
             .foregroundStyle(.tertiary)
             .lineLimit(1)
             .truncationMode(.tail)
@@ -299,7 +299,7 @@ struct SidebarView: View {
                 .controlSize(.mini)
             }
         }
-        .font(.system(size: 11))
+        .font(.scopeCaption)
         .foregroundStyle(.tertiary)
         .selectionDisabled()
     }
@@ -314,7 +314,7 @@ struct SidebarView: View {
             }
             .controlSize(.mini)
         }
-        .font(.system(size: 11))
+        .font(.scopeCaption)
         .help(message)
         .selectionDisabled()
     }

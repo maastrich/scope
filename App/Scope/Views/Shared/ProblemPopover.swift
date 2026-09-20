@@ -74,11 +74,11 @@ private struct ProblemRowView: View {
                 Image(systemName: severitySymbol)
                     .foregroundStyle(severityColor)
                 Text(problem.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scopeTitle)
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 Text(problem.createdAt, format: .relative(presentation: .named))
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                 Button {
                     model.problems.dismiss(problem.id)
@@ -93,7 +93,7 @@ private struct ProblemRowView: View {
             }
             if let detail = problem.detail, !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .lineLimit(8)

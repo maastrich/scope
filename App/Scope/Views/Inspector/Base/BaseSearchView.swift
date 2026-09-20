@@ -89,7 +89,7 @@ struct BaseSearchView: View {
     private func searchField(base: Bindable<BaseModel>, visibleCount: Int) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.tertiary)
                 .accessibilityHidden(true)
             TextField(model.base.searchOptions.regex ? "Search (regex)" : "Search", text: base.query)
@@ -228,7 +228,7 @@ struct BaseSearchView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color(nsColor: .systemRed))
             Text(message)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.scopeValue)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .lineLimit(6)
@@ -270,7 +270,7 @@ struct BaseSearchView: View {
                     .frame(width: 10)
                     .accessibilityHidden(true)
                 pathText(group.path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)

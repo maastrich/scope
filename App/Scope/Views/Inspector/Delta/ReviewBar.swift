@@ -27,7 +27,7 @@ struct ReviewBar: View {
             if let queued = model.queuedDelivery(in: task) {
                 Label("\(queued.delivery.label.capitalizedFirst) waits for \(model.displayTitle(for: queued.session)) to finish its turn",
                       systemImage: "clock")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -93,7 +93,7 @@ private struct ReviewCommentList: View {
                     model.delta.selectedFile = DeltaFileRef(repo: comment.repo, path: comment.path)
                 }
                 .buttonStyle(.link)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.scopeValue)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 Spacer(minLength: 4)

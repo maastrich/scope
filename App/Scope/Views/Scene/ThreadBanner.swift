@@ -23,7 +23,7 @@ struct ThreadBanner: View {
                 icon
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.scopeTitle)
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 12))
@@ -37,7 +37,7 @@ struct ThreadBanner: View {
             }
             if showsDetails, let details {
                 Text(details)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)

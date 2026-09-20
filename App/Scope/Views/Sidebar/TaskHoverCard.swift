@@ -16,11 +16,11 @@ struct TaskHoverCard: View {
             HStack(spacing: 6) {
                 TaskStatusGlyph(status: status)
                 Text(task.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scopeTitle)
                     .lineLimit(2)
             }
             Text(TaskStatus.summary(status, facts: facts))
-                .font(.system(size: 11.5))
+                .font(.scopeRow)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -28,7 +28,7 @@ struct TaskHoverCard: View {
 
             row("Branch") {
                 Text(task.branch)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -36,7 +36,7 @@ struct TaskHoverCard: View {
                 row(repo.isScopeRoot ? task.record.scopeName : repo.name) {
                     HStack(spacing: 6) {
                         Text(sandboxCaption(repo))
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.secondary)
                         DeltaCounts(additions: task.summary(for: repo)?.additions ?? 0,
                                     deletions: task.summary(for: repo)?.deletions ?? 0)
@@ -47,11 +47,11 @@ struct TaskHoverCard: View {
                 row(pr.label) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pr.title)
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .lineLimit(2)
                         if let checks = facts.pullRequest?.checks, checks != .none {
                             Text("\(PullRequestStyle.glyph(checks)) \(checksCaption(checks))")
-                                .font(.system(size: 11))
+                                .font(.scopeCaption)
                                 .foregroundStyle(PullRequestStyle.color(checks))
                         }
                     }
@@ -60,19 +60,19 @@ struct TaskHoverCard: View {
             if let setup = setupCaption {
                 row("Setup") {
                     Text(setup)
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(task.record.setupState == .failed ? AnyShapeStyle(PullRequestStyle.failing) : AnyShapeStyle(.secondary))
                 }
             }
             row("Created") {
                 Text(task.record.createdAt.formatted(.relative(presentation: .named)))
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
             }
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Divider()
                 Text(prompt)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(5)
                     .truncationMode(.tail)

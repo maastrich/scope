@@ -16,7 +16,7 @@ struct DeltaBaseVsOriginView: View {
                         Spacer()
                         if let delta = repo.delta {
                             Text("↑\(delta.ahead) ahead · ↓\(delta.behind) behind")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.scopeValue)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -25,14 +25,14 @@ struct DeltaBaseVsOriginView: View {
                     .background(Fill.quiet)
                     if let error = repo.error {
                         Text(error)
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 6)
                     } else if let delta = repo.delta {
                         if delta.commitsAhead.isEmpty, delta.commitsBehind.isEmpty {
                             Text("In sync with \(delta.base ?? "origin")")
-                                .font(.system(size: 11))
+                                .font(.scopeCaption)
                                 .foregroundStyle(.tertiary)
                                 .padding(.horizontal, 30)
                                 .frame(height: 24)
@@ -57,10 +57,10 @@ struct DeltaBaseVsOriginView: View {
             ForEach(commits) { commit in
                 HStack(spacing: 8) {
                     Text(commit.shortSHA)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.scopeValue)
                         .foregroundStyle(.tertiary)
                     Text(commit.subject)
-                        .font(.system(size: 11.5))
+                        .font(.scopeRow)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)

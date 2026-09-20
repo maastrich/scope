@@ -99,7 +99,7 @@ struct DiffView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: ImageFiles.isImage(file.path) ? "photo" : "doc.text")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.secondary)
             Text("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
                 .font(.system(size: 11.5, design: .monospaced))

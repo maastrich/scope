@@ -79,7 +79,7 @@ private struct ExitDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(notice.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.scopeTitle)
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 4) {
                 row("Driver", notice.profile.name)
                 row("Directory", notice.record.cwd)

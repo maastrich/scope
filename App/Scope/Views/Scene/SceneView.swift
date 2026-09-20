@@ -74,7 +74,7 @@ struct SceneView: View {
                         Text("Open in Editor")
                             .font(.system(size: 12, weight: .medium))
                         Text("⌘E")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.tertiary)
                     }
                 }

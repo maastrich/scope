@@ -103,14 +103,14 @@ struct NewTaskSheet: View {
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
                     Text("What should the agent do? e.g. Add a refresh-token flow to the auth service…")
-                        .font(.system(size: 13))
+                        .font(.scopeBody)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 8)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $prompt)
-                    .font(.system(size: 13))
+                    .font(.scopeBody)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 84, maxHeight: 168)
                     .focused($promptFocused)
@@ -134,7 +134,7 @@ struct NewTaskSheet: View {
                 }
             }
             Text(driverCaption)
-                .font(.system(size: 11.5))
+                .font(.scopeRow)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -171,7 +171,7 @@ struct NewTaskSheet: View {
             .onChange(of: startPoint) { _, option in startPointChanged(option) }
             LabeledContent("Sandbox") {
                 Text(sandboxPath)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
@@ -192,7 +192,7 @@ struct NewTaskSheet: View {
                     Text(sourceCaption)
                 }
             }
-            .font(.system(size: 11.5))
+            .font(.scopeRow)
             .foregroundStyle(.secondary)
         }
 

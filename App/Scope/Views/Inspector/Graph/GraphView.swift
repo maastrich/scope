@@ -28,7 +28,7 @@ struct GraphView: View {
                     ProgressView(value: Double(progress.finished), total: Double(max(1, progress.total)))
                         .controlSize(.small)
                     Text(progress.caption)
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -64,7 +64,7 @@ struct GraphView: View {
                 }
                 .lineLimit(1)
                 Text(generatedCaption)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

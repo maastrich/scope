@@ -35,7 +35,7 @@ struct CommitSheet: View {
                     Text("Commit in \(repo.isScopeRoot ? task.record.scopeName : repo.name)")
                 } footer: {
                     Text("git add -A && git commit in the sandbox")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.scopeValue)
                 }
             }
             .formStyle(.grouped)

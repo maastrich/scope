@@ -30,13 +30,13 @@ struct ScopeEmptyView: View {
                 .font(.system(size: 20, weight: .semibold))
             if scope.kind == .missing {
                 Text("The folder \(scope.url.path) is missing. Threads open once it is back.")
-                    .font(.system(size: 13))
+                    .font(.scopeBody)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             } else {
                 Text("Threads run in \(threadCwd.path) with SCOPE_SCOPE, SCOPE_THREAD and the login-shell environment injected.")
-                    .font(.system(size: 13))
+                    .font(.scopeBody)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)

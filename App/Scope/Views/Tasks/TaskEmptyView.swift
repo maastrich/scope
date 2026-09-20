@@ -14,7 +14,7 @@ struct TaskEmptyView: View {
             (Text("No thread in ") + Text(task.name).italic())
                 .font(.system(size: 20, weight: .semibold))
             Text("Threads run in \(task.record.threadCwd.path) on \(task.branch), with SCOPE_TASK and SCOPE_TASK_ROOT injected.")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)

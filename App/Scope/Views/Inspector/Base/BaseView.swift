@@ -38,7 +38,7 @@ struct BaseView: View {
                     .fixedSize()
                     .help(model.currentTask == nil ? "The repositories of the scope" : "The repositories of the task")
                     Text("base checkout")
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.tertiary)
                     Spacer(minLength: 0)
                     if model.base.isFetching || model.base.isPulling {
@@ -121,25 +121,25 @@ struct BaseView: View {
                 HStack(spacing: 6) {
                     if let head {
                         Text(head.short)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.scopeValue)
                             .foregroundStyle(.secondary)
                         Text(head.subject)
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text("· \(head.date.formatted(.relative(presentation: .named)))")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                             .fixedSize()
                     } else if model.base.isLoadingHistory {
                         Text("Loading HEAD…")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.tertiary)
                     } else {
                         Text("No commit yet")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.tertiary)
                     }
                 }

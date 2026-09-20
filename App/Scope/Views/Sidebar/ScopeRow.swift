@@ -18,10 +18,10 @@ struct ScopeSwitcher: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
-                        .font(.system(size: 13))
+                        .font(.scopeBody)
                         .foregroundStyle(.secondary)
                     Text(scope.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.scopeTitle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
@@ -45,7 +45,7 @@ struct ScopeSwitcher: View {
                     .controlSize(.mini)
             }
             Text(caption)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
                 .truncationMode(.tail)

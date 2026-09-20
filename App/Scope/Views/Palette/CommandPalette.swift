@@ -78,7 +78,7 @@ struct CommandPalette: View {
                 .accessibilityLabel(mode == .files ? "File name" : "Command or search")
             if let context = contextLabel {
                 Text(context)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -101,7 +101,7 @@ struct CommandPalette: View {
                             FileFinderEmptyView(query: query, hasRoots: !model.fileRoots.isEmpty)
                         } else {
                             Text("No match")
-                                .font(.system(size: 13))
+                                .font(.scopeBody)
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 24)
@@ -167,7 +167,7 @@ struct CommandPalette: View {
             Spacer()
             Text("esc")
         }
-        .font(.system(size: 11))
+        .font(.scopeCaption)
         .foregroundStyle(.tertiary)
         .padding(.horizontal, 16)
         .frame(height: 30)
@@ -215,13 +215,13 @@ private struct PaletteRow: View {
                     .accessibilityHidden(true)
             }
             Text(Self.emphasized(item.label, at: item.hintMatched ? [] : item.matched, monospaced: item.section == .files))
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 8)
             if let hint = item.hint {
                 Text(hint)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -229,7 +229,7 @@ private struct PaletteRow: View {
             }
             if let shortcut = item.shortcut {
                 Text(shortcut)
-                    .font(.system(size: 11.5))
+                    .font(.scopeRow)
                     .foregroundStyle(.tertiary)
                     .frame(minWidth: 34, alignment: .trailing)
             }

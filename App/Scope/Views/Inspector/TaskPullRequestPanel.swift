@@ -64,7 +64,7 @@ struct TaskPullRequestPanel: View {
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Self.color(state))
                             Text("\(count)")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.scopeValue)
                                 .foregroundStyle(.secondary)
                         }
                         .accessibilityLabel("\(count) \(state.rawValue)")
@@ -111,7 +111,7 @@ struct TaskPullRequestPanel: View {
                 .frame(width: 12)
                 .accessibilityLabel(check.state.rawValue)
             Text(check.title)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 4)
@@ -125,7 +125,7 @@ struct TaskPullRequestPanel: View {
                     model.openOnGitHub(url)
                 } label: {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                 }
                 .buttonStyle(.iconTight)
                 .foregroundStyle(.secondary)
@@ -196,7 +196,7 @@ struct ThreadPicker: View {
             Label(title, systemImage: systemImage)
         } else {
             Image(systemName: systemImage)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .accessibilityLabel(title)
         }
     }

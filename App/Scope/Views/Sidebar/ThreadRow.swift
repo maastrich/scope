@@ -28,12 +28,12 @@ struct ThreadRow: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: session.profile.icon ?? "terminal")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(glyphInk)
                 .frame(width: 16)
 
             Text(model.displayTitle(for: session))
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)

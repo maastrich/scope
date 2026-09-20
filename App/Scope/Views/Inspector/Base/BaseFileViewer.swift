@@ -52,12 +52,12 @@ struct BaseFileViewer: View {
         return VStack(spacing: 0) {
             HStack {
                 Text(path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Text(image?.caption ?? "undecodable image").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(image?.caption ?? "undecodable image").font(.scopeCaption).foregroundStyle(.secondary)
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
             Divider()
@@ -74,12 +74,12 @@ struct BaseFileViewer: View {
         return VStack(spacing: 0) {
             HStack {
                 Text(path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Text("\(lineCount) lines").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("\(lineCount) lines").font(.scopeCaption).foregroundStyle(.secondary)
             }
             .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
             Divider()

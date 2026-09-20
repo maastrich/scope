@@ -47,7 +47,7 @@ struct DeltaFileList: View {
                 .accessibilityHidden(true)
             TextField("Filter files", text: $filter)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11.5))
+                .font(.scopeRow)
                 .focused(filterFocused)
                 .accessibilityLabel("Filter changed files by path")
                 .onKeyPress(.escape) {
@@ -64,7 +64,7 @@ struct DeltaFileList: View {
                     statuses = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
@@ -117,7 +117,7 @@ struct DeltaFileList: View {
                         } else if let error = repo.error {
                             HStack(spacing: 6) {
                                 Text(repo.repo.name).font(.system(size: 12, weight: .semibold))
-                                Text(error).font(.system(size: 11)).foregroundStyle(Color(nsColor: .systemRed)).lineLimit(1)
+                                Text(error).font(.scopeCaption).foregroundStyle(Color(nsColor: .systemRed)).lineLimit(1)
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
@@ -146,7 +146,7 @@ struct DeltaFileList: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(shown == delta.files.count ? "\(delta.files.count) \(delta.files.count == 1 ? "file" : "files")" : "\(shown) of \(delta.files.count) files")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                 DeltaCounts(additions: delta.summary.additions, deletions: delta.summary.deletions)
             }
@@ -179,7 +179,7 @@ struct DeltaFileList: View {
                 model.delta.toggleViewed(ref, file)
             } label: {
                 Image(systemName: viewed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(viewed ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
@@ -190,7 +190,7 @@ struct DeltaFileList: View {
                                          line: file.hunks.first?.newStart)
             } label: {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)

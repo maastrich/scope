@@ -50,7 +50,7 @@ struct DeltaActionBar: View {
 
             Spacer(minLength: 4)
             Text(caption(repo))
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)

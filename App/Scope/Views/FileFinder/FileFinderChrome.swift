@@ -27,11 +27,11 @@ struct FileFinderEmptyView: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(hasRoots ? (query.isEmpty ? "Type to search files" : "No file matches") : "Select a scope or a task to search its files")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.tertiary)
             if hasRoots {
                 Text("Base files open in the Base viewer; sandbox files open in the editor.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.quaternary)
             }
         }

@@ -28,12 +28,12 @@ struct LooseThreadsRow: View {
             .accessibilityLabel(scope.looseThreadsShown ? "Collapse loose threads" : "Expand loose threads")
 
             Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
             Text("Loose threads")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -41,7 +41,7 @@ struct LooseThreadsRow: View {
             Spacer(minLength: 4)
 
             Text("\(count)")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.quaternary)
 
             if let state = aggregateState {

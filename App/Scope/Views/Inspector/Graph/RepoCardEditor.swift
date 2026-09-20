@@ -15,9 +15,9 @@ struct RepoCardEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(entry.card.name).font(.system(size: 13, weight: .semibold))
+                Text(entry.card.name).font(.scopeTitle)
                 Spacer()
-                Text("Editing").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Editing").font(.scopeCaption).foregroundStyle(.secondary)
             }
             field("Purpose") {
                 TextField("One to three sentences", text: $purpose, axis: .vertical)
@@ -27,14 +27,14 @@ struct RepoCardEditor: View {
                 TextField("node, typescript, react (comma separated)", text: $stack)
             }
             field("Setup") {
-                TextField("pnpm install", text: $setup).font(.system(size: 11, design: .monospaced))
+                TextField("pnpm install", text: $setup).font(.scopeValue)
             }
             field("Test") {
-                TextField("pnpm test", text: $test).font(.system(size: 11, design: .monospaced))
+                TextField("pnpm test", text: $test).font(.scopeValue)
             }
             field("Teardown") {
                 TextField("docker compose down (before a sandbox is removed)", text: $teardown)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
             }
             HStack(spacing: 8) {
                 Button("Save") { Task { await save() } }
@@ -64,7 +64,7 @@ struct RepoCardEditor: View {
 
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(label).font(.scopeCaption).foregroundStyle(.secondary)
             content()
         }
     }

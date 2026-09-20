@@ -21,7 +21,7 @@ struct BaseHistoryView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(commit.short)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.scopeValue)
                             .foregroundStyle(Color.accentColor)
                         Text(commit.subject)
                             .font(.system(size: 12))
@@ -33,7 +33,7 @@ struct BaseHistoryView: View {
                         Text("·")
                         Text(commit.date.formatted(.relative(presentation: .named)))
                     }
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 }

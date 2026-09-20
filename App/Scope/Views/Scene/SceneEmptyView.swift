@@ -15,7 +15,7 @@ struct SceneEmptyView: View {
                 .font(.system(size: 20, weight: .semibold))
                 .tracking(-0.2)
             Text("A scope is any folder: a cloned GitHub org, a folder of projects, or a single repo. Scope reads it and writes nothing inside.")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineSpacing(6)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -51,7 +51,7 @@ struct SceneEmptyView: View {
                 }
                 .multilineTextAlignment(.center)
             }
-            .font(.system(size: 11.5))
+            .font(.scopeRow)
             .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 40)

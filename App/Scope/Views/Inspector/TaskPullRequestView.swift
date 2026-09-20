@@ -67,7 +67,7 @@ struct TaskPullRequestView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Text(live.author)
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -113,7 +113,7 @@ struct TaskPullRequestView: View {
                     .padding(.vertical, 6)
             } else if live != nil {
                 Text("No checks on this pull request.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                     .padding(14)
             }

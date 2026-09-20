@@ -31,7 +31,7 @@ struct RepoCardView: View {
                 if !card.tags.isEmpty {
                     HStack(spacing: 5) {
                         ForEach(card.tags, id: \.self) { tag in
-                            Text("#\(tag)").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("#\(tag)").font(.scopeCaption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -52,11 +52,11 @@ struct RepoCardView: View {
         HStack(spacing: 6) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(card.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scopeTitle)
                     .lineLimit(1)
                 if let remote = card.remote, remote != card.name {
                     Text(remote)
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -82,7 +82,7 @@ struct RepoCardView: View {
             }
             if let date = card.lastActivity {
                 Text(date.formatted(.relative(presentation: .named)))
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .help("Last commit \(date.formatted(date: .abbreviated, time: .shortened))")
@@ -147,7 +147,7 @@ struct RepoCardView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             label(key)
             Text(value)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.scopeValue)
                 .textSelection(.enabled)
                 .lineLimit(2)
                 .truncationMode(.middle)
@@ -156,7 +156,7 @@ struct RepoCardView: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(.scopeCaption)
             .foregroundStyle(.secondary)
             .frame(width: 52, alignment: .leading)
     }
@@ -179,7 +179,7 @@ struct RepoCardView: View {
                 .buttonStyle(.link)
             } else {
                 Text("not in the scope any more")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

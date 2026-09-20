@@ -94,7 +94,7 @@ struct ShortcutsView: View {
                                     .font(.system(size: 12.5))
                                 if let note = entry.note {
                                     Text(note)
-                                        .font(.system(size: 11))
+                                        .font(.scopeCaption)
                                         .foregroundStyle(.tertiary)
                                         .lineLimit(1)
                                 }

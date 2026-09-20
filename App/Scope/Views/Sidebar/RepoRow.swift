@@ -12,12 +12,12 @@ struct RepoRow: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
             Text(repo.shortName)
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)

@@ -35,7 +35,7 @@ struct TaskRow: View {
             TaskStatusGlyph(status: status)
 
             Text(task.name)
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
@@ -99,7 +99,7 @@ struct TaskRow: View {
                 Task { await model.archiveTask(task.id) }
             } label: {
                 Image(systemName: "archivebox")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())

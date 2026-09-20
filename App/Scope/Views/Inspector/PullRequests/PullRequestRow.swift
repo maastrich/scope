@@ -27,7 +27,7 @@ struct PullRequestRow: View {
                 }
                 HStack(spacing: 6) {
                     Text(pr.author)
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Text(verbatim: "\(pr.headRefName) → \(pr.baseRefName)")

@@ -81,7 +81,7 @@ struct DeltaView: View {
                         .foregroundStyle(.secondary)
                     ForEach(delta.repos.filter { $0.error != nil }) { repo in
                         Text("\(repo.repo.name): \(repo.error ?? "")")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
@@ -137,7 +137,7 @@ struct DeltaView: View {
         let delta = model.delta
         return keyboardHint(HStack(spacing: 6) {
             Text(modeCaption)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -147,7 +147,7 @@ struct DeltaView: View {
                 .accessibilityLabel(focused ? "Delta panel has keyboard focus" : "Click the panel for keyboard navigation")
             if delta.mode == .baseVsOrigin {
                 Text("↑\(delta.ahead) ↓\(delta.behind)")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
             } else {
                 let summary = delta.summary

@@ -48,7 +48,7 @@ private struct GeneralSettingsView: View {
                     }
                 }
                 Text(driverCaption)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -66,7 +66,7 @@ private struct GeneralSettingsView: View {
                     types braces. On, ⌥ sends ESC first, which shells read as Meta. Either way ⌥← ⌥→ ⌥⌫ ⌥⌦ still \
                     move and delete by word.
                     """)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Picker("Appearance", selection: preference(\.terminalAppearance)) {
@@ -75,7 +75,7 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Claude Code follows the terminal palette", isOn: preference(\.claudeUsesTerminalPalette))
                 Text("Claude Code draws with the terminal's 16 colours, matched to the appearance, instead of its own theme. Applies to threads launched from now on.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Picker("Cursor", selection: preference(\.terminalCursorStyle)) {
@@ -86,7 +86,7 @@ private struct GeneralSettingsView: View {
                 Text(model.config.preferences.terminalCursorStyle.blinks
                      ? "Changes apply to every open thread. A blinking cursor fades in and out rather than switching on and off; a program may still ask for its own shape."
                      : "Changes apply to every open thread. A program may still ask for its own cursor shape.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
             }
             Section("Notifications") {
@@ -99,11 +99,11 @@ private struct GeneralSettingsView: View {
             Section("Threads") {
                 Toggle("Close exited threads automatically after 10 s", isOn: preference(\.autoCloseExitedThreads))
                 Text("Off: an exited thread stays in the sidebar until you close it.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                 Toggle("Relaunch running threads when Scope opens", isOn: preference(\.autoRelaunchThreads))
                 Text("Threads that were running when Scope quit, updated or crashed start again, picking their driver session back up when they can. Hold ⇧ while Scope opens to skip it once.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -114,7 +114,7 @@ private struct GeneralSettingsView: View {
                     }
                 }
                 Text("A waiting thread is always marked in place — a square dot, a bar down its row and the word “needs you”. This is only where the count of them goes; ⌥⌘↩ jumps to the next one either way.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
             }
             Section("Menu bar") {
@@ -168,7 +168,7 @@ private struct NotificationStatusRow: View {
         }
         .task { await refresh() }
         Text("Scope notifies you when a thread waits for input while the window is in the background.")
-            .font(.system(size: 11))
+            .font(.scopeCaption)
             .foregroundStyle(.secondary)
     }
 
@@ -211,7 +211,7 @@ private struct EditorPicker: View {
                 .font(.system(size: 12, design: .monospaced))
                 .onSubmit(commitCustomCommand)
             Text("Arguments separated by spaces. Placeholders: {path} (folder), {file}, {line}. The executable is resolved on your login-shell PATH.")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(.secondary)
         }
         if let editor = model.config.preferences.editor {
@@ -290,7 +290,7 @@ private struct ShellSettingsView: View {
                     Text("None (path_helper only)").tag(ShellProbeMode.none)
                 }
                 Text("Scope runs your shell once at launch to capture PATH and the variables agents need. Change the mode if your PATH is only set in an interactive rc file, or if the probe is slow.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
             }
             Section("Status") {
@@ -319,7 +319,7 @@ private struct ShellSettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(resolved.path.split(separator: ":").enumerated()), id: \.offset) { _, entry in
                             Text(String(entry))
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.scopeValue)
                                 .textSelection(.enabled)
                         }
                     }
@@ -398,7 +398,7 @@ private struct DriversSettingsView: View {
                         .font(.system(size: 12, weight: .semibold))
                     ForEach(Array(model.drivers.problems.enumerated()), id: \.offset) { _, problem in
                         Text("\(problem.file.lastPathComponent): \(problem.message)")
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.scopeValue)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .textSelection(.enabled)
                     }
@@ -414,7 +414,7 @@ private struct DriversSettingsView: View {
                 }
                 Spacer()
                 Text("Profiles are JSON files in \(ScopeHome.driversURL(home: model.env.home).path). Edit them with any editor; Reload picks up changes.")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }

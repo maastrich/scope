@@ -22,7 +22,7 @@ struct TaskSummaryBand: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Text(task.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scopeTitle)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
@@ -31,7 +31,7 @@ struct TaskSummaryBand: View {
                 }
                 .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
                 Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -98,7 +98,7 @@ struct TaskSummaryBand: View {
 
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Text(prompt)
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .truncationMode(.tail)
@@ -151,7 +151,7 @@ struct TaskVersionStrip: View {
                 .help(task.branch)
             if let base = lead?.upstreamBranch {
                 Text("from")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                 Text(base)
                     .font(.system(size: 10.5, design: .monospaced))
@@ -164,17 +164,17 @@ struct TaskVersionStrip: View {
             }
             if let sha = lead?.mergeBase {
                 Text("@")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(.tertiary)
                 Text(String(sha.prefix(7)))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .help("Merge-base: the base as it was when the task forked — \(sha)")
             }
             Spacer(minLength: 4)
             if ahead > 0 {
                 Text("↑\(ahead)")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.scopeValue)
                     .foregroundStyle(.secondary)
                     .help("\(ahead) \(ahead == 1 ? "commit" : "commits") on the task branch since the base")
             }

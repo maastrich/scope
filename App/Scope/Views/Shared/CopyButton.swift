@@ -18,7 +18,7 @@ struct CopyButton: View {
             }
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .foregroundStyle(copied ? AnyShapeStyle(ThreadStateStyle.done) : AnyShapeStyle(.secondary))
                 .frame(width: 14, height: 14)
                 .contentTransition(.symbolEffect(.replace))
