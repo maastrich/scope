@@ -126,7 +126,7 @@ identified by their selection fill and their state mark, both of which pass.
 They differ on one axis: **how much system-native chrome Scope gives up.** Three palettes would not be three
 directions.
 
-### A — Opaque Aqua *(gives up the least)*
+### A — Opaque Aqua *(gives up the least)* — **chosen 2026-09-20; full spec in [`OPAQUE_AQUA.md`](OPAQUE_AQUA.md)**
 
 Keep every macOS convention Scope already follows, delete the blur, and spend the brand on exactly one thing:
 the accent.
