@@ -16,6 +16,7 @@ import ScopeTasks
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     let task: TaskState
     @State private var isHovered = false
     @State private var showsCard = false
@@ -55,6 +56,7 @@ struct TaskRow: View {
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
             TaskHoverCard(task: task, status: status, facts: facts)
         }
+        .onAccent(isListSelected, controlActiveState)
         .contextMenu { TaskContextMenu(task: task) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(task.name)
@@ -65,6 +67,11 @@ struct TaskRow: View {
             }
             Button("Archive") { Task { await model.archiveTask(task.id) } }
         }
+    }
+
+    /// The row the List highlights.
+    private var isListSelected: Bool {
+        model.selection == .task(task.id)
     }
 
     /// The chevron, or its empty slot: task glyphs stay in one column whether or not a task has nested rows.

@@ -143,3 +143,28 @@ enum Radius {
     /// Anything elevated: the palette, the banner, the toasts.
     static let lg: CGFloat = 10
 }
+
+/// True while the view is being drawn on the accent selection fill of a key window.
+///
+/// A `List` inverts the foreground of the `Text` it owns, but it knows nothing about a caption that asked for
+/// `.secondary`, a `+N −M` that asked for green, or a state dot that paints itself: those keep their own
+/// colour and become unreadable on the fill — green on Electric is 1.9:1. The rows set this, and everything
+/// that carries its own colour reads it.
+private struct OnAccentKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isOnAccent: Bool {
+        get { self[OnAccentKey.self] }
+        set { self[OnAccentKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Marks a row's subtree as sitting on the accent fill: `selected` *and* the window key, since an inactive
+    /// window greys its selection and the row goes back to its ordinary colours.
+    func onAccent(_ selected: Bool, _ active: ControlActiveState) -> some View {
+        environment(\.isOnAccent, selected && active == .key)
+    }
+}

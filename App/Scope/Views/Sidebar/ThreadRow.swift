@@ -19,6 +19,7 @@ import ScopeCore
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     let session: ThreadSession
     /// 0 for a thread at the top level, 1 under a task or the loose-threads group.
     var depth = 0
@@ -28,7 +29,7 @@ struct ThreadRow: View {
         HStack(spacing: 7) {
             Image(systemName: session.profile.icon ?? "terminal")
                 .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(glyphInk)
                 .frame(width: 16)
 
             Text(model.displayTitle(for: session))
@@ -40,7 +41,7 @@ struct ThreadRow: View {
             if showsLiveMarker {
                 Image(systemName: "chevron.left.2")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(captionInk)
                     .accessibilityLabel("Shown in the terminal")
             }
 
@@ -48,8 +49,8 @@ struct ThreadRow: View {
 
             if let caption {
                 Text(caption)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(captionInk)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -77,6 +78,7 @@ struct ThreadRow: View {
                 withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
             }
         }
+        .onAccent(isListSelected, controlActiveState)
         .contextMenu { ThreadMenuItems(session: session) }
         .accessibilityAddTraits(isListSelected ? .isSelected : [])
     }
@@ -95,6 +97,12 @@ struct ThreadRow: View {
         .help("Close Thread (⌘W)")
         .accessibilityLabel("Close \(model.displayTitle(for: session))")
     }
+
+    /// On the accent fill nothing keeps a secondary tier: the darkest white that still reads as secondary is
+    /// 3.99:1 against it, under what AA asks of text.
+    private var onAccent: Bool { isListSelected && controlActiveState == .key }
+    private var glyphInk: Color { onAccent ? Ink.onAccent : Ink.secondary }
+    private var captionInk: Color { onAccent ? Ink.onAccent : Ink.tertiary }
 
     /// The thread the scene shows: where typing goes.
     private var isLive: Bool {

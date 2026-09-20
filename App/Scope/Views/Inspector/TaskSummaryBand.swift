@@ -289,6 +289,7 @@ struct DeltaCounts: View {
     let additions: Int
     let deletions: Int
     var size: CGFloat = 11
+    @Environment(\.isOnAccent) private var isOnAccent
 
     static let added = Color("DiffAddedSign")
     static let removed = Color("DiffRemovedSign")
@@ -296,10 +297,10 @@ struct DeltaCounts: View {
     var body: some View {
         HStack(spacing: 5) {
             if additions > 0 {
-                Text("+\(additions)").foregroundStyle(Self.added)
+                Text("+\(additions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.added)
             }
             if deletions > 0 {
-                Text("−\(deletions)").foregroundStyle(Self.removed)
+                Text("−\(deletions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.removed)
             }
         }
         .font(.system(size: size, design: .monospaced))

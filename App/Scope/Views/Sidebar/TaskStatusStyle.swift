@@ -44,11 +44,12 @@ enum TaskStatusStyle {
 struct TaskStatusGlyph: View {
     var status: TaskStatus
     var size: CGFloat = 12
+    @Environment(\.isOnAccent) private var isOnAccent
 
     var body: some View {
         Image(systemName: TaskStatusStyle.symbol(status))
             .font(.system(size: size, weight: .semibold))
-            .foregroundStyle(TaskStatusStyle.color(status))
+            .foregroundStyle(isOnAccent ? AnyShapeStyle(Ink.onAccent) : TaskStatusStyle.color(status))
             .frame(width: 16)
             .accessibilityLabel(status.label)
     }
