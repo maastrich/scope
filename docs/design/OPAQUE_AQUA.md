@@ -46,12 +46,14 @@ same saturation (97%), lightness 52% → 56.5%. That is the only window availabl
 the surface while the white label needs ≥4.5:1 on the fill — the two bound it from opposite sides. Light mode
 keeps Electric exactly (`#0E55FB` on `#EDECE5` = 4.78:1, white on it = 5.66:1).
 
-**`AccentColor.colorset` is empty today**, so filling it is what makes Scope stop following the user's macOS
-system accent. That is a deliberate break with a convention the app currently honours — see `RESEARCH.md §1`.
+**`AccentColor.colorset` is empty today**, and filling it is *not enough on its own*: the project never set
+`ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME`, without which `Color.accentColor` resolves to the user's
+System Settings accent and the catalogue entry is never read. Both together are what make Scope stop following
+the system accent. That is a deliberate break with a convention the app currently honours — see `RESEARCH.md §1`.
 
 ### Semantic tier — existing colorsets
 
-Kept as-is, except six light values darkened by ≤3% lightness: today's sidebar is vibrancy-composited and
+Kept as-is, except five light values darkened by ≤3% lightness: today's sidebar is vibrancy-composited and
 therefore lighter than an opaque surface, and three marks fell under 3:1 once the surface stopped being
 translucent.
 
@@ -264,3 +266,29 @@ logic belongs in the package.
 - No mesh gradient behind any list — empty states only.
 - `ThreadRecord.origin` stays unread. Showing user-vs-agent threads is a separate, cheap change that does not
   belong in a de-glassing pass.
+
+
+---
+
+## 7. As built
+
+Implemented on this branch, one commit per step, each building green
+(`xcodebuild … -configuration Debug`). Three things came out different from the spec above, and the spec is
+wrong where they disagree.
+
+| Spec said | Built | Why |
+|---|---|---|
+| Step 1 fills `AccentColor.colorset` | Fills it **and** adds `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor` to the `Scope` target in `project.yml` | The setting was absent, so the colorset would have been dead weight — `Color.accentColor` resolves to the System Settings accent until a target names its global accent asset |
+| Step 5 draws the selection by hand with `.listRowBackground` × `controlActiveState` | The system keeps drawing it; rows publish an `isOnAccent` environment flag instead | `.listStyle(.inset)` still fills the selection with the accent and greys it on resign-key — exactly the spec. What the framework does *not* do is recolour a caption that asked for `.secondary`, a `+N −M` that asked for green, or a state dot that paints itself, so only those read the flag |
+| Step 9 maps all 17 sizes onto 6 roles | 147 call sites rewritten — the **exact** equivalences only. 9, 10, 10.5, 12, 12.5 and everything from 14 up are untouched | Collapsing a 20pt sheet heading onto a 13pt title is a visual decision, not a sweep. As built the type commit renders identically; what it buys is that the next row asks for a role |
+
+`TaskStatusStyle` also stayed in `TaskStatusStyle.swift` rather than moving to `Theme.swift`: it maps a status
+to an SF Symbol *and* a token, and the file it lives in also holds `SidebarMetrics` and `trailingFade`. It is a
+component, not a token table.
+
+**Not visually verified.** A throwaway instance launches fine
+(`open -n --env SCOPE_HOME=…`), but `CGWindowListCopyWindowInfo` returns empty owner names and
+`screencapture -l` fails with *could not create image from window* — this machine has no Screen Recording grant
+for the tooling. The build is green and every colorset name resolves
+(`comm` of referenced names against the catalogue is empty), but **the pixels have not been looked at**. Run
+`make run` and check the sidebar selection in both appearances, key and inactive.
