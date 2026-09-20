@@ -32,7 +32,12 @@ struct SidebarView: View {
                     workSection(scope)
                     repositoriesSection(scope)
                 }
-                .listStyle(.sidebar)
+                // Not `.sidebar`: that style hands the list to AppKit's sidebar NSVisualEffectView, which is
+                // where every bit of the app's translucency came from. `.inset` keeps the row metrics and the
+                // disclosure behaviour and paints nothing, so the ground below is ours.
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .background(Surface.surface)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         ScopeSwitcher(scope: scope) { scope in
@@ -153,8 +158,9 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 7)
         .frame(height: 24)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(filterFocused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.1)))
+        .background(Surface.field, in: RoundedRectangle(cornerRadius: Radius.md))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md)
+            .strokeBorder(filterFocused ? Color.accentColor : Surface.stroke, lineWidth: filterFocused ? 2 : 1))
         .padding(EdgeInsets(top: 2, leading: 10, bottom: 4, trailing: 10))
         .help("Filter tasks, threads and repositories by name (⌥⌘F, Esc clears)")
     }
@@ -334,7 +340,7 @@ struct SidebarView: View {
             .frame(maxWidth: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { footerWidth = $0 }
         }
-        .background(.bar)
+        .background(Surface.surface)
     }
 
     private func footerButtons(_ style: some LabelStyle) -> some View {
