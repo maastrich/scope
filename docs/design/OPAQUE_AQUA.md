@@ -286,6 +286,14 @@ wrong where they disagree.
 to an SF Symbol *and* a token, and the file it lives in also holds `SidebarMetrics` and `trailingFade`. It is a
 component, not a token table.
 
+Two things the green build did not catch, both fixed in a follow-up commit: the step-7 sweep matched
+`Color.primary.opacity` but never `foregroundStyle(.secondary)` / `.tertiary`, so the 190 sites that keep the
+AA-failing hierarchy were still there; and `TerminalAppearance.swift:35` reads the bare
+`NSColor.windowBackgroundColor`, which the sweep's SwiftUI pattern missed — with `Ground` now Ivory in light,
+the terminal sat a shade off every pane around it and mixed its sixteen ANSI colours against a ground nothing
+else used. It reads the `Ground` asset now, which also means the spec's claim that "A does not repaint the
+ground, so the derivation stays valid" was wrong: A *does* repaint it, Ivory for system grey.
+
 **Not visually verified.** A throwaway instance launches fine
 (`open -n --env SCOPE_HOME=…`), but `CGWindowListCopyWindowInfo` returns empty owner names and
 `screencapture -l` fails with *could not create image from window* — this machine has no Screen Recording grant
