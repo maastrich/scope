@@ -202,7 +202,7 @@ struct CommentEditor: View {
                     .keyboardShortcut(.cancelAction)
                 Button(isNew ? "Add Comment" : "Save") { onSave(trimmed) }
                     .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(trimmed.isEmpty)
             }
             .controlSize(.small)

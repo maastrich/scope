@@ -47,7 +47,7 @@ struct ReviewBar: View {
                 Button("Send Review") {
                     if let only = live.first { send(to: only.id) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
                 .disabled(live.isEmpty || count == 0)
                 .help(live.isEmpty ? "No thread of this task is running" : "Paste the review into \(model.displayTitle(for: live[0]))")
             }
@@ -126,7 +126,7 @@ private struct ReviewCommentList: View {
                         if !body.isEmpty { model.review.update(comment.id, body: body) }
                         editing = nil
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                 }
                 .controlSize(.small)
             } else {

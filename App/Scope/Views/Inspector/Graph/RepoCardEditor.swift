@@ -38,7 +38,7 @@ struct RepoCardEditor: View {
             }
             HStack(spacing: 8) {
                 Button("Save") { Task { await save() } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .keyboardShortcut(.defaultAction)
                 Button("Cancel") { model.graph.editingKey = nil }
                     .keyboardShortcut(.cancelAction)

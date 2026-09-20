@@ -18,7 +18,7 @@ struct DeltaActionBar: View {
             } label: {
                 Label("Commit…", systemImage: "circle.circle")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.scopePrimary)
             .disabled(repo == nil || delta.isActing || !isDirty(repo))
             .help(isDirty(repo) ? "git add -A && git commit in the sandbox" : "Nothing to commit")
 

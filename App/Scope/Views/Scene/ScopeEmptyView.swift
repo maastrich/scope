@@ -54,7 +54,7 @@ struct ScopeEmptyView: View {
                         .font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 4)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .fixedSize()
                     .disabled(scope.kind == .missing)
                     .help("Open a \(preferred.name) thread here (⌘T)")

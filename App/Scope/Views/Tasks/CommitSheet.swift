@@ -50,7 +50,7 @@ struct CommitSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
                 .disabled(trimmedMessage.isEmpty)
             }
             .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))

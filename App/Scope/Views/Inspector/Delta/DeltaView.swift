@@ -39,14 +39,11 @@ struct DeltaView: View {
         @Bindable var delta = model.delta
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Picker("Mode", selection: $delta.mode) {
-                    Text("Task").tag(DeltaMode.task)
-                    Text("Uncommitted").tag(DeltaMode.uncommitted)
-                    Text("Base vs origin").tag(DeltaMode.baseVsOrigin)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+                TabStrip(selection: $delta.mode,
+                         items: [(DeltaMode.task, "Task"),
+                                 (.uncommitted, "Uncommitted"),
+                                 (.baseVsOrigin, "Base vs origin")])
+                    .accessibilityLabel("Mode")
                 Spacer(minLength: 0)
                 if delta.isLoading || delta.isActing {
                     ProgressView().controlSize(.small)

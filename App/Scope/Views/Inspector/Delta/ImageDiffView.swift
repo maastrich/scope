@@ -73,13 +73,7 @@ struct ImageDiffView: View {
     private func comparison(old: DecodedImage, new: DecodedImage) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Picker("", selection: $mode) {
-                    ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
+                TabStrip(selection: $mode, items: Mode.allCases.map { ($0, $0.rawValue) })
                 if mode == .onionSkin {
                     Text("Before").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
                     Slider(value: $opacity, in: 0...1).controlSize(.small).frame(maxWidth: 200)

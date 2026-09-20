@@ -34,7 +34,7 @@ struct SceneEmptyView: View {
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 4)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.scopePrimary)
             .controlSize(.regular)
             .keyboardShortcut("o", modifiers: .command)
             // One line when it fits, otherwise two centred lines (never a ragged wrap).

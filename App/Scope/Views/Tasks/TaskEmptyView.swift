@@ -29,7 +29,7 @@ struct TaskEmptyView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 4)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
 
                 Menu("Other driver…") {
                     ForEach(model.drivers.profiles) { profile in

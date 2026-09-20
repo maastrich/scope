@@ -78,14 +78,9 @@ struct BaseView: View {
                     Spacer(minLength: 0)
                 }
                 .controlSize(.small)
-                Picker("Section", selection: $base.section) {
-                    ForEach(BaseSection.allCases, id: \.self) { section in
-                        Text(section.rawValue).tag(section)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+                TabStrip(selection: $base.section,
+                         items: BaseSection.allCases.map { ($0, $0.rawValue) })
+                    .accessibilityLabel("Section")
             }
             .padding(EdgeInsets(top: 10, leading: 14, bottom: 8, trailing: 14))
             Divider()

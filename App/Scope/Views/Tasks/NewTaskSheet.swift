@@ -297,12 +297,12 @@ struct NewTaskSheet: View {
             case .prompt:
                 Button("Continue") { continueToProposal() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(!canContinue)
             case .proposal:
                 Button("Create") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(!canCreate)
             }
         }
