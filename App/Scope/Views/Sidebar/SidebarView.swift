@@ -33,11 +33,17 @@ struct SidebarView: View {
                     repositoriesSection(scope)
                 }
                 // Not `.sidebar`: that style hands the list to AppKit's sidebar NSVisualEffectView, which is
-                // where every bit of the app's translucency came from. `.inset` keeps the row metrics and the
-                // disclosure behaviour and paints nothing, so the ground below is ours.
-                .listStyle(.inset)
+                // where every bit of the app's translucency came from.
+                //
+                // And not `.inset` either: that one draws the list as a rounded card set into the window and
+                // puts each selection in a rounded pill inset from both edges. Two radii and two margins for
+                // a list that is already bounded by the split view's divider — it reads as a panel floating
+                // on another panel. `.plain` runs the rows the full width of the column, edge to edge, and
+                // the hairline on the right is the only thing that separates the sidebar from the scene.
+                .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 28)
                 .scrollContentBackground(.hidden)
-                .background(Surface.surface)
+                .background(Surface.surface.ignoresSafeArea())
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         ScopeSwitcher(scope: scope) { scope in

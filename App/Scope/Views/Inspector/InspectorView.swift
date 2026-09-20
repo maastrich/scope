@@ -16,15 +16,9 @@ struct InspectorView: View {
         VStack(spacing: 0) {
             // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
-                Picker("Panel", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases, id: \.self) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
+                TabStrip(selection: $model.inspectorTab,
+                         items: InspectorTab.allCases.map { ($0, $0.title) })
+                    .accessibilityLabel("Panel")
                 Spacer(minLength: 4)
             }
             .padding(.horizontal, 10)
