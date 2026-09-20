@@ -189,7 +189,7 @@ struct TaskVersionStrip: View {
             }
         }
         .padding(.horizontal, 6)
-        .frame(height: 26)
+        .frame(height: 24)
         .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
         .padding(.horizontal, -6)
         .padding(.vertical, 2)

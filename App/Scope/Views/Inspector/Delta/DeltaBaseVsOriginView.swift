@@ -21,7 +21,7 @@ struct DeltaBaseVsOriginView: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .frame(height: 26)
+                    .frame(height: 24)
                     .background(Fill.quiet)
                     if let error = repo.error {
                         Text(error)

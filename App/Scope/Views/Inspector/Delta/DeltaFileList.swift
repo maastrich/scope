@@ -121,7 +121,7 @@ struct DeltaFileList: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
-                            .frame(height: 26)
+                            .frame(height: 24)
                         }
                     }
                 }
@@ -151,7 +151,7 @@ struct DeltaFileList: View {
                 DeltaCounts(additions: delta.summary.additions, deletions: delta.summary.deletions)
             }
             .padding(.horizontal, 14)
-            .frame(height: 26)
+            .frame(height: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -198,7 +198,7 @@ struct DeltaFileList: View {
             .accessibilityLabel("Open \(file.path) in editor")
         }
         .padding(EdgeInsets(top: 0, leading: 30, bottom: 0, trailing: 14))
-        .frame(height: 26)
+        .frame(height: 24)
         .background(selected ? Fill.selectedTint : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
