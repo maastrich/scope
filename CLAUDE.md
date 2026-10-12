@@ -69,6 +69,11 @@ xcodebuild -project Scope.xcodeproj -scheme Scope -configuration Debug \
 - **A Debug build is a different app.** It is `Scope Debug.app`, bundle id `dev.maastrich.scope.debug`, and its
   data lives in `~/.scope-debug` — so it never shares config, thread records or the hook socket with the copy in
   `/Applications`, and Spotlight can tell them apart. Release is untouched (`Scope.app`, `dev.maastrich.scope`).
+  `docs/DEBUG_ISOLATION.md` is the audit of every surface the two could share; add a row when you add one.
+- **A Debug build never runs on `~/.scope`, and no build shares a home.** `AppHome.resolve` drops a `SCOPE_HOME`
+  inherited from a thread and refuses the production home outright; an app that finds its home's socket
+  answered quits with an alert instead of taking it over. So two Debug builds from two worktrees cannot run
+  together on `~/.scope-debug` — give the second its own `SCOPE_HOME`.
 
 ## Running a throwaway instance
 
