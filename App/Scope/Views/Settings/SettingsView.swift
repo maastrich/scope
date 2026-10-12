@@ -60,6 +60,7 @@ private struct GeneralSettingsView: View {
                     SettingsRow("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
                 }
                 Toggle("Use Option as the Meta key", isOn: preference(\.terminalOptionAsMeta))
+                    .toggleStyle(.scope)
                 // One literal, not a `+` chain: only a literal is read as Markdown, so the code spans render.
                 Text("""
                     Off, ⌥ types the character your layout puts there — `⌥(` and `⌥)` are how a French keyboard \
@@ -74,6 +75,7 @@ private struct GeneralSettingsView: View {
                     Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
                 }
                 Toggle("Claude Code follows the terminal palette", isOn: preference(\.claudeUsesTerminalPalette))
+                    .toggleStyle(.scope)
                 Text("Claude Code draws with the terminal's 16 colours, matched to the appearance, instead of its own theme. Applies to threads launched from now on.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
@@ -94,14 +96,18 @@ private struct GeneralSettingsView: View {
             }
             SettingsSection("Confirmations") {
                 Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
+                    .toggleStyle(.scope)
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
+                    .toggleStyle(.scope)
             }
             SettingsSection("Threads") {
                 Toggle("Close exited threads automatically after 10 s", isOn: preference(\.autoCloseExitedThreads))
+                    .toggleStyle(.scope)
                 Text("Off: an exited thread stays in the sidebar until you close it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                 Toggle("Relaunch running threads when Scope opens", isOn: preference(\.autoRelaunchThreads))
+                    .toggleStyle(.scope)
                 Text("Threads that were running when Scope quit, updated or crashed start again, picking their driver session back up when they can. Hold ⇧ while Scope opens to skip it once.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
@@ -119,6 +125,7 @@ private struct GeneralSettingsView: View {
             }
             SettingsSection("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
+                    .toggleStyle(.scope)
             }
         }
     }

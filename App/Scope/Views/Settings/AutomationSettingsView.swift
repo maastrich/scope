@@ -133,6 +133,7 @@ struct AutomationSettingsView: View {
 
             SettingsSection("Agents") {
                 Toggle("Let agents drive Scope", isOn: automation(\.agentsMayDrive))
+                    .toggleStyle(.scope)
                 Text("Requests from a thread Scope is running. Your own terminal is always allowed.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
