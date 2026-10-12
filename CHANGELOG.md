@@ -11,6 +11,36 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.11.0](https://github.com/maastrich/scope/releases/tag/v0.11.0) - 2026-10-12
+
+### Added
+
+- **ui:** name the surface, fill and text tokens the app was missing by @maastrich
+- **ui:** drop the sidebar's vibrancy for an opaque surface by @maastrich
+- **ui:** switch to the Ink palette and add the app's own controls by @maastrich
+- **ui:** replace the native controls with the app's own by @maastrich
+
+### Fixed
+
+- **sidebar:** keep a selected row readable on the accent fill by @maastrich
+- **ui:** put the text hierarchy and the terminal ground on the tokens by @maastrich
+- **terminal:** keep ANSI black visible on the Onyx ground by @maastrich
+
+### Changed
+
+- **ui:** paint the floating surfaces and retire the alpha fills by @maastrich
+- **ui:** name the six type roles at their exact call sites by @maastrich
+- **ui:** put the component library to work by @maastrich
+
+### Documentation
+
+- **design:** research an opaque, brand-coloured UI direction by @maastrich
+- **design:** spec direction A, the opaque one-accent chrome by @maastrich
+- **design:** record how the build diverged from the spec by @maastrich
+- **design:** note the two sweeps the green build hid by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.10.2...v0.11.0
+
 ## [0.10.2](https://github.com/maastrich/scope/releases/tag/v0.10.2) - 2026-09-17
 
 ### Fixed
