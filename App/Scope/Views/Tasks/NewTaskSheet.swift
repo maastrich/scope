@@ -48,8 +48,8 @@ struct NewTaskSheet: View {
     /// The branch Create asked for is checked out in another working tree: which one, said in words.
     @State private var checkedOut: (branch: String, holder: String)?
     @State private var error: String?
-    @FocusState private var promptFocused: Bool
-    @FocusState private var titleFocused: Bool
+    private enum Field { case prompt, title, branch, folder }
+    @FocusState private var focus: Field?
 
     init(scope: ScopeState, defaultDriverID: String) {
         self.scope = scope
@@ -57,38 +57,33 @@ struct NewTaskSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                switch step {
-                case .prompt: promptSections
-                case .proposal: proposalSections
-                }
+        SheetChrome(title: "New Task in \(scope.name)") {
+            switch step {
+            case .prompt: promptSections
+            case .proposal: proposalSections
             }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-
-            // Outside the Form on purpose. As its last section the message was the bottom of a scrolling list
+        } notice: {
+            // Outside the scrolling content on purpose. As its last row the message was the bottom of a list
             // nothing scrolled to, so a failed Create looked like nothing happening at all — the only legible
             // copy was in the toolbar's problem popover.
             if let error {
-                Divider()
                 Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(nsColor: .systemRed))
+                    .font(.scopeCaption)
+                    .foregroundStyle(PullRequestStyle.failing)
                     .lineLimit(4)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(EdgeInsets(top: 10, leading: 20, bottom: 2, trailing: 20))
+                    .padding(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
+                    .overlay(alignment: .top) { Rectangle().fill(Surface.stroke).frame(height: 1) }
             }
-
+        } actions: {
             buttonRow
-                .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
         }
         .frame(width: 520)
         .frame(minHeight: 300, maxHeight: 600)
         .onAppear {
-            promptFocused = true
+            focus = .prompt
             if !isRepoScope, scope.repos.count == 1, let only = scope.repos.first {
                 selectedRepos = [only.id]
             }
@@ -99,13 +94,12 @@ struct NewTaskSheet: View {
     // MARK: Step 1 — prompt
 
     @ViewBuilder private var promptSections: some View {
-        Section {
+        SheetGroup(caption: "The prompt opens the first thread of the task and is kept in AGENTS.md as its goal. ⌘↩ continues.") {
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
                     Text("What should the agent do? e.g. Add a refresh-token flow to the auth service…")
                         .font(.scopeBody)
                         .foregroundStyle(Ink.tertiary)
-                        .padding(.top, 8)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
                 }
@@ -113,198 +107,195 @@ struct NewTaskSheet: View {
                     .font(.scopeBody)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 84, maxHeight: 168)
-                    .focused($promptFocused)
+                    .focused($focus, equals: .prompt)
                     .onKeyPress(.return, phases: .down) { press in
                         guard press.modifiers.contains(.command), canContinue else { return .ignored }
                         continueToProposal()
                         return .handled
                     }
             }
-            .padding(.vertical, 2)
-        } header: {
-            Text("New Task in \(scope.name)")
-        } footer: {
-            Text("The prompt opens the first thread of the task and is kept in AGENTS.md as its goal. ⌘↩ continues.")
+            .scopeTextBox(focused: focus == .prompt, inset: 2)
         }
 
-        Section {
-            Picker("Driver", selection: $driverID) {
-                ForEach(model.drivers.profiles) { profile in
-                    Label(profile.name, systemImage: profile.icon ?? "terminal").tag(profile.id)
+        SheetGroup(caption: driverCaption) {
+            SheetRow("Driver") {
+                ScopePicker("Driver", selection: $driverID, title: selectedProfile?.name ?? "None",
+                            systemImage: selectedProfile?.icon ?? "terminal") {
+                    ForEach(model.drivers.profiles) { profile in
+                        Label(profile.name, systemImage: profile.icon ?? "terminal").tag(profile.id)
+                    }
                 }
             }
-            Text(driverCaption)
-                .font(.scopeRow)
-                .foregroundStyle(Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
 
-        Section {
-            Label(repoHint, systemImage: repoHintSymbol)
-                .font(.system(size: 12))
-                .foregroundStyle(Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Label(repoHint, systemImage: repoHintSymbol)
+            .font(.scopeCaption)
+            .foregroundStyle(Ink.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: Step 2 — proposal
 
     @ViewBuilder private var proposalSections: some View {
-        Section {
-            TextField("Title", text: $title)
-                .focused($titleFocused)
-                .onChange(of: title) { if title != appliedFields[0] { fieldsEdited = true } }
-            TextField("Branch", text: $branch)
-                .font(.system(size: 12, design: .monospaced))
-                .autocorrectionDisabled()
-                .disabled(startPoint.continuesExistingWork)
-                .onChange(of: branch) { if branch != appliedFields[1] { fieldsEdited = true } }
-            TextField("Folder", text: $folder)
-                .font(.system(size: 12, design: .monospaced))
-                .autocorrectionDisabled()
-                .onChange(of: folder) { if folder != appliedFields[2] { fieldsEdited = true } }
-            Picker("Start from", selection: $startPoint) {
-                ForEach(startPointOptions, id: \.self) { option in
-                    Text(label(for: option)).tag(option)
-                }
+        SheetGroup {
+            SheetRow("Title") {
+                TextField("Title", text: $title)
+                    .textFieldStyle(.plain)
+                    .focused($focus, equals: .title)
+                    .onChange(of: title) { if title != appliedFields[0] { fieldsEdited = true } }
+                    .scopeFieldBox(focused: focus == .title)
             }
-            .onChange(of: startPoint) { _, option in startPointChanged(option) }
-            LabeledContent("Sandbox") {
+            SheetRow("Branch") {
+                TextField("Branch", text: $branch)
+                    .textFieldStyle(.plain)
+                    .font(.scopeValue)
+                    .autocorrectionDisabled()
+                    .focused($focus, equals: .branch)
+                    .disabled(startPoint.continuesExistingWork)
+                    .onChange(of: branch) { if branch != appliedFields[1] { fieldsEdited = true } }
+                    .scopeFieldBox(focused: focus == .branch)
+            }
+            SheetRow("Folder") {
+                TextField("Folder", text: $folder)
+                    .textFieldStyle(.plain)
+                    .font(.scopeValue)
+                    .autocorrectionDisabled()
+                    .focused($focus, equals: .folder)
+                    .onChange(of: folder) { if folder != appliedFields[2] { fieldsEdited = true } }
+                    .scopeFieldBox(focused: focus == .folder)
+            }
+            SheetRow("Start from") {
+                ScopePicker("Start from", selection: $startPoint, title: label(for: startPoint)) {
+                    ForEach(startPointOptions, id: \.self) { option in
+                        Text(label(for: option)).tag(option)
+                    }
+                }
+                .onChange(of: startPoint) { _, option in startPointChanged(option) }
+            }
+            SheetRow("Sandbox") {
                 Text(sandboxPath)
                     .font(.scopeValue)
                     .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .help(sandboxPath)
             }
-        } header: {
-            Text("New Task in \(scope.name)")
-        } footer: {
             HStack(spacing: 6) {
                 if proposing != nil {
-                    ProgressView().controlSize(.mini)
+                    ScopeSpinner(size: 10)
                     Text(resolving ? "Reading the request…" : "\(selectedProfile?.name ?? "The driver") is reading the repositories…")
                     Button("Stop") { cancelProposing() }
-                        .controlSize(.mini)
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.scopeLink)
                 } else {
                     Text(sourceCaption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .font(.scopeRow)
+            .font(.scopeCaption)
             .foregroundStyle(Ink.secondary)
+            .frame(minHeight: 18)
         }
 
         if let busy = checkedOut {
-            Section {
-                Label("\(busy.branch) is checked out in \(busy.holder), and a branch lives in one working tree at a time.",
-                      systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12))
-                    .fixedSize(horizontal: false, vertical: true)
+            SheetNotice(text: "\(busy.branch) is checked out in \(busy.holder), and a branch lives in one working tree at a time.",
+                        systemImage: "exclamationmark.triangle") {
                 Button("Create on a New Branch Instead") { useNewBranch(instead: busy.branch) }
-                    .controlSize(.small)
+                    .buttonStyle(.scopeSecondary)
             }
         }
 
         if let existing = resolution?.existingTask, let task = model.task(existing) {
-            Section {
-                Label("\(task.name) already works on this pull request.", systemImage: "arrow.triangle.branch")
-                    .font(.system(size: 12))
+            SheetNotice(text: "\(task.name) already works on this pull request.", systemImage: "arrow.triangle.branch") {
                 Button("Open it instead") {
                     model.selection = .task(existing)
                     dismiss()
                 }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
             }
         }
 
         if !isRepoScope {
-            Section {
-                ForEach(scope.repos) { repo in
-                    Toggle(isOn: binding(for: repo.id)) {
-                        HStack(spacing: 6) {
-                            Text(repo.id).font(.system(size: 12))
-                            if let branch = repo.branchLabel {
-                                Text(branch)
-                                    .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundStyle(Ink.secondary)
-                            }
-                        }
-                    }
-                    .toggleStyle(.checkbox)
-                    .disabled(startPoint.pullRequest != nil && !selectedRepos.contains(repo.id))
-                }
-            } header: {
-                HStack {
-                    Text("Repositories")
+            SheetGroup(caption: repoFooter) {
+                HStack(spacing: 2) {
+                    SectionLabel(text: "Repositories")
                     Spacer()
                     if scope.repos.count > 1, startPoint.pullRequest == nil {
                         Button("All") { reposEdited = true; selectedRepos = Set(scope.repos.map(\.id)) }
                         Button("None") { reposEdited = true; selectedRepos = [] }
                     }
                 }
-                .controlSize(.small)
-                .buttonStyle(.borderless)
-            } footer: {
-                if !repoFooter.isEmpty { Text(repoFooter) }
+                .font(.scopeCaption)
+                .buttonStyle(.scopeLink)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(scope.repos) { repo in
+                        Toggle(isOn: binding(for: repo.id)) {
+                            HStack(spacing: 6) {
+                                Text(repo.id).font(.scopeBody)
+                                if let branch = repo.branchLabel {
+                                    Text(branch)
+                                        .font(.scopeValue)
+                                        .foregroundStyle(Ink.secondary)
+                                }
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        .disabled(startPoint.pullRequest != nil && !selectedRepos.contains(repo.id))
+                    }
+                }
             }
         }
 
-        Section {
+        SheetGroup(caption: "Runs each repository's setup command — from its Graph card, or the scope's config — in the new sandbox before the first thread starts. The .env files of the base checkout are copied either way.") {
             Toggle("Run setup", isOn: $runSetup)
                 .toggleStyle(.checkbox)
-        } footer: {
-            Text("Runs each repository's setup command — from its Graph card, or the scope's config — in the new sandbox before the first thread starts. The .env files of the base checkout are copied either way.")
+                .font(.scopeBody)
         }
 
-        Section {
+        SheetGroup {
+            SectionLabel(text: "Prompt")
             Text(prompt.trimmingCharacters(in: .whitespacesAndNewlines))
-                .font(.system(size: 12))
+                .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
                 .lineLimit(4)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            LabeledContent("Opens") {
+            SheetRow("Opens") {
                 Text("\(selectedProfile?.name ?? "Shell") in \(repoCaption)")
                     .foregroundStyle(Ink.secondary)
             }
-            .font(.system(size: 12))
-        } header: {
-            Text("Prompt")
         }
     }
 
-    private var buttonRow: some View {
-        HStack(spacing: 8) {
-            if isCreating {
-                ProgressView().controlSize(.small)
-                Text("Creating \(repoCount) \(repoCount == 1 ? "sandbox" : "sandboxes") — fetching origin…")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if step == .proposal {
-                Button("Back") { backToPrompt() }
-                    .disabled(isCreating)
-            }
-            Button("Cancel") { dismiss() }
-                .keyboardShortcut(.cancelAction)
+    @ViewBuilder private var buttonRow: some View {
+        if isCreating {
+            ScopeSpinner(size: 12)
+            Text("Creating \(repoCount) \(repoCount == 1 ? "sandbox" : "sandboxes") — fetching origin…")
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+                .lineLimit(1)
+        }
+        Spacer()
+        if step == .proposal {
+            Button("Back") { backToPrompt() }
+                .buttonStyle(.scopeSecondary)
                 .disabled(isCreating)
-            switch step {
-            case .prompt:
-                Button("Continue") { continueToProposal() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.scopePrimary)
-                    .disabled(!canContinue)
-            case .proposal:
-                Button("Create") { create() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.scopePrimary)
-                    .disabled(!canCreate)
-            }
+        }
+        Button("Cancel") { dismiss() }
+            .keyboardShortcut(.cancelAction)
+            .buttonStyle(.scopeSecondary)
+            .disabled(isCreating)
+        switch step {
+        case .prompt:
+            Button("Continue") { continueToProposal() }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.scopePrimary)
+                .disabled(!canContinue)
+        case .proposal:
+            Button("Create") { create() }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.scopePrimary)
+                .disabled(!canCreate)
         }
     }
 
@@ -463,7 +454,7 @@ struct NewTaskSheet: View {
             if let pr = resolved.pullRequest {
                 derivedBranch = model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID).branch
                 applyPullRequest(pr, in: scopeID, force: true)
-                titleFocused = true
+                focus = .title
                 proposing = nil
                 return
             }
@@ -473,7 +464,7 @@ struct NewTaskSheet: View {
                 startPoint = .existingBranch(branch)
             }
             apply(model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID), force: true)
-            titleFocused = true
+            focus = .title
             if startPoint == .defaultBranch, model.drivers.profile(id: driver)?.microsession?.isEmpty == false {
                 let proposal = await model.proposeTask(prompt: request, driverID: driver, repos: evidenceRepos, evidence: evidence, in: scopeID)
                 guard !Task.isCancelled else { return }
@@ -557,7 +548,7 @@ struct NewTaskSheet: View {
         cancelProposing()
         error = nil
         step = .prompt
-        promptFocused = true
+        focus = .prompt
     }
 
     /// Leaves the busy branch to whoever holds it: the proposed name, or the next free `-2`, `-3`, off the base.
