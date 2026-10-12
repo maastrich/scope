@@ -6,16 +6,16 @@ import UserNotifications
 
 /// Settings window (⌘,): General, Shell environment, Drivers, Automation.
 struct SettingsView: View {
+    @State private var tab: SettingsTab = .general
+
     var body: some View {
-        TabView {
-            GeneralSettingsView()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            ShellSettingsView()
-                .tabItem { Label("Shell Environment", systemImage: "terminal") }
-            DriversSettingsView()
-                .tabItem { Label("Drivers", systemImage: "cpu") }
-            AutomationSettingsView()
-                .tabItem { Label("Automation", systemImage: "terminal.fill") }
+        SettingsChrome(selection: $tab) {
+            switch tab {
+            case .general: GeneralSettingsView()
+            case .shell: ShellSettingsView()
+            case .drivers: DriversSettingsView()
+            case .automation: AutomationSettingsView()
+            }
         }
         .frame(width: 600, height: 520)
     }
@@ -27,9 +27,9 @@ private struct GeneralSettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Form {
-            Section("Configuration") {
-                LabeledContent("Config folder") {
+        SettingsPage {
+            SettingsSection("Configuration") {
+                SettingsRow("Config folder") {
                     HStack(spacing: 8) {
                         Text(model.env.home.path)
                             .font(.system(size: 12, design: .monospaced))
@@ -52,14 +52,15 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Section("Editor") {
+            SettingsSection("Editor") {
                 EditorPicker()
             }
-            Section("Terminal") {
+            SettingsSection("Terminal") {
                 Stepper(value: terminalFontSize, in: Preferences.terminalFontSizeRange) {
-                    LabeledContent("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
+                    SettingsRow("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
                 }
                 Toggle("Use Option as the Meta key", isOn: preference(\.terminalOptionAsMeta))
+                    .toggleStyle(.scope)
                 // One literal, not a `+` chain: only a literal is read as Markdown, so the code spans render.
                 Text("""
                     Off, ⌥ types the character your layout puts there — `⌥(` and `⌥)` are how a French keyboard \
@@ -74,6 +75,7 @@ private struct GeneralSettingsView: View {
                     Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
                 }
                 Toggle("Claude Code follows the terminal palette", isOn: preference(\.claudeUsesTerminalPalette))
+                    .toggleStyle(.scope)
                 Text("Claude Code draws with the terminal's 16 colours, matched to the appearance, instead of its own theme. Applies to threads launched from now on.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
@@ -89,25 +91,29 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
-            Section("Notifications") {
+            SettingsSection("Notifications") {
                 NotificationStatusRow()
             }
-            Section("Confirmations") {
+            SettingsSection("Confirmations") {
                 Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
+                    .toggleStyle(.scope)
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
+                    .toggleStyle(.scope)
             }
-            Section("Threads") {
+            SettingsSection("Threads") {
                 Toggle("Close exited threads automatically after 10 s", isOn: preference(\.autoCloseExitedThreads))
+                    .toggleStyle(.scope)
                 Text("Off: an exited thread stays in the sidebar until you close it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                 Toggle("Relaunch running threads when Scope opens", isOn: preference(\.autoRelaunchThreads))
+                    .toggleStyle(.scope)
                 Text("Threads that were running when Scope quit, updated or crashed start again, picking their driver session back up when they can. Hold ⇧ while Scope opens to skip it once.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Section("Threads waiting for you") {
+            SettingsSection("Threads waiting for you") {
                 Picker("Show the count", selection: preference(\.attentionCounter)) {
                     ForEach(AttentionCounterPlacement.allCases, id: \.self) { placement in
                         Text(placement.title).tag(placement)
@@ -117,11 +123,11 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
-            Section("Menu bar") {
+            SettingsSection("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
+                    .toggleStyle(.scope)
             }
         }
-        .formStyle(.grouped)
     }
 
     /// What the default actually decides: the driver a scope opens with, until you open one in it.
@@ -154,7 +160,7 @@ private struct NotificationStatusRow: View {
     @State private var status: UNAuthorizationStatus?
 
     var body: some View {
-        LabeledContent("Status") {
+        SettingsRow("Status") {
             HStack(spacing: 8) {
                 Text(statusText)
                     .foregroundStyle(status == .denied ? AnyShapeStyle(Color("WarningText")) : AnyShapeStyle(.primary))
@@ -215,7 +221,7 @@ private struct EditorPicker: View {
                 .foregroundStyle(Ink.secondary)
         }
         if let editor = model.config.preferences.editor {
-            LabeledContent("Command") {
+            SettingsRow("Command") {
                 Text(editor.argv.joined(separator: " "))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Ink.secondary)
@@ -277,9 +283,9 @@ private struct ShellSettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Form {
-            Section("Login shell") {
-                LabeledContent("Shell") {
+        SettingsPage {
+            SettingsSection("Login shell") {
+                SettingsRow("Shell") {
                     Text(ShellEnvironment.loginShell())
                         .font(.system(size: 12, design: .monospaced))
                         .textSelection(.enabled)
@@ -293,8 +299,8 @@ private struct ShellSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
-            Section("Status") {
-                LabeledContent("State") {
+            SettingsSection("Status") {
+                SettingsRow("State") {
                     HStack(spacing: 6) {
                         if model.shellStatus == .probing {
                             ProgressView().controlSize(.small)
@@ -303,7 +309,7 @@ private struct ShellSettingsView: View {
                     }
                 }
                 if let warning = resolved?.warning {
-                    LabeledContent("Warning") {
+                    SettingsRow("Warning") {
                         Text(warning)
                             .foregroundStyle(Color("WarningText"))
                             .textSelection(.enabled)
@@ -314,7 +320,7 @@ private struct ShellSettingsView: View {
                 }
                 .disabled(model.shellStatus == .probing)
             }
-            Section("PATH") {
+            SettingsSection("PATH") {
                 if let resolved {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(resolved.path.split(separator: ":").enumerated()), id: \.offset) { _, entry in
@@ -329,7 +335,6 @@ private struct ShellSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private var resolved: ResolvedShellEnvironment? {

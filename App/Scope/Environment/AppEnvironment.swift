@@ -89,9 +89,9 @@ final class AppEnvironment {
     static func live() -> AppEnvironment {
         var problems: [Problem] = []
         #if DEBUG
-        let home = ScopeHome.url(folderName: ".scope-debug")
+        let home = ScopeHome.appURL(debugBuild: true)
         #else
-        let home = ScopeHome.url()
+        let home = ScopeHome.appURL(debugBuild: false)
         #endif
         do {
             try ScopeHome.ensureLayout(at: home)

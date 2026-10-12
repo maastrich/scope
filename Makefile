@@ -21,7 +21,10 @@ build: generate      ## Build the app (Debug by default; CONFIG=Release for rele
 	$(XCB) build | tail -n 20
 
 run: build           ## Launch the built .app
-	open "$(APP)"
+	# Without this, a build launched from inside a Scope thread inherits SCOPE_HOME and points at the
+	# production ~/.scope -- same config, same thread records, same hook socket as the installed copy.
+	env -u SCOPE_HOME -u SCOPE_SOCK -u SCOPE_THREAD -u SCOPE_TASK -u SCOPE_TASK_ROOT \
+	    -u SCOPE_SCOPE -u SCOPE_SCOPE_ROOT -u SCOPE_PORT open "$(APP)"
 
 app-path:            ## Print the path of the built .app
 	@echo "$(APP)"
