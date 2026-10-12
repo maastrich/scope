@@ -130,7 +130,9 @@ targets:
         NSServices:
           - NSMenuItem: { default: "Open in $(SCOPE_DISPLAY_NAME)" }
             NSMessage: openInScope
-            NSPortName: Scope
+            # The port is the app, not the feature: with one name for both builds the Services menu sent
+            # "Open in Scope Debug" to whichever copy registered the port first.
+            NSPortName: $(PRODUCT_NAME)
             NSSendFileTypes: [public.folder]
         # --- Sparkle -------------------------------------------------------------------------------
         # Feed = asset of the LATEST non-draft, non-prerelease GitHub release (302 -> per-tag asset URL).
