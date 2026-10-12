@@ -132,16 +132,14 @@ struct SectionLabel: View {
     }
 }
 
-/// A text field with the app's own box: opaque ground, hairline at rest, a 2pt accent ring while it has the
-/// keyboard. `.textFieldStyle(.plain)` strips AppKit's bezel; this puts something back.
-struct ScopeFieldBox<Content: View>: View {
-    var focused: Bool
-    var height: CGFloat = 24
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        content
-            .padding(.horizontal, 7)
+extension View {
+    /// The app's own text-field box: opaque ground, hairline at rest, a 2pt accent ring while it has the
+    /// keyboard. `.textFieldStyle(.plain)` strips AppKit's bezel; this puts something back that is ours.
+    ///
+    /// A modifier rather than a wrapper view, because a field is a row of things — an icon, the text, a clear
+    /// button, a shortcut hint — and wrapping that in a container would mean threading its layout through.
+    func scopeFieldBox(focused: Bool, height: CGFloat = 24) -> some View {
+        padding(.horizontal, 7)
             .frame(height: height)
             .background(Surface.field, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .overlay {

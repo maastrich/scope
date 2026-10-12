@@ -28,14 +28,7 @@ struct RepoRow: View {
                 ProgressView()
                     .controlSize(.mini)
             } else if let branch = repo.branchLabel {
-                Text(branch)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
+                Chip(text: branch, mono: true)
             }
 
             // The gutter `ThreadRow` reserves for its close button, so every row's trailing marker lands in the

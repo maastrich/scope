@@ -162,11 +162,7 @@ struct SidebarView: View {
                     .foregroundStyle(Ink.tertiary)
             }
         }
-        .padding(.horizontal, 7)
-        .frame(height: 24)
-        .background(Surface.field, in: RoundedRectangle(cornerRadius: Radius.md))
-        .overlay(RoundedRectangle(cornerRadius: Radius.md)
-            .strokeBorder(filterFocused ? Color.accentColor : Surface.stroke, lineWidth: filterFocused ? 2 : 1))
+        .scopeFieldBox(focused: filterFocused)
         .padding(EdgeInsets(top: 2, leading: 10, bottom: 4, trailing: 10))
         .help("Filter tasks, threads and repositories by name (⌥⌘F, Esc clears)")
     }
@@ -196,15 +192,7 @@ struct SidebarView: View {
     }
 
     private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-            if let count {
-                Text("· \(count)")
-                    .foregroundStyle(Ink.tertiary)
-            }
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(Ink.tertiary)
+        SectionLabel(text: title, trailing: count.map { "\($0)" })
     }
 
     private func hintRow(_ text: String) -> some View {
