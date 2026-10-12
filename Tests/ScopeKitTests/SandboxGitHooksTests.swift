@@ -154,4 +154,50 @@ import ScopeCore
         }
         #expect(FileManager.default.isExecutableFile(atPath: first.appending(path: SandboxGitHooks.dispatcherName).path))
     }
+
+    /// An app started from a thread of another Scope inherits that thread's variables and its hooks override;
+    /// neither may reach its own git calls or the threads it opens.
+    @Test func anInheritedThreadLeavesNothingBehind() throws {
+        let otherHome = FileManager.default.temporaryDirectory.appending(path: "other-scope-\(UUID().uuidString.prefix(6))")
+        defer { try? FileManager.default.removeItem(at: otherHome) }
+        let otherHooks = try SandboxGitHooks.install(home: otherHome).path
+
+        let inherited = [
+            "PATH": "/usr/bin", "EDITOR": "vim",
+            "SCOPE_HOME": otherHome.path, "SCOPE_SOCK": otherHome.path + "/scope.sock", "SCOPE_THREAD": "8a18d7476063",
+            "SCOPE_TASK": "demo", "SCOPE_TASK_ROOT": otherHome.path + "/sandboxes/acme/demo", "SCOPE_PORT": "41020",
+            "SCOPE_SCOPE": "acme", "SCOPE_SCOPE_ROOT": "/Users/me/acme",
+            "GIT_CONFIG_COUNT": "3",
+            "GIT_CONFIG_KEY_0": "user.name", "GIT_CONFIG_VALUE_0": "Me",
+            "GIT_CONFIG_KEY_1": "core.hooksPath", "GIT_CONFIG_VALUE_1": otherHooks,
+            "GIT_CONFIG_KEY_2": "commit.gpgsign", "GIT_CONFIG_VALUE_2": "false",
+        ]
+        let clean = SandboxGitHooks.withoutInheritedThread(inherited)
+        #expect(clean == [
+            "PATH": "/usr/bin", "EDITOR": "vim",
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "user.name", "GIT_CONFIG_VALUE_0": "Me",
+            "GIT_CONFIG_KEY_1": "commit.gpgsign", "GIT_CONFIG_VALUE_1": "false",
+        ])
+        #expect(!clean.keys.contains { $0.hasPrefix("SCOPE_") })
+    }
+
+    @Test func onlyAScopeHooksOverrideIsRemoved() throws {
+        // The only entry was Scope's: no GIT_CONFIG_* is left at all.
+        let gone = SandboxGitHooks.environment(removingScopeHooksFrom: [
+            "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.hooksPath", "GIT_CONFIG_VALUE_0": "/Users/me/.scope/githooks",
+        ])
+        #expect(gone.isEmpty)
+
+        // A hooks path of the user's own is theirs, whatever it is called.
+        let home = FileManager.default.temporaryDirectory.appending(path: "user-hooks-\(UUID().uuidString.prefix(6))")
+        let own = home.appending(path: "githooks", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: own, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        for path in [own.path, "/Users/me/dotfiles/hooks"] {
+            let theirs = ["GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.hooksPath", "GIT_CONFIG_VALUE_0": path, "LANG": "C"]
+            #expect(SandboxGitHooks.environment(removingScopeHooksFrom: theirs) == theirs)
+        }
+        #expect(SandboxGitHooks.environment(removingScopeHooksFrom: ["LANG": "C"]) == ["LANG": "C"])
+    }
 }

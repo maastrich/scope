@@ -64,11 +64,20 @@ public enum TerminalEnvironment {
         "OLDPWD", "SHLVL", "_", "__CFBundleIdentifier", "XPC_SERVICE_NAME", "XPC_FLAGS", "SCOPE_ENV_PROBE",
     ]
 
+    /// Everything Scope puts into a thread or a setup script. A thread only ever gets these from the app that
+    /// opens it: an app started from another Scope's thread (a Debug build run from an agent, Xcode opened from
+    /// a Scope terminal) carries that thread's copies, and a thread with no task would otherwise keep the other
+    /// app's `SCOPE_TASK`, `SCOPE_TASK_ROOT` and `SCOPE_PORT`, since nothing overwrites what it does not set.
+    public static let injectedKeys: Set<String> = [
+        "SCOPE_HOME", "SCOPE_SOCK", "SCOPE_PORT", "SCOPE_THREAD", "SCOPE_TASK", "SCOPE_TASK_ROOT", "SCOPE_SCOPE",
+        "SCOPE_SCOPE_ROOT", "SCOPE_SANDBOX", "SCOPE_BASE_PATH", "SCOPE_DEFAULT_BRANCH",
+    ]
+
     /// `TERM` value for every thread.
     public static let term = "xterm-256color"
 
     /// `base` → + `TERM`, `COLORTERM`, `COLORFGBG` (from `theme`), `LANG` (kept if UTF-8, else `en_US.UTF-8`),
-    /// `TERM_PROGRAM=Scope`, `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys` → + `helpers` on
+    /// `TERM_PROGRAM=Scope`, `TERM_PROGRAM_VERSION`, `SHELL`, `PWD=cwd` → − `strippedKeys`, `injectedKeys` → + `helpers` on
     /// `PATH` → + scope variables → + `driverEnv` (already expanded by the caller).
     ///
     /// `helpers` is the app's `Contents/Helpers`: putting it first on `PATH` is what makes `scope` and
@@ -92,7 +101,7 @@ public enum TerminalEnvironment {
         environment["TERM_PROGRAM_VERSION"] = appVersion
         environment["SHELL"] = shell
         environment["PWD"] = cwd
-        for key in strippedKeys { environment.removeValue(forKey: key) }
+        for key in strippedKeys.union(injectedKeys) { environment.removeValue(forKey: key) }
         if let helpers, !helpers.isEmpty {
             environment["PATH"] = prepend(helpers, to: environment["PATH"] ?? "")
         }
