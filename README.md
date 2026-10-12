@@ -62,8 +62,8 @@ The app is ad-hoc signed and not sandboxed (it forks PTYs and runs arbitrary bin
 ├── threads/<id>.json     # one record per thread: driver, cwd, launches, last exit
 ├── graph/                # M3
 ├── sandboxes/            # M2
+├── ui-state.json         # selection, expansion, inspector
 └── scope.sock            # unix socket for scope-hook events
-~/Library/Application Support/Scope/ui-state.json   # selection, expansion, inspector
 ```
 
 ## Drivers

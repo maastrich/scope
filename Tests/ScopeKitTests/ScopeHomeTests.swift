@@ -38,4 +38,22 @@ struct ScopeHomeTests {
         let url = ScopeHome.appURL(environment: [:], debugBuild: false)
         #expect(url == home.appending(path: ".scope", directoryHint: .isDirectory))
     }
+
+    @Test("UI state lives under the home, so two builds never share one file")
+    func uiStateFollowsTheHome() {
+        let release = ScopeHome.url(environment: [:])
+        let debug = ScopeHome.appURL(environment: [:], debugBuild: true)
+        #expect(ScopeHome.uiStateURL(home: release).path == release.path + "/ui-state.json")
+        #expect(ScopeHome.uiStateURL(home: debug).path == debug.path + "/ui-state.json")
+        #expect(ScopeHome.uiStateURL(home: release) != ScopeHome.uiStateURL(home: debug))
+    }
+
+    @Test("every path the app writes derives from the home it was given")
+    func everythingFollowsTheHome() {
+        let home = URL(fileURLWithPath: "/tmp/scope-a", isDirectory: true)
+        let paths = [ScopeHome.configURL(home: home), ScopeHome.driversURL(home: home), ScopeHome.graphURL(home: home),
+                     ScopeHome.threadsURL(home: home), ScopeHome.sandboxesURL(home: home),
+                     ScopeHome.spotlightMarkerURL(home: home), ScopeHome.uiStateURL(home: home)]
+        for path in paths { #expect(path.path.hasPrefix("/tmp/scope-a/"), "\(path.path)") }
+    }
 }

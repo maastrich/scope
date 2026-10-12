@@ -1,4 +1,5 @@
 import Foundation
+import ScopeControl
 import ScopeCore
 
 /// UI-only state that is not worth a place in `config.json`: what is selected, which scope the sidebar
@@ -46,30 +47,43 @@ struct UIState: Codable, Sendable, Equatable {
     }
 }
 
-/// `~/Library/Application Support/Scope/ui-state.json`, written through `JSONStore` with a short
-/// coalescing delay so a burst of selection changes costs one write.
+/// `<home>/ui-state.json`, written through `JSONStore` with a short coalescing delay so a burst of selection
+/// changes costs one write.
 @MainActor
 final class UIStateStore {
     let url: URL
+    /// Read once when `url` does not exist yet, never written.
+    private let legacyURL: URL?
     private var pending: UIState?
     private var timer: Task<Void, Never>?
 
-    /// Default location under Application Support (created on the first save).
-    static func defaultURL() -> URL {
+    /// `~/Library/Application Support/Scope/ui-state.json`: where the file lived before it moved under the
+    /// home, shared by every build and every `SCOPE_HOME`.
+    static func legacyURL() -> URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support")
         return support.appending(path: "Scope/ui-state.json", directoryHint: .notDirectory)
     }
 
-    init(url: URL = UIStateStore.defaultURL()) {
+    /// - Parameter home: the app's home. The installed app on its default home picks up the legacy file once, so
+    ///   the move costs nobody their selection; a Debug build and a custom home never look at it — it is the
+    ///   installed app's state, not theirs.
+    convenience init(home: URL) {
+        let inherits = !BuildFlavor.isDebug && AppHome.isProductionHome(home)
+        self.init(url: ScopeHome.uiStateURL(home: home), legacyURL: inherits ? UIStateStore.legacyURL() : nil)
+    }
+
+    init(url: URL, legacyURL: URL? = nil) {
         self.url = url
+        self.legacyURL = legacyURL
     }
 
     /// Reads the file; a missing or corrupt file yields `.empty` (nothing here is precious).
     func load() -> UIState {
-        guard FileManager.default.fileExists(atPath: url.path) else { return .empty }
+        let source = FileManager.default.fileExists(atPath: url.path) ? url : legacyURL
+        guard let source, FileManager.default.fileExists(atPath: source.path) else { return .empty }
         do {
-            return try JSONStore.load(UIState.self, from: url)
+            return try JSONStore.load(UIState.self, from: source)
         } catch {
             Log.app.warning("ui-state.json unreadable, starting fresh: \(String(describing: error), privacy: .public)")
             return .empty
