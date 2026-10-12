@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.12.2](https://github.com/maastrich/scope/releases/tag/v0.12.2) - 2026-10-12
+
+### Fixed
+
+- **release:** export with a certificate that has no team, and never report a dead build green ([#20](https://github.com/maastrich/scope/pull/20)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.12.1...v0.12.2
+
 ## [0.12.1](https://github.com/maastrich/scope/releases/tag/v0.12.1) - 2026-10-12
 
 ### Fixed
