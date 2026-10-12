@@ -235,6 +235,7 @@ struct ScopeMenuLabel: View {
                 .font(.scopeBody)
                 .foregroundStyle(kind == .primary ? Ink.onAccent : Ink.primary)
                 .lineLimit(1)
+                .truncationMode(.middle)
             Image(systemName: "chevron.down")
                 .font(.scopeMicro)
                 .foregroundStyle(kind == .primary ? Ink.onAccent : Ink.tertiary)
@@ -285,7 +286,10 @@ struct ScopeMenu<Content: View, Label: View>: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .fixedSize()
+        // Vertical only: a long value — a pull request's title, a branch — has to truncate inside its row,
+        // not push the row past the edge of the sheet.
+        .fixedSize(horizontal: false, vertical: true)
+        .opacity(isEnabled ? 1 : 0.4)
         .onHover { hovering = $0 }
     }
 }
@@ -375,6 +379,7 @@ struct ScopeLinkButtonStyle: ButtonStyle {
             ScopeLinkLabel(hovering: hovering && isEnabled, pressed: configuration.isPressed) {
                 configuration.label
             }
+            .opacity(isEnabled ? 1 : 0.4)
             .onHover { hovering = $0 }
             .onChange(of: isEnabled) { _, enabled in if !enabled { hovering = false } }
         }
@@ -385,21 +390,20 @@ extension ButtonStyle where Self == ScopeLinkButtonStyle {
     static var scopeLink: ScopeLinkButtonStyle { ScopeLinkButtonStyle() }
 }
 
-/// What `ScopeLinkButtonStyle` draws, on its own so a `ScopeMenu` can wear it too.
+/// What `ScopeLinkButtonStyle` draws, on its own so a `ScopeMenu` can wear it too. Whoever wears it dims it
+/// when disabled — the style, or the menu — so it is not dimmed twice.
 struct ScopeLinkLabel<Content: View>: View {
     var hovering: Bool
     var pressed = false
     @ViewBuilder var content: Content
-    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         content
             .foregroundStyle(hovering ? Ink.primary : Ink.secondary)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 3)
             .padding(.vertical, 2)
             .background(pressed ? Fill.pressed : (hovering ? Fill.hover : .clear),
                         in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-            .opacity(isEnabled ? 1 : 0.4)
             .contentShape(Rectangle())
     }
 }

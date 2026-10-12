@@ -39,6 +39,7 @@ struct CheckoutPicker: View {
                         Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                 }
+                .fixedSize()
             }
         }
         .disabled(disabled)
