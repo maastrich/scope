@@ -10,14 +10,14 @@ struct SceneEmptyView: View {
         VStack(spacing: 14) {
             Image(systemName: "folder")
                 .font(.system(size: 44, weight: .thin))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             Text("Declare a scope")
                 .font(.system(size: 20, weight: .semibold))
                 .tracking(-0.2)
             Text("A scope is any folder: a cloned GitHub org, a folder of projects, or a single repo. Scope reads it and writes nothing inside.")
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineSpacing(6)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
             Button {
@@ -34,7 +34,7 @@ struct SceneEmptyView: View {
                 .font(.system(size: 12, weight: .medium))
                 .padding(.horizontal, 4)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.scopePrimary)
             .controlSize(.regular)
             .keyboardShortcut("o", modifiers: .command)
             // One line when it fits, otherwise two centred lines (never a ragged wrap).
@@ -51,8 +51,8 @@ struct SceneEmptyView: View {
                 }
                 .multilineTextAlignment(.center)
             }
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
+            .font(.scopeRow)
+            .foregroundStyle(Ink.secondary)
         }
         .padding(.horizontal, 40)
         .padding(.vertical, 56)
@@ -60,9 +60,9 @@ struct SceneEmptyView: View {
         .background {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(lineWidth: 1)
-                .foregroundStyle(.primary.opacity(0.12))
+                .foregroundStyle(Surface.stroke)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

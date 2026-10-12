@@ -103,14 +103,14 @@ struct NewTaskSheet: View {
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
                     Text("What should the agent do? e.g. Add a refresh-token flow to the auth service…")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.tertiary)
+                        .font(.scopeBody)
+                        .foregroundStyle(Ink.tertiary)
                         .padding(.top, 8)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $prompt)
-                    .font(.system(size: 13))
+                    .font(.scopeBody)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 84, maxHeight: 168)
                     .focused($promptFocused)
@@ -134,15 +134,15 @@ struct NewTaskSheet: View {
                 }
             }
             Text(driverCaption)
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
+                .font(.scopeRow)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
 
         Section {
             Label(repoHint, systemImage: repoHintSymbol)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -171,8 +171,8 @@ struct NewTaskSheet: View {
             .onChange(of: startPoint) { _, option in startPointChanged(option) }
             LabeledContent("Sandbox") {
                 Text(sandboxPath)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,8 +192,8 @@ struct NewTaskSheet: View {
                     Text(sourceCaption)
                 }
             }
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
+            .font(.scopeRow)
+            .foregroundStyle(Ink.secondary)
         }
 
         if let busy = checkedOut {
@@ -228,7 +228,7 @@ struct NewTaskSheet: View {
                             if let branch = repo.branchLabel {
                                 Text(branch)
                                     .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Ink.secondary)
                             }
                         }
                     }
@@ -261,14 +261,14 @@ struct NewTaskSheet: View {
         Section {
             Text(prompt.trimmingCharacters(in: .whitespacesAndNewlines))
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(4)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             LabeledContent("Opens") {
                 Text("\(selectedProfile?.name ?? "Shell") in \(repoCaption)")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
             .font(.system(size: 12))
         } header: {
@@ -282,7 +282,7 @@ struct NewTaskSheet: View {
                 ProgressView().controlSize(.small)
                 Text("Creating \(repoCount) \(repoCount == 1 ? "sandbox" : "sandboxes") — fetching origin…")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
             Spacer()
@@ -297,12 +297,12 @@ struct NewTaskSheet: View {
             case .prompt:
                 Button("Continue") { continueToProposal() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(!canContinue)
             case .proposal:
                 Button("Create") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(!canCreate)
             }
         }

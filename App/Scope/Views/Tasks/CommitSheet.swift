@@ -23,7 +23,7 @@ struct CommitSheet: View {
                     LabeledContent("Branch") {
                         Text(repo.branch)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -35,7 +35,7 @@ struct CommitSheet: View {
                     Text("Commit in \(repo.isScopeRoot ? task.record.scopeName : repo.name)")
                 } footer: {
                     Text("git add -A && git commit in the sandbox")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.scopeValue)
                 }
             }
             .formStyle(.grouped)
@@ -50,7 +50,7 @@ struct CommitSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
                 .disabled(trimmedMessage.isEmpty)
             }
             .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))

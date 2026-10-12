@@ -36,7 +36,7 @@ struct TaskPullRequestView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(linked.label)
                         .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     Text(live?.title ?? linked.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(3)
@@ -63,12 +63,12 @@ struct TaskPullRequestView: View {
                     HStack(spacing: 6) {
                         Text(verbatim: "\(live.headRefName) → \(live.baseRefName)")
                             .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Text(live.author)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                     }
                     HStack(spacing: 5) {
@@ -92,7 +92,7 @@ struct TaskPullRequestView: View {
                         Spacer(minLength: 0)
                         Text(live.updatedAt, format: .relative(presentation: .named))
                             .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                     }
                 } else if let error = model.pullRequests.taskPullRequestErrors[task.id] {
                     Text(error)
@@ -113,8 +113,8 @@ struct TaskPullRequestView: View {
                     .padding(.vertical, 6)
             } else if live != nil {
                 Text("No checks on this pull request.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                     .padding(14)
             }
             Spacer(minLength: 0)

@@ -32,7 +32,18 @@ struct SidebarView: View {
                     workSection(scope)
                     repositoriesSection(scope)
                 }
-                .listStyle(.sidebar)
+                // Not `.sidebar`: that style hands the list to AppKit's sidebar NSVisualEffectView, which is
+                // where every bit of the app's translucency came from.
+                //
+                // And not `.inset` either: that one draws the list as a rounded card set into the window and
+                // puts each selection in a rounded pill inset from both edges. Two radii and two margins for
+                // a list that is already bounded by the split view's divider — it reads as a panel floating
+                // on another panel. `.plain` runs the rows the full width of the column, edge to edge, and
+                // the hairline on the right is the only thing that separates the sidebar from the scene.
+                .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 28)
+                .scrollContentBackground(.hidden)
+                .background(Surface.surface.ignoresSafeArea())
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         ScopeSwitcher(scope: scope) { scope in
@@ -121,8 +132,8 @@ struct SidebarView: View {
         @Bindable var ui = model.searchUI
         return HStack(spacing: 5) {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField("Filter", text: $ui.sidebarFilter)
                 .textFieldStyle(.plain)
@@ -140,21 +151,18 @@ struct SidebarView: View {
                     model.searchUI.sidebarFilter = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear filter")
             } else {
                 Text("⌥⌘F")
                     .font(.system(size: 10))
-                    .foregroundStyle(.quaternary)
+                    .foregroundStyle(Ink.tertiary)
             }
         }
-        .padding(.horizontal, 7)
-        .frame(height: 24)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(filterFocused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.1)))
+        .scopeFieldBox(focused: filterFocused)
         .padding(EdgeInsets(top: 2, leading: 10, bottom: 4, trailing: 10))
         .help("Filter tasks, threads and repositories by name (⌥⌘F, Esc clears)")
     }
@@ -184,21 +192,13 @@ struct SidebarView: View {
     }
 
     private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-            if let count {
-                Text("· \(count)")
-                    .foregroundStyle(.quaternary)
-            }
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(.tertiary)
+        SectionLabel(text: title, trailing: count.map { "\($0)" })
     }
 
     private func hintRow(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
-            .foregroundStyle(.tertiary)
+            .font(.scopeCaption)
+            .foregroundStyle(Ink.tertiary)
             .lineLimit(1)
             .truncationMode(.tail)
             .selectionDisabled()
@@ -293,8 +293,8 @@ struct SidebarView: View {
                 .controlSize(.mini)
             }
         }
-        .font(.system(size: 11))
-        .foregroundStyle(.tertiary)
+        .font(.scopeCaption)
+        .foregroundStyle(Ink.tertiary)
         .selectionDisabled()
     }
 
@@ -308,7 +308,7 @@ struct SidebarView: View {
             }
             .controlSize(.mini)
         }
-        .font(.system(size: 11))
+        .font(.scopeCaption)
         .help(message)
         .selectionDisabled()
     }
@@ -334,7 +334,7 @@ struct SidebarView: View {
             .frame(maxWidth: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { footerWidth = $0 }
         }
-        .background(.bar)
+        .background(Surface.surface)
     }
 
     private func footerButtons(_ style: some LabelStyle) -> some View {

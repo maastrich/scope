@@ -19,7 +19,7 @@ struct PullRequestRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(verbatim: "#\(pr.number)")
                         .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     Text(pr.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(2)
@@ -27,18 +27,18 @@ struct PullRequestRow: View {
                 }
                 HStack(spacing: 6) {
                     Text(pr.author)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                     Text(verbatim: "\(pr.headRefName) → \(pr.baseRefName)")
                         .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if pr.isCrossRepository, let owner = pr.headOwner {
                         Text("fork · \(owner)")
                             .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Ink.tertiary)
                             .lineLimit(1)
                     }
                 }
@@ -58,7 +58,7 @@ struct PullRequestRow: View {
                     Spacer(minLength: 0)
                     Text(pr.updatedAt, format: .relative(presentation: .named))
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .layoutPriority(-1)
                 }
@@ -83,7 +83,7 @@ struct PullRequestRow: View {
                     Image(systemName: "arrow.up.right.square")
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .cursor(.pointingHand)
                 .help(pr.url.absoluteString)
                 .opacity(hovering ? 1 : 0.55)
@@ -91,7 +91,7 @@ struct PullRequestRow: View {
             .controlSize(.small)
         }
         .padding(EdgeInsets(top: 9, leading: 14, bottom: 9, trailing: 12))
-        .background(hovering ? Color.primary.opacity(0.03) : .clear)
+        .background(hovering ? Fill.hover : .clear)
         .onHover { hovering = $0 }
         .contextMenu {
             if let task = boundTask {
@@ -125,41 +125,5 @@ struct PullRequestChip: View {
             .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
             .lineLimit(1)
             .fixedSize()
-    }
-}
-
-/// Colours and glyphs of the PR chips: semantic assets (`ChecksPassing` #1f7a3a, `ChecksFailing` #b3261e,
-/// `ChecksPending` #a84c00 in light, lifted in dark) so they keep AA contrast on both appearances.
-enum PullRequestStyle {
-    static let passing = Color("ChecksPassing")
-    static let failing = Color("ChecksFailing")
-    static let pending = Color("ChecksPending")
-    static let neutral = Color(nsColor: .tertiaryLabelColor)
-
-    static func color(_ checks: PullRequest.Checks) -> Color {
-        switch checks {
-        case .passing: passing
-        case .failing: failing
-        case .pending: pending
-        case .none: neutral
-        }
-    }
-
-    static func glyph(_ checks: PullRequest.Checks) -> String {
-        switch checks {
-        case .passing: "✓"
-        case .failing: "✗"
-        case .pending: "●"
-        case .none: "–"
-        }
-    }
-
-    static func review(_ decision: PullRequest.ReviewDecision) -> (text: String, color: Color)? {
-        switch decision {
-        case .approved: ("Approved", passing)
-        case .changesRequested: ("Changes requested", failing)
-        case .reviewRequired: ("Review needed", Color.secondary)
-        case .none: nil
-        }
     }
 }

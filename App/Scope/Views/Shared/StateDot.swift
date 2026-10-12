@@ -17,28 +17,29 @@ struct StateDot: View {
     var size: CGFloat = 8
     var pulses = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isOnAccent) private var isOnAccent
     @State private var pulsePhase = false
 
     var body: some View {
         Group {
             switch state {
             case .exited:
-                Circle().strokeBorder(ThreadStateStyle.exitedRing, lineWidth: 1.5)
+                Circle().strokeBorder(isOnAccent ? Ink.onAccent : ThreadStateStyle.exitedRing, lineWidth: 1.5)
             case .waiting:
-                RoundedRectangle(cornerRadius: size / 4, style: .continuous).fill(state.dotColor)
+                RoundedRectangle(cornerRadius: size / 4, style: .continuous).fill(fill)
             case .failed:
-                RoundedRectangle(cornerRadius: size / 6, style: .continuous).fill(state.dotColor)
+                RoundedRectangle(cornerRadius: size / 6, style: .continuous).fill(fill)
                     .rotationEffect(.degrees(45))
                     .scaleEffect(0.8)
             default:
-                Circle().fill(state.dotColor)
+                Circle().fill(fill)
             }
         }
         .frame(width: size, height: size)
         .overlay {
             if animatesPulse {
                 Circle()
-                    .stroke(state.dotColor, lineWidth: 1)
+                    .stroke(fill, lineWidth: 1)
                     .scaleEffect(pulsePhase ? 2.1 : 1)
                     .opacity(pulsePhase ? 0 : 0.8)
                     .onAppear {
@@ -50,22 +51,15 @@ struct StateDot: View {
         .accessibilityLabel(state.displayLabel)
     }
 
+    /// On the accent fill every mark goes white; the shape is what still says which state it is, which is
+    /// what the legend was designed for.
+    private var fill: Color {
+        isOnAccent ? Ink.onAccent : state.dotColor
+    }
+
     private var animatesPulse: Bool {
         pulses && state == .running && !reduceMotion
     }
-}
-
-/// Colours of the state legend: catalogue colours with light/dark variants, every one at least 3:1 on its
-/// ground (WCAG 1.4.11). `done` is pinned to blue rather than the accent so it keeps its meaning under a
-/// graphite or red system accent.
-enum ThreadStateStyle {
-    static let idle = Color("StateIdle")
-    static let running = Color("StateRunning")
-    static let waiting = Color("StateWaiting")
-    static let done = Color("StateDone")
-    static let failed = Color("ChecksFailing")
-    /// Reads on both the sidebar and the dark terminal.
-    static let exitedRing = Color("ExitedRing")
 }
 
 extension ThreadState {
@@ -103,6 +97,6 @@ struct StatePill: View {
         .padding(.leading, 8)
         .padding(.trailing, 9)
         .frame(height: 22)
-        .background(Color.primary.opacity(0.05), in: Capsule())
+        .background(Fill.quiet, in: Capsule())
     }
 }

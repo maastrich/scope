@@ -25,19 +25,19 @@ struct ScopeEmptyView: View {
         VStack(spacing: 14) {
             Image(systemName: "terminal")
                 .font(.system(size: 36, weight: .thin))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             (Text("No thread in ") + Text(scope.name).italic())
                 .font(.system(size: 20, weight: .semibold))
             if scope.kind == .missing {
                 Text("The folder \(scope.url.path) is missing. Threads open once it is back.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeBody)
+                    .foregroundStyle(Ink.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             } else {
                 Text("Threads run in \(threadCwd.path) with SCOPE_SCOPE, SCOPE_THREAD and the login-shell environment injected.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeBody)
+                    .foregroundStyle(Ink.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }
@@ -54,7 +54,7 @@ struct ScopeEmptyView: View {
                         .font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 4)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .fixedSize()
                     .disabled(scope.kind == .missing)
                     .help("Open a \(preferred.name) thread here (⌘T)")
@@ -75,6 +75,6 @@ struct ScopeEmptyView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

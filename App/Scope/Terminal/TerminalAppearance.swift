@@ -32,7 +32,11 @@ enum TerminalAppearance {
         let appearance = NSAppearance(named: dark ? .darkAqua : .aqua) ?? NSAppearance.currentDrawing()
         var palette: Palette?
         appearance.performAsCurrentDrawingAppearance {
-            let background = resolve(.windowBackgroundColor, over: nil)
+            // The token, not `.windowBackgroundColor`: the panes around the terminal are painted with
+            // `Surface.ground` now, and in light that is Ivory rather than the system grey — reading the
+            // system colour here would leave a visible seam at the terminal's edge and mix every derived
+            // ANSI colour against a ground nothing else uses.
+            let background = resolve(NSColor(named: "Ground") ?? .windowBackgroundColor, over: nil)
             let foreground = resolve(.labelColor, over: background)
             let secondary = resolve(.secondaryLabelColor, over: background)
             let tertiary = resolve(.tertiaryLabelColor, over: background)
@@ -43,8 +47,12 @@ enum TerminalAppearance {
             let blue = resolve(.systemBlue, over: background)
             let magenta = resolve(.systemPurple, over: background)
             let cyan = resolve(.systemTeal, over: background)
-            // Black is a shade darker than the ground in the dark, so a black-on-default run still shows.
-            let black = dark ? mix(background, with: .black, 0.45) : foreground
+            // ANSI black has to be told apart from the ground, and on a near-black ground the only direction
+            // left is up. Darkening used to work when the ground was the system's #1E1E21 — barely, at
+            // 1.14:1 — but against Onyx it lands on #090909 and 1.05:1, which is nothing: a program printing
+            // black on the default background would simply disappear. Lifting by 22% gives 1.98:1, and white
+            // on it is still 9.6:1, so the programs that use `black` as a *background* keep a dark block.
+            let black = dark ? mix(background, with: .white, 0.22) : foreground
             // On white, the two whites are the light greys of a classic light terminal, a step below the
             // ground, not text colours: programs use them as *backgrounds* there. Claude Code's `light-ansi`
             // theme paints the user's prompt on `white` and expanded tool output on `whiteBright`, and writes

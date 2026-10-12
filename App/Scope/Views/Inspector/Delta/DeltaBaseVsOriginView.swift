@@ -16,24 +16,24 @@ struct DeltaBaseVsOriginView: View {
                         Spacer()
                         if let delta = repo.delta {
                             Text("↑\(delta.ahead) ahead · ↓\(delta.behind) behind")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                                .font(.scopeValue)
+                                .foregroundStyle(Ink.secondary)
                         }
                     }
                     .padding(.horizontal, 14)
-                    .frame(height: 26)
-                    .background(Color.primary.opacity(0.03))
+                    .frame(height: 24)
+                    .background(Fill.quiet)
                     if let error = repo.error {
                         Text(error)
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 6)
                     } else if let delta = repo.delta {
                         if delta.commitsAhead.isEmpty, delta.commitsBehind.isEmpty {
                             Text("In sync with \(delta.base ?? "origin")")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
+                                .font(.scopeCaption)
+                                .foregroundStyle(Ink.tertiary)
                                 .padding(.horizontal, 30)
                                 .frame(height: 24)
                         }
@@ -57,10 +57,10 @@ struct DeltaBaseVsOriginView: View {
             ForEach(commits) { commit in
                 HStack(spacing: 8) {
                     Text(commit.shortSHA)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .font(.scopeValue)
+                        .foregroundStyle(Ink.tertiary)
                     Text(commit.subject)
-                        .font(.system(size: 11.5))
+                        .font(.scopeRow)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)

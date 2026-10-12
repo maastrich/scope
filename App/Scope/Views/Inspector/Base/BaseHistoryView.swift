@@ -12,7 +12,7 @@ struct BaseHistoryView: View {
                 if base.isLoadingHistory {
                     ProgressView().controlSize(.small)
                 } else {
-                    Text("No commits").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("No commits").font(.system(size: 12)).foregroundStyle(Ink.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -21,7 +21,7 @@ struct BaseHistoryView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(commit.short)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.scopeValue)
                             .foregroundStyle(Color.accentColor)
                         Text(commit.subject)
                             .font(.system(size: 12))
@@ -33,8 +33,8 @@ struct BaseHistoryView: View {
                         Text("·")
                         Text(commit.date.formatted(.relative(presentation: .named)))
                     }
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                 }
                 .padding(.vertical, 2)

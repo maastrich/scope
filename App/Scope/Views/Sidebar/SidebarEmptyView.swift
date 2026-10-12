@@ -9,10 +9,10 @@ struct SidebarEmptyView: View {
             Text("No scopes yet")
                 .font(.system(size: 12, weight: .medium))
             Text("Press ⌘O to declare one")
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .multilineTextAlignment(.center)
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Ink.secondary)
         .padding(.horizontal, 24)
         .padding(.vertical, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

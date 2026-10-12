@@ -12,12 +12,12 @@ struct RepoRow: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
                 .frame(width: 16)
 
             Text(repo.shortName)
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
@@ -28,14 +28,7 @@ struct RepoRow: View {
                 ProgressView()
                     .controlSize(.mini)
             } else if let branch = repo.branchLabel {
-                Text(branch)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                Chip(text: branch, mono: true)
             }
 
             // The gutter `ThreadRow` reserves for its close button, so every row's trailing marker lands in the

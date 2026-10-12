@@ -27,8 +27,8 @@ struct ReviewBar: View {
             if let queued = model.queuedDelivery(in: task) {
                 Label("\(queued.delivery.label.capitalizedFirst) waits for \(model.displayTitle(for: queued.session)) to finish its turn",
                       systemImage: "clock")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -47,14 +47,14 @@ struct ReviewBar: View {
                 Button("Send Review") {
                     if let only = live.first { send(to: only.id) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
                 .disabled(live.isEmpty || count == 0)
                 .help(live.isEmpty ? "No thread of this task is running" : "Paste the review into \(model.displayTitle(for: live[0]))")
             }
         }
         .controlSize(.small)
         .padding(EdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14))
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
     }
 
     private func send(to thread: ThreadID) {
@@ -93,7 +93,7 @@ private struct ReviewCommentList: View {
                     model.delta.selectedFile = DeltaFileRef(repo: comment.repo, path: comment.path)
                 }
                 .buttonStyle(.link)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.scopeValue)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 Spacer(minLength: 4)
@@ -117,7 +117,7 @@ private struct ReviewCommentList: View {
                 TextEditor(text: $draft)
                     .font(.system(size: 12))
                     .frame(height: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
                 HStack {
                     Spacer()
                     Button("Cancel") { editing = nil }
@@ -126,7 +126,7 @@ private struct ReviewCommentList: View {
                         if !body.isEmpty { model.review.update(comment.id, body: body) }
                         editing = nil
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                 }
                 .controlSize(.small)
             } else {

@@ -23,11 +23,11 @@ struct ThreadBanner: View {
                 icon
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.scopeTitle)
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(showsDetails ? nil : 2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -37,16 +37,17 @@ struct ThreadBanner: View {
             }
             if showsDetails, let details {
                 Text(details)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.08)))
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.14), radius: 4, y: 1)
         .environment(\.colorScheme, terminalIsDark ? .dark : .light)
         .frame(maxWidth: 720)
     }
@@ -72,7 +73,7 @@ struct ThreadBanner: View {
                 .foregroundStyle(Color("WarningText"))
         default:
             Image(systemName: "moon.zzz")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
         }
     }
 

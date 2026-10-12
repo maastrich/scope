@@ -20,9 +20,9 @@ struct TaskSummaryBand: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 Text(task.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.scopeTitle)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
@@ -31,8 +31,8 @@ struct TaskSummaryBand: View {
                 }
                 .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
                 Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
@@ -43,7 +43,7 @@ struct TaskSummaryBand: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .disabled(model.config.preferences.editor == nil)
                 .help("Open Task in Editor (⇧⌘E)")
                 .accessibilityLabel("Open \(task.name) in Editor")
@@ -54,7 +54,7 @@ struct TaskSummaryBand: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("Reveal in Finder")
                 .accessibilityLabel("Reveal \(task.name) in Finder")
             }
@@ -73,13 +73,13 @@ struct TaskSummaryBand: View {
                                 .frame(width: 6, height: 6)
                             Text("\(pr.label) \(pr.title)")
                                 .font(.system(size: 10.5))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Ink.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
                         .padding(.horizontal, 6)
                         .frame(height: 18)
-                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
                     // A real URL link, which is what the pointing hand means on macOS.
@@ -98,8 +98,8 @@ struct TaskSummaryBand: View {
 
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Text(prompt)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
@@ -115,7 +115,7 @@ struct TaskSummaryBand: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
         // On the band, which is up under every tab: this is what notices the PR a thread opened and binds it, and
         // what keeps the checks fresh for the Pull Request tab.
         .task(id: task.id) {
@@ -151,31 +151,31 @@ struct TaskVersionStrip: View {
                 .help(task.branch)
             if let base = lead?.upstreamBranch {
                 Text("from")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                 Text(base)
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .padding(.horizontal, 6)
                     .frame(height: 18)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
                     .help("The task branch is measured against \(lead?.upstream ?? base)")
             }
             if let sha = lead?.mergeBase {
                 Text("@")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                 Text(String(sha.prefix(7)))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.secondary)
                     .help("Merge-base: the base as it was when the task forked — \(sha)")
             }
             Spacer(minLength: 4)
             if ahead > 0 {
                 Text("↑\(ahead)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.secondary)
                     .help("\(ahead) \(ahead == 1 ? "commit" : "commits") on the task branch since the base")
             }
             if behind > 0 {
@@ -189,7 +189,7 @@ struct TaskVersionStrip: View {
             }
         }
         .padding(.horizontal, 6)
-        .frame(height: 26)
+        .frame(height: 24)
         .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
         .padding(.horizontal, -6)
         .padding(.vertical, 2)
@@ -220,7 +220,7 @@ private struct TaskRepoRow: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("Open in Editor (⌥-click copies the path)")
                 .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
@@ -231,7 +231,7 @@ private struct TaskRepoRow: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help("See Delta (⌘D)")
                 .accessibilityLabel("See Delta of \(repoName)")
             }
@@ -248,7 +248,7 @@ private struct TaskRepoRow: View {
         }
         .padding(.horizontal, 6)
         .frame(height: 24)
-        .background(hovering ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: 5))
         .padding(.horizontal, -6)
         .onHover { hovering = $0 }
         .help(repo.sandboxPath)
@@ -289,6 +289,7 @@ struct DeltaCounts: View {
     let additions: Int
     let deletions: Int
     var size: CGFloat = 11
+    @Environment(\.isOnAccent) private var isOnAccent
 
     static let added = Color("DiffAddedSign")
     static let removed = Color("DiffRemovedSign")
@@ -296,10 +297,10 @@ struct DeltaCounts: View {
     var body: some View {
         HStack(spacing: 5) {
             if additions > 0 {
-                Text("+\(additions)").foregroundStyle(Self.added)
+                Text("+\(additions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.added)
             }
             if deletions > 0 {
-                Text("−\(deletions)").foregroundStyle(Self.removed)
+                Text("−\(deletions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.removed)
             }
         }
         .font(.system(size: size, design: .monospaced))

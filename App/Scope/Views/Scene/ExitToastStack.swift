@@ -50,7 +50,7 @@ private struct ExitToast: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
@@ -61,9 +61,9 @@ private struct ExitToast: View {
         .padding(.leading, 14)
         .padding(.trailing, 10)
         .padding(.vertical, 9)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.1)))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.14), radius: 4, y: 1)
         .frame(maxWidth: 560)
         .onHover { model.holdExitNotice(notice.id, $0 || showsDetails) }
         .onChange(of: showsDetails) { _, open in model.holdExitNotice(notice.id, open) }
@@ -79,7 +79,7 @@ private struct ExitDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(notice.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.scopeTitle)
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 4) {
                 row("Driver", notice.profile.name)
                 row("Directory", notice.record.cwd)
@@ -122,7 +122,7 @@ private struct ExitDetails: View {
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
             Text(label)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .gridColumnAlignment(.trailing)
             Text(value)
                 .textSelection(.enabled)

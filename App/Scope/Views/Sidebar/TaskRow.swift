@@ -16,6 +16,7 @@ import ScopeTasks
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     let task: TaskState
     @State private var isHovered = false
     @State private var showsCard = false
@@ -34,7 +35,7 @@ struct TaskRow: View {
             TaskStatusGlyph(status: status)
 
             Text(task.name)
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
@@ -55,6 +56,7 @@ struct TaskRow: View {
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
             TaskHoverCard(task: task, status: status, facts: facts)
         }
+        .onAccent(isListSelected, controlActiveState)
         .contextMenu { TaskContextMenu(task: task) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(task.name)
@@ -67,6 +69,11 @@ struct TaskRow: View {
         }
     }
 
+    /// The row the List highlights.
+    private var isListSelected: Bool {
+        model.selection == .task(task.id)
+    }
+
     /// The chevron, or its empty slot: task glyphs stay in one column whether or not a task has nested rows.
     @ViewBuilder
     private func disclosure(shown: Bool) -> some View {
@@ -76,7 +83,7 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: task.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 12, height: 12)
             }
             .buttonStyle(.iconTight)
@@ -92,8 +99,8 @@ struct TaskRow: View {
                 Task { await model.archiveTask(task.id) }
             } label: {
                 Image(systemName: "archivebox")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
             }
@@ -105,7 +112,7 @@ struct TaskRow: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 16, height: 16)
             }
             .menuStyle(.borderlessButton)

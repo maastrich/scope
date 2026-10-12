@@ -38,8 +38,8 @@ struct BaseView: View {
                     .fixedSize()
                     .help(model.currentTask == nil ? "The repositories of the scope" : "The repositories of the task")
                     Text("base checkout")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
                     Spacer(minLength: 0)
                     if model.base.isFetching || model.base.isPulling {
                         ProgressView().controlSize(.small)
@@ -78,14 +78,9 @@ struct BaseView: View {
                     Spacer(minLength: 0)
                 }
                 .controlSize(.small)
-                Picker("Section", selection: $base.section) {
-                    ForEach(BaseSection.allCases, id: \.self) { section in
-                        Text(section.rawValue).tag(section)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+                TabStrip(selection: $base.section,
+                         items: BaseSection.allCases.map { ($0, $0.rawValue) })
+                    .accessibilityLabel("Section")
             }
             .padding(EdgeInsets(top: 10, leading: 14, bottom: 8, trailing: 14))
             Divider()
@@ -107,7 +102,7 @@ struct BaseView: View {
         return HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 16))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
@@ -121,26 +116,26 @@ struct BaseView: View {
                 HStack(spacing: 6) {
                     if let head {
                         Text(head.short)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .font(.scopeValue)
+                            .foregroundStyle(Ink.secondary)
                         Text(head.subject)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text("· \(head.date.formatted(.relative(presentation: .named)))")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
                             .lineLimit(1)
                             .fixedSize()
                     } else if model.base.isLoadingHistory {
                         Text("Loading HEAD…")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
                     } else {
                         Text("No commit yet")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
                     }
                 }
                 .help(head.map { "\($0.sha)\n\($0.subject)\n\($0.author), \($0.date.formatted(date: .abbreviated, time: .shortened))" } ?? "")
@@ -158,8 +153,8 @@ struct BaseView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.06)))
+        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Fill.quiet))
         .accessibilityElement(children: .combine)
     }
 

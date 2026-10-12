@@ -115,7 +115,7 @@ struct PullRequestsView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 5))
                         .textSelection(.enabled)
                 }
             }
@@ -131,10 +131,10 @@ struct PullRequestsView: View {
             let count = model.pullRequests.pullRequests.count
             Text(count == 1 ? "1 open" : "\(count) open")
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .padding(.horizontal, 6)
                 .frame(height: 18)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
         }
     }
 

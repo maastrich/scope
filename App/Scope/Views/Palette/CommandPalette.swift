@@ -33,9 +33,9 @@ struct CommandPalette: View {
             // Opaque, not a material: a material blurs what lies under it, and under the panel lies the dimming
             // scrim — the panel came out grey (`#d6d9da` measured in light mode), a shade above the backdrop it is
             // supposed to stand in front of.
-            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.15)))
-            .shadow(color: .black.opacity(0.35), radius: 35, y: 24)
+            .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg))
+            .overlay(RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(Surface.stroke))
+            .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
             .padding(.top, 120)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             .onKeyPress(.upArrow) { move(-1, count: items.count); return .handled }
@@ -69,7 +69,7 @@ struct CommandPalette: View {
         HStack(spacing: 10) {
             Image(systemName: mode == .files ? "doc.text.magnifyingglass" : "magnifyingglass")
                 .font(.system(size: 16))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField(mode == .files ? FileFinderChrome.placeholder : "Type a command, a file, a repo or a thread…", text: $query)
                 .textFieldStyle(.plain)
@@ -78,14 +78,14 @@ struct CommandPalette: View {
                 .accessibilityLabel(mode == .files ? "File name" : "Command or search")
             if let context = contextLabel {
                 Text(context)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .padding(.horizontal, 6)
                     .frame(height: 20)
                     .frame(maxWidth: 220)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
             }
         }
         .padding(.horizontal, 16)
@@ -101,8 +101,8 @@ struct CommandPalette: View {
                             FileFinderEmptyView(query: query, hasRoots: !model.fileRoots.isEmpty)
                         } else {
                             Text("No match")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.tertiary)
+                                .font(.scopeBody)
+                                .foregroundStyle(Ink.tertiary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 24)
                         }
@@ -112,7 +112,7 @@ struct CommandPalette: View {
                         case .header(let section):
                             Text(section.rawValue)
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Ink.tertiary)
                                 .padding(EdgeInsets(top: 10, leading: 20, bottom: 4, trailing: 20))
                                 .accessibilityAddTraits(.isHeader)
                         case .item(let index, let item):
@@ -167,8 +167,8 @@ struct CommandPalette: View {
             Spacer()
             Text("esc")
         }
-        .font(.system(size: 11))
-        .foregroundStyle(.tertiary)
+        .font(.scopeCaption)
+        .foregroundStyle(Ink.tertiary)
         .padding(.horizontal, 16)
         .frame(height: 30)
     }
@@ -210,33 +210,33 @@ private struct PaletteRow: View {
             } else {
                 Image(systemName: item.icon)
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .frame(width: 15)
                     .accessibilityHidden(true)
             }
             Text(Self.emphasized(item.label, at: item.hintMatched ? [] : item.matched, monospaced: item.section == .files))
-                .font(.system(size: 13))
+                .font(.scopeBody)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 8)
             if let hint = item.hint {
                 Text(hint)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: 220, alignment: .trailing)
             }
             if let shortcut = item.shortcut {
                 Text(shortcut)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeRow)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(minWidth: 34, alignment: .trailing)
             }
         }
         .padding(.horizontal, 12)
         .frame(height: 32)
-        .background(highlighted ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .background(highlighted ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 6))
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)

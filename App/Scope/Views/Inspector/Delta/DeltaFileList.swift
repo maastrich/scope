@@ -43,11 +43,11 @@ struct DeltaFileList: View {
         HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
             TextField("Filter files", text: $filter)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11.5))
+                .font(.scopeRow)
                 .focused(filterFocused)
                 .accessibilityLabel("Filter changed files by path")
                 .onKeyPress(.escape) {
@@ -64,8 +64,8 @@ struct DeltaFileList: View {
                     statuses = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
                 }
                 .buttonStyle(.plain)
                 .help("Clear filters")
@@ -117,11 +117,11 @@ struct DeltaFileList: View {
                         } else if let error = repo.error {
                             HStack(spacing: 6) {
                                 Text(repo.repo.name).font(.system(size: 12, weight: .semibold))
-                                Text(error).font(.system(size: 11)).foregroundStyle(Color(nsColor: .systemRed)).lineLimit(1)
+                                Text(error).font(.scopeCaption).foregroundStyle(Color(nsColor: .systemRed)).lineLimit(1)
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
-                            .frame(height: 26)
+                            .frame(height: 24)
                         }
                     }
                 }
@@ -139,23 +139,23 @@ struct DeltaFileList: View {
             HStack(spacing: 6) {
                 Image(systemName: collapsedRepos.contains(repo.id) ? "chevron.right" : "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 11)
                 Text(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(shown == delta.files.count ? "\(delta.files.count) \(delta.files.count == 1 ? "file" : "files")" : "\(shown) of \(delta.files.count) files")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
                 DeltaCounts(additions: delta.summary.additions, deletions: delta.summary.deletions)
             }
             .padding(.horizontal, 14)
-            .frame(height: 26)
+            .frame(height: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.primary.opacity(0.03))
+        .background(Fill.quiet)
         .accessibilityLabel("\(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name), \(shown) files, \(collapsedRepos.contains(repo.id) ? "collapsed" : "expanded")")
     }
 
@@ -179,7 +179,7 @@ struct DeltaFileList: View {
                 model.delta.toggleViewed(ref, file)
             } label: {
                 Image(systemName: viewed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 11))
+                    .font(.scopeCaption)
                     .foregroundStyle(viewed ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
@@ -190,16 +190,16 @@ struct DeltaFileList: View {
                                          line: file.hunks.first?.newStart)
             } label: {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
             }
             .buttonStyle(.plain)
             .help("Open in Editor (⌥-click copies the path)")
             .accessibilityLabel("Open \(file.path) in editor")
         }
         .padding(EdgeInsets(top: 0, leading: 30, bottom: 0, trailing: 14))
-        .frame(height: 26)
-        .background(selected ? Color.accentColor.opacity(0.12) : .clear)
+        .frame(height: 24)
+        .background(selected ? Fill.selectedTint : .clear)
         .contentShape(Rectangle())
         .onTapGesture {
             model.delta.selectedFile = ref
@@ -211,7 +211,7 @@ struct DeltaFileList: View {
         guard let slash = path.lastIndex(of: "/") else { return Text(path) }
         let directory = String(path[...slash])
         let name = String(path[path.index(after: slash)...])
-        return Text(directory).foregroundStyle(.tertiary) + Text(name)
+        return Text(directory).foregroundStyle(Ink.tertiary) + Text(name)
     }
 
     static func letter(_ status: DiffFile.Status) -> String {

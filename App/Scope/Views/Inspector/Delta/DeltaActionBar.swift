@@ -18,7 +18,7 @@ struct DeltaActionBar: View {
             } label: {
                 Label("Commit…", systemImage: "circle.circle")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.scopePrimary)
             .disabled(repo == nil || delta.isActing || !isDirty(repo))
             .help(isDirty(repo) ? "git add -A && git commit in the sandbox" : "Nothing to commit")
 
@@ -50,14 +50,14 @@ struct DeltaActionBar: View {
 
             Spacer(minLength: 4)
             Text(caption(repo))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
         .controlSize(.small)
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
     }
 
     /// Merge when GitHub says the pull request merges, Fix Conflicts when it says it does not; nothing while its

@@ -99,8 +99,8 @@ struct DiffView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: ImageFiles.isImage(file.path) ? "photo" : "doc.text")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
             Text("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
                 .font(.system(size: 11.5, design: .monospaced))
                 .lineLimit(1)
@@ -108,7 +108,7 @@ struct DiffView: View {
             if let old = file.oldPath, old != file.path {
                 Text("← \(old)")
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -135,7 +135,7 @@ struct DiffView: View {
     private func placeholder(_ text: String) -> some View {
         VStack {
             Spacer()
-            Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(text).font(.system(size: 12)).foregroundStyle(Ink.secondary)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -185,14 +185,14 @@ struct CommentEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             TextEditor(text: $text)
                 .font(.system(size: 12))
                 .frame(width: 340, height: 90)
                 .focused($focused)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.15)))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
             HStack(spacing: 8) {
                 if let onDelete {
                     Button("Delete", role: .destructive, action: onDelete)
@@ -202,7 +202,7 @@ struct CommentEditor: View {
                     .keyboardShortcut(.cancelAction)
                 Button(isNew ? "Add Comment" : "Save") { onSave(trimmed) }
                     .keyboardShortcut(.return, modifiers: .command)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.scopePrimary)
                     .disabled(trimmed.isEmpty)
             }
             .controlSize(.small)

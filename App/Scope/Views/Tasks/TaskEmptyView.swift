@@ -10,12 +10,12 @@ struct TaskEmptyView: View {
         VStack(spacing: 14) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 36, weight: .thin))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Ink.tertiary)
             (Text("No thread in ") + Text(task.name).italic())
                 .font(.system(size: 20, weight: .semibold))
             Text("Threads run in \(task.record.threadCwd.path) on \(task.branch), with SCOPE_TASK and SCOPE_TASK_ROOT injected.")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
             HStack(spacing: 8) {
@@ -29,7 +29,7 @@ struct TaskEmptyView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 4)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.scopePrimary)
 
                 Menu("Other driver…") {
                     ForEach(model.drivers.profiles) { profile in
@@ -44,6 +44,6 @@ struct TaskEmptyView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
     }
 }

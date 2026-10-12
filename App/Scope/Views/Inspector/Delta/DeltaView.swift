@@ -39,14 +39,11 @@ struct DeltaView: View {
         @Bindable var delta = model.delta
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Picker("Mode", selection: $delta.mode) {
-                    Text("Task").tag(DeltaMode.task)
-                    Text("Uncommitted").tag(DeltaMode.uncommitted)
-                    Text("Base vs origin").tag(DeltaMode.baseVsOrigin)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+                TabStrip(selection: $delta.mode,
+                         items: [(DeltaMode.task, "Task"),
+                                 (.uncommitted, "Uncommitted"),
+                                 (.baseVsOrigin, "Base vs origin")])
+                    .accessibilityLabel("Mode")
                 Spacer(minLength: 0)
                 if delta.isLoading || delta.isActing {
                     ProgressView().controlSize(.small)
@@ -75,13 +72,13 @@ struct DeltaView: View {
                     Spacer()
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 28, weight: .thin))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Text("No changes")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                     ForEach(delta.repos.filter { $0.error != nil }) { repo in
                         Text("\(repo.repo.name): \(repo.error ?? "")")
-                            .font(.system(size: 11))
+                            .font(.scopeCaption)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
@@ -137,8 +134,8 @@ struct DeltaView: View {
         let delta = model.delta
         return keyboardHint(HStack(spacing: 6) {
             Text(modeCaption)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 4)
             Image(systemName: "keyboard")
@@ -147,13 +144,13 @@ struct DeltaView: View {
                 .accessibilityLabel(focused ? "Delta panel has keyboard focus" : "Click the panel for keyboard navigation")
             if delta.mode == .baseVsOrigin {
                 Text("↑\(delta.ahead) ↓\(delta.behind)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.secondary)
             } else {
                 let summary = delta.summary
                 Text("\(summary.files) \(summary.files == 1 ? "file" : "files")")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                 DeltaCounts(additions: summary.additions, deletions: summary.deletions)
             }
         })
@@ -163,7 +160,7 @@ struct DeltaView: View {
         row
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(focused ? Color.accentColor.opacity(0.55) : .clear, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(focused ? Color.accentColor : .clear, lineWidth: 1))
             .padding(.horizontal, -6)
             .padding(.vertical, -3)
             .contentShape(Rectangle())
@@ -186,7 +183,7 @@ struct DeltaSkeleton: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(0..<6, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(Fill.quiet)
                     .frame(width: index == 0 ? 120 : CGFloat(180 + (index * 37) % 120), height: 12)
             }
             Spacer()

@@ -20,7 +20,7 @@ struct LooseThreadsRow: View {
             } label: {
                 Image(systemName: scope.looseThreadsShown ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Ink.tertiary)
                     .frame(width: 12, height: 12)
             }
             .buttonStyle(.iconTight)
@@ -28,21 +28,21 @@ struct LooseThreadsRow: View {
             .accessibilityLabel(scope.looseThreadsShown ? "Collapse loose threads" : "Expand loose threads")
 
             Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
                 .frame(width: 16)
 
             Text("Loose threads")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             Spacer(minLength: 4)
 
             Text("\(count)")
-                .font(.system(size: 11))
-                .foregroundStyle(.quaternary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
 
             if let state = aggregateState {
                 StateDot(state: state, pulses: aggregateIsWorking)

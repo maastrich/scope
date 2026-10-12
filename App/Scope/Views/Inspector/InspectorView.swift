@@ -16,21 +16,15 @@ struct InspectorView: View {
         VStack(spacing: 0) {
             // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
-                Picker("Panel", selection: $model.inspectorTab) {
-                    ForEach(InspectorTab.allCases, id: \.self) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
+                TabStrip(selection: $model.inspectorTab,
+                         items: InspectorTab.allCases.map { ($0, $0.title) })
+                    .accessibilityLabel("Panel")
                 Spacer(minLength: 4)
             }
             .padding(.horizontal, 10)
             .frame(height: 30)
             .frame(maxWidth: .infinity)
-            .background(Color("PanelBackground"))
+            .background(Surface.panel)
             Divider()
             if let task = model.currentTask {
                 TaskSummaryBand(task: task)
@@ -52,7 +46,7 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Surface.ground)
         // A task-only tab left showing with no task would sit on an empty state forever; Base always has a subject.
         .onChange(of: model.currentTask == nil, initial: true) { _, noTask in
             if noTask, model.inspectorTab.needsTask { model.inspectorTab = .base }
@@ -69,24 +63,24 @@ private struct RepoSummaryBand: View {
         HStack(spacing: 6) {
             Image(systemName: "square.stack.3d.up")
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
             Text(repo.shortName)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.scopeTitle)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Text("repository")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
             Spacer(minLength: 4)
             Text("No task selected")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
         }
         .frame(height: 22)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color("PanelBackground"))
+        .background(Surface.panel)
         .help(repo.url.path)
     }
 }

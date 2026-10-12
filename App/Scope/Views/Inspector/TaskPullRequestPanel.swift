@@ -64,8 +64,8 @@ struct TaskPullRequestPanel: View {
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Self.color(state))
                             Text("\(count)")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                                .font(.scopeValue)
+                                .foregroundStyle(Ink.secondary)
                         }
                         .accessibilityLabel("\(count) \(state.rawValue)")
                     }
@@ -75,10 +75,10 @@ struct TaskPullRequestPanel: View {
                 if hidden > 0, layout == .compact {
                     Text(expanded ? "Failures only" : "All \(checks.count)")
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
             }
@@ -111,7 +111,7 @@ struct TaskPullRequestPanel: View {
                 .frame(width: 12)
                 .accessibilityLabel(check.state.rawValue)
             Text(check.title)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 4)
@@ -125,10 +125,10 @@ struct TaskPullRequestPanel: View {
                     model.openOnGitHub(url)
                 } label: {
                     Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 11))
+                        .font(.scopeCaption)
                 }
                 .buttonStyle(.iconTight)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .help(url.absoluteString)
                 .accessibilityLabel("Open \(check.title)")
             }
@@ -196,7 +196,7 @@ struct ThreadPicker: View {
             Label(title, systemImage: systemImage)
         } else {
             Image(systemName: systemImage)
-                .font(.system(size: 11))
+                .font(.scopeCaption)
                 .accessibilityLabel(title)
         }
     }

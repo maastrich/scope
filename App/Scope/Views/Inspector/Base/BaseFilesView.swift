@@ -14,13 +14,17 @@ struct BaseFilesView: View {
                         Label {
                             Text(node.name).font(.system(size: 12)).lineLimit(1)
                         } icon: {
+                            // Monochrome, and thin: an accent-blue folder is the Finder's idiom, and it
+                            // spends the one colour the chrome has on a row that is not selected.
                             Image(systemName: node.isDirectory ? "folder" : "doc.text")
-                                .foregroundStyle(node.isDirectory ? Color.accentColor : Color.secondary)
+                                .font(.system(size: 11))
+                                .foregroundStyle(node.isDirectory ? Ink.secondary : Ink.tertiary)
                         }
                         .tag(node.path)
                     }
                 }
-                .listStyle(.inset)
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 120, idealHeight: 220, maxHeight: 260)
                 .onChange(of: model.base.selectedPath) { _, path in
                     guard let path, model.base.content == nil || !isDirectory(path, in: tree) else { return }
@@ -29,7 +33,7 @@ struct BaseFilesView: View {
             } else {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Listing files…").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("Listing files…").font(.system(size: 12)).foregroundStyle(Ink.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
             }
