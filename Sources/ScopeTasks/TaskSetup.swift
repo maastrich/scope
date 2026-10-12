@@ -121,8 +121,16 @@ public enum PortAllocator {
     /// Clear of the usual dev-server ports (3000, 5173, 8080…) and below the ephemeral range macOS hands out.
     public static let range = 41000..<49000
 
+    /// What a Debug build hands out instead. Each app only knows the tasks of its own home, so with one range
+    /// both gave their first task 41000 and the two dev servers fought over it — the very thing a block exists
+    /// to prevent. Same width, clear of `range` and of the usual dev-server ports.
+    public static let debugRange = 31000..<39000
+
+    /// The range an app build allocates from.
+    public static func range(debugBuild: Bool) -> Range<Int> { debugBuild ? debugRange : range }
+
     /// The lowest block start in `range` no base in `taken` overlaps; `nil` once every block is used.
-    public static func allocate(taken: some Sequence<Int>) -> Int? {
+    public static func allocate(taken: some Sequence<Int>, in range: Range<Int> = PortAllocator.range) -> Int? {
         let used = Set(taken.map { $0 - (($0 - range.lowerBound) % blockSize) })
         return stride(from: range.lowerBound, to: range.upperBound, by: blockSize).first { !used.contains($0) }
     }

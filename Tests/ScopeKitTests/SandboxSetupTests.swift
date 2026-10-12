@@ -58,6 +58,16 @@ final class RecordingRunner: SandboxCommandRunner {
         #expect(PortAllocator.allocate(taken: [first + 3]) == first + 10)
         let every = stride(from: PortAllocator.range.lowerBound, to: PortAllocator.range.upperBound, by: 10)
         #expect(PortAllocator.allocate(taken: every) == nil)
+
+        // A Debug build draws from a range of its own: neither app knows the other's tasks, so sharing one
+        // meant both handed out the same first block.
+        #expect(!PortAllocator.debugRange.overlaps(PortAllocator.range))
+        #expect(PortAllocator.range(debugBuild: false) == PortAllocator.range)
+        let debugFirst = PortAllocator.allocate(taken: [], in: PortAllocator.range(debugBuild: true))
+        #expect(debugFirst == PortAllocator.debugRange.lowerBound)
+        #expect(debugFirst != PortAllocator.allocate(taken: []))
+        // A base from the other range takes nothing here.
+        #expect(PortAllocator.allocate(taken: [first, first + 5], in: PortAllocator.debugRange) == debugFirst)
     }
 
     @Test func configOverridesTheCardFieldByField() {

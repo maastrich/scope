@@ -71,7 +71,8 @@ final class AppEnvironment {
         self.shell = shell
         self.git = git
         self.taskRecords = TaskRecordStore(home: home)
-        self.tasks = TaskManager(home: home, registry: git, store: taskRecords)
+        self.tasks = TaskManager(home: home, registry: git, store: taskRecords,
+                            ports: PortAllocator.range(debugBuild: BuildFlavor.isDebug))
         self.graphStore = GraphStore(home: home)
         self.hooks = hooks
         self.knownThreads = knownThreads
@@ -173,7 +174,8 @@ final class AppEnvironment {
     func useGit(at path: String) {
         guard path != git.gitPath else { return }
         git = GitClientRegistry(gitPath: path)
-        tasks = TaskManager(home: home, registry: git, store: taskRecords)
+        tasks = TaskManager(home: home, registry: git, store: taskRecords,
+                            ports: PortAllocator.range(debugBuild: BuildFlavor.isDebug))
     }
 
     /// A generator over the current git registry; `level1` is the driver-backed pass (`nil` = level 0 only).

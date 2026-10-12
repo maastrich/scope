@@ -12,10 +12,14 @@ public actor TaskManager {
     public nonisolated let home: URL
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
+    private let ports: Range<Int>
     private var records: [TaskID: TaskRecord] = [:]
     /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
 
-    public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore) {
+    /// - Parameter ports: where `SCOPE_PORT` blocks come from (`PortAllocator.range(debugBuild:)` in the app).
+    public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore,
+                ports: Range<Int> = PortAllocator.range) {
+        self.ports = ports
         self.home = home
         self.registry = registry
         self.store = store
@@ -44,7 +48,8 @@ public actor TaskManager {
 
     /// A free block for a new live task: archived tasks give theirs back.
     private func allocatePort(excluding id: TaskID? = nil) -> Int? {
-        PortAllocator.allocate(taken: records.values.filter { !$0.isArchived && $0.id != id }.compactMap(\.portBase))
+        PortAllocator.allocate(taken: records.values.filter { !$0.isArchived && $0.id != id }.compactMap(\.portBase),
+                               in: ports)
     }
 
     /// Every known task, oldest first.
