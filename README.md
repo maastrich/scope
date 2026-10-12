@@ -170,7 +170,7 @@ signed but not notarized (Gatekeeper warns); no certificate = ad-hoc; no Sparkle
 
 1. **Sparkle keys** (before the first build you ship, the public key must be in the very first release):
    ```bash
-   curl -fsSL -o /tmp/Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz
+   curl -fsSL -o /tmp/Sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
    mkdir -p /tmp/sparkle && tar -xJf /tmp/Sparkle.tar.xz -C /tmp/sparkle ./bin
    /tmp/sparkle/bin/generate_keys                 # creates the key pair in your login keychain, prints SUPublicEDKey
    /tmp/sparkle/bin/generate_keys -p              # prints the public key again
@@ -187,7 +187,7 @@ signed but not notarized (Gatekeeper warns); no certificate = ad-hoc; no Sparkle
      --squash-merge-commit-message pr-title --delete-branch-on-merge
    ```
 3. **Developer ID + notarization** secrets (table above) whenever the certificate exists; nothing else changes.
-4. Bumping Sparkle: change `from:` in `project.yml` **and** `SPARKLE_VERSION` / `SPARKLE_TARBALL_SHA256` in
+4. Bumping Sparkle: change `exactVersion:` in `project.yml` **and** `SPARKLE_VERSION` / `SPARKLE_TARBALL_SHA256` in
    `.github/workflows/release.yml` (`shasum -a 256 Sparkle-<v>.tar.xz`). Dependabot does not see packages that
    are only declared in `project.yml`.
 
