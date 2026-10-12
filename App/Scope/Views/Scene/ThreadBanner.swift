@@ -63,8 +63,7 @@ struct ThreadBanner: View {
     private var icon: some View {
         switch session.phase {
         case .launching:
-            ProgressView()
-                .controlSize(.small)
+            ScopeSpinner(size: 14)
         case .failed:
             Image(systemName: "exclamationmark.octagon")
                 .foregroundStyle(Color(nsColor: .systemRed))
@@ -165,6 +164,6 @@ struct ThreadBanner: View {
                 .help("Close Thread (⌘W)")
             }
         }
-        .controlSize(.small)
+        .buttonStyle(.scopeSecondary)
     }
 }

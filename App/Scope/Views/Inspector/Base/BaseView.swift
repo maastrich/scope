@@ -25,31 +25,28 @@ struct BaseView: View {
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Picker("Repository", selection: Binding(
+                    ScopePicker("Repository", selection: Binding(
                         get: { model.base.pickedRepo[scope.id] ?? repo.id },
                         set: { model.base.pickedRepo[scope.id] = $0 }
-                    )) {
+                    ), title: repo.shortName) {
                         ForEach(candidates) { candidate in
                             Text(candidate.shortName).tag(candidate.id)
                         }
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
                     .help(model.currentTask == nil ? "The repositories of the scope" : "The repositories of the task")
                     Text("base checkout")
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.tertiary)
                     Spacer(minLength: 0)
                     if model.base.isFetching || model.base.isPulling {
-                        ProgressView().controlSize(.small)
+                        ScopeSpinner(size: 12)
                     }
                     Button {
                         Task { await model.base.refreshBehind(force: true) }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                     .help("Fetch and recount")
                     .accessibilityLabel("Fetch and recount")
                 }
@@ -77,7 +74,7 @@ struct BaseView: View {
                     .accessibilityLabel("Reveal in Finder")
                     Spacer(minLength: 0)
                 }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
                 TabStrip(selection: $base.section,
                          items: BaseSection.allCases.map { ($0, $0.rawValue) })
                     .accessibilityLabel("Section")
@@ -146,7 +143,7 @@ struct BaseView: View {
             } label: {
                 Label("Pull", systemImage: "arrow.down.to.line")
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
             .disabled(model.base.isPulling)
             .help("git pull --ff-only")
         }

@@ -12,6 +12,8 @@ struct RepoCardEditor: View {
     @State private var test = ""
     @State private var teardown = ""
 
+    @FocusState private var focus: Field?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -19,20 +21,20 @@ struct RepoCardEditor: View {
                 Spacer()
                 Text("Editing").font(.scopeCaption).foregroundStyle(Ink.secondary)
             }
-            field("Purpose") {
+            field("Purpose", .purpose, grows: true) {
                 TextField("One to three sentences", text: $purpose, axis: .vertical)
                     .lineLimit(2...5)
             }
-            field("Stack") {
+            field("Stack", .stack) {
                 TextField("node, typescript, react (comma separated)", text: $stack)
             }
-            field("Setup") {
+            field("Setup", .setup) {
                 TextField("pnpm install", text: $setup).font(.scopeValue)
             }
-            field("Test") {
+            field("Test", .test) {
                 TextField("pnpm test", text: $test).font(.scopeValue)
             }
-            field("Teardown") {
+            field("Teardown", .teardown) {
                 TextField("docker compose down (before a sandbox is removed)", text: $teardown)
                     .font(.scopeValue)
             }
@@ -48,11 +50,10 @@ struct RepoCardEditor: View {
                         .help("Drops the manual edits and re-runs the quick analysis")
                 }
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
             .padding(.top, 2)
         }
-        .textFieldStyle(.roundedBorder)
-        .controlSize(.small)
+        .textFieldStyle(.plain)
         .onAppear {
             purpose = entry.card.purpose ?? ""
             stack = entry.card.stack.joined(separator: ", ")
@@ -62,10 +63,19 @@ struct RepoCardEditor: View {
         }
     }
 
-    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+    private enum Field { case purpose, stack, setup, test, teardown }
+
+    /// `grows` is for the one field that wraps: a fixed-height box would clip its second line.
+    @ViewBuilder
+    private func field<Content: View>(_ label: String, _ id: Field, grows: Bool = false,
+                                      @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.scopeCaption).foregroundStyle(Ink.secondary)
-            content()
+            if grows {
+                content().focused($focus, equals: id).scopeTextBox(focused: focus == id)
+            } else {
+                content().focused($focus, equals: id).scopeFieldBox(focused: focus == id, height: 22)
+            }
         }
     }
 

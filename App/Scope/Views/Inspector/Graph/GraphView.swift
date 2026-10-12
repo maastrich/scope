@@ -25,8 +25,7 @@ struct GraphView: View {
             header(scope)
             if let progress = graph.progress {
                 VStack(alignment: .leading, spacing: 3) {
-                    ProgressView(value: Double(progress.finished), total: Double(max(1, progress.total)))
-                        .controlSize(.small)
+                    ScopeProgressBar(fraction: Double(progress.finished) / Double(max(1, progress.total)))
                     Text(progress.caption)
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.secondary)
@@ -69,29 +68,32 @@ struct GraphView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            Menu {
+            // Two controls where there was one split button: a plain `Menu` hides its `primaryAction` behind a
+            // long press, and a button that only sometimes opens a menu is not something a label can say.
+            HStack(spacing: 2) {
                 Button {
-                    Task { await model.analyzeGraph(scope: scope, withAI: true) }
+                    Task { await model.analyzeGraph(scope: scope, withAI: false) }
                 } label: {
-                    Label("Analyze with AI (\(model.defaultDriverProfile?.name ?? "driver"))", systemImage: "sparkles")
+                    Label("Analyze", systemImage: "sparkles")
                 }
-                .disabled(model.level1Unavailability != nil)
-                .help(model.level1Unavailability ?? "Level 1: the default driver in headless mode refines every card")
-                Button("Re-analyze Everything") {
-                    Task { await model.analyzeGraph(scope: scope, withAI: false, force: true) }
+                .buttonStyle(.scopeSecondary)
+                .help(model.level1Unavailability.map { "Quick analysis (README, manifests, git log). AI: \($0)" }
+                      ?? "Quick analysis (README, manifests, git log); the menu runs the default driver too")
+                .accessibilityIdentifier("graph-analyze")
+                ScopeIconMenu(systemImage: "chevron.down", title: "More ways to analyze") {
+                    Button {
+                        Task { await model.analyzeGraph(scope: scope, withAI: true) }
+                    } label: {
+                        Label("Analyze with AI (\(model.defaultDriverProfile?.name ?? "driver"))", systemImage: "sparkles")
+                    }
+                    .disabled(model.level1Unavailability != nil)
+                    .help(model.level1Unavailability ?? "Level 1: the default driver in headless mode refines every card")
+                    Button("Re-analyze Everything") {
+                        Task { await model.analyzeGraph(scope: scope, withAI: false, force: true) }
+                    }
                 }
-            } label: {
-                Label("Analyze", systemImage: "sparkles")
-            } primaryAction: {
-                Task { await model.analyzeGraph(scope: scope, withAI: false) }
             }
-            .menuStyle(.button)
-            .controlSize(.small)
-            .fixedSize()
             .disabled(graph.isGenerating || scope.repos.isEmpty)
-            .help(model.level1Unavailability.map { "Quick analysis (README, manifests, git log). AI: \($0)" }
-                  ?? "Quick analysis (README, manifests, git log); the menu runs the default driver too")
-            .accessibilityIdentifier("graph-analyze")
         }
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 8, trailing: 14))
     }

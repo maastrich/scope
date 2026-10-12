@@ -55,7 +55,7 @@ struct DeltaActionBar: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        .controlSize(.small)
+        .buttonStyle(.scopeSecondary)
         .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
         .background(Surface.panel)
     }

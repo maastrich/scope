@@ -106,7 +106,7 @@ struct BaseSearchView: View {
                     return .handled
                 }
             if model.base.isSearching {
-                ProgressView().controlSize(.mini)
+                ScopeSpinner(size: 10)
                     .accessibilityLabel("Searching")
             } else if !model.base.results.isEmpty {
                 Text(countLabel)
@@ -150,10 +150,7 @@ struct BaseSearchView: View {
                 .accessibilityLabel("Subpath scope")
                 .onSubmit { runNow() }
         }
-        .padding(.horizontal, 7)
-        .frame(height: 22)
-        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Surface.stroke))
+        .scopeFieldBox(focused: false, height: 22)
     }
 
     private func toggle(_ title: String, help: String, isOn: Binding<Bool>) -> some View {
@@ -233,7 +230,7 @@ struct BaseSearchView: View {
                 .textSelection(.enabled)
                 .lineLimit(6)
             Button("Retry") { runNow() }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -124,7 +124,7 @@ struct DiffView: View {
                 .help("Open in Editor at the first change (⌥-click copies the path)")
                 .accessibilityLabel("Open in Editor")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.icon)
         .font(.system(size: 12))
         .padding(.horizontal, 14)
         .frame(height: 30)
@@ -190,12 +190,14 @@ struct CommentEditor: View {
                 .truncationMode(.middle)
             TextEditor(text: $text)
                 .font(.system(size: 12))
+                .scrollContentBackground(.hidden)
                 .frame(width: 340, height: 90)
                 .focused($focused)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
+                .scopeTextBox(focused: focused, inset: 2)
             HStack(spacing: 8) {
                 if let onDelete {
                     Button("Delete", role: .destructive, action: onDelete)
+                        .buttonStyle(.scopeDanger)
                 }
                 Spacer()
                 Button("Cancel", action: onCancel)
@@ -205,7 +207,7 @@ struct CommentEditor: View {
                     .buttonStyle(.scopePrimary)
                     .disabled(trimmed.isEmpty)
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
         }
         .padding(12)
         .onAppear { focused = true }

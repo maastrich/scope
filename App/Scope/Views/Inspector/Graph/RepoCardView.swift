@@ -134,7 +134,7 @@ struct RepoCardView: View {
                                 }
                                 .font(.system(size: 12))
                             }
-                            .buttonStyle(.link)
+                            .buttonStyle(.scopeLink)
                             .help(relation.kind == .dependsOn ? "depends on \(relation.repo)" : "consumed by \(relation.repo)")
                         }
                     }
@@ -170,13 +170,13 @@ struct RepoCardView: View {
                 } label: {
                     Label("Base", systemImage: "square.stack.3d.up")
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.scopeLink)
                 Button {
                     Reveal.inFinder(repo.url)
                 } label: {
                     Label("Reveal", systemImage: "folder")
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.scopeLink)
             } else {
                 Text("not in the scope any more")
                     .font(.scopeCaption)
@@ -188,11 +188,10 @@ struct RepoCardView: View {
             } label: {
                 Label("Edit", systemImage: "pencil")
             }
-            .buttonStyle(.link)
+            .buttonStyle(.scopeLink)
         }
         .font(.system(size: 12, weight: .medium))
         .lineLimit(1)
-        .controlSize(.small)
         .padding(.top, 2)
     }
 }

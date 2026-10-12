@@ -66,7 +66,7 @@ struct PullRequestRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 6) {
                 if isOpening {
-                    ProgressView().controlSize(.small)
+                    ScopeSpinner(size: 14)
                 } else if let task = boundTask {
                     Button("Switch") { model.switchToTask(task) }
                         .help("Select the task \(task.name)")
@@ -82,13 +82,13 @@ struct PullRequestRow: View {
                 } label: {
                     Image(systemName: "arrow.up.right.square")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.iconTight)
                 .foregroundStyle(Ink.secondary)
                 .cursor(.pointingHand)
                 .help(pr.url.absoluteString)
                 .opacity(hovering ? 1 : 0.55)
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
         }
         .padding(EdgeInsets(top: 9, leading: 14, bottom: 9, trailing: 12))
         .background(hovering ? Fill.hover : .clear)

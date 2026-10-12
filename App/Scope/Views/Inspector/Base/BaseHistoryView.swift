@@ -10,7 +10,7 @@ struct BaseHistoryView: View {
         if base.commits.isEmpty {
             Group {
                 if base.isLoadingHistory {
-                    ProgressView().controlSize(.small)
+                    ScopeSpinner(size: 14)
                 } else {
                     Text("No commits").font(.system(size: 12)).foregroundStyle(Ink.secondary)
                 }

@@ -18,7 +18,7 @@ struct ReviewBar: View {
             } label: {
                 Label(count == 1 ? "1 comment" : "\(count) comments", systemImage: "text.bubble")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.scopeGhost)
             .help("List, edit and delete the comments")
             .popover(isPresented: $showsList, arrowEdge: .top) {
                 ReviewCommentList(task: task)
@@ -36,12 +36,11 @@ struct ReviewBar: View {
             Spacer(minLength: 4)
 
             if live.count > 1 {
-                Menu("Send Review") {
+                ScopeMenu("Send Review", kind: .primary) {
                     ForEach(live) { session in
                         Button(model.displayTitle(for: session)) { send(to: session.id) }
                     }
                 }
-                .fixedSize()
                 .help("Paste the review into one of the task's threads")
             } else {
                 Button("Send Review") {
@@ -52,7 +51,6 @@ struct ReviewBar: View {
                 .help(live.isEmpty ? "No thread of this task is running" : "Paste the review into \(model.displayTitle(for: live[0]))")
             }
         }
-        .controlSize(.small)
         .padding(EdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14))
         .background(Surface.panel)
     }
@@ -92,7 +90,7 @@ private struct ReviewCommentList: View {
                 Button(location(comment)) {
                     model.delta.selectedFile = DeltaFileRef(repo: comment.repo, path: comment.path)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.scopeLink)
                 .font(.scopeValue)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -103,21 +101,22 @@ private struct ReviewCommentList: View {
                 } label: {
                     Image(systemName: "pencil")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.iconTight)
                 .help("Edit")
                 Button {
                     model.review.delete(comment.id)
                 } label: {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.iconTight)
                 .help("Delete")
             }
             if editing == comment.id {
                 TextEditor(text: $draft)
                     .font(.system(size: 12))
+                    .scrollContentBackground(.hidden)
                     .frame(height: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Surface.stroke))
+                    .scopeTextBox(focused: false, inset: 2)
                 HStack {
                     Spacer()
                     Button("Cancel") { editing = nil }
@@ -128,7 +127,7 @@ private struct ReviewCommentList: View {
                     }
                     .buttonStyle(.scopePrimary)
                 }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
             } else {
                 Text(comment.body)
                     .font(.system(size: 12))

@@ -40,7 +40,7 @@ struct ImageDiffView: View {
         VStack(spacing: 0) {
             switch loaded {
             case nil:
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ScopeSpinner(size: 16).frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 placeholder(message)
             case .images(nil, nil):
@@ -76,7 +76,7 @@ struct ImageDiffView: View {
                 TabStrip(selection: $mode, items: Mode.allCases.map { ($0, $0.rawValue) })
                 if mode == .onionSkin {
                     Text("Before").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
-                    Slider(value: $opacity, in: 0...1).controlSize(.small).frame(maxWidth: 200)
+                    ScopeSlider(value: $opacity).frame(maxWidth: 200)
                     Text("After").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
                 }
                 Spacer()
