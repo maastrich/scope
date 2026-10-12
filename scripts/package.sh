@@ -70,6 +70,7 @@ ORIGINAL_KEYCHAINS=""
 SYSTEM_TRUSTED_PEM=""   # set when a certificate was trusted in the system keychain, so cleanup can untrust it
 API_KEY_FILE=""
 NOTARY_ARGS=()
+COMPLETED=false     # set by the last line of the script; read by cleanup to catch an aborted run
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*" >&2; [ -n "${GITHUB_ACTIONS:-}" ] && echo "::warning::$*"; return 0; }
@@ -100,6 +101,15 @@ run_capped() {
 }
 
 cleanup() {
+  # bash 3.2 (/bin/bash on macOS and on the runners) hands the EXIT trap a status of 0 when `set -u` aborts
+  # the script, so a dead build reported success and the job moved on to a DMG that was never written
+  # (v0.12.1). $COMPLETED, set only by the last line of the script, is what tells the two apart.
+  local rc=$?
+  if ! $COMPLETED && [[ "$rc" -eq 0 ]]; then
+    printf '\033[1;31m[error] %s\033[0m\n' "aborted before completing: bash reset the exit status, see the output above" >&2
+    [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::scripts/package.sh aborted before completing"
+    rc=1
+  fi
   # Always remove the temporary keychain and the secrets written to disk, even on failure.
   if [[ -n "$KEYCHAIN_PATH" && -f "$KEYCHAIN_PATH" ]]; then
     if [[ -n "$ORIGINAL_KEYCHAINS" ]]; then
@@ -114,7 +124,7 @@ cleanup() {
   fi
   rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/certificate.pem" 2>/dev/null || true
   [[ -n "$API_KEY_FILE" ]] && rm -f "$API_KEY_FILE" 2>/dev/null
-  return 0
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -248,10 +258,28 @@ if $SIGNED; then
   EXPORT_OPTIONS="$BUILD_DIR/ExportOptions.plist"
   cp "$EXPORT_OPTIONS_TEMPLATE" "$EXPORT_OPTIONS"
   /usr/libexec/PlistBuddy -c "Set :method $EXPORT_METHOD" \
-                          -c "Set :teamID $APPLE_TEAM_ID" \
                           -c "Set :signingCertificate $SIGNING_CERTIFICATE" "$EXPORT_OPTIONS"
-  xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$EXPORT_OPTIONS" -exportPath "$EXPORT_DIR" \
-    | tee "$BUILD_DIR/xcodebuild-export.log" | pretty
+  # A self-signed certificate has no team, and `teamID` set to an empty string is not a valid export option:
+  # drop the key entirely rather than hand xcodebuild a blank one.
+  if [[ -n "${APPLE_TEAM_ID:-}" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :teamID $APPLE_TEAM_ID" "$EXPORT_OPTIONS"
+  else
+    /usr/libexec/PlistBuddy -c "Delete :teamID" "$EXPORT_OPTIONS" >/dev/null 2>&1 || true
+  fi
+  # `-exportArchive` is what re-signs Sparkle's nested helpers, but method developer-id is Apple's path and
+  # may refuse an identity that is not a Developer ID. Fall back to the same work done by hand, loudly.
+  if xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$EXPORT_OPTIONS" -exportPath "$EXPORT_DIR" \
+       > "$BUILD_DIR/xcodebuild-export.log" 2>&1; then
+    pretty < "$BUILD_DIR/xcodebuild-export.log"
+  else
+    tail -40 "$BUILD_DIR/xcodebuild-export.log" || true
+    warn "xcodebuild -exportArchive failed (see build/xcodebuild-export.log): copying the app out of the archive and re-signing it inside-out with '$SIGNING_CERTIFICATE'"
+    rm -rf "$EXPORT_DIR"; mkdir -p "$EXPORT_DIR"
+    ditto "$ARCHIVE/Products/Applications/$APP_NAME.app" "$APP"
+    ENT_FILE="$BUILD_DIR/entitlements.plist"
+    codesign -d --entitlements - --xml "$APP" > "$ENT_FILE" 2>/dev/null || ENT_FILE=""
+    resign_inside_out "$APP" "$SIGNING_CERTIFICATE" "$ENT_FILE"
+  fi
   [[ -d "$APP" ]] || die "The export did not produce $APP"
   # Notarization requires a secure timestamp. Xcode's developer-id export adds one; other methods may not.
   if ! has_timestamp "$APP"; then
@@ -420,3 +448,4 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   } >> "$GITHUB_OUTPUT"
 fi
 log "Done: $DMG ($VERSION build $BUILD_NUMBER, signed=$SIGNED notarized=$NOTARIZED sparkle_key=$SPARKLE_KEY)"
+COMPLETED=true
