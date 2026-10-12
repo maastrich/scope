@@ -20,14 +20,14 @@ struct AutomationSettingsView: View {
     @State private var skillFailure: String?
 
     var body: some View {
-        Form {
-            Section("Command line") {
-                LabeledContent("Inside a thread") {
+        SettingsPage {
+            SettingsSection("Command line") {
+                SettingsRow("Inside a thread") {
                     Text("`scope` is already on the PATH")
                         .font(.system(size: 12))
                         .foregroundStyle(Ink.secondary)
                 }
-                LabeledContent("Your own terminal") {
+                SettingsRow("Your own terminal") {
                     HStack(spacing: 8) {
                         Text(linkState)
                             .font(.system(size: 12, design: .monospaced))
@@ -60,7 +60,7 @@ struct AutomationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("MCP server") {
+            SettingsSection("MCP server") {
                 Text("""
                     Registers `scope mcp` with the agents you run outside Scope too, so any of their sessions can \
                     list, open threads and create tasks. They count as agents: the rules below apply to them.
@@ -69,7 +69,7 @@ struct AutomationSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(MCPRegistration.Client.allCases) { client in
-                    LabeledContent(client.title) {
+                    SettingsRow(client.title) {
                         HStack(spacing: 8) {
                             Text(mcpCaption(mcpStates[client]))
                                 .font(.system(size: 12))
@@ -92,7 +92,7 @@ struct AutomationSettingsView: View {
             }
             .task { await refreshMCP() }
 
-            Section("Skills") {
+            SettingsSection("Skills") {
                 Text("""
                     Installs the **Scope tasks** skill for your user, so every session of these agents knows how to \
                     put work in a task, open threads in it and close it — by name or slug, through `scope` or the \
@@ -102,7 +102,7 @@ struct AutomationSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(SkillInstaller.Client.allCases) { client in
-                    LabeledContent(client.title) {
+                    SettingsRow(client.title) {
                         HStack(spacing: 8) {
                             Text(skillCaption(skillStates[client]))
                                 .font(.system(size: 12))
@@ -131,13 +131,13 @@ struct AutomationSettingsView: View {
             }
             .task { refreshSkills() }
 
-            Section("Agents") {
+            SettingsSection("Agents") {
                 Toggle("Let agents drive Scope", isOn: automation(\.agentsMayDrive))
                 Text("Requests from a thread Scope is running. Your own terminal is always allowed.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                 Stepper(value: automation(\.maxDepth), in: 0...5) {
-                    LabeledContent("Depth ceiling", value: depthCaption)
+                    SettingsRow("Depth ceiling", value: depthCaption)
                 }
                 Text("A thread you opened is at depth 0. The ceiling is how far a chain of agents opening "
                      + "agents may go.")
@@ -164,8 +164,8 @@ struct AutomationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("Socket") {
-                LabeledContent("Path") {
+            SettingsSection("Socket") {
+                SettingsRow("Path") {
                     Text(model.env.socketPath)
                         .font(.system(size: 12, design: .monospaced))
                         .textSelection(.enabled)
@@ -179,7 +179,6 @@ struct AutomationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .formStyle(.grouped)
     }
 
     // MARK: Bindings
