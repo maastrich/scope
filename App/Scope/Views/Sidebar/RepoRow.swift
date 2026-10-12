@@ -25,8 +25,7 @@ struct RepoRow: View {
             Spacer(minLength: 4)
 
             if repo.isRefreshing {
-                ProgressView()
-                    .controlSize(.mini)
+                ScopeSpinner(size: 10)
             } else if let branch = repo.branchLabel {
                 Chip(text: branch, mono: true)
             }

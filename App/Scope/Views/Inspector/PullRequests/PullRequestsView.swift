@@ -24,21 +24,18 @@ struct PullRequestsView: View {
         let prs = model.pullRequests
         return VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Picker("Repository", selection: Binding(
+                ScopePicker("Repository", selection: Binding(
                     get: { prs.pickedRepo[scope.id] ?? repo.id },
                     set: { prs.pickedRepo[scope.id] = $0 }
-                )) {
+                ), title: repo.shortName) {
                     ForEach(scope.repos) { candidate in
                         Text(candidate.shortName).tag(candidate.id)
                     }
                 }
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
                 countBadge
                 Spacer(minLength: 0)
                 if prs.isRefreshing {
-                    ProgressView().controlSize(.small)
+                    ScopeSpinner(size: 12)
                 }
                 if let url = pullsURL(repo) {
                     Button {
@@ -46,7 +43,7 @@ struct PullRequestsView: View {
                     } label: {
                         Image(systemName: "arrow.up.right.square")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                     .cursor(.pointingHand)
                     .help("Open on GitHub")
                 }
@@ -55,7 +52,7 @@ struct PullRequestsView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.icon)
                 .disabled(prs.isRefreshing || prs.gh == nil)
                 .help(refreshHelp)
             }
@@ -81,8 +78,7 @@ struct PullRequestsView: View {
         case .failed(let message):
             unavailable("Could not list pull requests", icon: "exclamationmark.triangle", text: message, command: nil)
         case .idle:
-            ProgressView("Loading pull requests…")
-                .controlSize(.small)
+            ScopeLoading(text: "Loading pull requests…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded where prs.pullRequests.isEmpty:
             ContentUnavailableView {
@@ -121,6 +117,7 @@ struct PullRequestsView: View {
             }
         } actions: {
             Button("Retry") { Task { await model.pullRequests.refresh() } }
+                .buttonStyle(.scopeSecondary)
                 .disabled(model.pullRequests.gh == nil)
         }
     }

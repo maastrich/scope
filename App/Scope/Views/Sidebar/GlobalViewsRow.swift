@@ -48,8 +48,7 @@ struct GlobalViewsRow: View {
             .help("Repository cards of the scope (⌥⌘G)")
             .accessibilityLabel("Graph")
         }
-        .font(.system(size: 12, weight: .medium))
-        .controlSize(.small)
+        .buttonStyle(.scopeSecondary)
         .disabled(scope.repos.isEmpty)
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 4, trailing: 10))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

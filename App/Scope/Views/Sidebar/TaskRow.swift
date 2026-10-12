@@ -107,18 +107,9 @@ struct TaskRow: View {
             .buttonStyle(.iconTight)
             .help("Archive: remove the sandboxes, keep the branch")
 
-            Menu {
+            ScopeIconMenu(systemImage: "ellipsis", title: "More") {
                 TaskContextMenu(task: task)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Ink.secondary)
-                    .frame(width: 16, height: 16)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("More")
         }
         .transition(.opacity)
     }

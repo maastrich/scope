@@ -105,7 +105,7 @@ private struct ProblemRowView: View {
                         Button(action.title) {
                             model.problems.onAction?(action)
                         }
-                        .controlSize(.small)
+                        .buttonStyle(.scopeSecondary)
                     }
                 }
             }

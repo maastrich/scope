@@ -35,7 +35,6 @@ struct SceneEmptyView: View {
                 .padding(.horizontal, 4)
             }
             .buttonStyle(.scopePrimary)
-            .controlSize(.regular)
             .keyboardShortcut("o", modifiers: .command)
             // One line when it fits, otherwise two centred lines (never a ragged wrap).
             ViewThatFits {

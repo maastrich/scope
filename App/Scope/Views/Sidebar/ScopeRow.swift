@@ -41,8 +41,7 @@ struct ScopeSwitcher: View {
             Spacer(minLength: 4)
 
             if scope.discovery == .scanning {
-                ProgressView()
-                    .controlSize(.mini)
+                ScopeSpinner(size: 10)
             }
             Text(caption)
                 .font(.scopeCaption)

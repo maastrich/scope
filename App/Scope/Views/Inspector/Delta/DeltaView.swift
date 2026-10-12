@@ -46,7 +46,7 @@ struct DeltaView: View {
                     .accessibilityLabel("Mode")
                 Spacer(minLength: 0)
                 if delta.isLoading || delta.isActing {
-                    ProgressView().controlSize(.small)
+                    ScopeSpinner(size: 12)
                 }
                 Button {
                     task.refresh()
@@ -54,7 +54,7 @@ struct DeltaView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.icon)
                 .help("Refresh")
             }
             .padding(EdgeInsets(top: 10, leading: 14, bottom: 6, trailing: 14))

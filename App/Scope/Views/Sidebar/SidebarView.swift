@@ -290,7 +290,7 @@ struct SidebarView: View {
                 Button("Search deeper") {
                     model.setDiscoveryDepth(scope.declaration.discoveryDepth + 1, for: scope.id)
                 }
-                .controlSize(.mini)
+                .buttonStyle(.scopeLink)
             }
         }
         .font(.scopeCaption)
@@ -306,7 +306,7 @@ struct SidebarView: View {
             Button("Retry") {
                 model.refreshScope(scope.id)
             }
-            .controlSize(.mini)
+            .buttonStyle(.scopeLink)
         }
         .font(.scopeCaption)
         .help(message)
@@ -327,8 +327,7 @@ struct SidebarView: View {
                     footerButtons(.iconOnly)
                 }
             }
-            .font(.system(size: 12, weight: .medium))
-            .controlSize(.regular)
+            .buttonStyle(.scopeSecondaryLarge)
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)

@@ -67,6 +67,7 @@ struct ScopeEmptyView: View {
                             .font(.system(size: 12))
                             .padding(.horizontal, 2)
                     }
+                    .buttonStyle(.scopeSecondary)
                     .fixedSize()
                     .disabled(scope.kind == .missing)
                     .help("Open a \(profile.name) thread here")

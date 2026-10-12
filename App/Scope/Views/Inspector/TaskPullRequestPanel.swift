@@ -168,24 +168,33 @@ struct ThreadPicker: View {
     var body: some View {
         let live = model.threads(in: task.id).filter(\.isAlive)
         if live.count > 1 {
-            Menu {
-                ForEach(live) { session in
-                    Button(model.displayTitle(for: session)) { action(session.id) }
+            if showsTitle {
+                ScopeMenu(title, systemImage: systemImage) {
+                    ForEach(live) { session in
+                        Button(model.displayTitle(for: session)) { action(session.id) }
+                    }
                 }
-            } label: {
-                label
+                .help(title)
+            } else {
+                ScopeIconMenu(systemImage: systemImage, title: title) {
+                    ForEach(live) { session in
+                        Button(model.displayTitle(for: session)) { action(session.id) }
+                    }
+                }
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(showsTitle ? .visible : .hidden)
-            .fixedSize()
-            .help(title)
         } else {
-            Button {
+            let only = Button {
                 if let only = live.first { action(only.id) }
             } label: {
                 label
             }
-            .buttonStyle(.iconTight)
+            Group {
+                if showsTitle {
+                    only.buttonStyle(.scopeSecondary)
+                } else {
+                    only.buttonStyle(.iconTight)
+                }
+            }
             .disabled(live.isEmpty)
             .help(live.isEmpty ? "\(title) — no thread of this task is running" : title)
         }

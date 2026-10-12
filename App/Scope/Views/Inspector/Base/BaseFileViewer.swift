@@ -13,7 +13,7 @@ struct BaseFileViewer: View {
             case nil:
                 placeholder("Select a file to read it")
             case .loading:
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ScopeSpinner(size: 16).frame(maxWidth: .infinity, maxHeight: .infinity)
             case .unavailable(let message):
                 placeholder(message)
             case .image(let data):

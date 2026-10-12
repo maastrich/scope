@@ -47,7 +47,7 @@ struct TaskPullRequestView: View {
                     } label: {
                         Image(systemName: "arrow.up.right.square")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                     .cursor(.pointingHand)
                     .help("Open on GitHub — \(linked.url.absoluteString)")
                     .accessibilityLabel("Open pull request \(linked.label) on GitHub")
@@ -56,7 +56,7 @@ struct TaskPullRequestView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                     .help("Refresh (automatic every minute)")
                 }
                 if let live {
@@ -101,8 +101,7 @@ struct TaskPullRequestView: View {
                         .lineLimit(3)
                         .help(error)
                 } else {
-                    ProgressView("Loading…")
-                        .controlSize(.small)
+                    ScopeLoading(text: "Loading…")
                 }
             }
             .padding(EdgeInsets(top: 10, leading: 14, bottom: 8, trailing: 14))

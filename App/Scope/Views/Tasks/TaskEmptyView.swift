@@ -31,14 +31,13 @@ struct TaskEmptyView: View {
                 }
                 .buttonStyle(.scopePrimary)
 
-                Menu("Other driver…") {
+                ScopeMenu("Other driver…") {
                     ForEach(model.drivers.profiles) { profile in
                         Button(profile.name) {
                             Task { await model.newThreadInCurrentContext(driverID: profile.id) }
                         }
                     }
                 }
-                .fixedSize()
                 .disabled(model.drivers.profiles.isEmpty)
             }
         }

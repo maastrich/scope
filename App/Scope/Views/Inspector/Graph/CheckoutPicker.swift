@@ -18,9 +18,9 @@ struct CheckoutPicker: View {
                 } label: {
                     Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.scopeLink)
             } else {
-                Menu {
+                ScopeMenu {
                     Button {
                         model.openInEditorOrCopy(path: repo.url.path)
                     } label: {
@@ -34,12 +34,11 @@ struct CheckoutPicker: View {
                             Text("\(entry.task.name) · \(entry.repo.branch) · \(state(entry.task, entry.repo))")
                         }
                     }
-                } label: {
-                    Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                } label: { hovering in
+                    ScopeLinkLabel(hovering: hovering) {
+                        Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
                 }
-                .menuStyle(.button)
-                .buttonStyle(.link)
-                .fixedSize()
             }
         }
         .disabled(disabled)

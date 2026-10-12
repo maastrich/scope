@@ -44,7 +44,7 @@ private struct ExitToast: View {
                     ExitDetails(notice: notice, isPresented: $showsDetails)
                 }
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
             Button {
                 Task { await model.dismissExitNotice(notice.id) }
             } label: {
@@ -106,8 +106,9 @@ private struct ExitDetails: View {
                     Task { await model.relaunchExitNotice(notice.id) }
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.scopePrimary)
             }
-            .controlSize(.small)
+            .buttonStyle(.scopeSecondary)
         }
         .padding(14)
         .frame(width: 360)
