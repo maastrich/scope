@@ -67,6 +67,7 @@ IDENTITY="ad-hoc"
 SPARKLE_KEY="absent"
 KEYCHAIN_PATH=""
 ORIGINAL_KEYCHAINS=""
+SYSTEM_TRUSTED_PEM=""   # set when a certificate was trusted in the system keychain, so cleanup can untrust it
 API_KEY_FILE=""
 NOTARY_ARGS=()
 
@@ -79,6 +80,24 @@ has_runtime_flag() { [[ "$(sig_info "$1")" == *"flags="*"runtime"* ]]; }
 has_timestamp()    { [[ "$(sig_info "$1")" == *$'\n'"Timestamp="* ]]; }
 team_of()          { sig_info "$1" | sed -n 's/^TeamIdentifier=//p'; }
 pretty()           { if command -v xcbeautify >/dev/null 2>&1; then xcbeautify; else grep -E --line-buffered 'error:|warning:|\*\* ' || true; fi; }
+# macOS ships no `timeout`, and a `security` call that asks SecurityAgent for authorization blocks forever on a
+# headless runner -- it is not a failure `|| true` can catch. Cap every such call instead. Returns 124 on timeout.
+run_capped() {
+  local seconds="$1" waited=0 pid
+  shift
+  "$@" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [[ "$waited" -ge "$seconds" ]]; then
+      kill -9 "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
+}
 
 cleanup() {
   # Always remove the temporary keychain and the secrets written to disk, even on failure.
@@ -89,7 +108,11 @@ cleanup() {
     fi
     security delete-keychain "$KEYCHAIN_PATH" || true
   fi
-  rm -f "$RUNNER_TEMP/certificate.p12" 2>/dev/null || true
+  # Trusting a certificate in the system keychain outlives the build, so undo it even on failure.
+  if [[ -n "$SYSTEM_TRUSTED_PEM" && -f "$SYSTEM_TRUSTED_PEM" ]]; then
+    run_capped 30 sudo -n security remove-trusted-cert -d "$SYSTEM_TRUSTED_PEM" >/dev/null 2>&1 || true
+  fi
+  rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/certificate.pem" 2>/dev/null || true
   [[ -n "$API_KEY_FILE" ]] && rm -f "$API_KEY_FILE" 2>/dev/null
   return 0
 }
@@ -131,17 +154,39 @@ if [[ -n "${MACOS_CERTIFICATE_P12_BASE64:-}" ]]; then
   security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
   security import "$CERTIFICATE_PATH" -P "${MACOS_CERTIFICATE_PASSWORD:-}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
   # Let Apple's tools (codesign, xcodebuild, productbuild...) use the private key without a UI prompt.
-  security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+  run_capped 60 security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null \
+    || warn "security set-key-partition-list did not complete: codesign may prompt or fail"
   # Prepend the keychain to the user search list, keeping the existing ones (safe on a developer machine too).
   ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
   # shellcheck disable=SC2086
   security list-keychains -d user -s "$KEYCHAIN_PATH" $ORIGINAL_KEYCHAINS
+
   # A self-signed certificate is imported untrusted, and `find-identity -v` then reports it as
   # CSSMERR_TP_NOT_TRUSTED -- so the match below would miss it and the build would fall back to ad-hoc.
-  # Trusting it for code signing alone, in this throwaway keychain, is what makes it a valid identity.
-  # An Apple-issued certificate is already trusted through Apple's root, so this is a no-op for one.
-  security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERTIFICATE_PEM" 2>/dev/null || true
-  rm -f "$CERTIFICATE_PATH" "$CERTIFICATE_PEM"
+  # Trusting it for code signing is what makes it a valid identity. An Apple-issued certificate is already
+  # trusted through Apple's root, so this is a no-op for one.
+  #
+  # Trust settings cannot be written without authorization: `add-trusted-cert` on the user domain asks
+  # SecurityAgent, which nobody can answer on a runner, and the call then hangs until the job is cancelled
+  # (issue #18 -- 52 minutes on v0.12.0). The admin domain (-d, system keychain) takes root instead of a
+  # prompt, which a runner has through passwordless sudo. Both paths are capped, so neither can block again.
+  if [[ -s "$CERTIFICATE_PEM" ]]; then
+    if run_capped 10 sudo -n true >/dev/null 2>&1; then
+      if run_capped 60 sudo -n security add-trusted-cert -d -r trustRoot -p codeSign \
+          -k /Library/Keychains/System.keychain "$CERTIFICATE_PEM" >/dev/null 2>&1; then
+        SYSTEM_TRUSTED_PEM="$CERTIFICATE_PEM"
+      else
+        warn "security add-trusted-cert -d failed or timed out: a self-signed certificate will not be a valid identity"
+      fi
+    else
+      # No passwordless sudo (a developer machine): try the user domain, where the prompt is answerable.
+      run_capped 60 security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERTIFICATE_PEM" >/dev/null 2>&1 \
+        || warn "security add-trusted-cert timed out or was declined: a self-signed certificate will not be a valid identity"
+    fi
+  else
+    warn "could not extract the certificate as PEM: skipping the trust step (an Apple-issued certificate does not need it)"
+  fi
+  rm -f "$CERTIFICATE_PATH"
   security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
 fi
 
