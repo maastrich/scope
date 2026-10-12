@@ -256,6 +256,15 @@ import Testing
         #expect(far.contains("task x, scope acme"))
     }
 
+    /// The marker is for agents: your own terminal goes through the socket too and must not wear it.
+    @Test func onlyAgentsCountAsHavingOpenedAThread() {
+        #expect(!ThreadOrigin.user.openedByAgent)
+        #expect(!ThreadOrigin.unknown.openedByAgent)
+        #expect(!ThreadOrigin(author: .control, client: "scope-cli/0.9.0").openedByAgent)
+        #expect(ThreadOrigin(author: .control, parent: "3f9a2c17be04", depth: 1, client: "scope-cli/0.9.0").openedByAgent)
+        #expect(ThreadOrigin(author: .control, depth: 1, client: "scope-mcp/0.9.0").openedByAgent)
+    }
+
     @Test func anAgentOutsideScopeHasNoThreadToAnswer() {
         let header = ThreadMessage.header(for: .init(client: "scope-mcp/0.9.0"))
         #expect(header.contains("outside Scope (scope-mcp/0.9.0)"))

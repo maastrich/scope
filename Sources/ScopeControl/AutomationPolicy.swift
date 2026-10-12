@@ -26,6 +26,18 @@ public enum ControlClientName {
     public static let mcp = "scope-mcp"
 }
 
+extension ThreadOrigin {
+    /// Whether an agent asked for this thread — the question the sidebar's origin marker answers.
+    ///
+    /// Not `author == .control` alone: that is also you typing `scope thread new` in a terminal of your own,
+    /// which `AutomationPolicy.origin` already counts as the user. An agent is a thread of this app (it has a
+    /// `parent`) or `scope mcp` reached from a session outside it.
+    public var openedByAgent: Bool {
+        guard author == .control else { return false }
+        return parent != nil || (client ?? "").hasPrefix(ControlClientName.mcp + "/")
+    }
+}
+
 /// What to do with a request, before anything happens.
 public enum PolicyDecision: Sendable, Equatable {
     /// Go ahead.
