@@ -95,6 +95,15 @@ public enum ScopeHome {
         home.appending(path: "threads", directoryHint: .isDirectory)
     }
 
+    /// `<home>/ui-state.json` — what is selected, which groups are open.
+    ///
+    /// Under the home like everything else the app writes. It used to be one file in Application Support for
+    /// every build and every `SCOPE_HOME`, so a Debug build (or a throwaway instance) restored the installed
+    /// app's selection — ids of scopes and threads it does not have — and then saved its own over it.
+    public static func uiStateURL(home: URL) -> URL {
+        home.appending(path: "ui-state.json", directoryHint: .notDirectory)
+    }
+
     /// `<home>/sandboxes/`
     public static func sandboxesURL(home: URL) -> URL {
         home.appending(path: "sandboxes", directoryHint: .isDirectory)

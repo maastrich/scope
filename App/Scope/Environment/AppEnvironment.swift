@@ -145,7 +145,7 @@ final class AppEnvironment {
             knownThreads: knownThreads,
             hookSink: sink,
             controls: controls,
-            uiState: UIStateStore(),
+            uiState: UIStateStore(home: home),
             startupProblems: problems
         )
     }

@@ -945,9 +945,8 @@ REFERENCE = """
 ├── tasks/&lt;id&gt;.json       <span class="c"># one record per task</span>
 ├── graph/&lt;scope&gt;.json    <span class="c"># the repository cards</span>
 ├── sandboxes/            <span class="c"># the task worktrees</span>
-└── scope.sock            <span class="c"># hook events</span>
-
-~/Library/Application Support/Scope/ui-state.json   <span class="c"># selection, expansion, panel widths</span></code></pre>
+├── ui-state.json         <span class="c"># selection, expansion, panel widths</span>
+└── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
 
