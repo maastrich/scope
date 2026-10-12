@@ -261,13 +261,13 @@ struct MonoTextView: NSViewRepresentable {
 /// Paints `.rowBackground` across the whole line fragment, from the left edge of the text view to the
 /// right edge of the (at least clip-wide) text view.
 final class RowBackgroundLayoutManager: NSLayoutManager {
+    /// Width of the text view, pushed by `GutterTextView` whenever it is resized: `drawBackground` is
+    /// nonisolated (the superclass method is) and cannot read the main-actor view geometry itself.
+    var rowWidth: CGFloat = 0
+
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
-        // The two `main actor-isolated property … from a nonisolated context` warnings below are known. AppKit
-        // draws on the main thread, so the reads are safe, but the override cannot be `@MainActor` (the
-        // superclass method is not) and `MainActor.assumeIsolated` cannot take this nonisolated `self` with it.
-        // Silencing them properly means caching the width on this layout manager and pushing it from the view.
-        if let storage = textStorage, let textView = textContainers.first?.textView {
-            let width = max(textView.bounds.width, textView.frame.width)
+        if let storage = textStorage {
+            let width = rowWidth
             enumerateLineFragments(forGlyphRange: glyphsToShow) { rect, _, _, glyphRange, _ in
                 let chars = self.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
                 guard chars.location < storage.length,
@@ -298,6 +298,25 @@ final class GutterTextView: NSTextView {
     private var trackingArea: NSTrackingArea?
 
     private var isActive: Bool { onGutterSelection != nil && gutterWidth > 0 }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        pushRowWidth()
+    }
+
+    override func setBoundsSize(_ newSize: NSSize) {
+        super.setBoundsSize(newSize)
+        pushRowWidth()
+    }
+
+    /// Row tints span the whole view, not just the text: the layout manager draws them from this width.
+    private func pushRowWidth() {
+        guard let layout = layoutManager as? RowBackgroundLayoutManager else { return }
+        let width = max(bounds.width, frame.width)
+        guard layout.rowWidth != width else { return }
+        layout.rowWidth = width
+        needsDisplay = true
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

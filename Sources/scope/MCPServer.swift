@@ -51,7 +51,7 @@ enum ScopeMCP {
                     FileHandle.standardError.write(Data("scope mcp: \(message)\n".utf8))
                 })
                 return CallTool.Result(
-                    content: [.text(MCPBridge.text(for: payload))],
+                    content: [.text(text: MCPBridge.text(for: payload), annotations: nil, _meta: nil)],
                     structuredContent: (try? MCPBridge.structured(for: payload)).flatMap {
                         try? JSONDecoder().decode(Value.self, from: $0)
                     }
@@ -66,7 +66,7 @@ enum ScopeMCP {
 
     /// A refusal an agent can act on: the message, and the detail that says what to do instead.
     private static func failure(_ error: ControlError) -> CallTool.Result {
-        CallTool.Result(content: [.text(error.description)], isError: true)
+        CallTool.Result(content: [.text(text: error.description, annotations: nil, _meta: nil)], isError: true)
     }
 
     private static func tool(_ tool: MCPTool) -> Tool {
