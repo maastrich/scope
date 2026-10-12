@@ -1,4 +1,5 @@
 import Foundation
+import ScopeDrivers
 
 /// Git hooks for the threads of a task, so an agent working in a sandbox cannot commit into the user's checkout
 /// or another task's sandbox, nor push onto the repository's default branch.
@@ -64,6 +65,52 @@ public enum SandboxGitHooks {
         result["GIT_CONFIG_VALUE_\(count)"] = hooksPath
         result["GIT_CONFIG_COUNT"] = String(count + 1)
         return result
+    }
+
+    /// `environment` without the `core.hooksPath` entries that point at a Scope hooks directory, the rest
+    /// renumbered. The user's own `GIT_CONFIG_*` entries are kept, in order.
+    ///
+    /// The inverse of `environment(adding:to:)`, for an app that was itself started from a thread: it inherits
+    /// that thread's override, and without this its own git calls and every thread it opens outside a task
+    /// would run the *other* app's hooks.
+    public static func environment(removingScopeHooksFrom environment: [String: String],
+                                   fileManager: FileManager = .default) -> [String: String] {
+        guard let count = environment["GIT_CONFIG_COUNT"].flatMap(Int.init), count > 0 else { return environment }
+        var result = environment
+        var kept: [(key: String, value: String)] = []
+        for index in 0..<count {
+            let key = result.removeValue(forKey: "GIT_CONFIG_KEY_\(index)")
+            let value = result.removeValue(forKey: "GIT_CONFIG_VALUE_\(index)")
+            guard let key, let value else { continue }
+            if key.lowercased() == "core.hookspath", isScopeHooksDirectory(value, fileManager: fileManager) { continue }
+            kept.append((key, value))
+        }
+        guard kept.count != count else { return environment }
+        for (index, entry) in kept.enumerated() {
+            result["GIT_CONFIG_KEY_\(index)"] = entry.key
+            result["GIT_CONFIG_VALUE_\(index)"] = entry.value
+        }
+        result["GIT_CONFIG_COUNT"] = kept.isEmpty ? nil : String(kept.count)
+        return result
+    }
+
+    /// `true` for a `<home>/githooks` of any Scope: the folder name, and the dispatcher inside it when the
+    /// folder is still there (a home that was deleted leaves only the name to go by).
+    static func isScopeHooksDirectory(_ path: String, fileManager: FileManager = .default) -> Bool {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        guard url.lastPathComponent == directory(home: url.deletingLastPathComponent()).lastPathComponent else { return false }
+        guard fileManager.fileExists(atPath: url.path) else { return true }
+        return fileManager.fileExists(atPath: url.appending(path: dispatcherName, directoryHint: .notDirectory).path)
+    }
+
+    /// What an app's own process environment should be once it has read what it needs from it: nothing a
+    /// thread of another Scope left there (`TerminalEnvironment.injectedKeys`, that app's hooks override).
+    /// The app applies the difference to its process at startup, so the login-shell probe, every `git` it
+    /// runs and every thread it opens start clean.
+    public static func withoutInheritedThread(_ environment: [String: String],
+                                              fileManager: FileManager = .default) -> [String: String] {
+        self.environment(removingScopeHooksFrom: environment.filter { !TerminalEnvironment.injectedKeys.contains($0.key) },
+                         fileManager: fileManager)
     }
 
     /// The dispatcher: POSIX sh, run by git with the hook's own arguments and stdin.

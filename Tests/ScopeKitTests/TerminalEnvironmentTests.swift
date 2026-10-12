@@ -117,4 +117,27 @@ struct TerminalEnvironmentTests {
         #expect(TerminalEnvironment.prepend("/helpers", to: "") == "/helpers")
         #expect(TerminalEnvironment.prepend("/helpers", to: "/usr/bin") == "/helpers:/usr/bin")
     }
+
+    @Test("a thread outside a task keeps nothing of the thread its app was started from")
+    func inheritedScopeVariablesAreDropped() {
+        // What a Debug build holds when it was launched from a task thread of the installed app.
+        let inherited = [
+            "PATH": "/usr/bin", "SCOPE_HOME": "/Users/me/.scope", "SCOPE_SOCK": "/Users/me/.scope/scope.sock",
+            "SCOPE_THREAD": "8a18d7476063", "SCOPE_TASK": "demo", "SCOPE_TASK_ROOT": "/Users/me/.scope/sandboxes/acme/demo",
+            "SCOPE_PORT": "41020", "SCOPE_SCOPE": "other", "SCOPE_SCOPE_ROOT": "/Users/me/other",
+            "SCOPE_SANDBOX": "/Users/me/.scope/sandboxes/acme/demo/api", "SCOPE_BASE_PATH": "/Users/me/acme/api",
+            "SCOPE_DEFAULT_BRANCH": "main",
+        ]
+        let debug = TerminalEnvironment.ScopeVariables(
+            thread: "3f9a2c17be04", scope: "acme", scopeRoot: "/Users/me/acme", task: nil,
+            sock: "/Users/me/.scope-debug/scope.sock", home: "/Users/me/.scope-debug"
+        )
+        let env = build(base: inherited, scope: debug)
+        // Its own identity, and only that: no task, no port, no sandbox of the other app.
+        #expect(env.filter { $0.key.hasPrefix("SCOPE_") } == debug.asDictionary)
+        #expect(env["SCOPE_TASK"] == nil)
+        #expect(env["SCOPE_TASK_ROOT"] == nil)
+        #expect(env["SCOPE_PORT"] == nil)
+        #expect(env["PATH"] == "/usr/bin")
+    }
 }

@@ -97,6 +97,7 @@ final class AppEnvironment {
         // Before the layout, the stores and the auto-relaunch: a second app on a home somebody is running would
         // rewrite its config and thread records and start its threads a second time.
         if UnixSocketServer.isListening(at: socketPath) { refuseSecondInstance(home: home, socketPath: socketPath) }
+        dropInheritedThreadEnvironment()
         do {
             try ScopeHome.ensureLayout(at: home)
         } catch {
@@ -149,6 +150,19 @@ final class AppEnvironment {
             uiState: UIStateStore(home: home),
             startupProblems: problems
         )
+    }
+
+    /// Removes from this process what a thread of another Scope left in its environment.
+    ///
+    /// Started from a thread, the app holds that thread's `SCOPE_*` variables and its git-hooks override. The
+    /// home is already resolved by now; everything after this point — the login-shell probe, the app's own
+    /// `git`, the threads it opens — builds on the process environment and would pass them on: a thread
+    /// opened outside a task kept the other app's `SCOPE_TASK_ROOT` and `SCOPE_PORT` and ran its hooks.
+    private static func dropInheritedThreadEnvironment() {
+        let current = ProcessInfo.processInfo.environment
+        let clean = SandboxGitHooks.withoutInheritedThread(current)
+        for key in current.keys where clean[key] == nil { unsetenv(key) }
+        for (key, value) in clean where current[key] != value { setenv(key, value, 1) }
     }
 
     /// Says why this instance will not start, then quits.
