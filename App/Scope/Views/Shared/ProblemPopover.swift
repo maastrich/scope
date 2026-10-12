@@ -12,6 +12,7 @@ struct ProblemPopover: View {
             isPresented.toggle()
         } label: {
             Label("Problems", systemImage: symbolName)
+                .labelStyle(.iconOnly)
                 .overlay(alignment: .topTrailing) {
                     if model.problems.unreadCount > 0 {
                         Text(model.problems.unreadCount, format: .number)
@@ -24,6 +25,7 @@ struct ProblemPopover: View {
                     }
                 }
         }
+        .buttonStyle(.icon)
         .help(model.problems.problems.isEmpty ? "No problems" : "\(model.problems.problems.count) problems")
         .accessibilityLabel(model.problems.unreadCount > 0 ? "Problems, \(model.problems.unreadCount) unread" : "Problems")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
