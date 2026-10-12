@@ -11,6 +11,15 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.12.0](https://github.com/maastrich/scope/releases/tag/v0.12.0) - 2026-10-12
+
+### Fixed
+
+- clear the release build warnings ([#16](https://github.com/maastrich/scope/pull/16)) by @maastrich
+- keep Debug builds off the production home, and give releases a stable code identity ([#17](https://github.com/maastrich/scope/pull/17)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.11.0...v0.12.0
+
 ## [0.11.0](https://github.com/maastrich/scope/releases/tag/v0.11.0) - 2026-10-12
 
 ### Added
