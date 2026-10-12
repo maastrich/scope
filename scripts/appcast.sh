@@ -20,7 +20,7 @@
 #   APP                     the exported app, to validate its SUPublicEDKey first (default build/export/Scope.app)
 #   SPARKLE_BIN             directory containing generate_appcast + sign_update (default: the SwiftPM artifact under
 #                           $SOURCE_PACKAGES, then a download of Sparkle-$SPARKLE_VERSION.tar.xz)
-#   SOURCE_PACKAGES         default SourcePackages;  SPARKLE_VERSION default 2.9.6;  SPARKLE_TARBALL_SHA256 optional
+#   SOURCE_PACKAGES         default SourcePackages;  SPARKLE_VERSION default 2.10.0;  SPARKLE_TARBALL_SHA256 optional
 #   FEED_URL                previous feed (default https://github.com/$REPO/releases/latest/download/appcast.xml)
 #   NO_PREVIOUS=1           start a fresh feed (ignore the previous appcast)
 #   DOWNLOAD_URL_PREFIX     default https://github.com/$REPO/releases/download/$TAG/
@@ -42,7 +42,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-${GITHUB_REPOSITORY:-maastrich/scope}}"
 APP="${APP:-$PWD/build/export/Scope.app}"
 SOURCE_PACKAGES="${SOURCE_PACKAGES:-$PWD/SourcePackages}"
-SPARKLE_VERSION="${SPARKLE_VERSION:-2.9.6}"
+SPARKLE_VERSION="${SPARKLE_VERSION:-2.10.0}"
 OUT_DIR="${OUT_DIR:-$PWD/dist}"
 WORK_DIR="${WORK_DIR:-$PWD/build/appcast}"
 RUNNER_TEMP="${RUNNER_TEMP:-$(mktemp -d -t scope-appcast)}"

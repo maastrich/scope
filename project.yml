@@ -19,7 +19,9 @@ packages:
     from: 0.9.0
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: 2.9.6 # binary xcframework (arm64 + x86_64); bump SPARKLE_VERSION in .github/workflows/release.yml too
+    # Exact, not `from:`: no Package.resolved is committed for the app, so a range lets CI embed a newer
+    # framework than the tools release.yml downloads to sign the update.
+    exactVersion: 2.10.0 # binary xcframework (arm64 + x86_64); bump SPARKLE_VERSION in .github/workflows/release.yml too
 
 settings:
   base:
