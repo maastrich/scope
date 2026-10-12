@@ -162,7 +162,9 @@ struct RepoCardView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 12) {
+        // 4, not 12: each link carries 3 pt of its own on either side for the hover wash, and the four of
+        // them only just fit a 260 pt card.
+        HStack(spacing: 4) {
             if let repo {
                 CheckoutPicker(scope: scope, repo: repo)
                 Button {
@@ -190,7 +192,9 @@ struct RepoCardView: View {
             }
             .buttonStyle(.scopeLink)
         }
-        .font(.system(size: 12, weight: .medium))
+        // The caption role: `.controlSize(.small)` used to shrink these links to 11 pt, and at 12 the four of
+        // them no longer fit the narrowest card.
+        .font(.scopeCaption.weight(.medium))
         .lineLimit(1)
         .padding(.top, 2)
     }

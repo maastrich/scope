@@ -70,6 +70,7 @@ private struct ReviewCommentList: View {
     let task: TaskState
     @State private var editing: UUID?
     @State private var draft = ""
+    @FocusState private var draftFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -116,7 +117,8 @@ private struct ReviewCommentList: View {
                     .font(.system(size: 12))
                     .scrollContentBackground(.hidden)
                     .frame(height: 70)
-                    .scopeTextBox(focused: false, inset: 2)
+                    .focused($draftFocused)
+                    .scopeTextBox(focused: draftFocused, inset: 2)
                 HStack {
                     Spacer()
                     Button("Cancel") { editing = nil }
