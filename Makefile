@@ -21,6 +21,13 @@ build: generate      ## Build the app (Debug by default; CONFIG=Release for rele
 	$(XCB) build | tail -n 20
 
 run: build           ## Launch the built .app
+	# Every worktree's Debug build is the same app to macOS (one bundle id), so `open` would just bring
+	# another worktree's running copy to the front and this build would never start. Say so instead.
+	@others=$$(pgrep -afl "/$(APP_NAME).app/Contents/MacOS/$(APP_NAME)$$" | grep -vF "$(APP)/" || true); \
+	if [ -n "$$others" ]; then \
+	    echo "error: another copy of $(APP_NAME) is running. Quit it by pid, never by name or bundle id:"; \
+	    echo "$$others"; exit 1; \
+	fi
 	# Without this, a build launched from inside a Scope thread inherits SCOPE_HOME and points at the
 	# production ~/.scope -- same config, same thread records, same hook socket as the installed copy.
 	env -u SCOPE_HOME -u SCOPE_SOCK -u SCOPE_THREAD -u SCOPE_TASK -u SCOPE_TASK_ROOT \
