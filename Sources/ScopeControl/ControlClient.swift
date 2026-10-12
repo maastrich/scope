@@ -100,7 +100,7 @@ public struct ControlClient: Sendable {
             return ControlError(.timeout, "Scope did not answer in time",
                                 detail: "Socket \(path) accepted the request and said nothing. A Scope older than "
                                     + "this `scope` binary listens there without understanding it — update the app.")
-        case .pathTooLong, .payloadTooLarge:
+        case .pathTooLong, .payloadTooLarge, .addressInUse:
             return ControlError(.badRequest, error.description)
         }
     }

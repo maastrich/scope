@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ScopeAdapters
 import ScopeControl
@@ -87,14 +88,14 @@ final class AppEnvironment {
     /// two apps sharing one config, one set of thread records and — worse — one hook socket, so a driver's
     /// events reach whichever of the two happens to be listening.
     static func live() -> AppEnvironment {
-        #if DEBUG
-        let resolution = AppHome.resolve(debugBuild: true)
-        #else
-        let resolution = AppHome.resolve(debugBuild: false)
-        #endif
+        let resolution = AppHome.resolve(debugBuild: BuildFlavor.isDebug)
         // Decided before anything is created or bound: a home refused here must not have been touched first.
         let home = resolution.home
         var problems = resolution.problems
+        let socketPath = SocketPath.resolve(home: home)
+        // Before the layout, the stores and the auto-relaunch: a second app on a home somebody is running would
+        // rewrite its config and thread records and start its threads a second time.
+        if UnixSocketServer.isListening(at: socketPath) { refuseSecondInstance(home: home, socketPath: socketPath) }
         do {
             try ScopeHome.ensureLayout(at: home)
         } catch {
@@ -105,7 +106,6 @@ final class AppEnvironment {
                 actions: [.reveal(home.deletingLastPathComponent().path)]
             ))
         }
-        let socketPath = SocketPath.resolve(home: home)
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
 
         let knownThreads = KnownThreads()
@@ -148,6 +148,25 @@ final class AppEnvironment {
             uiState: UIStateStore(),
             startupProblems: problems
         )
+    }
+
+    /// Says why this instance will not start, then quits.
+    ///
+    /// Reached with `open -n`, or by two worktrees running their Debug build at once: both are
+    /// `dev.maastrich.scope.debug` on `~/.scope-debug`, and macOS does not stop the second from launching.
+    private static func refuseSecondInstance(home: URL, socketPath: String) -> Never {
+        Log.app.error("refusing to start: \(socketPath, privacy: .public) is already served")
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Another Scope is already running on \(home.path)"
+        alert.informativeText = "Something is listening on \(socketPath). Two apps on one home overwrite each other's "
+            + "config and thread records, and a driver's events reach whichever of them is listening.\n\n"
+            + "This is \(Bundle.main.bundlePath) (pid \(ProcessInfo.processInfo.processIdentifier)). "
+            + "Quit the other one, or start this one with another SCOPE_HOME."
+        alert.addButton(withTitle: "Quit")
+        NSApplication.shared.activate()
+        alert.runModal()
+        exit(1)
     }
 
     /// Swaps in the registry built around the located git (before any `ScopeState` exists).
