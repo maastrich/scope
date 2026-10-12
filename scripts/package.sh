@@ -117,11 +117,13 @@ fi
 # ---------------------------------------------------------------- 1. keychain (optional)
 if [[ -n "${MACOS_CERTIFICATE_P12_BASE64:-}" ]]; then
   log "Importing the Developer ID certificate into a temporary keychain"
-  [[ -n "${APPLE_TEAM_ID:-}" ]] || die "APPLE_TEAM_ID is required together with MACOS_CERTIFICATE_P12_BASE64"
   KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD:-$(uuidgen)}"
   KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
   CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+  CERTIFICATE_PEM="$RUNNER_TEMP/certificate.pem"
   printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+  openssl pkcs12 -in "$CERTIFICATE_PATH" -passin "pass:${MACOS_CERTIFICATE_PASSWORD:-}" \
+    -nokeys -clcerts -legacy -out "$CERTIFICATE_PEM" 2>/dev/null || true
 
   # Sequence from GitHub Docs "Installing an Apple certificate on macOS runners for Xcode development".
   security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -134,7 +136,12 @@ if [[ -n "${MACOS_CERTIFICATE_P12_BASE64:-}" ]]; then
   ORIGINAL_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
   # shellcheck disable=SC2086
   security list-keychains -d user -s "$KEYCHAIN_PATH" $ORIGINAL_KEYCHAINS
-  rm -f "$CERTIFICATE_PATH"
+  # A self-signed certificate is imported untrusted, and `find-identity -v` then reports it as
+  # CSSMERR_TP_NOT_TRUSTED -- so the match below would miss it and the build would fall back to ad-hoc.
+  # Trusting it for code signing alone, in this throwaway keychain, is what makes it a valid identity.
+  # An Apple-issued certificate is already trusted through Apple's root, so this is a no-op for one.
+  security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERTIFICATE_PEM" 2>/dev/null || true
+  rm -f "$CERTIFICATE_PATH" "$CERTIFICATE_PEM"
   security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
 fi
 
@@ -143,8 +150,9 @@ VALID_IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true
 if [[ "$VALID_IDENTITIES" == *"$SIGNING_CERTIFICATE"* ]]; then
   SIGNED=true
   IDENTITY="$SIGNING_CERTIFICATE"
-  [[ -n "${APPLE_TEAM_ID:-}" ]] || die "APPLE_TEAM_ID is required when a signing identity is present"
-  log "Signing identity found: $SIGNING_CERTIFICATE (team $APPLE_TEAM_ID)"
+  # A self-signed certificate has no team, and xcodebuild signs fine without one; only an Apple-issued
+  # identity needs DEVELOPMENT_TEAM to match its OU.
+  log "Signing identity found: $SIGNING_CERTIFICATE${APPLE_TEAM_ID:+ (team $APPLE_TEAM_ID)}"
 else
   warn "No valid '$SIGNING_CERTIFICATE' identity: ad-hoc signing. Gatekeeper will refuse the downloaded app until the user runs: xattr -d com.apple.quarantine /Applications/$APP_NAME.app"
 fi
@@ -152,7 +160,7 @@ fi
 # ---------------------------------------------------------------- 2. archive (universal, Release)
 log "xcodebuild archive: $SCHEME, Release, $VERSION ($BUILD_NUMBER)"
 if $SIGNED; then
-  SIGN_SETTINGS=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE" "DEVELOPMENT_TEAM=$APPLE_TEAM_ID" OTHER_CODE_SIGN_FLAGS=--timestamp)
+  SIGN_SETTINGS=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE" "DEVELOPMENT_TEAM=${APPLE_TEAM_ID:-}" OTHER_CODE_SIGN_FLAGS=--timestamp)
 else
   SIGN_SETTINGS=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM=)
 fi

@@ -173,15 +173,14 @@ jobs:
           # Code signing (all optional; without them the build is ad-hoc signed)
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # An "Apple Development" certificate, not a "Developer ID Application": the free one any Apple ID
-          # gets from Xcode. It buys no distribution trust -- Gatekeeper still refuses a downloaded build
-          # until install.sh clears the quarantine, exactly as with ad-hoc -- but it gives every release the
-          # same code identity, which is what macOS keys its privacy permissions to. Ad-hoc has no
-          # certificate, so a binary's designated requirement collapses to its own cdhash and every update
-          # invalidates whatever the user had approved: a Screen Recording grant stops applying while the
-          # switch still reads on. Swap this for "Developer ID Application" the day there is one.
-          SIGNING_CERTIFICATE: Apple Development
+          # A self-signed certificate made for this app alone, valid to 2046 -- not an Apple identity, and
+          # deliberately so: nothing here is tied to a developer account. It buys no distribution trust
+          # (Gatekeeper still refuses a downloaded build until install.sh clears the quarantine, exactly as
+          # with ad-hoc) but it gives every release the same code identity, which is what macOS keys its
+          # privacy permissions to. Ad-hoc has no certificate, so a binary's designated requirement collapses
+          # to its own cdhash and every update invalidates whatever the user had approved: a Screen Recording
+          # grant stops applying while the switch still reads on.
+          SIGNING_CERTIFICATE: Scope Code Signing
           # notarytool only accepts Developer ID, so asking it to notarize this would fail the release.
           SKIP_NOTARIZE: "1"
           # Notarization, either flavour (optional)
