@@ -37,14 +37,16 @@ private struct GeneralSettingsView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Button("Reveal") { Reveal.inFinder(model.env.home) }
-                            .controlSize(.small)
+                            .buttonStyle(.scopeSecondary)
                     }
                 }
-                Picker("Default driver", selection: preference(\.defaultDriverID)) {
-                    Text("Automatic").tag("")
-                    Divider()
-                    ForEach(model.drivers.profiles) { profile in
-                        Text(profile.name).tag(profile.id)
+                SettingsRow("Default driver") {
+                    ScopePicker("Default driver", selection: preference(\.defaultDriverID), title: defaultDriverTitle) {
+                        Text("Automatic").tag("")
+                        Divider()
+                        ForEach(model.drivers.profiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
                     }
                 }
                 Text(driverCaption)
@@ -56,8 +58,14 @@ private struct GeneralSettingsView: View {
                 EditorPicker()
             }
             SettingsSection("Terminal") {
-                Stepper(value: terminalFontSize, in: Preferences.terminalFontSizeRange) {
-                    SettingsRow("Font size", value: "\(model.config.preferences.terminalFontSize) pt")
+                SettingsRow("Font size") {
+                    HStack(spacing: 8) {
+                        Text("\(model.config.preferences.terminalFontSize) pt")
+                            .foregroundStyle(Ink.primary)
+                            .monospacedDigit()
+                        ScopeStepper(value: model.config.preferences.terminalFontSize,
+                                     range: Preferences.terminalFontSizeRange) { terminalFontSize.wrappedValue = $0 }
+                    }
                 }
                 Toggle("Use Option as the Meta key", isOn: preference(\.terminalOptionAsMeta))
                     .toggleStyle(.scope)
@@ -70,9 +78,12 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Picker("Appearance", selection: preference(\.terminalAppearance)) {
-                    Text("Follow system").tag(TerminalAppearanceMode.system)
-                    Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
+                SettingsRow("Appearance") {
+                    ScopePicker("Appearance", selection: preference(\.terminalAppearance),
+                                title: model.config.preferences.terminalAppearance == .system ? "Follow system" : "Always dark") {
+                        Text("Follow system").tag(TerminalAppearanceMode.system)
+                        Text("Always dark").tag(TerminalAppearanceMode.alwaysDark)
+                    }
                 }
                 Toggle("Claude Code follows the terminal palette", isOn: preference(\.claudeUsesTerminalPalette))
                     .toggleStyle(.scope)
@@ -80,9 +91,12 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Picker("Cursor", selection: preference(\.terminalCursorStyle)) {
-                    ForEach(TerminalCursorStyle.allCases, id: \.self) { style in
-                        Text(style.title).tag(style)
+                SettingsRow("Cursor") {
+                    ScopePicker("Cursor", selection: preference(\.terminalCursorStyle),
+                                title: model.config.preferences.terminalCursorStyle.title) {
+                        ForEach(TerminalCursorStyle.allCases, id: \.self) { style in
+                            Text(style.title).tag(style)
+                        }
                     }
                 }
                 Text(model.config.preferences.terminalCursorStyle.blinks
@@ -114,9 +128,12 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Threads waiting for you") {
-                Picker("Show the count", selection: preference(\.attentionCounter)) {
-                    ForEach(AttentionCounterPlacement.allCases, id: \.self) { placement in
-                        Text(placement.title).tag(placement)
+                SettingsRow("Show the count") {
+                    ScopePicker("Show the count", selection: preference(\.attentionCounter),
+                                title: model.config.preferences.attentionCounter.title) {
+                        ForEach(AttentionCounterPlacement.allCases, id: \.self) { placement in
+                            Text(placement.title).tag(placement)
+                        }
                     }
                 }
                 Text("A waiting thread is always marked in place — a square dot, a bar down its row and the word “needs you”. This is only where the count of them goes; ⌥⌘↩ jumps to the next one either way.")
@@ -137,6 +154,11 @@ private struct GeneralSettingsView: View {
         return automatic
             ? "Automatic picks the first agent profile installed (\(name) here). A scope then keeps the driver you last opened in it — ⌘T never asks twice."
             : "A scope keeps the driver you last opened in it; this is what a scope starts on."
+    }
+
+    private var defaultDriverTitle: String {
+        let id = model.config.preferences.defaultDriverID
+        return id.isEmpty ? "Automatic" : (model.drivers.profile(id: id)?.name ?? id)
     }
 
     private func preference<Value>(_ keyPath: WritableKeyPath<Preferences, Value>) -> Binding<Value> {
@@ -163,13 +185,13 @@ private struct NotificationStatusRow: View {
         SettingsRow("Status") {
             HStack(spacing: 8) {
                 Text(statusText)
-                    .foregroundStyle(status == .denied ? AnyShapeStyle(Color("WarningText")) : AnyShapeStyle(.primary))
+                    .foregroundStyle(status == .denied ? Color("WarningText") : Ink.primary)
                 Button("Open System Settings…") {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
             }
         }
         .task { await refresh() }
@@ -200,22 +222,31 @@ private struct NotificationStatusRow: View {
 private struct EditorPicker: View {
     @Environment(AppModel.self) private var model
     @State private var customCommand = ""
+    @FocusState private var commandFocused: Bool
 
     private static let noneTag = "none"
     private static let customTag = "custom"
 
     var body: some View {
-        Picker("Editor", selection: selection) {
-            Text("None").tag(Self.noneTag)
-            ForEach(installedEditors, id: \.rawValue) { editor in
-                Text(displayName(editor)).tag(editor.rawValue)
+        SettingsRow("Editor") {
+            ScopePicker("Editor", selection: selection, title: selectionTitle) {
+                Text("None").tag(Self.noneTag)
+                ForEach(installedEditors, id: \.rawValue) { editor in
+                    Text(displayName(editor)).tag(editor.rawValue)
+                }
+                Text("Custom command").tag(Self.customTag)
             }
-            Text("Custom command").tag(Self.customTag)
         }
         if selection.wrappedValue == Self.customTag {
-            TextField("Command", text: $customCommand, prompt: Text("code -g {file}:{line}"))
-                .font(.system(size: 12, design: .monospaced))
-                .onSubmit(commitCustomCommand)
+            SettingsRow("Custom command") {
+                TextField("Command", text: $customCommand, prompt: Text("code -g {file}:{line}"))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .focused($commandFocused)
+                    .onSubmit(commitCustomCommand)
+                    .scopeFieldBox(focused: commandFocused, height: 22)
+                    .frame(width: 300)
+            }
             Text("Arguments separated by spaces. Placeholders: {path} (folder), {file}, {line}. The executable is resolved on your login-shell PATH.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
@@ -232,6 +263,14 @@ private struct EditorPicker: View {
     private var installedEditors: [KnownEditor] {
         KnownEditor.allCases.filter {
             NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
+        }
+    }
+
+    private var selectionTitle: String {
+        switch selection.wrappedValue {
+        case Self.noneTag: "None"
+        case Self.customTag: "Custom command"
+        case let tag: KnownEditor(rawValue: tag).map(displayName) ?? tag
         }
     }
 
@@ -290,10 +329,12 @@ private struct ShellSettingsView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .textSelection(.enabled)
                 }
-                Picker("Probe", selection: probeMode) {
-                    Text("Interactive login (-ilc)").tag(ShellProbeMode.interactiveLogin)
-                    Text("Login (-lc)").tag(ShellProbeMode.login)
-                    Text("None (path_helper only)").tag(ShellProbeMode.none)
+                SettingsRow("Probe") {
+                    ScopePicker("Probe", selection: probeMode, title: probeTitle(probeMode.wrappedValue)) {
+                        ForEach([ShellProbeMode.interactiveLogin, .login, .none], id: \.self) { mode in
+                            Text(probeTitle(mode)).tag(mode)
+                        }
+                    }
                 }
                 Text("Scope runs your shell once at launch to capture PATH and the variables agents need. Change the mode if your PATH is only set in an interactive rc file, or if the probe is slow.")
                     .font(.scopeCaption)
@@ -303,9 +344,10 @@ private struct ShellSettingsView: View {
                 SettingsRow("State") {
                     HStack(spacing: 6) {
                         if model.shellStatus == .probing {
-                            ProgressView().controlSize(.small)
+                            ScopeSpinner(size: 12)
                         }
                         Text(statusText)
+                            .foregroundStyle(Ink.primary)
                     }
                 }
                 if let warning = resolved?.warning {
@@ -318,7 +360,9 @@ private struct ShellSettingsView: View {
                 Button("Re-probe now") {
                     model.reprobeShell()
                 }
+                .buttonStyle(.scopeSecondary)
                 .disabled(model.shellStatus == .probing)
+                .padding(.top, 8)
             }
             SettingsSection("PATH") {
                 if let resolved {
@@ -352,6 +396,14 @@ private struct ShellSettingsView: View {
         }
     }
 
+    private func probeTitle(_ mode: ShellProbeMode) -> String {
+        switch mode {
+        case .interactiveLogin: "Interactive login (-ilc)"
+        case .login: "Login (-lc)"
+        case .none: "None (path_helper only)"
+        }
+    }
+
     private var probeMode: Binding<ShellProbeMode> {
         Binding(
             get: { model.config.preferences.shellProbe },
@@ -367,34 +419,44 @@ private struct DriversSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Table(model.drivers.profiles) {
-                TableColumn("Name") { profile in
-                    HStack(spacing: 6) {
-                        Image(systemName: profile.icon ?? "terminal")
-                            .foregroundStyle(Ink.secondary)
-                        Text(profile.name)
-                            .help("ID: \(profile.id)")
-                        if profile.builtin == true {
-                            Text("built-in")
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Fill.quiet, in: Capsule())
-                                .foregroundStyle(Ink.secondary)
+            // Our rows, not a `Table`: its header and its column separators are AppKit's, and three read-only
+            // columns have no use for sorting or resizing.
+            ScrollView {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
+                    GridRow {
+                        SectionLabel(text: "Name")
+                        SectionLabel(text: "Command")
+                        SectionLabel(text: "Resolved")
+                    }
+                    ForEach(model.drivers.profiles) { profile in
+                        Rectangle().fill(Surface.stroke).frame(height: 1)
+                            .gridCellColumns(3)
+                        GridRow {
+                            HStack(spacing: 6) {
+                                Image(systemName: profile.icon ?? "terminal")
+                                    .foregroundStyle(Ink.secondary)
+                                    .frame(width: 16)
+                                Text(profile.name)
+                                    .foregroundStyle(Ink.primary)
+                                    .lineLimit(1)
+                                    .help("ID: \(profile.id)")
+                                if profile.builtin == true {
+                                    Chip(text: "built-in")
+                                }
+                            }
+                            Text(([profile.command] + profile.args).joined(separator: " "))
+                                .font(.scopeValue)
+                                .foregroundStyle(Ink.primary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            resolvedText(for: profile)
                         }
+                        .font(.scopeBody)
+                        .frame(height: 28)
                     }
                 }
-                TableColumn("Command") { profile in
-                    Text(([profile.command] + profile.args).joined(separator: " "))
-                        .font(.system(size: 12, design: .monospaced))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                TableColumn("Resolved") { profile in
-                    resolvedText(for: profile)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .tableStyle(.inset(alternatesRowBackgrounds: false))
             .frame(minHeight: 180)
 
             if !model.drivers.problems.isEmpty {
@@ -404,7 +466,7 @@ private struct DriversSettingsView: View {
                     ForEach(Array(model.drivers.problems.enumerated()), id: \.offset) { _, problem in
                         Text("\(problem.file.lastPathComponent): \(problem.message)")
                             .font(.scopeValue)
-                            .foregroundStyle(Color(nsColor: .systemRed))
+                            .foregroundStyle(PullRequestStyle.failing)
                             .textSelection(.enabled)
                     }
                 }
@@ -414,9 +476,11 @@ private struct DriversSettingsView: View {
                 Button("Reveal in Finder") {
                     Reveal.inFinder(ScopeHome.driversURL(home: model.env.home))
                 }
+                .buttonStyle(.scopeSecondary)
                 Button("Reload") {
                     Task { await model.reloadDrivers() }
                 }
+                .buttonStyle(.scopeSecondary)
                 Spacer()
                 Text("Profiles are JSON files in \(ScopeHome.driversURL(home: model.env.home).path). Edit them with any editor; Reload picks up changes.")
                     .font(.scopeCaption)
@@ -424,7 +488,10 @@ private struct DriversSettingsView: View {
                     .lineLimit(2)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Surface.ground)
     }
 
     @ViewBuilder
@@ -435,13 +502,14 @@ private struct DriversSettingsView: View {
         case .ready(let environment), .fallback(let environment):
             if let path = ExecutableResolver.resolve(profile.command, path: environment.path, shell: environment.shell) {
                 Text(path)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.primary)
                     .lineLimit(1)
                     .truncationMode(.head)
                     .help(path)
             } else {
                 Text("not found")
-                    .foregroundStyle(Color(nsColor: .systemRed))
+                    .foregroundStyle(PullRequestStyle.failing)
             }
         }
     }
