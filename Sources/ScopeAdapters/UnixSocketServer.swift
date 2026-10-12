@@ -13,6 +13,8 @@ public enum UnixSocketError: Error, Sendable, Equatable {
     case unreachable(path: String, reason: String)
     /// The client was asked to send more than the server accepts.
     case payloadTooLarge(bytes: Int)
+    /// Another process is already listening on the path the server was asked to bind.
+    case addressInUse(path: String)
 }
 
 extension UnixSocketError: CustomStringConvertible, LocalizedError {
@@ -26,6 +28,8 @@ extension UnixSocketError: CustomStringConvertible, LocalizedError {
             "socket unreachable at \(path) (\(reason))"
         case .payloadTooLarge(let bytes):
             "payload of \(bytes) bytes exceeds the \(UnixSocketServer.maxMessageBytes)-byte limit"
+        case .addressInUse(let path):
+            "another process is already listening on \(path)"
         }
     }
 
@@ -58,7 +62,10 @@ public final class UnixSocketServer: Sendable {
     /// Creates the server (does not listen yet; call `start()`).
     ///
     /// A stale socket file left by a previous run is unlinked first, otherwise `bind` fails with
-    /// `EADDRINUSE`. Once listening, the socket file is chmod'ed to `0600` so only the current user can
+    /// `EADDRINUSE`. A socket somebody still answers on is left alone and the call throws `.addressInUse`:
+    /// unlinking it would hand this server every message meant for the other one, with nothing to tell
+    /// either of them — a second instance on the same home, or a Debug build sent to the production one.
+    /// Once listening, the socket file is chmod'ed to `0600` so only the current user can
     /// connect (connecting to a unix socket needs write permission on the file).
     /// - Parameters:
     ///   - path: socket file path, at most `SocketPath.maxLength` bytes.
@@ -69,6 +76,7 @@ public final class UnixSocketServer: Sendable {
                 onRequest: (@Sendable (Data, SocketResponder) -> Void)? = nil,
                 onFailure: (@Sendable (any Error) -> Void)? = nil) throws {
         guard SocketPath.fits(path) else { throw UnixSocketError.pathTooLong(path) }
+        guard !Self.isListening(at: path) else { throw UnixSocketError.addressInUse(path: path) }
         self.path = path
         unlink(path)
 
@@ -98,6 +106,34 @@ public final class UnixSocketServer: Sendable {
                 break
             }
         }
+    }
+
+    /// `true` when a process accepts connections on the socket file at `path`.
+    ///
+    /// A plain `connect`, closed at once: the listener sees an empty connection and drops it. A file nobody is
+    /// behind (`ECONNREFUSED`), no file (`ENOENT`) and a file that is not a socket all answer `false`; anything
+    /// else — connected, a full backlog, a socket this user may not open — means someone owns it.
+    public static func isListening(at path: String) -> Bool {
+        guard SocketPath.fits(path) else { return false }
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        // Non-blocking: a listener that stopped accepting must not hang the app's launch.
+        _ = fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) | O_NONBLOCK)
+
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let capacity = MemoryLayout.size(ofValue: address.sun_path)
+        withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            buffer.copyBytes(from: path.utf8.prefix(capacity - 1))
+        }
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        if result == 0 { return true }
+        return ![ECONNREFUSED, ENOENT, ENOTSOCK, ENOTDIR, EPROTOTYPE].contains(errno)
     }
 
     /// Starts listening. Failures are asynchronous and reach `onFailure`.
