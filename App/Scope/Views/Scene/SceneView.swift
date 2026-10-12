@@ -49,12 +49,8 @@ struct SceneView: View {
             // The state alone, centred. On macOS 26 the toolbar wraps a custom item in a 36 pt glass capsule,
             // which turned the 22 pt pill into a round blob taller than the title and out of line with the
             // trailing buttons; hiding the item's shared background leaves the pill its own quiet capsule.
-            if #available(macOS 26, *) {
-                ToolbarItem(placement: .principal) { statePill(session) }
-                    .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .principal) { statePill(session) }
-            }
+            ToolbarItem(placement: .principal) { statePill(session) }
+                .withoutSharedBackground()
         }
         ToolbarItemGroup(placement: .primaryAction) {
             if model.config.preferences.attentionCounter == .toolbar {
@@ -78,22 +74,42 @@ struct SceneView: View {
                             .foregroundStyle(Ink.tertiary)
                     }
                 }
+                .buttonStyle(.scopeGhost)
                 .disabled(model.config.preferences.editor == nil)
                 .help(model.config.preferences.editor == nil
                       ? "Choose an editor in Settings to enable this" : "Open in Editor (⌘E, ⌥-click copies the path)")
             }
             ProblemPopover()
         }
-        // Its own item, declared last: a separate pill anchored at the far right of the toolbar.
+        .withoutSharedBackground()
+        // Its own item, declared last, so it stays anchored at the far right of the toolbar.
         ToolbarItem(placement: .primaryAction) {
             Button {
                 model.toggleInspector()
             } label: {
                 Label("Inspector", systemImage: "sidebar.right")
+                    .labelStyle(.iconOnly)
             }
+            .buttonStyle(.icon)
             .disabled(model.scopes.isEmpty)
             .help("Toggle Inspector (⌥⌘I)")
             .accessibilityLabel("Toggle Inspector")
+        }
+        .withoutSharedBackground()
+    }
+}
+
+private extension ToolbarContent {
+    /// Drops the glass capsule macOS 26 draws behind a toolbar item. The capsule is a material: it samples
+    /// whatever scrolls under the toolbar, and nothing in this app is translucent. The item is left with no
+    /// background at all rather than an opaque one painted over the glass, so every control in it brings its
+    /// own button style.
+    @ToolbarContentBuilder
+    func withoutSharedBackground() -> some ToolbarContent {
+        if #available(macOS 26, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
         }
     }
 }
