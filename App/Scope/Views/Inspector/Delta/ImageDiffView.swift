@@ -74,6 +74,8 @@ struct ImageDiffView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 TabStrip(selection: $mode, items: Mode.allCases.map { ($0, $0.rawValue) })
+                    // The slider gives way first: a mode whose name is cut off cannot be told from the other.
+                    .fixedSize()
                 if mode == .onionSkin {
                     Text("Before").font(.system(size: 10.5)).foregroundStyle(Ink.secondary)
                     ScopeSlider(value: $opacity).frame(maxWidth: 200)
