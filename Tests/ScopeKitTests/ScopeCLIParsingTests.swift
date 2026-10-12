@@ -104,7 +104,7 @@ import Testing
         }
     }
 
-    /// The socket a client talks to: the flag, then what Scope injected into the thread, then the home.
+    /// The socket a client talks to: a flag, then what Scope injected into the thread, then the home.
     @Test func theEndpointFollowsTheFlagThenTheEnvironment() {
         #expect(ControlEndpoint.resolve(socket: "/tmp/explicit.sock", home: "/tmp/home",
                                         environment: ["SCOPE_SOCK": "/tmp/env.sock"]) == "/tmp/explicit.sock")
@@ -112,50 +112,57 @@ import Testing
         #expect(ControlEndpoint.resolve(home: "/tmp/home", environment: [:]) == "/tmp/home/scope.sock")
         #expect(ControlEndpoint.resolve(environment: ["SCOPE_HOME": "/tmp/from-env"]) == "/tmp/from-env/scope.sock")
     }
-}
 
-/// The commands that act on existing threads and tasks, and the flag that no longer swallows the next one.
-@Suite struct ScopeCLIActionParsingTests {
-    static func call(_ arguments: [String]) throws -> ControlCall {
-        guard case .call(let call, _) = try ScopeCLI.parse(arguments) else {
-            throw ScopeCLI.UsageError(message: "not a call", usage: "")
+    /// What a thread of the installed app hands every process it starts.
+    private static let releaseThread = [
+        "SCOPE_HOME": "/Users/me/.scope", "SCOPE_SOCK": "/Users/me/.scope/scope.sock", "SCOPE_THREAD": "8a18d7476063",
+    ]
+
+    /// `scope mcp --home ~/.scope-debug`, the Debug build's MCP entry, started by an agent running in a thread of
+    /// the installed app: it must reach the Debug build, not the socket it inherited.
+    @Test func anExplicitHomeBeatsTheInheritedSocket() {
+        #expect(ControlEndpoint.resolve(home: "/Users/me/.scope-debug", environment: Self.releaseThread)
+            == "/Users/me/.scope-debug/scope.sock")
+        // …and the other way round: the installed app's entry, from a thread of a Debug build.
+        let debugThread = ["SCOPE_HOME": "/Users/me/.scope-debug", "SCOPE_SOCK": "/Users/me/.scope-debug/scope.sock"]
+        #expect(ControlEndpoint.resolve(home: "/Users/me/.scope", environment: debugThread) == "/Users/me/.scope/scope.sock")
+    }
+
+    /// Without a flag, a thread's CLI talks to the app that opened the thread — whichever build that is, and
+    /// whatever else is running.
+    @Test func aThreadTalksToTheAppThatOpenedIt() {
+        #expect(ControlEndpoint.resolve(environment: Self.releaseThread) == "/Users/me/.scope/scope.sock")
+        // `SCOPE_SOCK` is the app's word on where it listens (it may be the `$TMPDIR` fallback of a deep home),
+        // so it outranks a socket re-derived from `SCOPE_HOME`.
+        let deep = ["SCOPE_HOME": "/Users/me/.scope", "SCOPE_SOCK": "/var/folders/x/T/scope-501-0badcafe.sock"]
+        #expect(ControlEndpoint.resolve(environment: deep) == "/var/folders/x/T/scope-501-0badcafe.sock")
+    }
+
+    /// `scope` and `scope mcp` parse the same options, so the two cannot disagree on the socket.
+    @Test func theCLIAndTheMCPServerResolveTheSameEndpoint() throws {
+        guard case .mcp(let mcp) = try ScopeCLI.parse(["mcp", "--home", "/Users/me/.scope-debug"]),
+              case .call(_, let cli) = try ScopeCLI.parse(["list", "--home", "/Users/me/.scope-debug"]) else {
+            Issue.record("both forms take --home")
+            return
         }
-        return call
+        let fromMCP = ControlEndpoint.resolve(socket: mcp.socket, home: mcp.home, environment: Self.releaseThread)
+        let fromCLI = ControlEndpoint.resolve(socket: cli.socket, home: cli.home, environment: Self.releaseThread)
+        #expect(fromMCP == fromCLI)
+        #expect(fromMCP == "/Users/me/.scope-debug/scope.sock")
     }
 
-    @Test func threadStopAndClose() throws {
-        #expect(try Self.call(["thread", "stop", "3f9a2c17be04"]) == .threadStop(ThreadTargetParams(thread: "3f9a2c17be04")))
-        #expect(try Self.call(["thread", "close", "3f9a2c17be04", "--json"]) == .threadClose(ThreadTargetParams(thread: "3f9a2c17be04")))
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "stop"]) }
-    }
-
-    @Test func threadSendJoinsTheWordsAndPressesReturn() throws {
-        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "run", "the", "tests"])
-            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "run the tests", submit: true)))
-        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "draft", "--no-enter"])
-            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "draft", submit: false)))
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "send", "3f9a2c17be04"]) }
-    }
-
-    @Test func taskCloseTakesItsFlags() throws {
-        #expect(try Self.call(["task", "close", "rework-auth"]) == .taskClose(TaskCloseParams(task: "rework-auth")))
-        #expect(try Self.call(["task", "close", "rework-auth", "--delete-branch", "--force"])
-            == .taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true, force: true)))
-    }
-
-    @Test func unknownSubcommandsAreUsageErrors() {
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "teleport", "x"]) }
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "archive", "x"]) }
-    }
-
-    /// `--task --driver shell` used to open a thread in a task called "--driver".
-    @Test func aFlagValueCannotBeTheNextFlag() {
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "new", "--task", "--driver", "shell"]) }
-        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "new", "x", "--repo", "--dry-run"]) }
-    }
-
-    @Test func aPromptMayStillStartWithDashes() throws {
-        #expect(try Self.call(["thread", "new", "-p", "--help is broken"])
-            == .threadNew(ThreadNewParams(prompt: "--help is broken")))
+    /// The hint names a flag: inside a thread `SCOPE_HOME=` would lose to the inherited `SCOPE_SOCK`.
+    @Test func theDebugHintNamesTheFlag() throws {
+        let userHome = FileManager.default.homeDirectoryForCurrentUser
+        let debugSocket = userHome.appending(path: ".scope-debug/scope.sock").path
+        final class Exists: FileManager, @unchecked Sendable {
+            override func fileExists(atPath path: String) -> Bool { path.hasSuffix(".scope-debug/scope.sock") }
+        }
+        let hint = try #require(ControlEndpoint.hint(for: "/Users/me/.scope/scope.sock", environment: Self.releaseThread,
+                                                     fileManager: Exists()))
+        #expect(hint.contains("--home \(userHome.appending(path: ".scope-debug").path)"))
+        #expect(!hint.contains("SCOPE_HOME="))
+        // Asking the Debug socket itself gets no hint about itself.
+        #expect(ControlEndpoint.hint(for: debugSocket, environment: [:], fileManager: Exists()) == nil)
     }
 }

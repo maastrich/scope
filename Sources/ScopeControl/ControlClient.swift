@@ -4,27 +4,33 @@ import ScopeCore
 
 /// Where a client looks for the running app.
 public enum ControlEndpoint {
-    /// `--sock`, then `SCOPE_SOCK` (Scope exports it into every thread), then the socket of `--home` /
-    /// `SCOPE_HOME` / `~/.scope`.
+    /// `--sock`, then the socket of `--home`, then `SCOPE_SOCK` (Scope exports it into every thread), then the
+    /// socket of `SCOPE_HOME` / `~/.scope`.
+    ///
+    /// A flag always beats the environment. `SCOPE_SOCK` used to win over `--home`, and the environment is not
+    /// a choice: an MCP server registered as `scope mcp --home ~/.scope-debug` and started by an agent inside a
+    /// thread of the installed app inherited that app's socket, so the Debug build's tools drove production.
     public static func resolve(socket: String? = nil, home: String? = nil,
                                environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
         if let socket, !socket.isEmpty { return socket }
-        if let fromEnvironment = environment["SCOPE_SOCK"], !fromEnvironment.isEmpty { return fromEnvironment }
-        let homeURL: URL = if let home, !home.isEmpty {
-            URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            ScopeHome.url(environment: environment)
+        if let home, !home.isEmpty {
+            return SocketPath.resolve(home: URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true))
         }
-        return SocketPath.resolve(home: homeURL)
+        if let fromEnvironment = environment["SCOPE_SOCK"], !fromEnvironment.isEmpty { return fromEnvironment }
+        return SocketPath.resolve(home: ScopeHome.url(environment: environment))
     }
 
     /// The line to add when nothing is listening. A Debug build keeps its own home and its own socket, and
     /// that is the mistake everyone makes first.
-    public static func hint(for path: String, environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+    ///
+    /// It names the flag, not `SCOPE_HOME`: inside a thread `SCOPE_SOCK` is set and outranks that variable, so
+    /// the advice would have sent the caller straight back to the socket that did not answer.
+    public static func hint(for path: String, environment: [String: String] = ProcessInfo.processInfo.environment,
+                            fileManager: FileManager = .default) -> String? {
         let debugHome = ScopeHome.url(environment: environment.filter { $0.key != "SCOPE_HOME" }, folderName: ".scope-debug")
         let debugSocket = SocketPath.resolve(home: debugHome)
-        guard debugSocket != path, FileManager.default.fileExists(atPath: debugSocket) else { return nil }
-        return "A Debug build is listening on \(debugSocket). Use SCOPE_HOME=\(debugHome.path) to talk to it."
+        guard debugSocket != path, fileManager.fileExists(atPath: debugSocket) else { return nil }
+        return "A Debug build is listening on \(debugSocket). Use --home \(debugHome.path) to talk to it."
     }
 }
 
