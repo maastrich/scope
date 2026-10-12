@@ -87,12 +87,14 @@ final class AppEnvironment {
     /// two apps sharing one config, one set of thread records and — worse — one hook socket, so a driver's
     /// events reach whichever of the two happens to be listening.
     static func live() -> AppEnvironment {
-        var problems: [Problem] = []
         #if DEBUG
-        let home = ScopeHome.appURL(debugBuild: true)
+        let resolution = AppHome.resolve(debugBuild: true)
         #else
-        let home = ScopeHome.appURL(debugBuild: false)
+        let resolution = AppHome.resolve(debugBuild: false)
         #endif
+        // Decided before anything is created or bound: a home refused here must not have been touched first.
+        let home = resolution.home
+        var problems = resolution.problems
         do {
             try ScopeHome.ensureLayout(at: home)
         } catch {
