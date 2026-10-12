@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeControl
 import ScopeCore
 
 /// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path; none under a task,
@@ -37,6 +38,10 @@ struct ThreadRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
+
+            if session.record.resolvedOrigin.openedByAgent {
+                OriginMarker()
+            }
 
             if showsLiveMarker {
                 Image(systemName: "chevron.left.2")
@@ -125,6 +130,16 @@ struct ThreadRow: View {
 
     private var helpText: String {
         "\(session.displayState.displayLabel)\(failureText.map { ": \($0)" } ?? "") — \(session.record.cwd)"
+            + (originText.map { "\n\($0)" } ?? "")
+    }
+
+    /// Who opened it, when that was an agent: the parent thread by its title, or the client's own name.
+    private var originText: String? {
+        let origin = session.record.resolvedOrigin
+        guard origin.openedByAgent else { return nil }
+        let parent = origin.parent.flatMap { ThreadID(rawValue: $0) }.flatMap { model.session($0) }
+        let opener = parent.map { "“\(model.displayTitle(for: $0))”" } ?? "an agent outside Scope"
+        return "Opened by \(opener)" + (origin.client.map { " (\($0))" } ?? "")
     }
 
     private var caption: String? {

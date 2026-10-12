@@ -64,6 +64,12 @@ enum Ink {
     static let onAccent = Color("OnAccent")
 }
 
+/// Who opened a thread. Only the agent has a colour: a thread you opened is the unmarked case.
+enum Origin {
+    /// Lavender in dark, a periwinkle in light — the one hue the state legend does not use.
+    static let agent = Color("OriginAgent")
+}
+
 /// Colours of the thread state legend: catalogue colours with light/dark variants, every one at least 3:1 on
 /// its ground (WCAG 1.4.11). `done` is pinned to blue rather than the accent so it keeps its meaning — the
 /// accent is now Electric, and a blue *done* beside a blue *selection* would say the same thing twice.
