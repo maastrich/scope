@@ -1,8 +1,33 @@
 import AppKit
 import Observation
+#if !DEBUG
 import Sparkle
+#endif
 import SwiftUI
 
+#if DEBUG
+/// The updater of a Debug build: there is none.
+///
+/// A Debug build is version `0.0.0`, so every published release looks newer. With the release feed in reach, a
+/// check replaced the developer's own build inside DerivedData with the installed app, and it died at the next
+/// launch while the bundle was half swapped. Turning the updater off at runtime left `SPUStandardUpdaterController`
+/// constructed and `checkForUpdates()` one palette command away, so Sparkle is not compiled into this
+/// configuration at all: no import, no controller, and `SUFeedURL` is empty in the Debug Info.plist
+/// (`SCOPE_UPDATE_FEED_URL` in project.yml).
+@MainActor
+@Observable
+final class UpdaterController {
+    /// Always `false`: "Check for Updates…" stays disabled.
+    let canCheckForUpdates = false
+
+    init(startingUpdater: Bool = true) {}
+
+    func start() {}
+
+    func checkForUpdates() {}
+}
+
+#else
 /// Owns Sparkle's standard updater for the lifetime of the app (scheduled background checks driven by the
 /// `SU*` keys of Info.plist, plus user-initiated checks from the menu) and mirrors
 /// `SPUUpdater.canCheckForUpdates` into an `@Observable` property so SwiftUI can enable/disable the menu item.
@@ -21,22 +46,11 @@ final class UpdaterController {
 
     /// - Parameter startingUpdater: pass `false` to call `start()` yourself later (for example after onboarding).
     init(startingUpdater: Bool = true) {
-        // A Debug build carries the release feed and `MARKETING_VERSION = 0.0.0`, so every published release
-        // looks newer: a scheduled check replaces the developer's own build inside DerivedData, and the app
-        // dies at the next launch while the bundle is half swapped. The updater never runs outside Release.
-        #if DEBUG
-        let shouldStart = false
-        #else
-        let shouldStart = startingUpdater
-        #endif
         controller = SPUStandardUpdaterController(
-            startingUpdater: shouldStart,
+            startingUpdater: startingUpdater,
             updaterDelegate: nil, // Sparkle holds its delegates weakly: keep any delegate alive yourself.
             userDriverDelegate: nil
         )
-        #if DEBUG
-        controller.updater.automaticallyChecksForUpdates = false
-        #endif
         observation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] _, change in
             let value = change.newValue ?? false
             // Sparkle mutates the property on the main thread, but the KVO closure is not statically
@@ -50,19 +64,14 @@ final class UpdaterController {
     /// The underlying updater (feed URL, last check date, `checkForUpdatesInBackground()`, ...).
     var updater: SPUUpdater { controller.updater }
 
-    /// Starts the updater when it was created with `startingUpdater: false`. No-op in Debug, where the
-    /// updater must never run (see `init`); `canCheckForUpdates` then stays false and the menu item disabled.
-    func start() {
-        #if DEBUG
-        return
-        #else
-        controller.startUpdater()
-        #endif
-    }
+    /// Starts the updater when it was created with `startingUpdater: false`.
+    func start() { controller.startUpdater() }
 
     /// User-initiated check with Sparkle's standard UI ("Check for Updates…").
     func checkForUpdates() { controller.updater.checkForUpdates() }
 }
+
+#endif
 
 /// Menu item for `CommandGroup(after: .appInfo)`. A dedicated view keeps the Observation tracking scope
 /// (and therefore the enabled/disabled refresh of the menu item) confined to this button.

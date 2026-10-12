@@ -134,7 +134,8 @@ targets:
             NSSendFileTypes: [public.folder]
         # --- Sparkle -------------------------------------------------------------------------------
         # Feed = asset of the LATEST non-draft, non-prerelease GitHub release (302 -> per-tag asset URL).
-        SUFeedURL: https://github.com/maastrich/scope/releases/latest/download/appcast.xml
+        # Empty in a Debug build, which must never find a feed (see UpdaterController).
+        SUFeedURL: $(SCOPE_UPDATE_FEED_URL)
         # Public EdDSA key, output of `generate_keys` (README > Releasing > One-time setup). Must stay a real
         # key: an invalid/empty value makes Sparkle show "Unable to Check For Updates" at every launch
         # (scripts/package.sh refuses it), and a key can never be added later for already-installed copies.
@@ -167,6 +168,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SCOPE_DISPLAY_NAME: Scope
         SCOPE_URL_SCHEME: scope
+        SCOPE_UPDATE_FEED_URL: https://github.com/maastrich/scope/releases/latest/download/appcast.xml
         MARKETING_VERSION: "0.0.0"   # dev builds; releases: tag without "v" (scripts/package.sh)
         CURRENT_PROJECT_VERSION: "0" # dev builds; releases: git rev-list --count HEAD (scripts/package.sh)
         ENABLE_HARDENED_RUNTIME: YES
@@ -182,6 +184,8 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: dev.maastrich.scope.debug
           SCOPE_DISPLAY_NAME: Scope Debug
           SCOPE_URL_SCHEME: scope-debug
+          # No feed: a Debug build is 0.0.0, so any release would look like an update and overwrite it.
+          SCOPE_UPDATE_FEED_URL: ""
           # The bundle on disk is renamed too, not just the display name: Spotlight indexes the file, so two
           # Scope.app would both answer to "Scope" and you could not tell which one you were opening.
           PRODUCT_NAME: Scope Debug
