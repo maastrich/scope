@@ -34,14 +34,14 @@ struct AutomationSettingsView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Button(isInstalled ? "Reinstall" : "Install") { install() }
-                            .controlSize(.small)
+                            .buttonStyle(.scopeSecondary)
                             .disabled(toolPath == nil)
                     }
                 }
                 if let installFailure {
                     Text(installFailure)
                         .font(.scopeCaption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(PullRequestStyle.failing)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let installMessage {
                     Text(installMessage)
@@ -76,7 +76,7 @@ struct AutomationSettingsView: View {
                                 .foregroundStyle(Ink.secondary)
                             if let title = mcpActionTitle(mcpStates[client]) {
                                 Button(title) { toggleMCP(client) }
-                                    .controlSize(.small)
+                                    .buttonStyle(.scopeSecondary)
                                     .disabled(mcpBusy || toolPath == nil)
                             }
                         }
@@ -85,7 +85,7 @@ struct AutomationSettingsView: View {
                 if let mcpFailure {
                     Text(mcpFailure)
                         .font(.scopeCaption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(PullRequestStyle.failing)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -111,7 +111,7 @@ struct AutomationSettingsView: View {
                                 .truncationMode(.middle)
                             if let title = skillActionTitle(skillStates[client]) {
                                 Button(title) { toggleSkill(client) }
-                                    .controlSize(.small)
+                                    .buttonStyle(.scopeSecondary)
                             }
                         }
                     }
@@ -119,15 +119,16 @@ struct AutomationSettingsView: View {
                 if let skillFailure {
                     Text(skillFailure)
                         .font(.scopeCaption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(PullRequestStyle.failing)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Button("Reveal Skill Text") {
                     Reveal.inFinder(skillInstaller.skillFile(.claudeCode).deletingLastPathComponent())
                 }
-                .controlSize(.small)
+                .buttonStyle(.scopeSecondary)
                 .disabled(skillStates[.claudeCode] != .installed && skillStates[.claudeCode] != .outdated)
+                .padding(.top, 8)
             }
             .task { refreshSkills() }
 
@@ -137,27 +138,41 @@ struct AutomationSettingsView: View {
                 Text("Requests from a thread Scope is running. Your own terminal is always allowed.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
-                Stepper(value: automation(\.maxDepth), in: 0...5) {
-                    SettingsRow("Depth ceiling", value: depthCaption)
+                SettingsRow("Depth ceiling") {
+                    HStack(spacing: 8) {
+                        Text(depthCaption)
+                            .foregroundStyle(Ink.primary)
+                        ScopeStepper(value: model.config.preferences.automationSettings.maxDepth,
+                                     range: 0...5) { automation(\.maxDepth).wrappedValue = $0 }
+                    }
                 }
                 Text("A thread you opened is at depth 0. The ceiling is how far a chain of agents opening "
                      + "agents may go.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Picker("Talking to threads", selection: automation(\.threadReach)) {
-                    ForEach(AutomationSettings.ThreadReach.allCases, id: \.self) { Text($0.title).tag($0) }
+                SettingsRow("Talking to threads") {
+                    ScopePicker("Talking to threads", selection: automation(\.threadReach),
+                                title: model.config.preferences.automationSettings.threadReach.title) {
+                        ForEach(AutomationSettings.ThreadReach.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
                 Text("Which threads an agent may read, type into, stop or close — in any task or scope, or only "
                      + "the ones it opened. A message from an agent always says which thread sent it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Picker("Opening a thread", selection: automation(\.threads)) {
-                    ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                SettingsRow("Opening a thread") {
+                    ScopePicker("Opening a thread", selection: automation(\.threads),
+                                title: model.config.preferences.automationSettings.threads.title) {
+                        ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
-                Picker("Creating a task", selection: automation(\.tasks)) {
-                    ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                SettingsRow("Creating a task") {
+                    ScopePicker("Creating a task", selection: automation(\.tasks),
+                                title: model.config.preferences.automationSettings.tasks.title) {
+                        ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
                 Text("A task writes a branch and one worktree per repository, which is why it asks by default.")
                     .font(.scopeCaption)

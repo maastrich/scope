@@ -141,7 +141,21 @@ extension View {
     func scopeFieldBox(focused: Bool, height: CGFloat = 24) -> some View {
         padding(.horizontal, 7)
             .frame(height: height)
-            .background(Surface.field, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .scopeFieldGround(focused: focused)
+    }
+
+    /// The same box around text that grows: a `TextEditor`, a `TextField(axis: .vertical)`. A fixed height
+    /// would clip the second line, so this one pads and lets the content decide.
+    ///
+    /// `inset` is 7 for a text field and 2 for a `TextEditor`, whose text container already insets by 5.
+    func scopeTextBox(focused: Bool, inset: CGFloat = 7) -> some View {
+        padding(.horizontal, inset)
+            .padding(.vertical, 5)
+            .scopeFieldGround(focused: focused)
+    }
+
+    private func scopeFieldGround(focused: Bool) -> some View {
+        background(Surface.field, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                     .strokeBorder(focused ? Color.accentColor : Surface.stroke, lineWidth: focused ? 2 : 1)
@@ -193,38 +207,200 @@ extension ToggleStyle where Self == ScopeToggleStyle {
     static var scope: ScopeToggleStyle { ScopeToggleStyle() }
 }
 
-/// The trailing half of a settings row that opens a menu: the current value and a chevron, on a quiet fill.
+/// The closed state of anything that opens a menu: the current value or the action's name, and a chevron.
 ///
 /// The *popup* is an `NSMenu` and stays the system's — it is a window the OS draws, and it is where macOS
 /// users expect the system menu. What was native and did not need to be is the closed state: AppKit's pop-up
 /// button draws a bezel and its own double chevron, which is the single most recognisable System Settings
 /// control after the grouped box.
+///
+/// `.primary` exists for the one case where the menu *is* the surface's primary action (Send Review, when
+/// there are several threads to send it to); everything else is `.secondary`.
 struct ScopeMenuLabel: View {
+    enum Kind { case primary, secondary }
+
     var text: String
     var systemImage: String?
+    var kind: Kind = .secondary
+    var hovering = false
 
     var body: some View {
         HStack(spacing: 6) {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Ink.secondary)
+                    .font(.scopeCaption)
+                    .foregroundStyle(kind == .primary ? Ink.onAccent : Ink.secondary)
             }
             Text(text)
                 .font(.scopeBody)
-                .foregroundStyle(Ink.primary)
+                .foregroundStyle(kind == .primary ? Ink.onAccent : Ink.primary)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(Ink.tertiary)
+                .font(.scopeMicro)
+                .foregroundStyle(kind == .primary ? Ink.onAccent : Ink.tertiary)
         }
         .padding(.horizontal, 9)
         .frame(height: 22)
-        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .background(fill, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                .strokeBorder(Surface.stroke, lineWidth: 1)
+            if kind == .secondary {
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .strokeBorder(Surface.stroke, lineWidth: 1)
+            }
         }
+        .contentShape(Rectangle())
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .primary: Color.accentColor
+        case .secondary: hovering ? Fill.hover : Fill.quiet
+        }
+    }
+}
+
+/// A menu whose trigger is ours. `Menu` draws its label through AppKit unless it is a plain button, and a
+/// plain button has no hover — so the hover is tracked out here and handed to the label.
+///
+/// Every `Menu` that is a visible control goes through this; a `.contextMenu` and a submenu are not controls
+/// and stay as they are.
+struct ScopeMenu<Content: View, Label: View>: View {
+    @ViewBuilder var content: Content
+    /// Receives whether the pointer is over the trigger.
+    var label: (Bool) -> Label
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    init(@ViewBuilder content: () -> Content, @ViewBuilder label: @escaping (Bool) -> Label) {
+        self.content = content()
+        self.label = label
+    }
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            label(hovering && isEnabled)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+    }
+}
+
+extension ScopeMenu where Label == ScopeMenuLabel {
+    /// The ordinary case: a name, an optional glyph, a chevron.
+    init(_ text: String, systemImage: String? = nil, kind: ScopeMenuLabel.Kind = .secondary,
+         @ViewBuilder content: () -> Content) {
+        self.init(content: content) { hovering in
+            ScopeMenuLabel(text: text, systemImage: systemImage, kind: kind, hovering: hovering)
+        }
+    }
+}
+
+/// A menu behind a lone glyph — the `…` of a row, a send arrow. The wash is `IconButtonStyle`'s, so the
+/// glyph that opens a menu and the glyph that acts answer the pointer the same way.
+struct ScopeIconMenu<Content: View>: View {
+    var systemImage: String
+    var title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScopeMenu {
+            content
+        } label: { hovering in
+            Image(systemName: systemImage)
+                .font(.scopeCaption.weight(.semibold))
+                .foregroundStyle(Ink.secondary)
+                .frame(width: 16, height: 16)
+                .padding(3)
+                .background(hovering ? Fill.hover : .clear,
+                            in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .help(title)
+        .accessibilityLabel(title)
+    }
+}
+
+/// A choice among a few values, in place of `Picker`'s pop-up button. The inline `Picker` inside the menu
+/// keeps what the system does well — the checkmark, type-to-select, VoiceOver's "selected" — and the closed
+/// state is `ScopeMenuLabel`.
+///
+/// `title` is the current value's name: a custom label cannot ask the picker which row is selected.
+struct ScopePicker<Value: Hashable, Content: View>: View {
+    /// What is being chosen, for VoiceOver; the visible label belongs to the row.
+    var label: String
+    @Binding var selection: Value
+    var title: String
+    var systemImage: String?
+    @ViewBuilder var content: Content
+
+    init(_ label: String, selection: Binding<Value>, title: String, systemImage: String? = nil,
+         @ViewBuilder content: () -> Content) {
+        self.label = label
+        _selection = selection
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
+
+    var body: some View {
+        ScopeMenu(title, systemImage: systemImage) {
+            Picker(label, selection: $selection) { content }
+                .pickerStyle(.inline)
+                .labelsHidden()
+        }
+        .accessibilityLabel(label)
+        .accessibilityValue(title)
+    }
+}
+
+/// An action that reads as text: "Reveal", "Edit", a file path that jumps to its diff. In place of
+/// `.buttonStyle(.link)`, whose system blue spent the accent on something that is not the primary action.
+/// Secondary ink at rest, primary ink and a wash under the pointer; it keeps the font of the view it is in.
+struct ScopeLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverLabel(configuration: configuration)
+    }
+
+    private struct HoverLabel: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var isEnabled
+        @State private var hovering = false
+
+        var body: some View {
+            ScopeLinkLabel(hovering: hovering && isEnabled, pressed: configuration.isPressed) {
+                configuration.label
+            }
+            .onHover { hovering = $0 }
+            .onChange(of: isEnabled) { _, enabled in if !enabled { hovering = false } }
+        }
+    }
+}
+
+extension ButtonStyle where Self == ScopeLinkButtonStyle {
+    static var scopeLink: ScopeLinkButtonStyle { ScopeLinkButtonStyle() }
+}
+
+/// What `ScopeLinkButtonStyle` draws, on its own so a `ScopeMenu` can wear it too.
+struct ScopeLinkLabel<Content: View>: View {
+    var hovering: Bool
+    var pressed = false
+    @ViewBuilder var content: Content
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        content
+            .foregroundStyle(hovering ? Ink.primary : Ink.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(pressed ? Fill.pressed : (hovering ? Fill.hover : .clear),
+                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.4)
+            .contentShape(Rectangle())
     }
 }
 
@@ -271,5 +447,69 @@ struct ScopeSpinner: View {
                        value: spinning)
             .onAppear { spinning = true }
             .accessibilityLabel("Working")
+    }
+}
+
+/// A spinner with the sentence that says what it is waiting for, stacked — what `ProgressView("Loading…")`
+/// drew, for a pane that has nothing else to show yet.
+struct ScopeLoading: View {
+    var text: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ScopeSpinner(size: 14)
+            Text(text)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A determinate bar: a 4 pt track with the done part in secondary ink. Not the accent — progress is a
+/// reading, not an action.
+struct ScopeProgressBar: View {
+    /// 0…1.
+    var fraction: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(Ink.secondary)
+                .frame(width: proxy.size.width * min(1, max(0, fraction)))
+        }
+        .frame(height: 4)
+        .background(Fill.pressed, in: Capsule())
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int((min(1, max(0, fraction)) * 100).rounded())) percent")
+    }
+}
+
+/// A 0…1 slider: a 4 pt track and a round thumb, in place of AppKit's. VoiceOver and the arrow keys get the
+/// system slider through `accessibilityRepresentation`, so nothing is lost by drawing it.
+struct ScopeSlider: View {
+    @Binding var value: Double
+    private let thumb: CGFloat = 12
+
+    var body: some View {
+        GeometryReader { proxy in
+            let span = max(1, proxy.size.width - thumb)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Fill.pressed).frame(height: 4)
+                Capsule().fill(Ink.secondary).frame(width: thumb / 2 + span * value, height: 4)
+                Circle()
+                    .fill(Ink.primary)
+                    .frame(width: thumb, height: thumb)
+                    .offset(x: span * value)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                value = min(1, max(0, (drag.location.x - thumb / 2) / span))
+            })
+        }
+        .frame(height: 16)
+        .accessibilityRepresentation { Slider(value: $value, in: 0...1) }
     }
 }
