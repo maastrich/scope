@@ -148,3 +148,128 @@ extension View {
             }
     }
 }
+
+/// A switch, drawn by us.
+///
+/// `Toggle` renders as a *checkbox* on macOS unless it sits inside a `Form`, which is how the settings window
+/// used to get switches — the grouped form was doing it. Taking the form away took the switches with it, so
+/// this puts them back and stops them depending on their container.
+struct ScopeToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 9) {
+                configuration.label
+                    .font(.scopeBody)
+                    .foregroundStyle(Ink.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                track(configuration.isOn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(configuration.isOn ? [.isSelected] : [])
+    }
+
+    private func track(_ on: Bool) -> some View {
+        Capsule()
+            .fill(on ? Color.accentColor : Fill.quiet)
+            .overlay { Capsule().strokeBorder(on ? .clear : Surface.stroke, lineWidth: 1) }
+            .frame(width: 30, height: 18)
+            .overlay(alignment: on ? .trailing : .leading) {
+                Circle()
+                    .fill(on ? Ink.onAccent : Ink.secondary)
+                    .frame(width: 13, height: 13)
+                    .padding(.horizontal, 2.5)
+            }
+            .animation(.easeOut(duration: 0.12), value: on)
+    }
+}
+
+extension ToggleStyle where Self == ScopeToggleStyle {
+    static var scope: ScopeToggleStyle { ScopeToggleStyle() }
+}
+
+/// The trailing half of a settings row that opens a menu: the current value and a chevron, on a quiet fill.
+///
+/// The *popup* is an `NSMenu` and stays the system's — it is a window the OS draws, and it is where macOS
+/// users expect the system menu. What was native and did not need to be is the closed state: AppKit's pop-up
+/// button draws a bezel and its own double chevron, which is the single most recognisable System Settings
+/// control after the grouped box.
+struct ScopeMenuLabel: View {
+    var text: String
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Ink.secondary)
+            }
+            Text(text)
+                .font(.scopeBody)
+                .foregroundStyle(Ink.primary)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(Ink.tertiary)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 22)
+        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                .strokeBorder(Surface.stroke, lineWidth: 1)
+        }
+    }
+}
+
+/// A stepper drawn as two buttons, in place of AppKit's little stacked arrows.
+struct ScopeStepper: View {
+    var value: Int
+    var range: ClosedRange<Int>
+    var onChange: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            button("minus", enabled: value > range.lowerBound) { onChange(value - 1) }
+            button("plus", enabled: value < range.upperBound) { onChange(value + 1) }
+        }
+    }
+
+    private func button(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.scopeSecondary)
+        .disabled(!enabled)
+        .accessibilityLabel(symbol == "plus" ? "Increase" : "Decrease")
+    }
+}
+
+/// Our spinner: AppKit's `ProgressView` is sized by `.controlSize`, which a custom one cannot answer, so this
+/// takes the size as an argument and every call site states it.
+struct ScopeSpinner: View {
+    var size: CGFloat = 12
+    @State private var spinning = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: 0.7)
+            .stroke(Ink.tertiary, style: StrokeStyle(lineWidth: max(1, size / 8), lineCap: .round))
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .animation(reduceMotion ? nil : .linear(duration: 0.9).repeatForever(autoreverses: false),
+                       value: spinning)
+            .onAppear { spinning = true }
+            .accessibilityLabel("Working")
+    }
+}

@@ -27,6 +27,30 @@ public enum ScopeHome {
             .appending(path: folderName, directoryHint: .isDirectory)
     }
 
+    /// The home an *app build* should use.
+    ///
+    /// A Debug build keeps its own `~/.scope-debug` — unless `SCOPE_HOME` was set deliberately. The
+    /// distinction matters because Scope injects `SCOPE_HOME` into every thread it opens, so a Debug build
+    /// launched from inside a thread (`make run` from an agent, Xcode run from a Scope terminal) inherits the
+    /// *production* home and quietly adopts it: same config, same thread records, same sandboxes and — worst
+    /// of all — the same hook socket as the copy in /Applications, which is precisely what `.scope-debug`
+    /// exists to prevent.
+    ///
+    /// `SCOPE_THREAD` is the tell. Scope sets it only when it launches a thread, so its presence means
+    /// `SCOPE_HOME` arrived by inheritance rather than from someone who meant it. A human pointing a Debug
+    /// build at a specific home from a plain terminal has no `SCOPE_THREAD`, and is still obeyed.
+    ///
+    /// Release builds are unaffected: they honour `SCOPE_HOME` however it arrived.
+    public static func appURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        debugBuild: Bool
+    ) -> URL {
+        guard debugBuild else { return url(environment: environment) }
+        let inherited = !(environment["SCOPE_THREAD"] ?? "").isEmpty
+        let effective = inherited ? environment.filter { $0.key != "SCOPE_HOME" } : environment
+        return url(environment: effective, folderName: ".scope-debug")
+    }
+
     /// Creates `drivers/`, `graph/`, `sandboxes/` and `threads/` under `home` (idempotent) and returns `home`.
     /// `sandboxes/` gets a `.metadata_never_index` marker.
     @discardableResult
