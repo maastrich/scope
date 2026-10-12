@@ -48,16 +48,27 @@ public enum CLIInstaller {
     }
 
     /// The destination to use: `/usr/local/bin` when it exists and is writable, else `<home>/bin`.
-    public static func preferredDestination(home: URL, fileManager: FileManager = .default) -> Destination {
+    ///
+    /// A Debug build only ever gets `<home>/bin`. `/usr/local/bin/scope` is one name for the whole machine, and
+    /// it belongs to the installed copy: a build that lives in DerivedData and disappears on the next clean
+    /// has no business being what `scope` means in the user's terminal.
+    public static func preferredDestination(home: URL, debugBuild: Bool = false,
+                                            fileManager: FileManager = .default) -> Destination {
+        if debugBuild { return .scopeHome(home) }
         let usrLocal = Destination.usrLocalBin.directory
         if fileManager.isWritableFile(atPath: usrLocal) { return .usrLocalBin }
         return .scopeHome(home)
     }
 
     /// Creates (or repoints) the symlink. Returns where it landed.
+    ///
+    /// The installed app repoints a link to another copy of itself: it moved, or a newer one replaced it. A
+    /// Debug build does not — the only other copy that link can name is the installed one, and taking it over
+    /// would silently send the user's own terminal to a development build. It replaces a dead link, and
+    /// otherwise throws, naming the copy it left alone.
     /// - Throws: `ControlError` with a message meant for a dialog.
     @discardableResult
-    public static func install(toolPath: String, to destination: Destination,
+    public static func install(toolPath: String, to destination: Destination, debugBuild: Bool = false,
                                fileManager: FileManager = .default) throws -> String {
         guard fileManager.isExecutableFile(atPath: toolPath) else {
             throw ControlError.failed("the `scope` tool is missing from the app bundle", detail: toolPath)
@@ -72,6 +83,13 @@ public enum CLIInstaller {
         // Replace our own link or a dead one; never a real file we did not create.
         if let existing = try? fileManager.destinationOfSymbolicLink(atPath: link) {
             guard existing != toolPath else { return link }
+            if debugBuild, isLive(existing, linkedFrom: directory, fileManager: fileManager) {
+                throw ControlError.failed(
+                    "\(link) belongs to another Scope",
+                    detail: "It points at \(existing). A Debug build never takes over the installed copy's `scope`; "
+                        + "run this build's own by its path: \(toolPath)"
+                )
+            }
             try? fileManager.removeItem(atPath: link)
         } else if fileManager.fileExists(atPath: link) {
             throw ControlError.failed("\(link) already exists and is not a link Scope made",
@@ -83,6 +101,12 @@ public enum CLIInstaller {
             throw ControlError.failed("could not link \(link)", detail: String(describing: error))
         }
         return link
+    }
+
+    /// `true` when a link's `target` (possibly relative to the link's `directory`) still leads somewhere.
+    private static func isLive(_ target: String, linkedFrom directory: String, fileManager: FileManager) -> Bool {
+        let path = target.hasPrefix("/") ? target : directory + "/" + target
+        return fileManager.fileExists(atPath: path)
     }
 
     /// Removes the link, if it is ours.

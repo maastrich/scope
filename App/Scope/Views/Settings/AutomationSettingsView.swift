@@ -211,7 +211,7 @@ struct AutomationSettingsView: View {
     private var toolPath: String? { ScopeCLILocator.embedded(in: Bundle.main.bundleURL) }
 
     private var destination: CLIInstaller.Destination {
-        CLIInstaller.preferredDestination(home: model.env.home)
+        CLIInstaller.preferredDestination(home: model.env.home, debugBuild: BuildFlavor.isDebug)
     }
 
     private var isInstalled: Bool {
@@ -233,11 +233,7 @@ struct AutomationSettingsView: View {
 
     private var registration: MCPRegistration? {
         guard let toolPath else { return nil }
-        #if DEBUG
-        let debug = true
-        #else
-        let debug = false
-        #endif
+        let debug = BuildFlavor.isDebug
         return MCPRegistration(userHome: FileManager.default.homeDirectoryForCurrentUser, tool: toolPath,
                                scopeHome: model.env.home.path, debug: debug)
     }
@@ -298,11 +294,7 @@ struct AutomationSettingsView: View {
     // MARK: Skills
 
     private var skillInstaller: SkillInstaller {
-        #if DEBUG
-        let debug = true
-        #else
-        let debug = false
-        #endif
+        let debug = BuildFlavor.isDebug
         return SkillInstaller(userHome: FileManager.default.homeDirectoryForCurrentUser, debug: debug)
     }
 
@@ -351,7 +343,7 @@ struct AutomationSettingsView: View {
         guard let toolPath else { return }
         installFailure = nil
         do {
-            let link = try CLIInstaller.install(toolPath: toolPath, to: destination)
+            let link = try CLIInstaller.install(toolPath: toolPath, to: destination, debugBuild: BuildFlavor.isDebug)
             installMessage = [
                 "Linked \(link).",
                 CLIInstaller.pathAdvice(for: destination),

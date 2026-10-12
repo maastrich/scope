@@ -88,6 +88,56 @@ import Testing
         #expect(CLIInstaller.pathAdvice(for: .scopeHome(home))?.contains(home.appending(path: "bin").path) == true)
         #expect(CLIInstaller.pathAdvice(for: .usrLocalBin) == nil)
     }
+
+    /// Both builds have installed `scope` in the same place: the installed copy keeps the name.
+    @Test func aDebugBuildNeverTakesOverTheInstalledLink() throws {
+        let home = try Self.temporaryHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let release = try Self.fakeTool(in: home)
+        let destination = CLIInstaller.Destination.scopeHome(home)
+        try CLIInstaller.install(toolPath: release, to: destination)
+
+        let derivedData = home.appending(path: "DerivedData", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: derivedData, withIntermediateDirectories: true)
+        let debug = try Self.fakeTool(in: derivedData)
+
+        #expect(CLIInstaller.state(of: destination, toolPath: debug) == .foreign(at: destination.linkPath, target: release))
+        do {
+            try CLIInstaller.install(toolPath: debug, to: destination, debugBuild: true)
+            Issue.record("a Debug build must not repoint a live link")
+        } catch let error as ControlError {
+            // Loud, and it names what it left alone.
+            #expect(error.detail?.contains(release) == true)
+        }
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: destination.linkPath) == release)
+        #expect(CLIInstaller.state(of: destination, toolPath: release) == .installed(at: destination.linkPath))
+    }
+
+    /// A link left by a build that no longer exists is nobody's: a Debug build may have it.
+    @Test func aDebugBuildReplacesADeadLink() throws {
+        let home = try Self.temporaryHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let destination = CLIInstaller.Destination.scopeHome(home)
+        try FileManager.default.createDirectory(atPath: destination.directory, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: destination.linkPath, withDestinationPath: home.path + "/gone/scope")
+
+        let debug = try Self.fakeTool(in: home)
+        try CLIInstaller.install(toolPath: debug, to: destination, debugBuild: true)
+        #expect(CLIInstaller.state(of: destination, toolPath: debug) == .installed(at: destination.linkPath))
+        // Its own link stays its own.
+        #expect(try CLIInstaller.install(toolPath: debug, to: destination, debugBuild: true) == destination.linkPath)
+    }
+
+    /// `/usr/local/bin/scope` is one name for the whole machine: only the installed copy may claim it.
+    @Test func aDebugBuildOnlyInstallsUnderItsOwnHome() {
+        final class Writable: FileManager, @unchecked Sendable {
+            override func isWritableFile(atPath path: String) -> Bool { true }
+        }
+        let debugHome = URL(fileURLWithPath: "/Users/me/.scope-debug", isDirectory: true)
+        #expect(CLIInstaller.preferredDestination(home: debugHome, debugBuild: true, fileManager: Writable()) == .scopeHome(debugHome))
+        #expect(CLIInstaller.preferredDestination(home: debugHome, fileManager: Writable()) == .usrLocalBin)
+        #expect(CLIInstaller.Destination.scopeHome(debugHome).linkPath == "/Users/me/.scope-debug/bin/scope")
+    }
 }
 
 /// `scope --version` is the version of the app it ships inside.
