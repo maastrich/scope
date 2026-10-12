@@ -17,43 +17,40 @@ struct CommitSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section {
-                    LabeledContent("Branch") {
-                        Text(repo.branch)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    TextField("Message", text: $message, prompt: Text("Describe the change"), axis: .vertical)
-                        .lineLimit(3...8)
-                        .font(.system(size: 12, design: .monospaced))
-                        .focused($messageFocused)
-                } header: {
-                    Text("Commit in \(repo.isScopeRoot ? task.record.scopeName : repo.name)")
-                } footer: {
-                    Text("git add -A && git commit in the sandbox")
+        SheetChrome(title: "Commit in \(repo.isScopeRoot ? task.record.scopeName : repo.name)") {
+            SheetGroup {
+                SheetRow("Branch") {
+                    Text(repo.branch)
                         .font(.scopeValue)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Commit") {
-                    onCommit(trimmedMessage)
-                    dismiss()
+                SheetRow("Message") {
+                    TextField("Message", text: $message, prompt: Text("Describe the change"), axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(3...8)
+                        .font(.scopeValue)
+                        .focused($messageFocused)
+                        .scopeTextBox(focused: messageFocused)
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.scopePrimary)
-                .disabled(trimmedMessage.isEmpty)
+                Text("git add -A && git commit in the sandbox")
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.tertiary)
             }
-            .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
+        } notice: {
+        } actions: {
+            Spacer()
+            Button("Cancel") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(.scopeSecondary)
+            Button("Commit") {
+                onCommit(trimmedMessage)
+                dismiss()
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.scopePrimary)
+            .disabled(trimmedMessage.isEmpty)
         }
         .frame(width: 460)
         .onAppear { messageFocused = true }
