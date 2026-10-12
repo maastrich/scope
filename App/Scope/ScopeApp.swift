@@ -16,7 +16,7 @@ struct ScopeApp: App {
     }
 
     var body: some Scene {
-        Window("Scope", id: "main") {
+        Window(BuildFlavor.displayName, id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: 1040, minHeight: 600)

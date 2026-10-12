@@ -47,7 +47,7 @@ final class AppControlService: ControlService {
                  progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
         switch call {
         case .ping:
-            return .success(.ping(PingResult(app: "Scope", version: model.env.appVersion,
+            return .success(.ping(PingResult(app: BuildFlavor.displayName, version: model.env.appVersion,
                                              home: model.env.home.path, automation: automation)))
         case .list(let params):
             return list(params)
