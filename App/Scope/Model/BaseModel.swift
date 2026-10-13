@@ -279,7 +279,7 @@ extension AppModel {
             repos: scope.repos.map(\.id),
             pin: pin,
             selectedRepo: selectedRepo,
-            threadDirectory: currentThread.map { $0.reportedDirectory ?? $0.record.cwd },
+            threadDirectory: currentThread.map { $0.agentDirectory ?? $0.reportedDirectory ?? $0.record.cwd },
             taskRepos: currentTask?.activeRepos ?? [],
             deltaFocus: delta.taskID == currentTask?.id ? delta.selectedFile?.repo : nil,
             recent: base.recent[scope.id]

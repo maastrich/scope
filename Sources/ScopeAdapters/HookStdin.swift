@@ -5,7 +5,8 @@ import Foundation
 /// Read: the driver's session id, lifted into `payload["session_id"]` so the app never parses `raw`; for
 /// Claude Code's `Notification` hook the `notification_type`, which decides between `permission.requested` and
 /// `input.requested`; the `tool_name` of a tool hook, so a permission request for a question tool counts as a
-/// question; and the `error` of `StopFailure`. Everything else stays verbatim in `raw`.
+/// question; the `error` of `StopFailure`; and where the driver is working — the folder of the file a tool just
+/// touched, else the hook's `cwd`. Everything else stays verbatim in `raw`.
 public struct HookStdin: Sendable, Equatable {
     /// `session_id` (Claude Code, Cursor) or `thread-id` (Codex `notify`), whichever is present.
     public var sessionID: String?
@@ -17,15 +18,23 @@ public struct HookStdin: Sendable, Equatable {
     public var toolName: String?
     /// Claude Code `StopFailure`: the error code (`rate_limit`, `overloaded`, `billing_error`, …).
     public var error: String?
+    /// Where the driver is working: the folder of the file its tool call names (`tool_input.file_path`,
+    /// `notebook_path` or `path`, when absolute), else the hook's own `cwd`. A driver never reports a directory
+    /// the way a shell does, so this is the only thing that says which repository of a task it is in.
+    public var directory: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
-                toolName: String? = nil, error: String? = nil) {
+                toolName: String? = nil, error: String? = nil, directory: String? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
         self.toolName = toolName
         self.error = error
+        self.directory = directory
     }
+
+    /// Keys of `tool_input` that name the file a tool works on, in the order tried.
+    public static let filePathKeys = ["file_path", "notebook_path", "path"]
 
     /// Keys tried, in order, for the session id.
     public static let sessionIDKeys = ["session_id", "thread-id", "thread_id"]
@@ -46,6 +55,13 @@ public struct HookStdin: Sendable, Equatable {
         result.hookEventName = (object["hook_event_name"] as? String) ?? (object["type"] as? String)
         result.toolName = object["tool_name"] as? String
         result.error = object["error"] as? String
+        let input = object["tool_input"] as? [String: Any]
+        let file = filePathKeys.lazy.compactMap { input?[$0] as? String }.first { $0.hasPrefix("/") }
+        if let file {
+            result.directory = URL(fileURLWithPath: file).deletingLastPathComponent().path
+        } else if let cwd = object["cwd"] as? String, cwd.hasPrefix("/") {
+            result.directory = cwd
+        }
         return result
     }
 }

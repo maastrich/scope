@@ -144,6 +144,9 @@ enum HookCLI {
         if payload[HookEvent.errorKey] == nil, let error = stdin.error, !error.isEmpty {
             payload[HookEvent.errorKey] = error
         }
+        if payload[HookEvent.directoryKey] == nil, let directory = stdin.directory {
+            payload[HookEvent.directoryKey] = directory
+        }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }
 }
