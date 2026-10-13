@@ -75,8 +75,14 @@ Two neighbours matter because they decide *when* the user lands on Base at all:
 | W12 | **The Pull Requests sheet.** | Lists the Base repository unless it has its own pick, and the sidebar button's count is that one repository's, under a label that reads scope-wide. | `pullRequestsRepo` falls back to `baseRepo` (`PullRequestsModel.swift:138-142`); `GlobalViewsRow.swift:59-64`. |
 | W13 | **"Workspace".** In a task thread, the user expects the files the agent sees. | Base shows the *base checkout* — `main`, not the task's worktree — and only the grey caption "base checkout" says so. | By design (spec §4.5), but the tab never says why you would want it instead of the sandbox. |
 
+| W14 | **An agent opens a thread.** A running agent calls `scope thread new` / `scope_thread_new`. | The sidebar selection jumps to the new thread — the terminal you were reading is replaced, and Delta, Base and the band change subject. If the thread is in another scope, the sidebar switches scope too. | `newThread` ends with `selection = .thread(session.id)` whatever the `origin` (`AppModel.swift:820-821`); the control path calls it with `author: .control` (`AppControlService.swift:233-237`); `selection.didSet` follows the scope (`AppModel.swift:55-57`). |
+| W15 | **An agent creates a task.** | Same: `selection = .task(record.id)`, then its first thread. | `AppModel+Tasks.swift:195-201`, no guard on who asked. |
+| W16 | **Closing a thread.** Close the last thread of a task group, or a loose thread. | The selection moves to the neighbour in *scope* order, which can be another task's thread. | `detach` picks from `threadOrder(in: scope)` (`AppModel.swift:936-958`). |
+
 W1–W3 are a bug by any reading. W4–W6 are a rule that is too weak. W7–W9 are state that is global where it should
-be per place. W13 is wording.
+be per place. W13 is wording. W14–W16 are the selection moving without the user asking — with agents opening
+threads on their own, likely the most frequent cause of all: the inspector is right about the selection, and the
+selection is no longer where the user left it.
 
 ### 1.3 Options
 
@@ -112,6 +118,11 @@ where:
 
 **The tab.** The inspector remembers the tab *of tasks* separately from the fallback. With no task it shows Base
 without overwriting that memory, so returning to a task returns to Delta (W8).
+
+**The selection moves only on user intent** (W14–W16). A thread or task opened by an agent
+(`origin.author == .control`) appears in the sidebar with its origin marker and its state mark — and on its scope's
+rail tile (§4.4) — but does not take the selection. One opened by the user does, as today. After a close, the next
+selection is a sibling in the same task or group, else the task row, else the scope row.
 
 **The wording** (W13). The band says `base checkout · main` in a task context, and the empty/first-use hint of the
 tab says what Base is for: *the repository as it is on `main`, next to the task's sandbox*. Whether Base should also
@@ -318,7 +329,7 @@ Constraints inherited from earlier research:
 | Reorder | Drag a tile | Wires up the unused `moveScopes`. |
 
 Two risks to verify when building, not to assume away: ⌃1…9 is also macOS's *Switch to Desktop N* when the user has
-enabled it in Keyboard settings (off by default; the system takes the key first), and a menu key equivalent on ⌃digit
+enabled it in Keyboard settings (Keyboard ▸ Keyboard Shortcuts ▸ Mission Control; the system then takes the key first), and a menu key equivalent on ⌃digit
 takes those chords from the PTY (a few are control codes almost nobody types). If either bites, ⌥⌘1…9 is free.
 
 ### 4.4 Mockups
@@ -429,6 +440,7 @@ Each step ships alone and leaves the app better than it found it. Steps 1–3 ar
 | 6 | **Identity.** `icon` and `tint` on `ScopeDeclaration` with `decodeIfPresent`; `ScopeTint` (eight cases) and the derived default in the package; eight colorsets; `ScopeTile` view; the header shows the tile; **Icon and Colour…** in the context menu. | `Sources/ScopeCore/Models/ScopeConfig.swift:165-241`, `Tests/ScopeKitTests/ConfigStoreTests.swift`, `App/Scope/Assets.xcassets`, `App/Scope/Views/Shared/Theme.swift`, `App/Scope/Views/Sidebar/ScopeTile.swift` *(new)*, `App/Scope/Views/Sidebar/ScopeRow.swift:20-22, 117-167` | `swift test --filter ConfigStoreTests`; a config without the fields loads. |
 | 7 | **The rail.** Tiles in config order under the footer, active bar, attention marks from `waitingThreads` grouped by scope, tooltip, context menu, `＋`, overflow, drag to reorder through `moveScopes`. Hidden with one scope. | `App/Scope/Views/Sidebar/ScopeRail.swift` *(new)*, `App/Scope/Views/Sidebar/SidebarView.swift:320-337`, `App/Scope/Model/AppModel+Attention.swift` | A thread waiting in another scope marks its tile; the click lands on that scope's restored place. |
 | 8 | **Slide and swipe** *(optional)*. Sidebar content transitions on scope change (120 ms, opacity only under Reduce Motion — add the row to `OPAQUE_AQUA.md` §4 *Motion*); a horizontal two-finger swipe over the sidebar steps one scope. | `App/Scope/Views/Sidebar/SidebarView.swift:31-60`, a scroll-wheel monitor beside `App/Scope/Terminal/TerminalKeyBindings.swift` | Swipe over the terminal still scrolls it. |
+| 3b | **Agents do not take the selection.** `newThread` and `createTask` select only for a user origin; `detach` prefers a sibling of the same task or group. Fixes W14–W16. | `App/Scope/Model/AppModel.swift:769-823, 936-958`, `App/Scope/Model/AppModel+Tasks.swift:195` | From a thread, `scope thread new`: the row appears, the terminal on screen does not change. |
 | 9 | **Findability small wins.** Subtitle `scope · task · cwd`; palette thread hint `task · state`; `Repositories N · k dirty`; the Pull Requests count named or scope-wide; **Show Details** on the task menu. | `App/Scope/Views/Scene/ThreadToolbar.swift:16-18`, `App/Scope/Model/PaletteModel.swift:148-150`, `App/Scope/Views/Sidebar/SidebarView.swift:194-196, 279`, `App/Scope/Views/Sidebar/GlobalViewsRow.swift:59-64`, `App/Scope/Views/Sidebar/TaskRow.swift` | Read each off a running Debug build. |
 
 `docs/DEBUG_ISOLATION.md` needs no new row: every new piece of state lives in `ui-state.json` or `config.json`,
