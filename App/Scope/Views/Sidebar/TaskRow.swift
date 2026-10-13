@@ -42,7 +42,7 @@ struct TaskRow: View {
                 if detailed {
                     Text(TaskStatus.summary(status, facts: facts))
                         .font(.scopeCaption)
-                        .foregroundStyle(isListSelected && controlActiveState == .key ? Ink.onAccent : Ink.tertiary)
+                        .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -65,7 +65,7 @@ struct TaskRow: View {
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
             TaskHoverCard(task: task, status: status, facts: facts)
         }
-        .onAccent(isListSelected, controlActiveState)
+        .sidebarRow(selected: isListSelected)
         .contextMenu { TaskContextMenu(task: task) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(task.name)

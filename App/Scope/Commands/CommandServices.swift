@@ -10,7 +10,7 @@ enum CommandServices {
 
     /// `NSSplitViewController.toggleSidebar` through the responder chain (the View menu's ⌃⌘S).
     static func toggleSidebar() {
-        NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+        AppServices.model?.toggleSidebar()
     }
 
     /// The SwiftUI `Settings` scene (⌘,).

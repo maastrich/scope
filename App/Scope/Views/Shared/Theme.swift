@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeCore
 import ScopeGit
 
 // The app's colour and type tokens. Every value lives in `Assets.xcassets`, which is what gives each one a
@@ -14,34 +15,49 @@ import ScopeGit
 // Nothing in the app is translucent any more except `PaletteDim`, which is a modal scrim rather than a
 // material: it is meant to dim what is behind it, not to sample it.
 
+/// Which set of chrome colours is in force (Settings ▸ Appearance ▸ Chrome). The asset catalogue holds both: the
+/// neutral one under the plain names, the brand's under the same names suffixed `Ink`. The tokens below are
+/// computed so a change of theme reaches every view the next time it is drawn; `RootView` redraws on the change.
+enum ChromePalette {
+    nonisolated(unsafe) static var theme: ChromeTheme = .neutral
+
+    static func name(_ token: String) -> String {
+        theme == .ink ? token + "Ink" : token
+    }
+
+    static func color(_ token: String) -> Color {
+        Color(name(token))
+    }
+}
+
 /// The opaque grounds, in the order they stack. In light `surface` sits one step *below* `ground` — macOS
 /// puts grey chrome around near-white content — and `panel` one step above it, so a band never comes out
 /// darker than the list it heads. In dark the two are the same colour, which is what macOS does too.
 enum Surface {
     /// Terminal, content panes, list wells, empty states.
-    static let ground = Color("Ground")
+    static var ground: Color { ChromePalette.color("Ground") }
     /// Chrome: the sidebar, the window toolbar, the sidebar footer.
-    static let surface = Color("Surface")
+    static var surface: Color { ChromePalette.color("Surface") }
     /// Panels inside the content well: the inspector header, the summary bands, the delta and review bars.
-    static let panel = Color("SurfacePanel")
+    static var panel: Color { ChromePalette.color("SurfacePanel") }
     /// Anything that floats: the command palette, popovers, the thread banner, the exit toasts.
-    static let elevated = Color("SurfaceElevated")
+    static var elevated: Color { ChromePalette.color("SurfaceElevated") }
     /// Every 1px hairline. Deliberately below 3:1 — a divider is decoration under WCAG 1.4.11, the row it
     /// separates is not.
-    static let stroke = Color("Stroke")
+    static var stroke: Color { ChromePalette.color("Stroke") }
     /// Text fields: the sidebar filter, the search fields.
-    static let field = Color("Field")
+    static var field: Color { ChromePalette.color("Field") }
 }
 
 /// Opaque fills for the states a control answers with. These replace `Color.primary.opacity(…)`, which
 /// composites against whatever happens to be behind it and so drifted from view to view.
 enum Fill {
     /// Chips, the state pill, count badges, a segmented control at rest.
-    static let quiet = Color("FillQuiet")
+    static var quiet: Color { ChromePalette.color("FillQuiet") }
     /// Row hover, icon-button hover.
-    static let hover = Color("FillHover")
+    static var hover: Color { ChromePalette.color("FillHover") }
     /// An icon button while it is pressed.
-    static let pressed = Color("FillPressed")
+    static var pressed: Color { ChromePalette.color("FillPressed") }
     /// The selected row of a list, while its window is key.
     static let selected = Color.accentColor
     /// The selected row while the window is *not* key. Its contrast against the surface is 1.39:1 and cannot
@@ -56,9 +72,9 @@ enum Fill {
 /// Text colours. `.secondary` and `.tertiary` are alpha over an unknown ground: on the opaque light surface
 /// `.tertiary` renders at 4.26:1 and fails AA, which is why these are assets and not SwiftUI hierarchies.
 enum Ink {
-    static let primary = Color("TextPrimary")
-    static let secondary = Color("TextSecondary")
-    static let tertiary = Color("TextTertiary")
+    static var primary: Color { ChromePalette.color("TextPrimary") }
+    static var secondary: Color { ChromePalette.color("TextSecondary") }
+    static var tertiary: Color { ChromePalette.color("TextTertiary") }
     /// Every glyph, label, caption and count on a selected row. No secondary tier survives on the accent
     /// fill: the darkest white that still reads as secondary is 3.99:1 against it.
     static let onAccent = Color("OnAccent")
@@ -167,7 +183,46 @@ extension EnvironmentValues {
     }
 }
 
+/// Takes the system's selection highlight off the list it sits behind, so a row can draw its own. SwiftUI's `List`
+/// is an `NSTableView` underneath, whose highlight is the system accent, full width — the one thing a `List`
+/// offers no modifier for.
+struct ListSelectionHighlightRemover: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            var ancestor = view.superview
+            while let current = ancestor {
+                if let table = Self.table(in: current) {
+                    table.selectionHighlightStyle = .none
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
+    }
+
+    private static func table(in view: NSView) -> NSTableView? {
+        if let table = view as? NSTableView { return table }
+        for subview in view.subviews {
+            if let table = table(in: subview) { return table }
+        }
+        return nil
+    }
+}
+
 extension View {
+    /// A sidebar row: no separator, and a rounded neutral fill of its own when selected, in place of the system's
+    /// full-width accent bar. The text keeps its ordinary colours on it.
+    func sidebarRow(selected: Bool) -> some View {
+        listRowSeparator(.hidden)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(selected ? Fill.pressed : Color.clear)
+                    .padding(.horizontal, 6)
+            )
+    }
+
     /// Marks a row's subtree as sitting on the accent fill: `selected` *and* the window key, since an inactive
     /// window greys its selection and the row goes back to its ordinary colours.
     func onAccent(_ selected: Bool, _ active: ControlActiveState) -> some View {

@@ -40,7 +40,7 @@ struct RepoCardView: View {
         }
         .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
+        .background(Surface.panel, in: RoundedRectangle(cornerRadius: 9))
         .overlay(
             RoundedRectangle(cornerRadius: 9)
                 .stroke(model.graph.highlightedKey == entry.key ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor), lineWidth: 1)

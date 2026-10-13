@@ -57,6 +57,20 @@ private struct GeneralSettingsView: View {
             SettingsSection("Editor") {
                 EditorPicker()
             }
+            SettingsSection("Appearance") {
+                SettingsRow("Colours") {
+                    ScopePicker("Colours", selection: preference(\.chromeTheme),
+                                title: model.config.preferences.chromeTheme.title) {
+                        ForEach(ChromeTheme.allCases, id: \.self) { theme in
+                            Text(theme.title).tag(theme)
+                        }
+                    }
+                }
+                Text("Neutral is white or near-black with grey chrome. Ink is the brand's navy and ivory. The state colours are the same in both.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Terminal") {
                 SettingsRow("Font size") {
                     HStack(spacing: 8) {

@@ -46,7 +46,7 @@ struct GraphView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
     }
 
     private func header(_ scope: ScopeState) -> some View {

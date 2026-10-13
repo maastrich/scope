@@ -2,51 +2,40 @@ import AppKit
 import SwiftUI
 import ScopeCore
 
-/// The main window: sidebar / scene split view with the inspector attached to the scene, the whole window accepting
-/// folder drops, and the model published to `ScopeCommands` through the focused scene value.
+/// The main window: sidebar, scene and inspector as three flat columns of one surface, separated by hairlines,
+/// under a toolbar that spans them all; the whole window accepts folder drops, and the model is published to
+/// `ScopeCommands` through the focused scene value.
+///
+/// Plain columns rather than `NavigationSplitView` and `.inspector`: on macOS 26 the split view draws its sidebar
+/// as a rounded panel floating over the window, and gives the inspector its own toolbar section. Both dividers
+/// are drag handles (widths persisted in `UIStateStore`).
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var columns: NavigationSplitViewVisibility = .all
-    /// The sidebar as it was before ⌘M, put back when the thread is restored.
-    @State private var columnsBeforeMaximize: NavigationSplitViewVisibility?
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView(columnVisibility: $columns) {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 400)
-        } detail: {
-            // A plain HStack rather than `.inspector`: macOS gives the inspector its own toolbar section (the
-            // toolbar splits at the inspector edge and the trailing items move above the inspector), whereas the
-            // toolbar must span the full width with the inspector starting below it. The divider is a drag handle
-            // (320…520 pt, persisted in `UIStateStore`).
-            HStack(spacing: 0) {
-                SceneView()
-                if inspectorPresented.wrappedValue {
-                    InspectorResizeHandle(width: inspectorWidth)
-                    InspectorView()
-                        .frame(width: model.inspectorWidth)
-                        .transition(.move(edge: .trailing))
-                }
+        // Before any child is built: the tokens read it as they are drawn.
+        let theme = model.config.preferences.chromeTheme
+        let _ = (ChromePalette.theme = theme)
+        HStack(spacing: 0) {
+            if sidebarPresented {
+                SidebarView()
+                    .frame(width: model.sidebarWidth)
+                    .transition(.move(edge: .leading))
+                ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, label: "Sidebar width")
+            }
+            SceneView()
+            if inspectorPresented.wrappedValue {
+                ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, label: "Inspector width")
+                InspectorView()
+                    .frame(width: model.inspectorWidth)
+                    .transition(.move(edge: .trailing))
             }
         }
-        .navigationSplitViewStyle(.balanced)
-        // ⌘M: the sidebar goes with the inspector, and comes back as it was.
-        .onChange(of: model.threadMaximized) { _, maximized in
-            if maximized {
-                columnsBeforeMaximize = columns
-                columns = .detailOnly
-            } else if let saved = columnsBeforeMaximize {
-                columnsBeforeMaximize = nil
-                columns = saved
-            }
-        }
-        // Bringing the sidebar back by hand (⌃⌘S, its toolbar button) ends the maximized thread.
-        .onChange(of: columns) { _, visibility in
-            guard model.threadMaximized, visibility != .detailOnly else { return }
-            columnsBeforeMaximize = nil
-            model.restoreLayout()
-        }
+        .background(Surface.ground)
+        .toolbarBackground(Surface.surface, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
+        .id(theme)
         // Nothing left to maximize: a window without sidebar and without thread would be a dead end.
         .onChange(of: model.currentThread?.id) { _, id in
             if id == nil { model.restoreLayout() }
@@ -84,6 +73,18 @@ struct RootView: View {
         )
     }
 
+    private var sidebarWidth: Binding<Double> {
+        Binding(
+            get: { model.sidebarWidth },
+            set: { model.sidebarWidth = min(max($0, UIState.sidebarWidthRange.lowerBound), UIState.sidebarWidthRange.upperBound) }
+        )
+    }
+
+    /// ⌘M hides the sidebar with the inspector; ⌃⌘S hides it on its own.
+    private var sidebarPresented: Bool {
+        model.sidebarShown && !model.threadMaximized
+    }
+
     /// The inspector is hidden in the empty state (no scope) and while a thread is maximized, whatever the
     /// persisted preference says.
     private var inspectorPresented: Binding<Bool> {
@@ -94,13 +95,18 @@ struct RootView: View {
     }
 }
 
-/// The divider between the scene and the inspector, draggable over an 9 pt hit area with the resize cursor.
-private struct InspectorResizeHandle: View {
+/// A hairline between two columns, draggable over a 9 pt hit area with the resize cursor. `growsWithDrag` says
+/// which side the column is on: dragging right widens the sidebar and narrows the inspector.
+private struct ColumnResizeHandle: View {
     @Binding var width: Double
+    var growsWithDrag: Bool
+    var label: String
     @State private var startWidth: Double?
 
     var body: some View {
-        Divider()
+        Rectangle()
+            .fill(Surface.stroke)
+            .frame(width: 1)
             .frame(maxHeight: .infinity)
             .overlay {
                 Color.clear
@@ -111,12 +117,12 @@ private struct InspectorResizeHandle: View {
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in
                                 if startWidth == nil { startWidth = width }
-                                width = (startWidth ?? width) - value.translation.width
+                                width = (startWidth ?? width) + (growsWithDrag ? value.translation.width : -value.translation.width)
                             }
                             .onEnded { _ in startWidth = nil }
                     )
             }
-            .accessibilityLabel("Inspector width")
+            .accessibilityLabel(label)
             .accessibilityValue("\(Int(width)) points")
             .accessibilityAdjustableAction { direction in
                 switch direction {

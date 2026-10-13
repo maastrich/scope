@@ -141,6 +141,26 @@ final class AppModel {
         globalSheet = .graph
     }
 
+    /// Width of the sidebar column in points (200…420).
+    var sidebarWidth: Double = UIState.defaultSidebarWidth {
+        didSet { if !isRestoringUIState, sidebarWidth != oldValue { persistUIState() } }
+    }
+
+    /// The sidebar column is on screen (⌃⌘S). Not saved: a launch starts with the sidebar, which is the only way
+    /// to a thread.
+    var sidebarShown = true
+
+    /// ⌃⌘S. While a thread is maximized the sidebar is hidden rather than off, so the toggle means "show it" and
+    /// gives the layout back.
+    func toggleSidebar() {
+        if threadMaximized {
+            threadMaximized = false
+            sidebarShown = true
+        } else {
+            sidebarShown.toggle()
+        }
+    }
+
     /// Width of the inspector column in points (320…520).
     var inspectorWidth: Double = UIState.defaultInspectorWidth {
         didSet { if !isRestoringUIState, inspectorWidth != oldValue { persistUIState() } }
@@ -604,6 +624,7 @@ final class AppModel {
         places = state.places.filter { scope($0.key) != nil }
         base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
+        sidebarWidth = min(max(state.sidebarWidth, UIState.sidebarWidthRange.lowerBound), UIState.sidebarWidthRange.upperBound)
         lastDriverByScope = state.lastDrivers
         switch state.selectedItem {
         case .scope(let id) where scope(id) != nil:
@@ -652,6 +673,7 @@ final class AppModel {
         state.basePins = base.pins
         state.places = places
         state.inspectorWidth = inspectorWidth
+        state.sidebarWidth = sidebarWidth
         state.lastDrivers = lastDriverByScope
         env.uiState.save(state)
     }
