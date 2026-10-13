@@ -276,6 +276,25 @@ struct ScopeCommands: Commands {
 
             Divider()
 
+            // ⌃ rather than ⌘: ⌘1…9 are the threads of the scope, as tabs are in a browser.
+            Menu("Scope") {
+                ForEach(1...9, id: \.self) { number in
+                    Button(scopeMenuTitle(number)) {
+                        model?.selectScope(index: number - 1)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character(String(number))), modifiers: .control)
+                    .disabled(number > (model?.scopes.count ?? 0))
+                }
+            }
+            Button("Next Scope") { model?.selectAdjacentScope(1) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled((model?.scopes.count ?? 0) < 2)
+            Button("Previous Scope") { model?.selectAdjacentScope(-1) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled((model?.scopes.count ?? 0) < 2)
+
+            Divider()
+
             Button("Delta") { model?.showInspector(.delta) }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(model == nil)
@@ -306,6 +325,12 @@ struct ScopeCommands: Commands {
             }
             .disabled(model?.currentTask == nil)
         }
+    }
+
+    /// `@acme`, or `Scope 4` for a slot no scope fills.
+    private func scopeMenuTitle(_ number: Int) -> String {
+        guard let scopes = model?.scopes, scopes.indices.contains(number - 1) else { return "Scope \(number)" }
+        return scopes[number - 1].name
     }
 
     // MARK: View
