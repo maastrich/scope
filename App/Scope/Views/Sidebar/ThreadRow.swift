@@ -33,11 +33,20 @@ struct ThreadRow: View {
                 .foregroundStyle(glyphInk)
                 .frame(width: 16)
 
-            Text(model.displayTitle(for: session))
-                .font(.scopeBody)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(model.displayTitle(for: session))
+                    .font(.scopeBody)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if detailed {
+                    Text([session.displayState.displayLabel, caption].compactMap { $0 }.joined(separator: " · "))
+                        .font(.scopeCaption)
+                        .foregroundStyle(captionInk)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .layoutPriority(1)
 
             if session.record.resolvedOrigin.openedByAgent {
                 OriginMarker()
@@ -52,7 +61,8 @@ struct ThreadRow: View {
 
             Spacer(minLength: 4)
 
-            if let caption {
+            // In a detailed row the caption is on the second line, after the state.
+            if let caption, !detailed {
                 Text(caption)
                     .font(.scopeCaption)
                     .foregroundStyle(captionInk)
@@ -73,7 +83,7 @@ struct ThreadRow: View {
         }
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
+        .frame(height: detailed ? SidebarMetrics.detailedRowHeight : 28)
         .contentShape(Rectangle())
         .help(helpText)
         .onHover { hovering in
@@ -108,6 +118,9 @@ struct ThreadRow: View {
     private var onAccent: Bool { isListSelected && controlActiveState == .key }
     private var glyphInk: Color { onAccent ? Ink.onAccent : Ink.secondary }
     private var captionInk: Color { onAccent ? Ink.onAccent : Ink.tertiary }
+
+    /// Settings ▸ Sidebar ▸ Rows: a second line with the state in words and where the thread runs.
+    private var detailed: Bool { model.config.preferences.sidebarRows == .detailed }
 
     /// The thread the scene shows: where typing goes.
     private var isLive: Bool {

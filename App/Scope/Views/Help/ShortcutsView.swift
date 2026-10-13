@@ -27,6 +27,8 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌃1 … ⌃9", title: "Scope 1 … 9", note: "back to where you were in it"),
             ShortcutEntry(keys: "⌥⌘→", title: "Next Scope"),
             ShortcutEntry(keys: "⌥⌘←", title: "Previous Scope"),
+            ShortcutEntry(keys: "⌃⌘L", title: "Detailed / Compact Rows", note: "the second line of a sidebar row"),
+            ShortcutEntry(keys: "⌃⌘G", title: "Arrange by State / as a Tree"),
             ShortcutEntry(keys: "⌘,", title: "Settings…"),
             ShortcutEntry(keys: "⇧⌘W", title: "Close Window"),
             ShortcutEntry(keys: "⌥⌘M", title: "Minimize Window", note: "⌘M is Maximize Thread"),

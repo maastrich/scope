@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import ScopeCore
+import ScopeTasks
 
 /// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
 /// the two scope-wide views as buttons (`GlobalViewsRow`: Pull Requests and Graph, each a sheet over the window),
@@ -191,8 +192,14 @@ struct SidebarView: View {
         scope.repos.filter { matches($0.shortName) }
     }
 
-    private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
-        SectionLabel(text: title, trailing: count.map { "\($0)" })
+    private func sectionHeader(_ title: String, trailing: String? = nil) -> some View {
+        SectionLabel(text: title, trailing: trailing)
+    }
+
+    /// `35`, or `35 · 2 dirty`: the section is collapsed by default, so the exceptions have to show on its header.
+    private func repositoriesCaption(_ scope: ScopeState) -> String {
+        let dirty = scope.repos.filter(\.isDirty).count
+        return dirty == 0 ? "\(scope.repos.count)" : "\(scope.repos.count) · \(dirty) dirty"
     }
 
     private func hintRow(_ text: String) -> some View {
@@ -214,21 +221,49 @@ struct SidebarView: View {
     /// thread — selecting it shows the terminal and hands it the keyboard.
     private func workSection(_ scope: ScopeState) -> some View {
         Section {
-            looseThreadsGroup(scope)
-
             let tasks = visibleTasks(in: scope)
-            ForEach(tasks) { task in
-                TaskRow(task: task)
-                    .tag(SidebarItem.task(task.id))
-                if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
-                    ForEach(visibleThreads(in: task)) { session in
-                        ThreadRow(session: session, depth: 1)
-                            .tag(SidebarItem.thread(session.id))
-                    }
-                }
+            if model.config.preferences.sidebarArrangement == .byState {
+                stateGroups(scope, tasks: tasks)
+            } else {
+                looseThreadsGroup(scope)
+                ForEach(tasks) { task in taskRows(task) }
             }
             if tasks.isEmpty {
                 hintRow(isFiltering ? "No task matches “\(filter)”" : (scope.kind == .missing ? "Scope folder is missing" : "No task yet — ⇧⌘T"))
+            }
+        }
+    }
+
+    /// A task's row and, from its second thread on, its threads nested under it.
+    @ViewBuilder
+    private func taskRows(_ task: TaskState) -> some View {
+        TaskRow(task: task)
+            .tag(SidebarItem.task(task.id))
+        if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
+            ForEach(visibleThreads(in: task)) { session in
+                ThreadRow(session: session, depth: 1)
+                    .tag(SidebarItem.thread(session.id))
+            }
+        }
+    }
+
+    /// Settings ▸ Sidebar ▸ Arrange ▸ By state: the same rows under four headers, what needs the user first. A
+    /// task and a loose thread are peers here — the question is "what wants me", not "where was it opened" — and an
+    /// empty group is skipped. Rows move between groups as their state changes; that is the price of the answer.
+    @ViewBuilder
+    private func stateGroups(_ scope: ScopeState, tasks: [TaskState]) -> some View {
+        let loose = visibleScopeThreads(in: scope)
+        ForEach(SidebarGroup.allCases, id: \.self) { group in
+            let groupTasks = tasks.filter { SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0))) == group }
+            let groupThreads = loose.filter { SidebarGroup($0.displayState) == group }
+            if !groupTasks.isEmpty || !groupThreads.isEmpty {
+                SectionLabel(text: group.title, trailing: "\(groupTasks.count + groupThreads.count)")
+                    .selectionDisabled()
+                ForEach(groupTasks) { task in taskRows(task) }
+                ForEach(groupThreads) { session in
+                    ThreadRow(session: session)
+                        .tag(SidebarItem.thread(session.id))
+                }
             }
         }
     }
@@ -276,8 +311,8 @@ struct SidebarView: View {
                 scanFailedRow(scope, message: message)
             }
         } header: {
-            sectionHeader("Repositories", count: scope.repos.count)
-                .accessibilityLabel("Repositories, \(scope.repos.count)")
+            sectionHeader("Repositories", trailing: repositoriesCaption(scope))
+                .accessibilityLabel("Repositories, \(repositoriesCaption(scope))")
         }
     }
 

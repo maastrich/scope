@@ -146,7 +146,9 @@ enum PaletteModel {
             let index = tabs.firstIndex { $0.id == session.id }
             let shortcut = index.flatMap { $0 < 9 ? "⌘\($0 + 1)" : nil }
             items.append(PaletteItem(id: "thread-\(session.id.rawValue)", section: .threads, icon: session.profile.icon ?? "terminal",
-                                     label: model.displayTitle(for: session), hint: session.displayState.displayLabel, shortcut: shortcut,
+                                     label: model.displayTitle(for: session),
+                                     hint: [model.task(of: session)?.name, session.displayState.displayLabel].compactMap { $0 }.joined(separator: " · "),
+                                     shortcut: shortcut,
                                      path: session.reportedDirectory ?? session.record.cwd, state: session.displayState) {
                 model.selection = .thread(session.id)
                 model.selectedThreadID = session.id

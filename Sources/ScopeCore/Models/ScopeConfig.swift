@@ -42,6 +42,36 @@ public enum AttentionCounterPlacement: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// How much a sidebar row says.
+public enum SidebarRows: String, Codable, Sendable, CaseIterable {
+    /// Two lines: the name, then what the task or thread is doing, in words.
+    case detailed
+    /// One line: the name and the state mark.
+    case compact
+
+    public var title: String {
+        switch self {
+        case .detailed: "Detailed"
+        case .compact: "Compact"
+        }
+    }
+}
+
+/// How the sidebar orders the work of a scope.
+public enum SidebarArrangement: String, Codable, Sendable, CaseIterable {
+    /// Loose threads, then tasks, in a fixed order: a row never moves on its own.
+    case tree
+    /// What needs the user first, then what is working, finished, quiet: rows move as their state changes.
+    case byState
+
+    public var title: String {
+        switch self {
+        case .tree: "As a tree"
+        case .byState: "By state"
+        }
+    }
+}
+
 /// Whether a thread or task an agent opened (`scope thread new`, `scope task new`, the MCP tools) comes to the
 /// front. What the user opens always does.
 ///
@@ -324,6 +354,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var attentionCounter: AttentionCounterPlacement
     /// Whether what an agent opens comes to the front. Only when nothing is being read, by default.
     public var agentOpenedFocus: AgentOpenedFocus
+    /// Detailed by default.
+    public var sidebarRows: SidebarRows
+    /// As a tree by default.
+    public var sidebarArrangement: SidebarArrangement
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -352,6 +386,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         autoRelaunchThreads: Bool = true,
         attentionCounter: AttentionCounterPlacement = .sidebar,
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
+        sidebarRows: SidebarRows = .detailed,
+        sidebarArrangement: SidebarArrangement = .tree,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -370,6 +406,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.autoRelaunchThreads = autoRelaunchThreads
         self.attentionCounter = attentionCounter
         self.agentOpenedFocus = agentOpenedFocus
+        self.sidebarRows = sidebarRows
+        self.sidebarArrangement = sidebarArrangement
         self.automation = automation
     }
 
@@ -378,7 +416,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement,
              automation, autoRelaunchThreads
     }
 
@@ -412,6 +450,9 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.attentionCounter
         agentOpenedFocus = (try? container.decodeIfPresent(AgentOpenedFocus.self, forKey: .agentOpenedFocus))
             ?? defaults.agentOpenedFocus
+        sidebarRows = (try? container.decodeIfPresent(SidebarRows.self, forKey: .sidebarRows)) ?? defaults.sidebarRows
+        sidebarArrangement = (try? container.decodeIfPresent(SidebarArrangement.self, forKey: .sidebarArrangement))
+            ?? defaults.sidebarArrangement
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 

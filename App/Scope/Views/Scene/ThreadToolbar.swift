@@ -12,9 +12,10 @@ enum ThreadTitle {
         session.profile.name
     }
 
-    /// `@acme · …/api/auth-refresh`; the scope alone when the cwd is the home folder.
-    static func subtitle(_ session: ThreadSession, scope: ScopeState?) -> String {
-        [scope?.name, abbreviatedDirectory(currentDirectory(session))].compactMap { $0 }.joined(separator: " · ")
+    /// `@acme · auth-refresh · …/api/auth-refresh`: the scope, the task that owns the thread when one does, the
+    /// directory. The task is here because a maximized thread has neither sidebar nor inspector to say it.
+    static func subtitle(_ session: ThreadSession, scope: ScopeState?, task: String? = nil) -> String {
+        [scope?.name, task, abbreviatedDirectory(currentDirectory(session))].compactMap { $0 }.joined(separator: " · ")
     }
 
     static func currentDirectory(_ session: ThreadSession) -> String {

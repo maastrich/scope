@@ -147,3 +147,39 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         return tail.isEmpty ? head + "." : head + "; " + tail.joined(separator: ", ") + "."
     }
 }
+
+/// The four groups of the sidebar arranged by state, most pressing first.
+public enum SidebarGroup: Int, Sendable, CaseIterable, Comparable {
+    case needsYou, working, finished, quiet
+
+    public var title: String {
+        switch self {
+        case .needsYou: "Needs you"
+        case .working: "Working"
+        case .finished: "Finished, not read"
+        case .quiet: "Quiet"
+        }
+    }
+
+    public static func < (lhs: SidebarGroup, rhs: SidebarGroup) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    /// Where a task goes: anything the user has to act on first, then what runs without them.
+    public init(_ status: TaskStatus) {
+        switch status {
+        case .waiting, .failed, .setupFailed, .conflicted, .checksFailing: self = .needsYou
+        case .running, .setupRunning, .checksRunning: self = .working
+        case .done, .checksPassed: self = .finished
+        case .draft, .pullRequestOpen, .changed, .clean: self = .quiet
+        }
+    }
+
+    /// Where a loose thread goes.
+    public init(_ state: ThreadState) {
+        switch state {
+        case .waiting, .failed: self = .needsYou
+        case .running: self = .working
+        case .done: self = .finished
+        case .idle, .exited: self = .quiet
+        }
+    }
+}

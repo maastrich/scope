@@ -34,11 +34,20 @@ struct TaskRow: View {
 
             TaskStatusGlyph(status: status)
 
-            Text(task.name)
-                .font(.scopeBody)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(task.name)
+                    .font(.scopeBody)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if detailed {
+                    Text(TaskStatus.summary(status, facts: facts))
+                        .font(.scopeCaption)
+                        .foregroundStyle(isListSelected && controlActiveState == .key ? Ink.onAccent : Ink.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .layoutPriority(1)
 
             Spacer(minLength: 4)
 
@@ -50,7 +59,7 @@ struct TaskRow: View {
             if isHovered { hoverControls }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
+        .frame(height: detailed ? SidebarMetrics.detailedRowHeight : 28)
         .contentShape(Rectangle())
         .onHover(perform: hover)
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
@@ -68,6 +77,9 @@ struct TaskRow: View {
             Button("Archive") { Task { await model.archiveTask(task.id) } }
         }
     }
+
+    /// Settings ▸ Sidebar ▸ Rows: a second line saying what the task is doing.
+    private var detailed: Bool { model.config.preferences.sidebarRows == .detailed }
 
     /// The row the List highlights.
     private var isListSelected: Bool {
