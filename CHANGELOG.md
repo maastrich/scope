@@ -11,6 +11,38 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.13.0](https://github.com/maastrich/scope/releases/tag/v0.13.0) - 2026-10-13
+
+### Added
+
+- **settings:** draw the settings window's controls ourselves by @maastrich
+- **sheets:** give the New Task and Commit sheets their own chrome by @maastrich
+- **sidebar:** mark the threads an agent opened by @maastrich
+- **ui:** replace the remaining AppKit controls in the main window by @maastrich
+
+### Fixed
+
+- **app:** refuse the production home in a Debug build and say so by @maastrich
+- **socket:** never take over a socket somebody is listening on by @maastrich
+- **cli:** let --home beat the socket inherited from a thread by @maastrich
+- **cli:** keep a Debug build from taking over the installed `scope` link by @maastrich
+- **updates:** compile Sparkle out of Debug builds by @maastrich
+- **app:** keep UI state under the home instead of one shared file by @maastrich
+- **app:** stop a Debug build from presenting itself as Scope by @maastrich
+- **tasks:** give Debug builds their own SCOPE_PORT range by @maastrich
+- **make:** fail `make run` when another copy of the app is running by @maastrich
+- **app:** stop passing the launching thread's environment to new threads by @maastrich
+- **app:** recognise the production home through a link when it does not exist yet by @maastrich
+- **ui:** let a menu's value truncate, dim it when disabled, refit the card links by @maastrich
+- **toolbar:** drop the glass capsule behind the trailing toolbar items by @maastrich
+- **delta:** keep the image diff's mode names whole by @maastrich
+
+### Documentation
+
+- audit what a Debug build could share with the installed app by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.12.2...v0.13.0
+
 ## [0.12.2](https://github.com/maastrich/scope/releases/tag/v0.12.2) - 2026-10-12
 
 ### Fixed
