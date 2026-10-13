@@ -355,6 +355,18 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .control])
             .disabled(model?.currentScope == nil)
 
+            Button(model?.config.preferences.sidebarRows == .compact ? "Detailed Rows" : "Compact Rows") {
+                model?.updatePreferences { $0.sidebarRows = $0.sidebarRows == .detailed ? .compact : .detailed }
+            }
+            .keyboardShortcut("l", modifiers: [.command, .control])
+            .disabled(model == nil)
+
+            Button(model?.config.preferences.sidebarArrangement == .byState ? "Arrange as a Tree" : "Arrange by State") {
+                model?.updatePreferences { $0.sidebarArrangement = $0.sidebarArrangement == .tree ? .byState : .tree }
+            }
+            .keyboardShortcut("g", modifiers: [.command, .control])
+            .disabled(model == nil)
+
             Button("Clear Scrollback") {
                 currentThread?.terminalView.clearScrollback()
             }

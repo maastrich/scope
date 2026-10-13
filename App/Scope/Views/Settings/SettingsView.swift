@@ -127,6 +127,28 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            SettingsSection("Sidebar") {
+                SettingsRow("Rows") {
+                    ScopePicker("Rows", selection: preference(\.sidebarRows),
+                                title: model.config.preferences.sidebarRows.title) {
+                        ForEach(SidebarRows.allCases, id: \.self) { rows in
+                            Text(rows.title).tag(rows)
+                        }
+                    }
+                }
+                SettingsRow("Arrange") {
+                    ScopePicker("Arrange", selection: preference(\.sidebarArrangement),
+                                title: model.config.preferences.sidebarArrangement.title) {
+                        ForEach(SidebarArrangement.allCases, id: \.self) { arrangement in
+                            Text(arrangement.title).tag(arrangement)
+                        }
+                    }
+                }
+                Text("Detailed rows add a line saying what each task or thread is doing (⌃⌘L). By state puts what needs you first, and rows move as their state changes; as a tree keeps loose threads, then tasks, in a fixed order (⌃⌘G).")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Threads opened by agents") {
                 SettingsRow("Bring them to the front") {
                     ScopePicker("Bring them to the front", selection: preference(\.agentOpenedFocus),

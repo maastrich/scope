@@ -63,6 +63,8 @@ enum SidebarMetrics {
     static let indent: CGFloat = 19
     /// Room the hover controls take over the trailing edge of a row.
     static let hoverControlsWidth: CGFloat = 44
+    /// Height of a row that carries a second line (Settings ▸ Sidebar ▸ Rows ▸ Detailed); 28 otherwise.
+    static let detailedRowHeight: CGFloat = 42
 }
 
 extension View {
