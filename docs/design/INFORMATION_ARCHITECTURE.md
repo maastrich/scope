@@ -459,8 +459,8 @@ Where this section disagrees with §4.3–§4.4 and §6, this section wins.
 | How Base names its subject | **A breadcrumb** — scope › task › repository, the last segment being the picker — with a sentence under it saying why that repository is shown (*Shown because claude is working in logger*, *You pinned hashup here. Unpin*). The same breadcrumb heads the scene. | The one-line band with a `pinned ✕` chip in §1.4. The rule itself is unchanged. |
 | Look | **Not macOS-native chrome.** Flat panels, hairlines, mono captions; the app draws its own controls, as `43babbb` already started. | — |
 | States | Written in words wherever there is room (*needs you*, *working*, *finished*, *idle*), the mark kept beside them. | — |
-| Row density | **A preference**: *Detailed* (a second line saying what the task or thread is doing) or *Compact*. Settings ▸ Sidebar, and **⌃⌘L** in the View menu. | — |
-| Arrangement | **A preference**: *As a tree* (loose threads, then tasks) or *By state* (needs you, working, finished, idle). Settings ▸ Sidebar, and **⌃⌘G** in the View menu. | — |
+| Row density | **A preference**: *Detailed* (a second line saying what the task or thread is doing) or *Compact*. **Default: Detailed.** Settings ▸ Sidebar, and **⌃⌘L** in the View menu. | — |
+| Arrangement | **A preference**: *As a tree* (loose threads, then tasks) or *By state* (needs you, working, finished, idle). **Default: As a tree.** Settings ▸ Sidebar, and **⌃⌘G** in the View menu. | — |
 
 Both preferences belong in `Preferences` (`Sources/ScopeCore/Models/ScopeConfig.swift:258`), decoded with
 `decodeIfPresent` like its neighbours, next to `attentionCounter`; the chords sit beside ⌃⌘R *Show Repositories*
@@ -471,7 +471,7 @@ Added plan step, after step 9:
 
 | # | Step | Files | Verify |
 |---|---|---|---|
-| 10 | **Sidebar preferences.** `sidebarRows` (`detailed` / `compact`) and `sidebarArrangement` (`tree` / `byState`) in `Preferences`; a Sidebar group in Settings; *View ▸ Detailed Rows* (⌃⌘L) and *View ▸ Arrange by State* (⌃⌘G); the row views read them. The status sentence of a detailed row comes from the package so it is tested. | `Sources/ScopeCore/Models/ScopeConfig.swift:258`, `Sources/ScopeTasks/TaskStatus.swift`, `Tests/ScopeKitTests/ConfigStoreTests.swift`, `App/Scope/Views/Settings/SettingsView.swift`, `App/Scope/Commands/ScopeCommands.swift:314-340`, `App/Scope/Views/Sidebar/SidebarView.swift`, `TaskRow.swift`, `ThreadRow.swift` | `swift test --filter ConfigStoreTests`; toggle each chord with the terminal focused. |
+| 10 | **Sidebar preferences.** `sidebarRows` (`detailed` / `compact`, default `detailed`) and `sidebarArrangement` (`tree` / `byState`, default `tree`) in `Preferences`; a Sidebar group in Settings; *View ▸ Detailed Rows* (⌃⌘L) and *View ▸ Arrange by State* (⌃⌘G); the row views read them. The status sentence of a detailed row comes from the package so it is tested. | `Sources/ScopeCore/Models/ScopeConfig.swift:258`, `Sources/ScopeTasks/TaskStatus.swift`, `Tests/ScopeKitTests/ConfigStoreTests.swift`, `App/Scope/Views/Settings/SettingsView.swift`, `App/Scope/Commands/ScopeCommands.swift:314-340`, `App/Scope/Views/Sidebar/SidebarView.swift`, `TaskRow.swift`, `ThreadRow.swift` | `swift test --filter ConfigStoreTests`; toggle each chord with the terminal focused. |
 
 Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.swift`) instead of a new
 `ScopeRail.swift` under the footer.
@@ -492,6 +492,6 @@ Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.
   Needs an audit of `ScopeAdapters` events before any design.
 - **⌃1…9 against Mission Control** on the owner's machine — check before committing the default (§4.3).
 - **By state moves rows on their own.** A task changes group when its state changes; whether that is tolerable
-  while reading the list is only known by living with it — hence a preference, not a default decided here.
+  while reading the list is only known by living with it — hence a preference, with the stable tree as the default.
 - **Which eight swatches.** To be picked against `Surface.surface` in both appearances in step 6, from the brand
   families that are not already state colours.
