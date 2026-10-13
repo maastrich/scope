@@ -16,7 +16,6 @@ import ScopeTasks
 struct TaskRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     let task: TaskState
     @State private var isHovered = false
     @State private var showsCard = false

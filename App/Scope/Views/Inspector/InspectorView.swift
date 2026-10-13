@@ -18,7 +18,9 @@ struct InspectorView: View {
             // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
             HStack(spacing: 8) {
                 TabStrip(selection: $model.inspectorTab,
-                         items: InspectorTab.allCases.map { ($0, $0.title) })
+                         items: InspectorTab.allCases.map { ($0, $0.title) },
+                         isEnabled: { !$0.needsTask || model.currentTask != nil },
+                         disabledHelp: "Select a task to see this")
                     .accessibilityLabel("Panel")
                 Spacer(minLength: 4)
             }
