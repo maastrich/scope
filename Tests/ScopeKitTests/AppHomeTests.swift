@@ -99,6 +99,22 @@ struct AppHomeTests {
         #expect(AppHome.resolve(environment: ["SCOPE_HOME": link.path], debugBuild: true).refusedProduction != nil)
     }
 
+    @Test("a link to a home that does not exist yet is still that home")
+    func danglingLink() throws {
+        // `~/.scope` is missing on a machine where the installed app never ran, CI included.
+        let directory = FileManager.default.temporaryDirectory.appending(path: "scope-dangling-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = directory.appending(path: "home")
+        let link = directory.appending(path: "link")
+        let relative = directory.appending(path: "relative")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: missing)
+        try FileManager.default.createSymbolicLink(atPath: relative.path, withDestinationPath: "home")
+
+        #expect(AppHome.canonical(link) == AppHome.canonical(missing))
+        #expect(AppHome.canonical(relative) == AppHome.canonical(missing))
+    }
+
     @Test("both refusals are reported, the production one as an error naming the home")
     func problems() {
         let refused = AppHome.resolve(environment: ["SCOPE_HOME": Self.production.path], debugBuild: true).problems
