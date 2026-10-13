@@ -367,11 +367,12 @@ final class AppModel {
     }
 
     /// Whether something just opened takes the sidebar selection. What the user opened does. What an agent opened
-    /// (`scope thread new`, `scope_task_new`) does not: it would replace the terminal being read, move the
-    /// inspector to another subject and, for another scope, switch the sidebar — the row and its state mark say it
-    /// is there. It still takes the selection when its scope is on screen with no thread shown: nothing is being read.
+    /// (`scope thread new`, `scope_task_new`) would replace the terminal being read, move the inspector to another
+    /// subject and, for another scope, switch the sidebar — so it only does as far as `Preferences.agentOpenedFocus`
+    /// says; the row and its state mark say it is there either way.
     func takesSelection(_ origin: ThreadOrigin, in scopeID: ScopeID) -> Bool {
-        origin.author == .user || (currentThread == nil && currentScope?.id == scopeID)
+        origin.author == .user || config.preferences.agentOpenedFocus
+            .takesSelection(threadShown: currentThread != nil, sameScope: currentScope?.id == scopeID)
     }
 
     /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`).
@@ -1128,6 +1129,20 @@ final class AppModel {
     /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
     func threadOrder(in scope: ScopeID) -> [ThreadSession] {
         tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
+    }
+
+    // MARK: Scope navigation
+
+    /// ⌃1…⌃9: the scope at `index` in the declared order.
+    func selectScope(index: Int) {
+        guard scopes.indices.contains(index) else { return }
+        selectScope(scopes[index].id)
+    }
+
+    /// ⌥⌘→ / ⌥⌘←: the next or previous declared scope, wrapping around.
+    func selectAdjacentScope(_ delta: Int) {
+        guard scopes.count > 1, let current = currentScope, let index = scopes.firstIndex(where: { $0.id == current.id }) else { return }
+        selectScope(scopes[((index + delta) % scopes.count + scopes.count) % scopes.count].id)
     }
 
     private var currentTabs: [ThreadSession] {

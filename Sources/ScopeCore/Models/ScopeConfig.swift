@@ -42,6 +42,38 @@ public enum AttentionCounterPlacement: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// Whether a thread or task an agent opened (`scope thread new`, `scope task new`, the MCP tools) comes to the
+/// front. What the user opens always does.
+///
+/// Showing it replaces the terminal being read and moves the inspector with it, which is wrong while reading and
+/// right when watching agents hand work to each other — hence the preference.
+public enum AgentOpenedFocus: String, Codable, Sendable, CaseIterable {
+    /// Only when its scope is on screen with no thread shown: nothing is being read.
+    case whenIdle
+    /// Never: the row and its state mark say it is there.
+    case never
+    /// Always, as the app did before the preference existed.
+    case always
+
+    /// What Settings shows.
+    public var title: String {
+        switch self {
+        case .whenIdle: "Only when no thread is on screen"
+        case .never: "Never"
+        case .always: "Always"
+        }
+    }
+
+    /// `threadShown`: a thread is on screen. `sameScope`: what opened belongs to the scope the sidebar shows.
+    public func takesSelection(threadShown: Bool, sameScope: Bool) -> Bool {
+        switch self {
+        case .whenIdle: !threadShown && sameScope
+        case .never: false
+        case .always: true
+        }
+    }
+}
+
 /// Whether the terminal follows the app appearance or stays dark.
 public enum TerminalAppearanceMode: String, Codable, Sendable, CaseIterable {
     /// Light palette under the light appearance, dark palette under the dark one.
@@ -290,6 +322,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var autoRelaunchThreads: Bool
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement
+    /// Whether what an agent opens comes to the front. Only when nothing is being read, by default.
+    public var agentOpenedFocus: AgentOpenedFocus
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -317,6 +351,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
         attentionCounter: AttentionCounterPlacement = .sidebar,
+        agentOpenedFocus: AgentOpenedFocus = .whenIdle,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -334,6 +369,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
         self.attentionCounter = attentionCounter
+        self.agentOpenedFocus = agentOpenedFocus
         self.automation = automation
     }
 
@@ -342,7 +378,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter,
+             attentionCounter, agentOpenedFocus,
              automation, autoRelaunchThreads
     }
 
@@ -374,6 +410,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.autoRelaunchThreads
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
             ?? defaults.attentionCounter
+        agentOpenedFocus = (try? container.decodeIfPresent(AgentOpenedFocus.self, forKey: .agentOpenedFocus))
+            ?? defaults.agentOpenedFocus
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 
