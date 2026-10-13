@@ -31,8 +31,9 @@ struct SceneView: View {
         }
         // The window's own title and subtitle, not a custom item: the system truncates them to the room left
         // and draws them bare (a custom `.principal` view overflowed on a long path).
-        .navigationTitle(model.currentThread.map(ThreadTitle.title) ?? model.contextDescription ?? BuildFlavor.displayName)
-        .navigationSubtitle(model.currentThread.map { ThreadTitle.subtitle($0, scope: model.currentScope, task: model.task(of: $0)?.name) } ?? "")
+        .navigationTitle(model.currentThread.map { ThreadTitle.path(scope: model.currentScope?.name, task: model.task(of: $0)?.name, thread: model.displayTitle(for: $0)) }
+                         ?? model.contextDescription ?? BuildFlavor.displayName)
+        .navigationSubtitle(model.currentThread.map(ThreadTitle.detail) ?? "")
         .toolbar { toolbar }
     }
 

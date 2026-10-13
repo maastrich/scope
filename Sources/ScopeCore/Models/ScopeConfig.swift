@@ -376,6 +376,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var sidebarArrangement: SidebarArrangement
     /// By importance by default.
     public var scopeTileOrder: ScopeTileOrder
+    /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
+    public var swipeBetweenScopes: Bool
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -407,6 +409,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarRows: SidebarRows = .detailed,
         sidebarArrangement: SidebarArrangement = .tree,
         scopeTileOrder: ScopeTileOrder = .byImportance,
+        swipeBetweenScopes: Bool = true,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -428,6 +431,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.sidebarRows = sidebarRows
         self.sidebarArrangement = sidebarArrangement
         self.scopeTileOrder = scopeTileOrder
+        self.swipeBetweenScopes = swipeBetweenScopes
         self.automation = automation
     }
 
@@ -436,7 +440,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes,
              automation, autoRelaunchThreads
     }
 
@@ -474,6 +478,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarArrangement = (try? container.decodeIfPresent(SidebarArrangement.self, forKey: .sidebarArrangement))
             ?? defaults.sidebarArrangement
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
+        swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 

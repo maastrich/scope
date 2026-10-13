@@ -33,7 +33,23 @@ struct BaseView: View {
         let candidates = model.baseRepoCandidates(in: scope)
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    // The path to what the panel shows — scope › task › repository — its last step being the
+                    // picker. The window title starts the same way.
+                    Text(scope.name)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    crumbSeparator
+                    if let task = model.currentTask {
+                        Text(task.name)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        crumbSeparator
+                    }
                     ScopePicker("Repository", selection: Binding(
                         get: { reason == .pinned ? repo.id : Self.followTag },
                         set: { id in
@@ -59,9 +75,7 @@ struct BaseView: View {
                         }
                     }
                     .help("Pin a repository here, or follow the selection")
-                    Text("base checkout")
-                        .font(.scopeCaption)
-                        .foregroundStyle(Ink.tertiary)
+                    .fixedSize()
                     Spacer(minLength: 0)
                     if model.base.isFetching || model.base.isPulling {
                         ScopeSpinner(size: 12)
@@ -117,6 +131,13 @@ struct BaseView: View {
         .background(Color(nsColor: .textBackgroundColor))
     }
 
+    private var crumbSeparator: some View {
+        Text("›")
+            .font(.scopeCaption)
+            .foregroundStyle(Ink.tertiary)
+            .accessibilityHidden(true)
+    }
+
     /// Why the panel is on this repository, in a sentence, with the way out of a pin next to it.
     private func subjectLine(reason: BaseSubjectReason) -> some View {
         HStack(spacing: 6) {
@@ -137,13 +158,13 @@ struct BaseView: View {
 
     private func explanation(of reason: BaseSubjectReason) -> String {
         switch reason {
-        case .pinned: "You pinned this repository here."
-        case .selection: "Shown because it is selected in the sidebar."
-        case .thread: "Shown because \(model.currentThread.map(model.displayTitle(for:)) ?? "the thread") is working in it."
-        case .delta: "Shown because the file open in Delta belongs to it."
-        case .task: "The first repository of the task."
-        case .recent: "The last repository shown in this scope."
-        case .first: "The first repository of the scope."
+        case .pinned: "Base checkout · you pinned it here."
+        case .selection: "Base checkout · selected in the sidebar."
+        case .thread: "Base checkout · \(model.currentThread.map(model.displayTitle(for:)) ?? "the thread") is working in it."
+        case .delta: "Base checkout · the file open in Delta belongs to it."
+        case .task: "Base checkout · first repository of the task."
+        case .recent: "Base checkout · last shown in this scope."
+        case .first: "Base checkout · first repository of the scope."
         }
     }
 

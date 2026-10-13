@@ -12,6 +12,17 @@ enum ThreadTitle {
         session.profile.name
     }
 
+    /// `@acme › auth-refresh › claude`: where the thread sits, the same path the inspector's Base header starts
+    /// with, so the two sides of the window name their subject the same way.
+    static func path(scope: String?, task: String?, thread: String) -> String {
+        [scope, task, thread].compactMap { $0 }.joined(separator: " › ")
+    }
+
+    /// `Claude Code · …/api/auth-refresh`: what runs, and where — the line under the path.
+    static func detail(_ session: ThreadSession) -> String {
+        "\(session.profile.name) · \(abbreviatedDirectory(currentDirectory(session)))"
+    }
+
     /// `@acme · auth-refresh · …/api/auth-refresh`: the scope, the task that owns the thread when one does, the
     /// directory. The task is here because a maximized thread has neither sidebar nor inspector to say it.
     static func subtitle(_ session: ThreadSession, scope: ScopeState?, task: String? = nil) -> String {
