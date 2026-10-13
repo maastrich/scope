@@ -20,7 +20,6 @@ import ScopeCore
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     let session: ThreadSession
     /// 0 for a thread at the top level, 1 under a task or the loose-threads group.
     var depth = 0
@@ -113,11 +112,9 @@ struct ThreadRow: View {
         .accessibilityLabel("Close \(model.displayTitle(for: session))")
     }
 
-    /// On the accent fill nothing keeps a secondary tier: the darkest white that still reads as secondary is
-    /// 3.99:1 against it, under what AA asks of text.
-    private var onAccent: Bool { false }
-    private var glyphInk: Color { onAccent ? Ink.onAccent : Ink.secondary }
-    private var captionInk: Color { onAccent ? Ink.onAccent : Ink.tertiary }
+    // The selected row is a neutral fill (`sidebarRow`), so its glyph and caption keep their ordinary tiers.
+    private var glyphInk: Color { Ink.secondary }
+    private var captionInk: Color { Ink.tertiary }
 
     /// Settings ▸ Sidebar ▸ Rows: a second line with the state in words and where the thread runs.
     private var detailed: Bool { model.config.preferences.sidebarRows == .detailed }
