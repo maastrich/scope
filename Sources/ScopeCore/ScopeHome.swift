@@ -104,6 +104,11 @@ public enum ScopeHome {
         home.appending(path: "ui-state.json", directoryHint: .notDirectory)
     }
 
+    /// `<home>/scope-logos/`: the copies of the images chosen as scope logos.
+    public static func scopeLogosURL(home: URL) -> URL {
+        home.appending(path: "scope-logos", directoryHint: .isDirectory)
+    }
+
     /// `<home>/sandboxes/`
     public static func sandboxesURL(home: URL) -> URL {
         home.appending(path: "sandboxes", directoryHint: .isDirectory)
