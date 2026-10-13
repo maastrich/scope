@@ -459,6 +459,9 @@ Where this section disagrees with §4.3–§4.4 and §6, this section wins.
 | How Base names its subject | **A breadcrumb** — scope › task › repository, the last segment being the picker — with a sentence under it saying why that repository is shown (*Shown because claude is working in logger*, *You pinned hashup here. Unpin*). The same breadcrumb heads the scene. | The one-line band with a `pinned ✕` chip in §1.4. The rule itself is unchanged. |
 | Look | **Not macOS-native chrome.** Flat panels, hairlines, mono captions; the app draws its own controls, as `43babbb` already started. | — |
 | States | Written in words wherever there is room (*needs you*, *working*, *finished*, *idle*), the mark kept beside them. | — |
+| Scope logo | A scope can carry **a logo the owner picks** (an image file) in place of its letter; the tint then only shows when there is no logo. The image is copied under `SCOPE_HOME` — the app writes nothing in the scope's folder and must not depend on a path that can move. | The `icon` field of §4.3 was an SF Symbol name or an emoji only. It becomes letter (default) / symbol or emoji / image. |
+| Tile states | One mark per tile, the most urgent: **waiting** (square), then **failed** (diamond), then **unread result** (dot). *Running* shows nothing. A missing scope is a dashed outline with `?`. Hover gives the state in words, the repo count and the shortcut. | §4.3 listed waiting and done / failed without an order between them. |
+| Tile overflow | The header shows the active scope by name and **three neighbours**; the rest sit behind a `+N` counter that carries the most urgent mark of the hidden scopes and opens the full list (name, state in words, ⌃N). **Tile order never changes** — it is what ⌃1…9 means — so a scope that needs you does not jump the queue. | The `⋯` slot of §4.4. |
 | Row density | **A preference**: *Detailed* (a second line saying what the task or thread is doing) or *Compact*. **Default: Detailed.** Settings ▸ Sidebar, and **⌃⌘L** in the View menu. | — |
 | Arrangement | **A preference**: *As a tree* (loose threads, then tasks) or *By state* (needs you, working, finished, idle). **Default: As a tree.** Settings ▸ Sidebar, and **⌃⌘G** in the View menu. | — |
 
@@ -472,6 +475,10 @@ Added plan step, after step 9:
 | # | Step | Files | Verify |
 |---|---|---|---|
 | 10 | **Sidebar preferences.** `sidebarRows` (`detailed` / `compact`, default `detailed`) and `sidebarArrangement` (`tree` / `byState`, default `tree`) in `Preferences`; a Sidebar group in Settings; *View ▸ Detailed Rows* (⌃⌘L) and *View ▸ Arrange by State* (⌃⌘G); the row views read them. The status sentence of a detailed row comes from the package so it is tested. | `Sources/ScopeCore/Models/ScopeConfig.swift:258`, `Sources/ScopeTasks/TaskStatus.swift`, `Tests/ScopeKitTests/ConfigStoreTests.swift`, `App/Scope/Views/Settings/SettingsView.swift`, `App/Scope/Commands/ScopeCommands.swift:314-340`, `App/Scope/Views/Sidebar/SidebarView.swift`, `TaskRow.swift`, `ThreadRow.swift` | `swift test --filter ConfigStoreTests`; toggle each chord with the terminal focused. |
+
+Step 6 gains the logo: a `logo` file name on `ScopeDeclaration`, the image stored as
+`$SCOPE_HOME/scope-logos/<slug>.png` (downscaled on import), a **Choose Logo… / Remove Logo** pair in
+**Icon and Colour…**, and a row in `docs/DEBUG_ISOLATION.md` since it is a new on-disk surface under the home.
 
 Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.swift`) instead of a new
 `ScopeRail.swift` under the footer.
