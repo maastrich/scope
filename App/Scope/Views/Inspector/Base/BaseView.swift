@@ -1,15 +1,21 @@
 import SwiftUI
+import ScopeCore
+import ScopeTasks
 
 /// The Base inspector panel (spec §4.5): repo picker, the version band — the branch in bold, the HEAD commit, how
 /// far behind origin the checkout is, Pull — then Editor / Shell / Reveal and the Files / Search / History
-/// sections. The picker offers the task's repositories while a task is selected, every repo of the scope otherwise.
+/// sections. Which repository it shows is `AppModel.baseSubject`; the line under the picker says why, and the picker
+/// pins another one for the current task, loose thread or scope.
 struct BaseView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let scope = model.currentScope, let repo = model.baseRepo {
-            content(scope: scope, repo: repo)
-                .task(id: repo.url) { model.base.show(repo: repo) }
+        if let scope = model.currentScope, let subject = model.baseSubject() {
+            content(scope: scope, repo: subject.repo, reason: subject.reason)
+                .task(id: subject.repo.url) {
+                    model.base.show(repo: subject.repo)
+                    model.base.recent[scope.id] = GraphModel.key(for: subject.repo)
+                }
         } else {
             ContentUnavailableView {
                 Label("No repository", systemImage: "square.stack.3d.up")
@@ -19,21 +25,40 @@ struct BaseView: View {
         }
     }
 
-    private func content(scope: ScopeState, repo: RepoState) -> some View {
+    /// The picker's tag for "no pin"; not a path, so it cannot collide with a repository (a repo scope's is `""`).
+    private static let followTag = "\u{0}follow"
+
+    private func content(scope: ScopeState, repo: RepoState, reason: BaseSubjectReason) -> some View {
         @Bindable var base = model.base
         let candidates = model.baseRepoCandidates(in: scope)
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     ScopePicker("Repository", selection: Binding(
-                        get: { model.base.pickedRepo[scope.id] ?? repo.id },
-                        set: { model.base.pickedRepo[scope.id] = $0 }
+                        get: { reason == .pinned ? repo.id : Self.followTag },
+                        set: { id in
+                            if id == Self.followTag {
+                                model.unpinBase()
+                            } else if let picked = scope.repo(relativePath: id) {
+                                model.pinBase(picked, in: scope)
+                            }
+                        }
                     ), title: repo.shortName) {
-                        ForEach(candidates) { candidate in
-                            Text(candidate.shortName).tag(candidate.id)
+                        Text("Follow Selection").tag(Self.followTag)
+                        Section(model.currentTask == nil ? "Repositories of the scope" : "Repositories of the task") {
+                            ForEach(candidates.own) { candidate in
+                                Text(candidate.shortName).tag(candidate.id)
+                            }
+                        }
+                        if !candidates.others.isEmpty {
+                            Section("Other repositories") {
+                                ForEach(candidates.others) { candidate in
+                                    Text(candidate.shortName).tag(candidate.id)
+                                }
+                            }
                         }
                     }
-                    .help(model.currentTask == nil ? "The repositories of the scope" : "The repositories of the task")
+                    .help("Pin a repository here, or follow the selection")
                     Text("base checkout")
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.tertiary)
@@ -50,6 +75,7 @@ struct BaseView: View {
                     .help("Fetch and recount")
                     .accessibilityLabel("Fetch and recount")
                 }
+                subjectLine(reason: reason)
                 versionBand(scope: scope, repo: repo)
                 HStack(spacing: 6) {
                     Button {
@@ -89,6 +115,36 @@ struct BaseView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    /// Why the panel is on this repository, in a sentence, with the way out of a pin next to it.
+    private func subjectLine(reason: BaseSubjectReason) -> some View {
+        HStack(spacing: 6) {
+            Text(explanation(of: reason))
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if reason == .pinned {
+                Button("Unpin") { model.unpinBase() }
+                    .buttonStyle(.scopeLink)
+                    .font(.scopeCaption)
+                    .help("Follow the selection again")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func explanation(of reason: BaseSubjectReason) -> String {
+        switch reason {
+        case .pinned: "You pinned this repository here."
+        case .selection: "Shown because it is selected in the sidebar."
+        case .thread: "Shown because \(model.currentThread.map(model.displayTitle(for:)) ?? "the thread") is working in it."
+        case .delta: "Shown because the file open in Delta belongs to it."
+        case .task: "The first repository of the task."
+        case .recent: "The last repository shown in this scope."
+        case .first: "The first repository of the scope."
+        }
     }
 
     /// What version the checkout is at, readable at a glance: the branch in bold, the HEAD commit (short sha,

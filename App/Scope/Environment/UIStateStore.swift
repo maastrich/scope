@@ -14,7 +14,10 @@ struct UIState: Codable, Sendable, Equatable {
     /// Scopes whose "Loose threads" group is collapsed (expanded by default, so the set holds the exceptions).
     var looseThreadsCollapsed: Set<ScopeID> = []
     var inspectorVisible = false
+    /// The tab of the inspector while a task is selected (`AppModel.taskInspectorTab`).
     var inspectorTab: InspectorTab = .delta
+    /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
+    var basePins: [String: String] = [:]
     /// Points; clamped to `inspectorWidthRange` on restore.
     var inspectorWidth: Double = UIState.defaultInspectorWidth
     /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
@@ -27,7 +30,7 @@ struct UIState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers
+        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins
     }
 
     init() {}
@@ -44,6 +47,7 @@ struct UIState: Codable, Sendable, Equatable {
         inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .delta
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
+        basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]
     }
 }
 

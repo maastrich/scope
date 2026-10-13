@@ -94,8 +94,17 @@ final class AppModel {
     /// starts from the layout the user chose, not from a mode they may have forgotten they were in.
     private(set) var threadMaximized = false
 
-    var inspectorTab: InspectorTab = .delta {
+    /// The tab the inspector is on while a task is selected: the one the user last asked for. Kept apart from the
+    /// tab on screen so that passing over a row without a task — where only Base has a subject — does not
+    /// overwrite it, and coming back to a task comes back to its tab.
+    var taskInspectorTab: InspectorTab = .delta {
         didSet { if !isRestoringUIState { persistUIState() } }
+    }
+
+    /// The tab on screen: the user's, or Base while nothing selected has a task.
+    var inspectorTab: InspectorTab {
+        get { currentTask == nil && taskInspectorTab.needsTask ? .base : taskInspectorTab }
+        set { taskInspectorTab = newValue }
     }
 
     /// The scope-wide sheet over the window, if one is up. Never persisted: a sheet is a look, not a layout.
@@ -535,7 +544,8 @@ final class AppModel {
             scope.looseThreadsShown = !state.looseThreadsCollapsed.contains(scope.id)
         }
         inspectorShown = state.inspectorVisible
-        inspectorTab = state.inspectorTab
+        taskInspectorTab = state.inspectorTab
+        base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
         lastDriverByScope = state.lastDrivers
         switch state.selectedItem {
@@ -569,7 +579,7 @@ final class AppModel {
         }
     }
 
-    private func persistUIState() {
+    func persistUIState() {
         var state = UIState()
         state.selectedItem = selection
         state.selectedThread = selectedThreadID
@@ -577,7 +587,8 @@ final class AppModel {
         state.reposShown = Set(scopes.filter(\.reposShown).map(\.id))
         state.looseThreadsCollapsed = Set(scopes.filter { !$0.looseThreadsShown }.map(\.id))
         state.inspectorVisible = inspectorShown
-        state.inspectorTab = inspectorTab
+        state.inspectorTab = taskInspectorTab
+        state.basePins = base.pins
         state.inspectorWidth = inspectorWidth
         state.lastDrivers = lastDriverByScope
         env.uiState.save(state)

@@ -4,8 +4,9 @@ import SwiftUI
 /// Request, Base — then the summary band naming the subject, then the panel pinned to the top. ⌘D / ⇧⌘B
 /// switch tabs.
 ///
-/// Delta and Pull Request follow the selected task; Base follows the task's repositories, or the selected repo
-/// when no task is selected, so a repo row or a loose thread still has a Base to show. The scope-wide views
+/// Delta and Pull Request follow the selected task; Base follows `AppModel.baseSubject`, which always has a
+/// repository to show, so a repo row or a loose thread still has a Base. Without a task the inspector shows
+/// Base and keeps the task's own tab for the next task (`AppModel.inspectorTab`). The scope-wide views
 /// that used to share this header — the graph, a repo's open pull requests — moved to sheets opened from the
 /// sidebar: with them here the tabs followed two subjects at once and nothing said which applied.
 struct InspectorView: View {
@@ -47,10 +48,6 @@ struct InspectorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Surface.ground)
-        // A task-only tab left showing with no task would sit on an empty state forever; Base always has a subject.
-        .onChange(of: model.currentTask == nil, initial: true) { _, noTask in
-            if noTask, model.inspectorTab.needsTask { model.inspectorTab = .base }
-        }
     }
 }
 
