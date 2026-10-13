@@ -144,6 +144,18 @@ private struct GeneralSettingsView: View {
                         }
                     }
                 }
+                SettingsRow("Scope tiles") {
+                    ScopePicker("Scope tiles", selection: preference(\.scopeTileOrder),
+                                title: model.config.preferences.scopeTileOrder.title) {
+                        ForEach(ScopeTileOrder.allCases, id: \.self) { order in
+                            Text(order.title).tag(order)
+                        }
+                    }
+                }
+                Text("By importance puts the scope that needs you first, so what falls behind the +N counter is the least urgent. ⌃1…⌃9 always follow the declared order, whatever the tiles do.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Detailed rows add a line saying what each task or thread is doing (⌃⌘L). By state puts what needs you first, and rows move as their state changes; as a tree keeps loose threads, then tasks, in a fixed order (⌃⌘G).")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)

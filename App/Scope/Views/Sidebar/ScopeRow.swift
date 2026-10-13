@@ -1,30 +1,63 @@
 import AppKit
 import SwiftUI
 import ScopeCore
+import UniformTypeIdentifiers
 
-/// The sidebar header: the current scope's name as a switcher. The menu lists every declared scope (repo count,
-/// checkmark on the current one), "Declare a Scope… ⌘O" and "Remove Scope…"; the caption shows the scan state.
-/// Right-click keeps the scope actions (Refresh, Analyze Graph, Discovery Depth, Rename…, Reveal, Remove).
+/// The sidebar header: the current scope as a tile and its name, then the other scopes as tiles — as many as fit,
+/// the rest behind a `+N` counter. A tile is one click to its scope, back where the user was in it; its corner
+/// mark says what is happening there. The name is still a menu (every declared scope, "Declare a Scope… ⌘O",
+/// "Remove Scope…"), and right-click keeps the scope actions, plus what the tile shows (icon, colour, logo).
 struct ScopeSwitcher: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
     /// Called by the "Rename…" menu item; the sidebar owns the rename dialog.
     var onRename: @MainActor (ScopeState) -> Void
 
+    @State private var iconBeingEdited = false
+    @State private var iconText = ""
+
     var body: some View {
-        HStack(spacing: 6) {
+        let others = model.scopeTiles(besides: scope)
+        // As many neighbour tiles as fit beside the scope's whole name; the rest go behind the +N counter. Only
+        // when no tile is left and the name still does not fit beside the counter does the name truncate.
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: others.count, through: 0, by: -1)), id: \.self) { visible in
+                row(others: others, visible: visible, truncatesName: false)
+            }
+            row(others: others, visible: 0, truncatesName: true)
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .contextMenu { contextMenu }
+        .alert("Tile of \(scope.name)", isPresented: $iconBeingEdited) {
+            TextField("An emoji, or a letter or two", text: $iconText)
+            Button("Set") {
+                let icon = iconText.trimmingCharacters(in: .whitespacesAndNewlines)
+                model.updateScopeIdentity(scope.id) { $0.icon = icon.isEmpty ? nil : icon }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Shown on the tile in place of the first letter of the name. Leave it empty to go back to the letter.")
+        }
+    }
+
+    private func row(others: [ScopeState], visible: Int, truncatesName: Bool) -> some View {
+        let hidden = Array(others.dropFirst(visible))
+        return HStack(spacing: 7) {
             Menu {
                 switcherMenu
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: scope.kind == .missing ? "folder.badge.questionmark" : "folder")
-                        .font(.scopeBody)
-                        .foregroundStyle(Ink.secondary)
+                HStack(spacing: 7) {
+                    ScopeTile(scope: scope)
                     Text(scope.name)
                         .font(.scopeTitle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                        .fixedSize(horizontal: !truncatesName, vertical: false)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Ink.tertiary)
@@ -34,28 +67,82 @@ struct ScopeSwitcher: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
-            .fixedSize(horizontal: false, vertical: true)
-            .help("Switch scope — \(scope.url.path)")
+            .fixedSize(horizontal: !truncatesName, vertical: true)
+            .help("\(scope.name) — \(caption) — \(scope.url.path)")
             .accessibilityLabel("Scope: \(scope.name). Switch scope")
-
-            Spacer(minLength: 4)
 
             if scope.discovery == .scanning {
                 ScopeSpinner(size: 10)
             }
-            Text(caption)
-                .font(.scopeCaption)
-                .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .help(scope.url.path)
+            // The repo count moved to the tooltip and to the Repositories header; only a state worth a word
+            // (scanning, a failed scan, a missing folder) still takes room here.
+            if captionIsStatus {
+                Text(caption)
+                    .font(.scopeCaption)
+                    .foregroundStyle(captionIsError ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.secondary))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+
+            Spacer(minLength: 2)
+
+            ForEach(others.prefix(visible)) { other in
+                Button {
+                    model.selectScope(other.id)
+                } label: {
+                    ScopeTile(scope: other, activity: model.activity(of: other))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(tileHelp(other))
+                .accessibilityLabel("\(other.name), \(model.activity(of: other).label)")
+            }
+            if !hidden.isEmpty {
+                moreMenu(hidden)
+            }
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
-        .frame(height: 30)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .contextMenu { contextMenu }
+    }
+
+    /// The scopes that did not fit, behind a counter that carries the most pressing mark among them.
+    private func moreMenu(_ hidden: [ScopeState]) -> some View {
+        let urgent = hidden.map(model.activity(of:)).min() ?? .quiet
+        return Menu {
+            ForEach(hidden) { other in
+                Button(scopeMenuTitle(other)) { model.selectScope(other.id) }
+            }
+        } label: {
+            Text("+\(hidden.count)")
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Ink.secondary)
+                .padding(.horizontal, 5)
+                .frame(height: 20)
+                .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    if urgent != .quiet, urgent != .missing {
+                        ScopeActivityMark(activity: urgent).offset(x: 3, y: -3)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("\(hidden.count) more \(hidden.count == 1 ? "scope" : "scopes")")
+        .accessibilityLabel("\(hidden.count) more scopes, \(urgent.label)")
+    }
+
+    /// `@acme — a thread needs you — 12 repos (⌃2)`: the number is the scope's declared position, which is what
+    /// ⌃1…⌃9 follow whatever order the tiles are in.
+    private func tileHelp(_ other: ScopeState) -> String {
+        let count = other.repos.count
+        var text = "\(other.name) — \(model.activity(of: other).label) — \(count) \(count == 1 ? "repo" : "repos")"
+        if let index = model.scopes.firstIndex(where: { $0.id == other.id }), index < 9 { text += " (⌃\(index + 1))" }
+        return text
+    }
+
+    private var captionIsStatus: Bool {
+        captionIsError || scope.discovery == .scanning
     }
 
     private var caption: String {
@@ -103,7 +190,10 @@ struct ScopeSwitcher: View {
         }
     }
 
+    /// `@acme — a thread needs you`, `notes — 3 repos`: the state when there is one to tell, else the size.
     private func scopeMenuTitle(_ other: ScopeState) -> String {
+        let activity = model.activity(of: other)
+        if activity != .quiet, other.id != scope.id { return "\(other.name) — \(activity.label)" }
         let count = other.repos.count
         switch other.kind {
         case .missing: return "\(other.name) — missing"
@@ -152,6 +242,39 @@ struct ScopeSwitcher: View {
         }
         Button("Rename…") {
             onRename(scope)
+        }
+        Menu("Tile") {
+            Button("Set Icon…") {
+                iconText = scope.declaration.icon ?? ""
+                iconBeingEdited = true
+            }
+            Menu("Colour") {
+                Button {
+                    model.updateScopeIdentity(scope.id) { $0.tint = nil }
+                } label: {
+                    if scope.declaration.tint == nil { Label("Automatic", systemImage: "checkmark") } else { Text("Automatic") }
+                }
+                Divider()
+                ForEach(ScopeTint.allCases, id: \.self) { tint in
+                    Button {
+                        model.updateScopeIdentity(scope.id) { $0.tint = tint }
+                    } label: {
+                        if scope.declaration.tint == tint { Label(tint.title, systemImage: "checkmark") } else { Text(tint.title) }
+                    }
+                }
+            }
+            Divider()
+            Button("Choose Logo…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.image]
+                panel.allowsMultipleSelection = false
+                panel.prompt = "Use as Logo"
+                panel.message = "Choose an image for the tile of \(scope.name). Scope keeps its own copy."
+                if panel.runModal() == .OK, let url = panel.url { model.setScopeLogo(scope.id, from: url) }
+            }
+            if scope.declaration.logo != nil {
+                Button("Remove Logo") { model.removeScopeLogo(scope.id) }
+            }
         }
         Divider()
         Button("Reveal in Finder") {

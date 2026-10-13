@@ -145,6 +145,7 @@ final class AppModel {
         config.preferences.autoCloseExitedThreads
     }
 
+    @ObservationIgnored private let logoCache = NSCache<NSURL, NSImage>()
     @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
@@ -791,6 +792,70 @@ final class AppModel {
         scope.name = name
         config.scopes[index].name = name
         saveConfig()
+    }
+
+    // MARK: Scope identity
+
+    /// The most pressing thing happening in `scope`: the mark on its tile, and what orders the tiles.
+    func activity(of scope: ScopeState) -> ScopeActivity {
+        ScopeActivity(threads: threads(in: scope.id).map(\.displayState), missing: scope.kind == .missing)
+    }
+
+    /// The other scopes in tile order (`Preferences.scopeTileOrder`).
+    func scopeTiles(besides current: ScopeState) -> [ScopeState] {
+        let others = scopes.filter { $0.id != current.id }
+        let ids = config.preferences.scopeTileOrder.arranged(others.map { (id: $0.id, activity: activity(of: $0)) })
+        return ids.compactMap(scope)
+    }
+
+    /// Changes what a scope's tile shows (icon, tint, logo) and saves it.
+    func updateScopeIdentity(_ id: ScopeID, _ change: (inout ScopeDeclaration) -> Void) {
+        guard let scope = scope(id), let index = config.scopes.firstIndex(where: { $0.id == id }) else { return }
+        change(&config.scopes[index])
+        scope.declaration = config.scopes[index]
+        saveConfig()
+    }
+
+    /// The scope's logo, read from the copy under the home; `nil` without one or when the file is gone.
+    func scopeLogo(_ scope: ScopeState) -> NSImage? {
+        guard let name = scope.declaration.logo else { return nil }
+        let url = ScopeHome.scopeLogosURL(home: env.home).appending(path: name, directoryHint: .notDirectory)
+        if let cached = logoCache.object(forKey: url as NSURL) { return cached }
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        logoCache.setObject(image, forKey: url as NSURL)
+        return image
+    }
+
+    /// Copies `source` under the home as the scope's logo. The copy is what the app reads from then on: nothing
+    /// is written in the scope's folder and the original may move.
+    func setScopeLogo(_ id: ScopeID, from source: URL) {
+        guard let scope = scope(id), NSImage(contentsOf: source) != nil else {
+            problems.warn("That file is not an image Scope can show", detail: source.path)
+            return
+        }
+        let folder = ScopeHome.scopeLogosURL(home: env.home)
+        // A fresh name per import: the cache and SwiftUI both key on it, so a replaced logo shows at once.
+        let name = "\(scope.declaration.slug)-\(UUID().uuidString.prefix(8)).\(source.pathExtension.isEmpty ? "png" : source.pathExtension.lowercased())"
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: source, to: folder.appending(path: name, directoryHint: .notDirectory))
+        } catch {
+            problems.error("Could not save the logo of \(scope.name)", detail: String(describing: error), scope: id)
+            return
+        }
+        removeLogoFile(of: scope)
+        updateScopeIdentity(id) { $0.logo = name }
+    }
+
+    func removeScopeLogo(_ id: ScopeID) {
+        guard let scope = scope(id) else { return }
+        removeLogoFile(of: scope)
+        updateScopeIdentity(id) { $0.logo = nil }
+    }
+
+    private func removeLogoFile(of scope: ScopeState) {
+        guard let name = scope.declaration.logo else { return }
+        try? FileManager.default.removeItem(at: ScopeHome.scopeLogosURL(home: env.home).appending(path: name, directoryHint: .notDirectory))
     }
 
     func moveScopes(fromOffsets offsets: IndexSet, toOffset destination: Int) {

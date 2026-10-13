@@ -239,6 +239,13 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     /// Per-repository overrides of the setup / teardown commands and the copied files, keyed by the repository's
     /// path relative to the scope root (`"."` for a repo scope). Edited by hand in `config.json`.
     public var repoCommands: [String: RepoCommandOverride]
+    /// What the scope's tile shows in place of the first letter of its name: an emoji or a letter or two.
+    public var icon: String?
+    /// The tile's colour; `nil` derives one from the slug (`resolvedTint`).
+    public var tint: ScopeTint?
+    /// File name of the scope's logo under `ScopeHome.scopeLogosURL`: a copy, so the app neither writes in the
+    /// scope's folder nor depends on a path the user may move. Shown in place of the letter and the colour.
+    public var logo: String?
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -251,9 +258,15 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         sandboxes: SandboxLocation = .home,
         id: ScopeID = .generate(),
         addedAt: Date = .now,
-        repoCommands: [String: RepoCommandOverride] = [:]
+        repoCommands: [String: RepoCommandOverride] = [:],
+        icon: String? = nil,
+        tint: ScopeTint? = nil,
+        logo: String? = nil
     ) {
         self.repoCommands = repoCommands
+        self.icon = icon
+        self.tint = tint
+        self.logo = logo
         let normalized = ScopeDeclaration.normalizedPath(path)
         self.id = id
         self.path = normalized
@@ -286,7 +299,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands
+        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -301,6 +314,9 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         sandboxes = try container.decodeIfPresent(SandboxLocation.self, forKey: .sandboxes) ?? .home
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? .now
         repoCommands = try container.decodeIfPresent([String: RepoCommandOverride].self, forKey: .repoCommands) ?? [:]
+        icon = try? container.decodeIfPresent(String.self, forKey: .icon)
+        tint = try? container.decodeIfPresent(ScopeTint.self, forKey: .tint)
+        logo = try? container.decodeIfPresent(String.self, forKey: .logo)
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.
@@ -358,6 +374,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var sidebarRows: SidebarRows
     /// As a tree by default.
     public var sidebarArrangement: SidebarArrangement
+    /// By importance by default.
+    public var scopeTileOrder: ScopeTileOrder
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -388,6 +406,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
         sidebarRows: SidebarRows = .detailed,
         sidebarArrangement: SidebarArrangement = .tree,
+        scopeTileOrder: ScopeTileOrder = .byImportance,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -408,6 +427,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.agentOpenedFocus = agentOpenedFocus
         self.sidebarRows = sidebarRows
         self.sidebarArrangement = sidebarArrangement
+        self.scopeTileOrder = scopeTileOrder
         self.automation = automation
     }
 
@@ -416,7 +436,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder,
              automation, autoRelaunchThreads
     }
 
@@ -453,6 +473,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarRows = (try? container.decodeIfPresent(SidebarRows.self, forKey: .sidebarRows)) ?? defaults.sidebarRows
         sidebarArrangement = (try? container.decodeIfPresent(SidebarArrangement.self, forKey: .sidebarArrangement))
             ?? defaults.sidebarArrangement
+        scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 

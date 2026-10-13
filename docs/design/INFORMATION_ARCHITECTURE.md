@@ -507,7 +507,36 @@ threads) only. One addition to the rule of §1.4: an agent-opened thread still t
 is on screen **with no thread shown** — nothing is being read, and an empty view staying empty would look like
 nothing happened.
 
-Runtime behaviour was checked by building only (`BUILD SUCCEEDED`), not by running the app.
+**Steps 4 to 10** followed the same day, in the order 4, 5, 9 + 10, 6 + 7:
+
+- **4** — `ScopePlace` per scope in `ui-state.json`; `selectScope` restores it; the filter is cleared and the sheet
+  closed in `currentScopeID.didSet`, so they also go when a notification or the palette crosses scopes.
+- **5** — *Go ▸ Scope* (⌃1…⌃9), *Next / Previous Scope* (⌥⌘→ / ⌥⌘←).
+- **9 + 10** — detailed rows and the by-state arrangement as preferences (⌃⌘L, ⌃⌘G); the dirty count on the
+  collapsed Repositories header; the task in the window subtitle and in the palette's thread rows. *Show Details*
+  on the task menu and the Pull Requests count were left out.
+- **6 + 7** — tiles in the header (`ScopeTile`, `ScopeSwitcher`): letter or icon on one of eight tints, or a logo
+  copied under `<home>/scope-logos/`; marks for waiting, failed, unread and working; as many tiles as fit
+  (`ViewThatFits`), the rest behind `+N`. Right-click the header ▸ **Tile** sets the icon, the colour and the logo.
+  The repo count left the header for the tooltip.
+
+Where a behaviour was a judgement call it became a preference, with the judgement as its default:
+
+| Preference | Default | Other values |
+|---|---|---|
+| Threads opened by agents come to the front | only when no thread is on screen | never, always |
+| Sidebar rows | detailed | compact |
+| Sidebar arrangement | as a tree | by state |
+| Scope tiles | by importance | in declared order |
+
+Not done: the breadcrumb in the scene and the inspector, the slide and the swipe (step 8), drag-to-reorder of
+tiles, and following an agent's directory.
+
+**Checked by running** a throwaway Debug instance on a scratch home with four scopes (one missing): it starts and
+answers `scope ping`; a thread opened through the CLI in another scope does not move the selection, one opened in
+the scope on screen with nothing shown is shown, and a second one while that thread is on screen is not.
+**Not looked at:** every pixel — the tiles, the marks, the two-line rows, the settings rows and the pickers were
+built, never seen.
 
 ---
 
