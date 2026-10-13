@@ -24,6 +24,9 @@ enum ShortcutCatalog {
         ShortcutGroup(title: "Scope", entries: [
             ShortcutEntry(keys: "⌘O", title: "Declare a Scope…"),
             ShortcutEntry(keys: "⌘R", title: "Refresh Scope"),
+            ShortcutEntry(keys: "⌃1 … ⌃9", title: "Scope 1 … 9", note: "back to where you were in it"),
+            ShortcutEntry(keys: "⌥⌘→", title: "Next Scope"),
+            ShortcutEntry(keys: "⌥⌘←", title: "Previous Scope"),
             ShortcutEntry(keys: "⌘,", title: "Settings…"),
             ShortcutEntry(keys: "⇧⌘W", title: "Close Window"),
             ShortcutEntry(keys: "⌥⌘M", title: "Minimize Window", note: "⌘M is Maximize Thread"),
