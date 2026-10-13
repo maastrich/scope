@@ -501,6 +501,12 @@ Three things differ from the plan above:
 - **The breadcrumb is not in.** This round adds the sentence under the picker and the **Unpin** link; the
   breadcrumb of the review comes with the visual work.
 
+**Step 3b** followed: `AppModel.takesSelection` gates the selection in `newThread` and `createTask` on
+`origin.author == .user`, and `detach` picks its neighbour among the threads of the same task (or the other loose
+threads) only. One addition to the rule of §1.4: an agent-opened thread still takes the selection when its scope
+is on screen **with no thread shown** — nothing is being read, and an empty view staying empty would look like
+nothing happened.
+
 Runtime behaviour was checked by building only (`BUILD SUCCEEDED`), not by running the app.
 
 ---
