@@ -65,6 +65,9 @@ extension HookEvent {
     /// Payload key under which `scope-hook` forwards the error code of a failed turn (`rate_limit`, …).
     public static let errorKey = "error"
 
+    /// Payload key under which `scope-hook` forwards where the driver is working (`HookStdin.directory`).
+    public static let directoryKey = "directory"
+
     /// Payload key under which `scope-hook` forwards the driver's own session id (lifted from the hook's
     /// stdin JSON, or given as `session_id=`). `ThreadSession` stores it as `ThreadRecord.resumeID`.
     public static let sessionIDKey = "session_id"

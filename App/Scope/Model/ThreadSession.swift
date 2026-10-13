@@ -43,6 +43,9 @@ final class ThreadSession: Identifiable {
     private(set) var terminalTitle: String?
     /// OSC 7 directory, decoded from its `file://` form.
     private(set) var reportedDirectory: String?
+    /// Where the driver last said it was working (the folder of the file a tool touched, from its hooks). A
+    /// driver's terminal never reports a directory, so this is what tells the repositories of a task apart.
+    private(set) var agentDirectory: String?
     private(set) var columns = 0
     private(set) var rows = 0
     private(set) var lastError: LaunchError?
@@ -260,6 +263,9 @@ final class ThreadSession: Identifiable {
         adapterState = next
         lastFailure = next == .failed ? (event.payload[HookEvent.errorKey] ?? lastFailure) : nil
         record.lastState = next
+        if let directory = event.payload[HookEvent.directoryKey], !directory.isEmpty {
+            agentDirectory = directory
+        }
         if let session = event.payload["session_id"] ?? event.payload["resume_id"], !session.isEmpty {
             record.resumeID = session
         }

@@ -90,4 +90,15 @@ struct HookStdinTests {
         #expect(HookCommandEvent(word: "turn.paused") == nil)
         #expect(HookCommandEvent.allWords.count == HookEvent.Kind.allCases.count + 1)
     }
+
+    @Test("the folder of the file a tool touched says where the driver works; cwd is the fallback")
+    func liftsTheWorkingDirectory() {
+        let edit = HookStdin.parse(Data(#"{"hook_event_name":"PostToolUse","cwd":"/sandbox/task","tool_name":"Edit","tool_input":{"file_path":"/sandbox/task/web/src/auth.ts"}}"#.utf8))
+        #expect(edit.directory == "/sandbox/task/web/src")
+        let bash = HookStdin.parse(Data(#"{"hook_event_name":"PostToolUse","cwd":"/sandbox/task","tool_name":"Bash","tool_input":{"command":"ls"}}"#.utf8))
+        #expect(bash.directory == "/sandbox/task")
+        let relative = HookStdin.parse(Data(#"{"cwd":"/sandbox/task","tool_input":{"file_path":"web/a.ts"}}"#.utf8))
+        #expect(relative.directory == "/sandbox/task")
+        #expect(HookStdin.parse(Data(#"{"session_id":"s"}"#.utf8)).directory == nil)
+    }
 }
