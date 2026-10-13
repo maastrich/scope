@@ -160,7 +160,7 @@ extension AppModel {
         return resolved.pullRequest == nil ? nil : resolved
     }
 
-    /// Creates the task from a proposal, selects it, starts its watcher, then opens its first thread with
+    /// Creates the task from a proposal, selects it unless an agent asked for it (`takesSelection`), starts its watcher, then opens its first thread with
     /// `driverID` and the prompt as the driver's opening request. Throws `TaskError` for the sheet to show inline.
     @discardableResult
     ///
@@ -192,7 +192,7 @@ extension AppModel {
         state.startWatching()
         state.refresh()
         startSetup(for: state, runCommands: runSetup)
-        selection = .task(record.id)
+        if takesSelection(threadOrigin, in: scopeID) { selection = .task(record.id) }
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
         guard openThread else { return state }

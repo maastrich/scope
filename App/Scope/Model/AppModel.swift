@@ -328,6 +328,14 @@ final class AppModel {
         }
     }
 
+    /// Whether something just opened takes the sidebar selection. What the user opened does. What an agent opened
+    /// (`scope thread new`, `scope_task_new`) does not: it would replace the terminal being read, move the
+    /// inspector to another subject and, for another scope, switch the sidebar — the row and its state mark say it
+    /// is there. It still takes the selection when its scope is on screen with no thread shown: nothing is being read.
+    func takesSelection(_ origin: ThreadOrigin, in scopeID: ScopeID) -> Bool {
+        origin.author == .user || (currentThread == nil && currentScope?.id == scopeID)
+    }
+
     /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`).
     @discardableResult
     func newThreadInCurrentContext(driverID: String? = nil) async -> ThreadSession? {
@@ -830,8 +838,10 @@ final class AppModel {
         await env.threadRecords.save(record)
         // The next ⌘T in this scope opens the same driver.
         lastDriverByScope[scopeID] = profile.id
-        selection = .thread(session.id)
-        selectedThreadID = session.id
+        if takesSelection(origin, in: scopeID) {
+            selection = .thread(session.id)
+            selectedThreadID = session.id
+        }
         await launch(session, mode: .launch, initialPrompt: initialPrompt)
         return session
     }
@@ -944,19 +954,22 @@ final class AppModel {
         await launch(session, mode: session.canResume ? .resume : .launch)
     }
 
-    /// Removes the tab (and the terminal view with it) and moves the selection to a neighbour or the
-    /// scope's empty view. The record stays on disk.
+    /// Removes the tab (and the terminal view with it) and moves the selection to a neighbour of the same group —
+    /// the other threads of its task, or the other loose threads — else to the task row, else to the scope's empty
+    /// view. Never into another task: closing a thread is not asking to look at different work. The record stays
+    /// on disk.
     private func detach(_ session: ThreadSession) {
         let id = session.id
         let wasSelected = selectedThreadID == id
-        let siblings = threadOrder(in: session.record.scopeID)
+        let sameGroup: (ThreadSession) -> Bool = { $0.record.taskID == session.record.taskID }
+        let siblings = threadOrder(in: session.record.scopeID).filter(sameGroup)
         let position = siblings.firstIndex { $0.id == id } ?? 0
         threads.removeAll { $0.id == id }
         if lastThreadByScope[session.record.scopeID] == id {
             lastThreadByScope[session.record.scopeID] = nil
         }
         guard wasSelected else { return }
-        let remaining = threadOrder(in: session.record.scopeID)
+        let remaining = threadOrder(in: session.record.scopeID).filter(sameGroup)
         if let neighbour = remaining[safe: min(position, remaining.count - 1)] {
             selection = .thread(neighbour.id)
             selectedThreadID = neighbour.id
