@@ -62,9 +62,22 @@ final class AppModel {
 
     /// The scope the sidebar shows (its tasks, threads and repositories). Follows the selection — selecting an
     /// item of another scope switches — and is remembered across launches; `nil` means "the first declared".
+    ///
+    /// Arriving in a scope brings what belongs to it and drops what belonged to the one left: its tasks' inspector
+    /// tab comes back, the sidebar filter and the scope-wide sheet go — a filter typed for one scope hid rows of
+    /// the next, and the sheet was about the scope left behind.
     var currentScopeID: ScopeID? {
-        didSet { if !isRestoringUIState, currentScopeID != oldValue { persistUIState() } }
+        didSet {
+            guard !isRestoringUIState, currentScopeID != oldValue else { return }
+            if let id = currentScopeID { taskInspectorTab = places[id]?.taskTab ?? .delta }
+            searchUI.sidebarFilter = ""
+            globalSheet = nil
+            persistUIState()
+        }
     }
+
+    /// Where the user was in each scope (`ScopePlace`), kept current by `persistUIState` and read by `selectScope`.
+    private(set) var places: [ScopeID: ScopePlace] = [:]
 
     /// Driver last opened per scope (restored from the UI state): what ⌘T reaches for first.
     var lastDriverByScope: [ScopeID: String] = [:]
@@ -73,7 +86,6 @@ final class AppModel {
     var selectedThreadID: ThreadID? {
         didSet {
             if let id = selectedThreadID, let session = session(id) {
-                lastThreadByScope[session.record.scopeID] = id
                 revealThread(session)
             }
             clearNotifications(for: selectedThreadID)
@@ -133,7 +145,6 @@ final class AppModel {
         config.preferences.autoCloseExitedThreads
     }
 
-    @ObservationIgnored private var lastThreadByScope: [ScopeID: ThreadID] = [:]
     @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
@@ -183,10 +194,37 @@ final class AppModel {
         }
     }
 
-    /// The scope switcher: shows `id` in the sidebar with its header row selected.
+    /// The scope switcher: goes back to where the user was in `id` — the row, the thread on screen, the tab — or,
+    /// on a first visit, to its first thread. Asked for the scope already shown, it selects the scope's own row.
     func selectScope(_ id: ScopeID) {
         guard scope(id) != nil else { return }
-        selection = .scope(id)
+        guard id != currentScope?.id else {
+            selection = .scope(id)
+            return
+        }
+        let place = places[id]
+        if let item = place?.selection, isSelectable(item, in: id) {
+            selection = item
+            // A task row stands for one of its threads: the one that was being read, not the first.
+            if case .task(let taskID) = item, let thread = place?.thread, session(thread)?.record.taskID == taskID.rawValue {
+                selectedThreadID = thread
+            }
+        } else if let first = threadOrder(in: id).first {
+            selection = .thread(first.id)
+            selectedThreadID = first.id
+        } else {
+            selection = .scope(id)
+        }
+    }
+
+    /// Whether a remembered sidebar item still names a row of `scopeID`.
+    private func isSelectable(_ item: SidebarItem, in scopeID: ScopeID) -> Bool {
+        switch item {
+        case .scope(let id): id == scopeID
+        case .repo(let id, let relativePath): id == scopeID && scope(id)?.repo(relativePath: relativePath) != nil
+        case .thread(let id): session(id)?.record.scopeID == scopeID
+        case .task(let id): task(id).map { $0.scopeID == scopeID && !$0.isArchived } ?? false
+        }
     }
 
     /// The Repositories section of the current scope (View ▸ Show Repositories).
@@ -555,6 +593,7 @@ final class AppModel {
         }
         inspectorShown = state.inspectorVisible
         taskInspectorTab = state.inspectorTab
+        places = state.places.filter { scope($0.key) != nil }
         base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
         lastDriverByScope = state.lastDrivers
@@ -579,6 +618,7 @@ final class AppModel {
             selection = nil
         }
         currentScopeID = scopeID(of: selection) ?? state.currentScope.flatMap(scope)?.id ?? scopes.first?.id
+        if let id = currentScopeID, let tab = places[id]?.taskTab { taskInspectorTab = tab }
         if selection == nil, let scope = currentScope {
             if let first = threads(in: scope.id).first {
                 selection = .thread(first.id)
@@ -590,6 +630,9 @@ final class AppModel {
     }
 
     func persistUIState() {
+        if let id = currentScope?.id {
+            places[id] = ScopePlace(selection: selection, thread: selectedThreadID, taskTab: taskInspectorTab)
+        }
         var state = UIState()
         state.selectedItem = selection
         state.selectedThread = selectedThreadID
@@ -599,6 +642,7 @@ final class AppModel {
         state.inspectorVisible = inspectorShown
         state.inspectorTab = taskInspectorTab
         state.basePins = base.pins
+        state.places = places
         state.inspectorWidth = inspectorWidth
         state.lastDrivers = lastDriverByScope
         env.uiState.save(state)
@@ -965,9 +1009,6 @@ final class AppModel {
         let siblings = threadOrder(in: session.record.scopeID).filter(sameGroup)
         let position = siblings.firstIndex { $0.id == id } ?? 0
         threads.removeAll { $0.id == id }
-        if lastThreadByScope[session.record.scopeID] == id {
-            lastThreadByScope[session.record.scopeID] = nil
-        }
         guard wasSelected else { return }
         let remaining = threadOrder(in: session.record.scopeID).filter(sameGroup)
         if let neighbour = remaining[safe: min(position, remaining.count - 1)] {

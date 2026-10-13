@@ -213,7 +213,7 @@ enum PaletteModel {
         // Scopes
         for other in model.scopes where other.id != scope?.id {
             items.append(PaletteItem(id: "scope-\(other.id.rawValue)", section: .scopes, icon: "folder", label: other.name,
-                                     hint: other.url.path, path: other.url.path) { model.selection = .scope(other.id) })
+                                     hint: other.url.path, path: other.url.path) { model.selectScope(other.id) })
         }
         return items
     }
