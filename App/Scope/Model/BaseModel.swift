@@ -1,6 +1,7 @@
 import Foundation
 import ScopeCore
 import ScopeGit
+import ScopeTasks
 
 /// The three sub-sections of the Base panel.
 enum BaseSection: String, CaseIterable, Hashable {
@@ -24,8 +25,12 @@ enum BaseFileContent: Equatable {
 @MainActor
 @Observable
 final class BaseModel {
-    /// Repo id picked in the panel header, per scope (`nil` = follow the sidebar selection).
-    var pickedRepo: [ScopeID: String] = [:]
+    /// Repositories pinned in the panel header, keyed by `BaseContext.key` and valued by graph key. A pin belongs to
+    /// the task, loose thread or scope it was made in; no entry means the panel follows the selection.
+    var pins: [String: String] = [:]
+    /// The repository last shown in each scope (graph key): what a scope row falls back to. Written when the panel
+    /// shows a repository, so it is not observed — reading it must not redraw the panel that just wrote it.
+    @ObservationIgnored var recent: [ScopeID: String] = [:]
     var section: BaseSection = .files
     private(set) var repoURL: URL?
     private(set) var behind: Int?
@@ -254,41 +259,83 @@ final class BaseModel {
 }
 
 extension AppModel {
-    /// The repo the Base panel shows: the header pick when it belongs to the current scope, else the
-    /// selected repo row, the current thread's base / task repo, or the scope's first repo.
-    var baseRepo: RepoState? {
+    /// What a Base pin made now would belong to: the selected task, else the selected loose thread, else the scope.
+    var baseContext: BaseContext? {
         guard let scope = currentScope else { return nil }
-        if let picked = base.pickedRepo[scope.id], let repo = scope.repo(relativePath: picked) { return repo }
-        if case .repo(_, let relativePath) = selection, let repo = scope.repo(relativePath: relativePath) { return repo }
-        if let thread = currentThread, case .repoBase(let relativePath) = thread.record.cwdKind,
-           let repo = scope.repo(relativePath: relativePath) {
-            return repo
-        }
-        if let task = currentTask, let first = task.activeRepos.first,
-           let repo = scope.repos.first(where: { GraphModel.key(for: $0) == first.repoRelativePath }) {
-            return repo
-        }
-        return scope.repos.first
+        if let task = currentTask { return .task(task.id) }
+        if case .thread(let id) = selection { return .thread(id) }
+        return .scope(scope.id)
     }
 
-    /// Shows the Base panel for a repo (card link, sidebar "See Base", ⌘⇧B). Closes the sheet the link may sit
-    /// on: the inspector is behind it.
+    /// The repository the Base panel shows and why (`BaseSubjectResolver`, where the rule is and is tested).
+    /// A selected repo row is its own answer, so no pin applies to it.
+    func baseSubject(ignoringPin: Bool = false) -> (repo: RepoState, reason: BaseSubjectReason)? {
+        guard let scope = currentScope else { return nil }
+        var selectedRepo: String?
+        if case .repo(_, let relativePath) = selection { selectedRepo = relativePath }
+        let pin = ignoringPin || selectedRepo != nil ? nil : baseContext.flatMap { base.pins[$0.key] }
+        let input = BaseSubjectInput(
+            scopeRoot: scope.url.path,
+            repos: scope.repos.map(\.id),
+            pin: pin,
+            selectedRepo: selectedRepo,
+            threadDirectory: currentThread.map { $0.reportedDirectory ?? $0.record.cwd },
+            taskRepos: currentTask?.activeRepos ?? [],
+            deltaFocus: delta.taskID == currentTask?.id ? delta.selectedFile?.repo : nil,
+            recent: base.recent[scope.id]
+        )
+        guard let subject = BaseSubjectResolver.resolve(input),
+              let repo = scope.repos.first(where: { GraphModel.key(for: $0) == subject.repo }) else { return nil }
+        return (repo, subject.reason)
+    }
+
+    var baseRepo: RepoState? { baseSubject()?.repo }
+
+    /// Points Base at `repo` for the current context, until unpinned. With a repo row selected the row is the
+    /// choice, so the selection moves instead.
+    func pinBase(_ repo: RepoState, in scope: ScopeState) {
+        if case .repo = selection {
+            selection = .repo(scope.id, relativePath: repo.id)
+            return
+        }
+        guard let context = baseContext else { return }
+        base.pins[context.key] = GraphModel.key(for: repo)
+        persistUIState()
+    }
+
+    /// Lets Base follow the selection again in the current context.
+    func unpinBase() {
+        guard let context = baseContext, base.pins.removeValue(forKey: context.key) != nil else { return }
+        persistUIState()
+    }
+
+    /// Whether a stored pin still has something to belong to (its task, thread or scope exists).
+    func isLiveBaseContext(_ key: String) -> Bool {
+        let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return false }
+        switch parts[0] {
+        case "task": return TaskID(rawValue: parts[1]).flatMap(task) != nil
+        case "thread": return ThreadID(rawValue: parts[1]).flatMap(session) != nil
+        case "scope": return scope(ScopeID(rawValue: parts[1])) != nil
+        default: return false
+        }
+    }
+
+    /// Shows the Base panel for a repo (card link, sidebar "See Base", ⌘P on a base file), pinned in the current
+    /// context. Closes the sheet the link may sit on: the inspector is behind it.
     func showBase(repo: RepoState, in scope: ScopeState) {
-        base.pickedRepo[scope.id] = repo.id
+        pinBase(repo, in: scope)
         globalSheet = nil
         showInspector(.base)
     }
 
-    /// The repos the Base header offers: the task's own while a task is selected — the panel is about the task —
-    /// every repo of the scope otherwise. A repo picked from elsewhere (a graph card) stays listed while shown.
-    func baseRepoCandidates(in scope: ScopeState) -> [RepoState] {
-        var candidates = scope.repos
-        if let task = currentTask {
-            let keys = Set(task.activeRepos.map(\.repoRelativePath))
-            candidates = scope.repos.filter { keys.contains(GraphModel.key(for: $0)) }
-            if let shown = baseRepo, !candidates.contains(where: { $0.id == shown.id }) { candidates.append(shown) }
-        }
-        return candidates
+    /// The repos the Base header offers: the task's own first while a task is selected — the panel is about the
+    /// task — then the rest of the scope; every repo of the scope otherwise.
+    func baseRepoCandidates(in scope: ScopeState) -> (own: [RepoState], others: [RepoState]) {
+        guard let task = currentTask else { return (scope.repos, []) }
+        let keys = Set(task.activeRepos.map(\.repoRelativePath))
+        return (scope.repos.filter { keys.contains(GraphModel.key(for: $0)) },
+                scope.repos.filter { !keys.contains(GraphModel.key(for: $0)) })
     }
 
     /// "Open a shell here": a driver-less terminal in the base checkout (spec §4.5).

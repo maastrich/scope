@@ -134,11 +134,12 @@ final class PullRequestsModel {
 }
 
 extension AppModel {
-    /// The repo the PRs panel lists: the header pick when it belongs to the current scope, else what Base shows.
+    /// The repo the PRs panel lists: the header pick when it belongs to the current scope, else the repository Base
+    /// would follow to — not the one pinned there, which is a choice made about Base.
     var pullRequestsRepo: RepoState? {
         guard let scope = currentScope else { return nil }
         if let picked = pullRequests.pickedRepo[scope.id], let repo = scope.repo(relativePath: picked) { return repo }
-        return baseRepo
+        return baseSubject(ignoringPin: true)?.repo
     }
 
     /// Opens the Pull Requests sheet, on a repo when one is given (the sidebar button, ⇧⌘P, the palette).
