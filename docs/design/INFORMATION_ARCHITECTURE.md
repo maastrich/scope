@@ -126,7 +126,7 @@ selection is a sibling in the same task or group, else the task row, else the sc
 
 **The wording** (W13). The band says `base checkout · main` in a task context, and the empty/first-use hint of the
 tab says what Base is for: *the repository as it is on `main`, next to the task's sandbox*. Whether Base should also
-browse the sandbox's files is a feature question left open in §7.
+browse the sandbox's files is a feature question left open in §8.
 
 File-level changes:
 
@@ -183,12 +183,12 @@ Small, each tied to a row above; none needs a new screen.
 | For | Change | Where |
 |---|---|---|
 | Q12, Q9 | The **subject line** of §1.4: the band always names what the visible panel is about and why. | `InspectorView.swift`, `TaskSummaryBand.swift` |
-| Q5, Q9 | The collapsed **Repositories** header carries the exceptions: `Repositories 35 · 2 dirty`. Behind-count joins it once it is known without opening Base (it needs a throttled fetch per repository; open question in §7). | `SidebarView.swift:194-196, 279` |
+| Q5, Q9 | The collapsed **Repositories** header carries the exceptions: `Repositories 35 · 2 dirty`. Behind-count joins it once it is known without opening Base (it needs a throttled fetch per repository; open question in §8). | `SidebarView.swift:194-196, 279` |
 | Q8 | The window subtitle becomes `scope · task · cwd` when the thread has a task; the palette's thread rows hint `task · state`. | `ThreadToolbar.swift:16-18`, `PaletteModel.swift:148-150` |
 | Q2, Q11 | Per-scope attention marks on the scope rail (§4.4). | new `ScopeRail.swift` |
 | Q10 | The Pull Requests button either counts the scope or names its repository. | `GlobalViewsRow.swift:59-64` |
 | Q6 | The hover card also opens at once on ⌥-hover or from the row's context menu (**Show Details**), keeping the 700 ms rest for a plain hover. | `TaskRow.swift` |
-| Q4 | **Not designed here.** A one-line "last activity" per thread needs hook data this research did not audit. Listed in §7. | — |
+| Q4 | **Not designed here.** A one-line "last activity" per thread needs hook data this research did not audit. Listed in §8. | — |
 
 ---
 
@@ -448,7 +448,37 @@ both already under `SCOPE_HOME`. `SPEC.md` §7 should gain the rail and the two 
 
 ---
 
-## 7. Open questions
+## 7. Decisions from the prototype review (2026-10-14)
+
+A navigable mock of §4 and §1.4 was reviewed with the owner: https://claude.ai/artifact/3wNhWuueUYzjGhPJApvrf6.
+Where this section disagrees with §4.3–§4.4 and §6, this section wins.
+
+| Topic | Decision | Replaces |
+|---|---|---|
+| Where the scope tiles live | **In the sidebar header**: the active scope as a tile with its name, the other scopes as tiles beside it. No rail under the footer, no strip on the window edge. | The bottom rail of §4.3–§4.4 and plan step 7's placement. Tile states, shortcuts and per-scope memory are unchanged. |
+| How Base names its subject | **A breadcrumb** — scope › task › repository, the last segment being the picker — with a sentence under it saying why that repository is shown (*Shown because claude is working in logger*, *You pinned hashup here. Unpin*). The same breadcrumb heads the scene. | The one-line band with a `pinned ✕` chip in §1.4. The rule itself is unchanged. |
+| Look | **Not macOS-native chrome.** Flat panels, hairlines, mono captions; the app draws its own controls, as `43babbb` already started. | — |
+| States | Written in words wherever there is room (*needs you*, *working*, *finished*, *idle*), the mark kept beside them. | — |
+| Row density | **A preference**: *Detailed* (a second line saying what the task or thread is doing) or *Compact*. Settings ▸ Sidebar, and **⌃⌘L** in the View menu. | — |
+| Arrangement | **A preference**: *As a tree* (loose threads, then tasks) or *By state* (needs you, working, finished, idle). Settings ▸ Sidebar, and **⌃⌘G** in the View menu. | — |
+
+Both preferences belong in `Preferences` (`Sources/ScopeCore/Models/ScopeConfig.swift:258`), decoded with
+`decodeIfPresent` like its neighbours, next to `attentionCounter`; the chords sit beside ⌃⌘R *Show Repositories*
+(`ScopeCommands.swift:330`). ⌃⌘L and ⌃⌘G are unused in the app today; neither was checked against system-wide
+shortcuts.
+
+Added plan step, after step 9:
+
+| # | Step | Files | Verify |
+|---|---|---|---|
+| 10 | **Sidebar preferences.** `sidebarRows` (`detailed` / `compact`) and `sidebarArrangement` (`tree` / `byState`) in `Preferences`; a Sidebar group in Settings; *View ▸ Detailed Rows* (⌃⌘L) and *View ▸ Arrange by State* (⌃⌘G); the row views read them. The status sentence of a detailed row comes from the package so it is tested. | `Sources/ScopeCore/Models/ScopeConfig.swift:258`, `Sources/ScopeTasks/TaskStatus.swift`, `Tests/ScopeKitTests/ConfigStoreTests.swift`, `App/Scope/Views/Settings/SettingsView.swift`, `App/Scope/Commands/ScopeCommands.swift:314-340`, `App/Scope/Views/Sidebar/SidebarView.swift`, `TaskRow.swift`, `ThreadRow.swift` | `swift test --filter ConfigStoreTests`; toggle each chord with the terminal focused. |
+
+Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.swift`) instead of a new
+`ScopeRail.swift` under the footer.
+
+---
+
+## 8. Open questions
 
 - **Should Base browse the sandbox too?** In a task, "the files" most often means the worktree the agent is
   editing. A source switch (`Base | Sandbox`) on the tab would answer W13 properly; it is a feature, not a fix, and
@@ -461,5 +491,7 @@ both already under `SCOPE_HOME`. `SPEC.md` §7 should gain the rail and the two 
 - **What the other agents are doing** (Q4): a last-activity line per thread depends on what the adapters report.
   Needs an audit of `ScopeAdapters` events before any design.
 - **⌃1…9 against Mission Control** on the owner's machine — check before committing the default (§4.3).
+- **By state moves rows on their own.** A task changes group when its state changes; whether that is tolerable
+  while reading the list is only known by living with it — hence a preference, not a default decided here.
 - **Which eight swatches.** To be picked against `Surface.surface` in both appearances in step 6, from the brand
   families that are not already state colours.
