@@ -94,6 +94,14 @@ struct ScopeSwitcher: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Dragging a tile onto another moves its scope there in the declared order — the order of ⌃1…⌃9,
+                // and of the tiles themselves when Settings arranges them that way.
+                .draggable(other.id.rawValue)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let raw = items.first, model.scope(ScopeID(rawValue: raw)) != nil else { return false }
+                    model.moveScope(ScopeID(rawValue: raw), onto: other.id)
+                    return true
+                }
                 .help(tileHelp(other))
                 .accessibilityLabel("\(other.name), \(model.activity(of: other).label)")
             }

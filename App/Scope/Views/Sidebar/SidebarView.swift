@@ -16,6 +16,7 @@ struct SidebarView: View {
     @State private var renameText = ""
     @State private var footerWidth: CGFloat = 0
     @FocusState private var filterFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Below this width the footer buttons drop their titles.
     private static let footerTitleThreshold: CGFloat = 230
@@ -29,6 +30,10 @@ struct SidebarView: View {
             if model.scopes.isEmpty {
                 SidebarEmptyView()
             } else if let scope = model.currentScope {
+                // The list is the part that belongs to the scope, so it is the part that slides when the scope
+                // changes: in from the side the new scope sits on, 120 ms, a fade alone under Reduce Motion. The
+                // header above it never moves.
+                ZStack {
                 List(selection: listSelection) {
                     workSection(scope)
                     repositoriesSection(scope)
@@ -45,6 +50,16 @@ struct SidebarView: View {
                 .environment(\.defaultMinListRowHeight, 28)
                 .scrollContentBackground(.hidden)
                 .background(Surface.surface.ignoresSafeArea())
+                .id(scope.id)
+                .transition(slide)
+                }
+                .clipped()
+                .animation(.easeOut(duration: 0.12), value: scope.id)
+                .background {
+                    if model.config.preferences.swipeBetweenScopes {
+                        ScopeSwipeArea { model.selectAdjacentScope($0) }
+                    }
+                }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         ScopeSwitcher(scope: scope) { scope in
@@ -94,6 +109,13 @@ struct SidebarView: View {
         } message: { scope in
             Text("The folder \(scope.url.path) is not renamed; only the sidebar label changes.")
         }
+    }
+
+    private var slide: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let forward = model.scopeSwitchForward
+        return .asymmetric(insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                           removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity))
     }
 
     /// Hands the keyboard to the visible terminal, one turn later: the thread's `TerminalHost` has to be in

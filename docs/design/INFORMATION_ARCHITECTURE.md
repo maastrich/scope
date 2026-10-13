@@ -528,15 +528,29 @@ Where a behaviour was a judgement call it became a preference, with the judgemen
 | Sidebar rows | detailed | compact |
 | Sidebar arrangement | as a tree | by state |
 | Scope tiles | by importance | in declared order |
+| Swipe sideways on the sidebar to switch scope | on | off |
 
-Not done: the breadcrumb in the scene and the inspector, the slide and the swipe (step 8), drag-to-reorder of
-tiles, and following an agent's directory.
+The four items left at that point followed:
+
+- **Following an agent.** Claude Code's hooks already carry what is needed: `scope-hook` lifts the folder of the
+  file a tool call names (`tool_input.file_path`), else the hook's `cwd`, into the event (`HookStdin.directory`),
+  `ThreadSession.agentDirectory` keeps the last one, and the Base rule reads it before the shell's own report. In
+  a multi-repository task Base now follows the agent to the repository it last touched a file in. No driver
+  profile changed: `PostToolUse` was already forwarded with its stdin. Drivers without such hooks are unchanged.
+- **The breadcrumb.** The window title is `scope › task › thread` with `driver · directory` under it; the Base
+  header starts `scope › task ›` and ends on the repository picker, with the reason on the next line.
+- **Slide and swipe** (step 8). The list slides 120 ms from the side the new scope sits on, a fade under Reduce
+  Motion; the header does not move. A two-finger horizontal swipe over the sidebar steps one scope
+  (`ScopeSwipe`, a watching monitor that consumes nothing); **Settings ▸ Sidebar** turns it off.
+- **Reordering.** Dragging a tile onto another moves its scope there in the declared order; Settings ▸ Sidebar ▸
+  Scope order lists the scopes with their ⌃N and moves them up and down.
 
 **Checked by running** a throwaway Debug instance on a scratch home with four scopes (one missing): it starts and
 answers `scope ping`; a thread opened through the CLI in another scope does not move the selection, one opened in
 the scope on screen with nothing shown is shown, and a second one while that thread is on screen is not.
-**Not looked at:** every pixel — the tiles, the marks, the two-line rows, the settings rows and the pickers were
-built, never seen.
+**Not looked at:** every pixel — the tiles, the marks, the two-line rows, the settings rows, the pickers, the
+slide, the breadcrumb — and nothing that needs a hand on the trackpad: the swipe and the tile drag were built,
+never tried.
 
 ---
 

@@ -156,6 +156,40 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Swipe sideways on the sidebar to switch scope", isOn: preference(\.swipeBetweenScopes))
+                    .toggleStyle(.scope)
+                if model.scopes.count > 1 {
+                    SettingsRow("Scope order") {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            ForEach(Array(model.scopes.enumerated()), id: \.element.id) { index, scope in
+                                HStack(spacing: 6) {
+                                    Text(index < 9 ? "⌃\(index + 1)" : "")
+                                        .font(.scopeCaption)
+                                        .foregroundStyle(Ink.tertiary)
+                                    Text(scope.name)
+                                        .font(.scopeBody)
+                                        .lineLimit(1)
+                                    Button {
+                                        model.moveScopes(fromOffsets: IndexSet(integer: index), toOffset: index - 1)
+                                    } label: { Image(systemName: "chevron.up") }
+                                        .buttonStyle(.icon)
+                                        .disabled(index == 0)
+                                        .accessibilityLabel("Move \(scope.name) earlier")
+                                    Button {
+                                        model.moveScopes(fromOffsets: IndexSet(integer: index), toOffset: index + 2)
+                                    } label: { Image(systemName: "chevron.down") }
+                                        .buttonStyle(.icon)
+                                        .disabled(index == model.scopes.count - 1)
+                                        .accessibilityLabel("Move \(scope.name) later")
+                                }
+                            }
+                        }
+                    }
+                    Text("The declared order: what ⌃1…⌃9 and ⌥⌘←/→ follow. Dragging a tile onto another in the sidebar changes it too.")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text("Detailed rows add a line saying what each task or thread is doing (⌃⌘L). By state puts what needs you first, and rows move as their state changes; as a tree keeps loose threads, then tasks, in a fixed order (⌃⌘G).")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)

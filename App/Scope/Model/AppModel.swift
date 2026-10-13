@@ -69,12 +69,18 @@ final class AppModel {
     var currentScopeID: ScopeID? {
         didSet {
             guard !isRestoringUIState, currentScopeID != oldValue else { return }
+            let from = scopes.firstIndex { $0.id == oldValue } ?? 0
+            let to = scopes.firstIndex { $0.id == currentScopeID } ?? 0
+            scopeSwitchForward = to >= from
             if let id = currentScopeID { taskInspectorTab = places[id]?.taskTab ?? .delta }
             searchUI.sidebarFilter = ""
             globalSheet = nil
             persistUIState()
         }
     }
+
+    /// Whether the last scope switch went towards a later scope: the side the sidebar's content slides in from.
+    private(set) var scopeSwitchForward = true
 
     /// Where the user was in each scope (`ScopePlace`), kept current by `persistUIState` and read by `selectScope`.
     private(set) var places: [ScopeID: ScopePlace] = [:]
@@ -856,6 +862,13 @@ final class AppModel {
     private func removeLogoFile(of scope: ScopeState) {
         guard let name = scope.declaration.logo else { return }
         try? FileManager.default.removeItem(at: ScopeHome.scopeLogosURL(home: env.home).appending(path: name, directoryHint: .notDirectory))
+    }
+
+    /// Drops the scope `id` at the place of `target` in the declared order (a tile dragged onto another).
+    func moveScope(_ id: ScopeID, onto target: ScopeID) {
+        guard id != target, let from = scopes.firstIndex(where: { $0.id == id }),
+              let to = scopes.firstIndex(where: { $0.id == target }) else { return }
+        moveScopes(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
     }
 
     func moveScopes(fromOffsets offsets: IndexSet, toOffset destination: Int) {
