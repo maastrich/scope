@@ -4,6 +4,15 @@ import ScopeCore
 
 /// UI-only state that is not worth a place in `config.json`: what is selected, which scope the sidebar
 /// shows, which scopes list their repositories, whether the inspector is open and on which tab.
+/// Where the user was in one scope: what switching back to it restores.
+struct ScopePlace: Codable, Sendable, Equatable {
+    var selection: SidebarItem?
+    /// The thread on screen; tells which thread of a selected task was being read.
+    var thread: ThreadID?
+    /// The inspector tab of the scope's tasks (`AppModel.taskInspectorTab`).
+    var taskTab: InspectorTab = .delta
+}
+
 struct UIState: Codable, Sendable, Equatable {
     var selectedItem: SidebarItem?
     var selectedThread: ThreadID?
@@ -18,6 +27,8 @@ struct UIState: Codable, Sendable, Equatable {
     var inspectorTab: InspectorTab = .delta
     /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
     var basePins: [String: String] = [:]
+    /// The place left in each scope, the current one included.
+    var places: [ScopeID: ScopePlace] = [:]
     /// Points; clamped to `inspectorWidthRange` on restore.
     var inspectorWidth: Double = UIState.defaultInspectorWidth
     /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
@@ -30,7 +41,7 @@ struct UIState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins
+        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins, places
     }
 
     init() {}
@@ -48,6 +59,7 @@ struct UIState: Codable, Sendable, Equatable {
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]
+        places = (try? container.decodeIfPresent([ScopeID: ScopePlace].self, forKey: .places)) ?? [:]
     }
 }
 
