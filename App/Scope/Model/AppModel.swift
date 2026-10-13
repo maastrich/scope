@@ -101,10 +101,12 @@ final class AppModel {
         didSet { if !isRestoringUIState { persistUIState() } }
     }
 
-    /// The tab on screen: the user's, or Base while nothing selected has a task.
+    /// The tab on screen: the user's, or Base while nothing selected has a task. Asking for a tab without a task
+    /// selected changes nothing — Base is already up, and "See Base" on a repo row must not decide what the next
+    /// task opens on.
     var inspectorTab: InspectorTab {
         get { currentTask == nil && taskInspectorTab.needsTask ? .base : taskInspectorTab }
-        set { taskInspectorTab = newValue }
+        set { if currentTask != nil { taskInspectorTab = newValue } }
     }
 
     /// The scope-wide sheet over the window, if one is up. Never persisted: a sheet is a look, not a layout.
