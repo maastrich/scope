@@ -119,7 +119,7 @@ struct TaskPullRequestView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
     }
 
     /// The folded checks state in words, for the chip here and the one on the band.

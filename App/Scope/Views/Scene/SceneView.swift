@@ -46,6 +46,18 @@ struct SceneView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                model.toggleSidebar()
+            } label: {
+                Label("Sidebar", systemImage: "sidebar.left")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.icon)
+            .help("Toggle Sidebar (⌃⌘S)")
+            .accessibilityLabel("Toggle Sidebar")
+        }
+        .withoutSharedBackground()
         if let session = model.currentThread {
             // The state alone, centred. On macOS 26 the toolbar wraps a custom item in a 36 pt glass capsule,
             // which turned the 22 pt pill into a round blob taller than the title and out of line with the

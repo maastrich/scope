@@ -44,7 +44,7 @@ struct Checkerboard: View {
                 row += 1
             }
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
     }
 }
 

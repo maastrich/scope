@@ -93,7 +93,7 @@ struct ThreadRow: View {
                 withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
             }
         }
-        .onAccent(isListSelected, controlActiveState)
+        .sidebarRow(selected: isListSelected)
         .contextMenu { ThreadMenuItems(session: session) }
         .accessibilityAddTraits(isListSelected ? .isSelected : [])
     }
@@ -115,7 +115,7 @@ struct ThreadRow: View {
 
     /// On the accent fill nothing keeps a secondary tier: the darkest white that still reads as secondary is
     /// 3.99:1 against it, under what AA asks of text.
-    private var onAccent: Bool { isListSelected && controlActiveState == .key }
+    private var onAccent: Bool { false }
     private var glyphInk: Color { onAccent ? Ink.onAccent : Ink.secondary }
     private var captionInk: Color { onAccent ? Ink.onAccent : Ink.tertiary }
 

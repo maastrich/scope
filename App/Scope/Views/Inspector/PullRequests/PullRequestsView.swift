@@ -62,7 +62,7 @@ struct PullRequestsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
     }
 
     @ViewBuilder

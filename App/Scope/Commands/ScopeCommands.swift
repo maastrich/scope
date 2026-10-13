@@ -337,6 +337,14 @@ struct ScopeCommands: Commands {
 
     private var viewMenu: some Commands {
         CommandGroup(after: .sidebar) {
+            // The sidebar is the app's own column, not a split-view item, so the system's Show Sidebar does not
+            // reach it.
+            Button(model?.sidebarShown == false ? "Show Sidebar" : "Hide Sidebar") {
+                model?.toggleSidebar()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            .disabled(model == nil)
+
             Button(model?.threadMaximized == true ? "Restore Thread" : "Maximize Thread") {
                 model?.toggleThreadMaximized()
             }

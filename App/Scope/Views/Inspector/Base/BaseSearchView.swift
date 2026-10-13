@@ -134,7 +134,7 @@ struct BaseSearchView: View {
         }
         .padding(.horizontal, 7)
         .frame(height: 24)
-        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+        .background(Surface.field, in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(focused ? Color.accentColor.opacity(0.6) : Surface.stroke))
     }
 

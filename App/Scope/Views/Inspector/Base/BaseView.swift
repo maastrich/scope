@@ -34,22 +34,15 @@ struct BaseView: View {
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    // The path to what the panel shows — scope › task › repository — its last step being the
-                    // picker. The window title starts the same way.
-                    Text(scope.name)
+                    // The path to what the panel shows, its last step being the picker.
+                    // With a task selected the band above already reads "task · scope": repeating both here made
+                    // two headers for one subject, so the path starts at the task.
+                    Text(model.currentTask?.name ?? scope.name)
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     crumbSeparator
-                    if let task = model.currentTask {
-                        Text(task.name)
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        crumbSeparator
-                    }
                     ScopePicker("Repository", selection: Binding(
                         get: { reason == .pinned ? repo.id : Self.followTag },
                         set: { id in
@@ -128,7 +121,7 @@ struct BaseView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
     }
 
     private var crumbSeparator: some View {

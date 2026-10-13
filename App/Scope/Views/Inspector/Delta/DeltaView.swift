@@ -104,7 +104,7 @@ struct DeltaView: View {
             DeltaActionBar(task: task, showCommitSheet: $showCommitSheet)
         }
         .task(id: task.id) { await model.review.show(task: task.id) }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Surface.ground)
         .focusable()
         .focused($focused)
         .focusEffectDisabled()

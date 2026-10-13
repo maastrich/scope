@@ -27,6 +27,8 @@ struct UIState: Codable, Sendable, Equatable {
     var inspectorTab: InspectorTab = .delta
     /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
     var basePins: [String: String] = [:]
+    /// Points; clamped to `sidebarWidthRange` on restore.
+    var sidebarWidth: Double = UIState.defaultSidebarWidth
     /// The place left in each scope, the current one included.
     var places: [ScopeID: ScopePlace] = [:]
     /// Points; clamped to `inspectorWidthRange` on restore.
@@ -38,10 +40,12 @@ struct UIState: Codable, Sendable, Equatable {
     static let empty = UIState()
     static let inspectorWidthRange: ClosedRange<Double> = 320...520
     static let defaultInspectorWidth: Double = 380
+    static let sidebarWidthRange: ClosedRange<Double> = 200...420
+    static let defaultSidebarWidth: Double = 264
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins, places
+        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
     }
 
     init() {}
@@ -60,6 +64,7 @@ struct UIState: Codable, Sendable, Equatable {
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]
         places = (try? container.decodeIfPresent([ScopeID: ScopePlace].self, forKey: .places)) ?? [:]
+        sidebarWidth = (try? container.decodeIfPresent(Double.self, forKey: .sidebarWidth)) ?? UIState.defaultSidebarWidth
     }
 }
 

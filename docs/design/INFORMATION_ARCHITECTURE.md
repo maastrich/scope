@@ -529,6 +529,7 @@ Where a behaviour was a judgement call it became a preference, with the judgemen
 | Sidebar arrangement | as a tree | by state |
 | Scope tiles | by importance | in declared order |
 | Swipe sideways on the sidebar to switch scope | on | off |
+| Colours | neutral | ink |
 
 The four items left at that point followed:
 
@@ -545,12 +546,33 @@ The four items left at that point followed:
 - **Reordering.** Dragging a tile onto another moves its scope there in the declared order; Settings ▸ Sidebar ▸
   Scope order lists the scopes with their ⌃N and moves them up and down.
 
+**The finish pass** (owner's review of the running app: colours and finishes "too Apple", the light sidebar ground
+in particular; daily references are GitHub, Slack, Linear, Sentry, Zed, Arc, Claude):
+
+- **Flat columns.** `NavigationSplitView` drew the sidebar as a rounded panel floating over the window on macOS
+  26. `RootView` is now three plain columns under one toolbar, with hairlines for dividers; the sidebar's width
+  and ⌃⌘S are the app's own (`AppModel.sidebarWidth`, `toggleSidebar`).
+- **Neutral chrome.** White / near-black ground with grey chrome is the default; the Ink and Ivory palette of
+  [`RESEARCH.md`](RESEARCH.md) stays available (**Settings ▸ Appearance ▸ Colours**). Both live in the asset
+  catalogue, the brand's under names suffixed `Ink`; the tokens in `Theme.swift` are computed from
+  `ChromePalette.theme`.
+- **Quiet selection.** A selected sidebar row is a rounded neutral fill with its ordinary text colours, not the
+  system's full-width accent bar (`ListSelectionHighlightRemover`, `sidebarRow`). Row separators are gone.
+- **One ground.** The inspector panels were painted with `textBackgroundColor`, a system grey off the palette in
+  dark; they use `Surface.ground`.
+
+This reverses two calls of [`OPAQUE_AQUA.md`](OPAQUE_AQUA.md): the accent-filled selection, and "keep every macOS
+convention". The state colours and their shapes are untouched.
+
 **Checked by running** a throwaway Debug instance on a scratch home with four scopes (one missing): it starts and
 answers `scope ping`; a thread opened through the CLI in another scope does not move the selection, one opened in
 the scope on screen with nothing shown is shown, and a second one while that thread is on screen is not.
-**Not looked at:** every pixel — the tiles, the marks, the two-line rows, the settings rows, the pickers, the
-slide, the breadcrumb — and nothing that needs a hand on the trackpad: the swipe and the tile drag were built,
-never tried.
+**Looked at**, through captures of the app's own window in light and dark: the tiles and their marks, the `+N`
+overflow at 220, 264 and 330 pt, detailed and compact rows, the by-state groups, the Base header and its
+sentence, the Settings rows. Driven through the model and read back: Base following an agent's file into the
+second repository of a task, a pin kept by its task and not seen by another, Delta surviving a detour through a
+loose thread, a scope restored to its task and thread.
+**Not tried:** anything that needs a hand — the swipe, the tile drag, the pickers' menus, the slide.
 
 ---
 

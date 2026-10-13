@@ -49,6 +49,7 @@ struct SidebarView: View {
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, 28)
                 .scrollContentBackground(.hidden)
+                .background(ListSelectionHighlightRemover())
                 .background(Surface.surface.ignoresSafeArea())
                 .id(scope.id)
                 .transition(slide)
@@ -231,6 +232,7 @@ struct SidebarView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .selectionDisabled()
+            .listRowSeparator(.hidden)
     }
 
     // MARK: Sections
@@ -283,7 +285,8 @@ struct SidebarView: View {
                     .selectionDisabled()
                 ForEach(groupTasks) { task in taskRows(task) }
                 ForEach(groupThreads) { session in
-                    ThreadRow(session: session)
+                    // Depth 1 so its title lines up with the task names it sits among.
+                    ThreadRow(session: session, depth: 1)
                         .tag(SidebarItem.thread(session.id))
                 }
             }

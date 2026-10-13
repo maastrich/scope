@@ -55,6 +55,7 @@ struct LooseThreadsRow: View {
         .contentShape(Rectangle())
         .help("Threads of \(scope.name) that belong to no task: the scope root and the repository base checkouts")
         .accessibilityLabel("Loose threads, \(count)")
+        .sidebarRow(selected: false)
     }
 
     /// The most urgent state among the threads (`ThreadState.mostUrgent`).

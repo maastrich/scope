@@ -42,6 +42,21 @@ public enum AttentionCounterPlacement: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// The colours of the app's own chrome — grounds, hairlines, fills and text. The state colours are the same in both.
+public enum ChromeTheme: String, Codable, Sendable, CaseIterable {
+    /// Neutral greys: a white or near-black ground, grey chrome one step off it.
+    case neutral
+    /// The brand's Ink and Ivory: navy chrome in dark, a blue-grey sidebar on an ivory ground in light.
+    case ink
+
+    public var title: String {
+        switch self {
+        case .neutral: "Neutral"
+        case .ink: "Ink"
+        }
+    }
+}
+
 /// How much a sidebar row says.
 public enum SidebarRows: String, Codable, Sendable, CaseIterable {
     /// Two lines: the name, then what the task or thread is doing, in words.
@@ -378,6 +393,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var scopeTileOrder: ScopeTileOrder
     /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
     public var swipeBetweenScopes: Bool
+    /// Neutral by default.
+    public var chromeTheme: ChromeTheme
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -410,6 +427,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarArrangement: SidebarArrangement = .tree,
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
+        chromeTheme: ChromeTheme = .neutral,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -432,6 +450,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.sidebarArrangement = sidebarArrangement
         self.scopeTileOrder = scopeTileOrder
         self.swipeBetweenScopes = swipeBetweenScopes
+        self.chromeTheme = chromeTheme
         self.automation = automation
     }
 
@@ -440,7 +459,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme,
              automation, autoRelaunchThreads
     }
 
@@ -479,6 +498,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.sidebarArrangement
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
+        chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 

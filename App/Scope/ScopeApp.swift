@@ -25,8 +25,6 @@ struct ScopeApp: App {
         .defaultSize(width: 1280, height: 800)
         .windowToolbarStyle(.unified)
         .commands {
-            // View ▸ Show / Hide Sidebar and its ⌃⌘S. Without it the chord listed in the shortcut sheet did nothing.
-            SidebarCommands()
             ScopeCommands(updater: updater)
         }
 

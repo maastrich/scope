@@ -49,6 +49,7 @@ struct RepoRow: View {
         .accessibilityLabel(repo.isDirty ? "\(repo.shortName), uncommitted changes" : repo.shortName)
         .help(repo.displayName == repo.shortName ? repo.url.path : "\(repo.displayName)\n\(repo.url.path)")
         .contextMenu { contextMenu }
+        .sidebarRow(selected: model.selection == .repo(scope.id, relativePath: repo.id))
     }
 
     @ViewBuilder
