@@ -127,6 +127,20 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            SettingsSection("Threads opened by agents") {
+                SettingsRow("Bring them to the front") {
+                    ScopePicker("Bring them to the front", selection: preference(\.agentOpenedFocus),
+                                title: model.config.preferences.agentOpenedFocus.title) {
+                        ForEach(AgentOpenedFocus.allCases, id: \.self) { focus in
+                            Text(focus.title).tag(focus)
+                        }
+                    }
+                }
+                Text("A thread or task an agent opens always appears in the sidebar with its state mark. This is whether it also replaces the terminal you are reading. What you open yourself always comes to the front.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Threads waiting for you") {
                 SettingsRow("Show the count") {
                     ScopePicker("Show the count", selection: preference(\.attentionCounter),
