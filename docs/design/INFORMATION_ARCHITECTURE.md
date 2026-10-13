@@ -483,6 +483,26 @@ Step 6 gains the logo: a `logo` file name on `ScopeDeclaration`, the image store
 Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.swift`) instead of a new
 `ScopeRail.swift` under the footer.
 
+### As built — steps 1 to 3 (2026-10-14)
+
+`c180a39` (the resolver and `BaseSubjectTests`), `b667f35` (the wiring), and the follow-up that guards the tab.
+Three things differ from the plan above:
+
+- **The thread only says where it is when its shell does.** `ThreadSession.reportedDirectory` is fed by OSC 7 alone
+  (`ThreadSession.swift:332-342`). A shell that emits it is followed as it moves; an agent driver never emits it, so
+  its thread stays at the directory it started in. For a one-repository task that is the sandbox, which resolves
+  to the right repository. For a **multi-repository task it is the task root, which is inside no repository** —
+  W4 is then answered by the file open in Delta, else the task's first repository, not by the thread. Following
+  an agent into a repository needs a signal from the adapters (the cwd of the last tool call); listed below.
+- **Asking for a tab without a task changes nothing.** The setter of `inspectorTab` writes only while a task is
+  selected; otherwise *See Base* on a repo row, or ⇧⌘B on a loose thread, would have decided what the next task
+  opens on and brought W8 back. The Delta and Pull Request tabs are still clickable without a task and do nothing:
+  `TabStrip` has no disabled state.
+- **The breadcrumb is not in.** This round adds the sentence under the picker and the **Unpin** link; the
+  breadcrumb of the review comes with the visual work.
+
+Runtime behaviour was checked by building only (`BUILD SUCCEEDED`), not by running the app.
+
 ---
 
 ## 8. Open questions
@@ -495,6 +515,8 @@ Step 7 becomes: the tiles in `ScopeSwitcher` (`App/Scope/Views/Sidebar/ScopeRow.
   to a repository a normal thing; not required by them.
 - **"Behind origin" without opening Base** (Q9): needs a background `git fetch` per repository. With 35
   repositories that is a network policy decision — how often, and whether at all on a metered connection.
+- **Where an agent is working.** No driver reports its directory; the adapters would have to carry the cwd of the
+  last tool call for Base to follow an agent inside a multi-repository task.
 - **What the other agents are doing** (Q4): a last-activity line per thread depends on what the adapters report.
   Needs an audit of `ScopeAdapters` events before any design.
 - **⌃1…9 against Mission Control** on the owner's machine — check before committing the default (§4.3).
