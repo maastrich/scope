@@ -98,7 +98,15 @@ public enum AppHome {
         canonical(home) == canonical(ScopeHome.url(environment: [:]))
     }
 
-    private static func canonical(_ url: URL) -> String {
+    static func canonical(_ url: URL) -> String {
+        // `resolvingSymlinksInPath` leaves a link alone when its target does not exist, and `~/.scope` does not
+        // exist until the installed app has run once: a link to it would pass as some other folder and the Debug
+        // build would then create the production home through it. So the last component is followed by hand.
+        var url = url.standardizedFileURL
+        for _ in 0..<16 {
+            guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path) else { break }
+            url = URL(fileURLWithPath: target, relativeTo: url.deletingLastPathComponent()).standardizedFileURL
+        }
         var path = url.resolvingSymlinksInPath().standardizedFileURL.path
         while path.count > 1, path.hasSuffix("/") { path.removeLast() }
         return path.lowercased()
