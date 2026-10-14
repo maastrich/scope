@@ -1,23 +1,20 @@
 import AppKit
 import SwiftUI
+import ScopeCore
 import ScopeTasks
 
-/// The band under the inspector's tab row while a task is selected: the task's name and scope, the version strip
-/// (its branch, the base it forked from and where the two stand), the bound pull request, the prompt it was opened
-/// with, and one row per repo with the sandbox state, `+N −M` and the Open in Editor / See Delta buttons.
+/// The band at the top of the inspector, level with the window toolbar: what the column is about. A task's name and
+/// scope, with copy / open in editor / reveal on hover; without a task, the repository the Base sections show.
 ///
-/// This is the single owner of all of it. The same fields used to be drawn inside the sidebar, in a block injected
-/// into the `List` under the selected task row, which shoved every row below it by a variable amount on every
-/// click; the branch was drawn a second time by `DeltaView`. The sidebar now says *which* task, in one 28 pt row
-/// like any other, and the panel says *what*. The checks of the pull request have the Pull Request tab to
-/// themselves; the band keeps the one-line chip.
-struct TaskSummaryBand: View {
+/// The rest of what used to sit in the task's summary band — the version strip, the prompt, the repo rows, the pull
+/// request chip — moved into the Task and Pull Request sections, whose closed headers keep the essential.
+struct InspectorSubjectBand: View {
     @Environment(AppModel.self) private var model
-    let task: TaskState
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
+        HStack(spacing: 6) {
+            if let task = model.currentTask {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 12))
                     .foregroundStyle(Ink.secondary)
@@ -25,107 +22,148 @@ struct TaskSummaryBand: View {
                     .font(.scopeTitle)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
-                CopyButton(label: "Copy task name") {
-                    NSEvent.modifierFlags.contains(.option) ? task.record.slug : task.name
-                }
-                .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
+                    .help(task.name)
                 Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
-                Button {
-                    model.openTaskInEditor(task)
-                } label: {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.icon)
-                .foregroundStyle(Ink.secondary)
-                .help("Open Task in Editor (⇧⌘E)")
-                .accessibilityLabel("Open \(task.name) in Editor")
-                Button {
-                    Reveal.inFinder(task.record.rootURL)
-                } label: {
-                    Image(systemName: "folder")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.icon)
-                .foregroundStyle(Ink.secondary)
-                .help("Reveal in Finder")
-                .accessibilityLabel("Reveal \(task.name) in Finder")
-            }
-            .frame(height: 22)
-
-            TaskVersionStrip(task: task)
-
-            if let pr = task.record.pullRequest {
-                HStack(spacing: 6) {
+                HStack(spacing: 2) {
+                    // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
+                    CopyButton(label: "Copy task name") {
+                        NSEvent.modifierFlags.contains(.option) ? task.record.slug : task.name
+                    }
+                    .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
                     Button {
-                        model.openOnGitHub(pr.url)
+                        model.openTaskInEditor(task)
                     } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(PullRequestStyle.color(model.liveChecks(for: task) ?? .none))
-                                .frame(width: 6, height: 6)
-                            Text("\(pr.label) \(pr.title)")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(Ink.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                        .padding(.horizontal, 6)
-                        .frame(height: 18)
-                        .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
                     }
-                    .buttonStyle(.plain)
-                    // A real URL link, which is what the pointing hand means on macOS.
-                    .cursor(.pointingHand)
-                    .help("Open on GitHub — \(pr.url.absoluteString)")
-                    .accessibilityLabel("Open pull request \(pr.label) on GitHub")
-                    Spacer(minLength: 4)
-                    if let checks = model.liveChecks(for: task), checks != .none {
-                        Text("\(PullRequestStyle.glyph(checks)) \(TaskPullRequestView.caption(checks))")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(PullRequestStyle.color(checks))
+                    .help("Open Task in Editor (⇧⌘E)")
+                    .accessibilityLabel("Open \(task.name) in Editor")
+                    Button {
+                        Reveal.inFinder(task.record.rootURL)
+                    } label: {
+                        Image(systemName: "folder")
                     }
+                    .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal \(task.name) in Finder")
                 }
-                .frame(height: 22)
-            }
-
-            if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
-                Text(prompt)
-                    .font(.scopeCaption)
+                .buttonStyle(.icon)
+                .font(.system(size: 12))
+                .foregroundStyle(Ink.secondary)
+                .opacity(hovering ? 1 : 0)
+            } else if let repo = model.baseRepo {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 12))
                     .foregroundStyle(Ink.secondary)
-                    .lineLimit(2)
+                Text(repo.shortName)
+                    .font(.scopeTitle)
+                    .lineLimit(1)
                     .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
-                    .padding(.bottom, 4)
-                    .help(prompt)
-            }
-
-            ForEach(task.activeRepos) { repo in
-                TaskRepoRow(task: task, repo: repo)
+                    .help(repo.url.path)
+                Text("repository")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                Spacer(minLength: 4)
+                Text("No task selected")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+            } else {
+                Text("Nothing selected")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 30)
+        .frame(maxWidth: .infinity)
         .background(Surface.panel)
-        // On the band, which is up under every tab: this is what notices the PR a thread opened and binds it, and
-        // what keeps the checks fresh for the Pull Request tab.
-        .task(id: task.id) {
-            while !Task.isCancelled {
-                await model.refreshTaskPullRequest(task)
-                try? await Task.sleep(for: Self.pullRequestRefreshInterval)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// The Task section: closed, the branch and where it stands (commits ahead, base moved on); open, the version strip,
+/// the prompt the task was opened with and one row per repository with its sandbox state and `+N −M`.
+struct TaskSection: View {
+    @Environment(AppModel.self) private var model
+    let bodyHeight: Double?
+    var onNatural: (Double) -> Void
+
+    var body: some View {
+        let task = model.currentTask
+        CollapsibleSection(section: .task, bodyHeight: bodyHeight, onNatural: onNatural) {
+            if let task { TaskVersionSummary(task: task) }
+        } actions: {
+            EmptyView()
+        } content: {
+            if let task {
+                VStack(alignment: .leading, spacing: 0) {
+                    TaskVersionStrip(task: task)
+                    if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
+                        Text(prompt)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.secondary)
+                            .lineLimit(4)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, 4)
+                            .help(prompt)
+                    }
+                    ForEach(task.activeRepos) { repo in
+                        TaskRepoRow(task: task, repo: repo)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             }
         }
     }
 
     static let pullRequestRefreshInterval: Duration = .seconds(60)
+}
+
+/// What every task-wide number reads: the first summarised repository for the base and fork commit, the sum of the
+/// commits made, the largest lag of a base.
+@MainActor
+struct TaskVersionFacts {
+    let lead: RepoDeltaSummary?
+    let ahead: Int
+    let behind: Int
+
+    init(task: TaskState) {
+        let summaries = task.activeRepos.compactMap { task.summary(for: $0) }
+        lead = summaries.first { $0.mergeBase != nil } ?? summaries.first
+        ahead = summaries.reduce(0) { $0 + $1.ahead }
+        behind = summaries.map(\.behind).max() ?? 0
+    }
+}
+
+/// The closed Task header: the branch, `↑N`, and the base lag in warning colour when there is one.
+private struct TaskVersionSummary: View {
+    let task: TaskState
+
+    var body: some View {
+        let facts = TaskVersionFacts(task: task)
+        HStack(spacing: 6) {
+            Text(task.branch)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Color.accentColor)
+                .truncationMode(.middle)
+            if facts.ahead > 0 {
+                Text("↑\(facts.ahead)")
+                    .font(.scopeValue)
+                    .fixedSize()
+            }
+            if facts.behind > 0 {
+                Text("base behind \(facts.behind)")
+                    .foregroundStyle(Color("WarningText"))
+                    .fixedSize()
+            }
+        }
+    }
 }
 
 /// Where the task stands, in one tinted row: its branch, the base branch it forked from, the fork commit, how many
@@ -136,10 +174,10 @@ struct TaskVersionStrip: View {
     let task: TaskState
 
     var body: some View {
-        let summaries = task.activeRepos.compactMap { task.summary(for: $0) }
-        let lead = summaries.first { $0.mergeBase != nil } ?? summaries.first
-        let ahead = summaries.reduce(0) { $0 + $1.ahead }
-        let behind = summaries.map(\.behind).max() ?? 0
+        let facts = TaskVersionFacts(task: task)
+        let lead = facts.lead
+        let ahead = facts.ahead
+        let behind = facts.behind
         HStack(spacing: 6) {
             Text(task.branch)
                 .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
@@ -223,8 +261,8 @@ private struct TaskRepoRow: View {
                 .help("Open in Editor (⌥-click copies the path)")
                 .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
-                    model.inspectorTab = .delta
-                    model.delta.selectedFile = model.delta.orderedFiles.first { $0.repo == repo.repoRelativePath }
+                    model.showInspector(.delta)
+                    model.showDiff(model.delta.orderedFiles.first { $0.repo == repo.repoRelativePath })
                 } label: {
                     Image(systemName: "plus.forwardslash.minus")
                         .font(.system(size: 12))

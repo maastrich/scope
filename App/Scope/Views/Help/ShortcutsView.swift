@@ -68,8 +68,8 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌃⌘S", title: "Toggle Sidebar"),
             ShortcutEntry(keys: "⌃⌘R", title: "Show / Hide Repositories", note: "the Repositories section of the sidebar"),
         ]),
-        ShortcutGroup(title: "Delta panel", entries: [
-            ShortcutEntry(keys: "j / k", title: "Next / previous file", note: "the Delta panel must have focus"),
+        ShortcutGroup(title: "Delta", entries: [
+            ShortcutEntry(keys: "j / k", title: "Next / previous file", note: "the Delta list or the diff must have focus"),
             ShortcutEntry(keys: "] / [", title: "Next / previous hunk"),
         ]),
         ShortcutGroup(title: "Help", entries: [

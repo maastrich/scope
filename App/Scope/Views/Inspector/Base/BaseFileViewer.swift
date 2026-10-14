@@ -5,8 +5,54 @@ import SwiftUI
 /// jump tinted and centred, the search term highlighted wherever it occurs. No syntax colouring in this pass.
 struct BaseFileViewer: View {
     @Environment(AppModel.self) private var model
+    /// Controls the host puts at the ends of the header (the viewer column: back, close).
+    var leading: AnyView?
+    var trailing: AnyView?
 
     var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content
+        }
+    }
+
+    /// One header whatever the state, so the viewer's own controls are there while a file loads or fails too.
+    private var header: some View {
+        let base = model.base
+        let caption: String = switch base.content {
+        case .text(let text): "\(text.split(separator: "\n", omittingEmptySubsequences: false).count) lines"
+        case .image(let data): DecodedImage(data: data)?.caption ?? "undecodable image"
+        default: ""
+        }
+        return HStack(spacing: 8) {
+            if let leading { leading }
+            Image(systemName: "doc.text")
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+            if let path = base.selectedPath {
+                FilePathLabel(path: path)
+            }
+            Spacer(minLength: 4)
+            Text(caption)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
+                .lineLimit(1)
+                .fixedSize()
+            if let trailing {
+                HStack(spacing: 2) { trailing }.fixedSize()
+            }
+        }
+        .buttonStyle(.iconTight)
+        .foregroundStyle(Ink.secondary)
+        .font(.system(size: 11.5))
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(Surface.panel)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         let base = model.base
         Group {
             switch base.content {
@@ -50,17 +96,6 @@ struct BaseFileViewer: View {
     private func imageViewer(_ data: Data, path: String) -> some View {
         let image = DecodedImage(data: data)
         return VStack(spacing: 0) {
-            HStack {
-                Text(path)
-                    .font(.scopeValue)
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer()
-                Text(image?.caption ?? "undecodable image").font(.scopeCaption).foregroundStyle(Ink.secondary)
-            }
-            .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
-            Divider()
             if let image {
                 ImageCanvas(image: image)
             } else {
@@ -70,19 +105,7 @@ struct BaseFileViewer: View {
     }
 
     private func viewer(_ text: String, path: String, target: Int?, term: String) -> some View {
-        let lineCount = text.split(separator: "\n", omittingEmptySubsequences: false).count
         return VStack(spacing: 0) {
-            HStack {
-                Text(path)
-                    .font(.scopeValue)
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer()
-                Text("\(lineCount) lines").font(.scopeCaption).foregroundStyle(Ink.secondary)
-            }
-            .padding(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14))
-            Divider()
             MonoTextView(
                 identity: Identity(path: path, text: text),
                 version: Version(path: path, text: text, target: target, term: term),

@@ -27,6 +27,10 @@ final class ThreadSession: Identifiable {
         TerminalAppearance.apply(to: view)
         view.processDelegate = bridge
         view.onUserInput = { [weak self] bytes in self?.handleUserInput(bytes) }
+        view.onOpenLink = { [weak self] link in
+            guard let self else { return false }
+            return self.onOpenLink?(self, link) ?? false
+        }
         _terminalView = view
         return view
     }
@@ -61,6 +65,8 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored var onRecordChanged: (@MainActor (ThreadRecord) -> Void)?
     /// Called when the process exits (after the record was updated).
     @ObservationIgnored var onExit: (@MainActor (ThreadSession, ExitStatus) -> Void)?
+    /// A link clicked in the terminal; `true` when it was shown in the app.
+    @ObservationIgnored var onOpenLink: (@MainActor (ThreadSession, String) -> Bool)?
 
     /// How long a deferred launch waits for the first layout before starting on the default frame.
     static let layoutFallbackDelay: Duration = .milliseconds(250)

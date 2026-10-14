@@ -39,6 +39,8 @@ final class AppModel {
     let pullRequests: PullRequestsModel
     /// Comments on the Delta diff of the followed task.
     let review: ReviewModel
+    /// Which inspector sections are open, how they share the height, what the viewer shows.
+    let inspector = InspectorModel()
     /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
     var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
@@ -74,7 +76,7 @@ final class AppModel {
     /// item of another scope switches — and is remembered across launches; `nil` means "the first declared".
     ///
     /// Arriving in a scope brings what belongs to it and drops what belonged to the one left: its tasks' inspector
-    /// tab comes back, the sidebar filter and the scope-wide sheet go — a filter typed for one scope hid rows of
+    /// sections come back, the sidebar filter and the scope-wide sheet go — a filter typed for one scope hid rows of
     /// the next, and the sheet was about the scope left behind.
     var currentScopeID: ScopeID? {
         didSet {
@@ -89,7 +91,7 @@ final class AppModel {
             } else {
                 scopeSwitchForward = true
             }
-            if let id = currentScopeID { taskInspectorTab = places[id]?.taskTab ?? .delta }
+            if let id = currentScopeID { inspector.sections = places[id]?.sections ?? .defaults }
             searchUI.sidebarFilter = ""
             globalSheet = nil
             persistUIState()
@@ -140,28 +142,12 @@ final class AppModel {
     /// starts from the layout the user chose, not from a mode they may have forgotten they were in.
     private(set) var threadMaximized = false
 
-    /// The tab the inspector is on while a task is selected: the one the user last asked for. Kept apart from the
-    /// tab on screen so that passing over a row without a task — where only Base has a subject — does not
-    /// overwrite it, and coming back to a task comes back to its tab.
-    var taskInspectorTab: InspectorTab = .delta {
-        didSet { if !isRestoringUIState { persistUIState() } }
-    }
-
-    /// The tab on screen: the user's, or Base while nothing selected has a task. Asking for a tab without a task
-    /// selected changes nothing — Base is already up, and "See Base" on a repo row must not decide what the next
-    /// task opens on.
-    var inspectorTab: InspectorTab {
-        get { currentTask == nil && taskInspectorTab.needsTask ? .base : taskInspectorTab }
-        set { if currentTask != nil { taskInspectorTab = newValue } }
-    }
-
     /// The scope-wide sheet over the window, if one is up. Never persisted: a sheet is a look, not a layout.
     var globalSheet: GlobalSheet?
 
     /// Shows a task's panel in the inspector (⌘D, ⇧⌘B, the task's menu, a notification).
     func showInspector(_ tab: InspectorTab) {
-        inspectorTab = tab
-        inspectorShown = true
+        revealSection(tab.section)
     }
 
     /// Opens the Graph sheet (the sidebar button, ⌥⌘G, the palette, a repo's "See Graph").
@@ -655,7 +641,9 @@ final class AppModel {
             scope.looseThreadsShown = !state.looseThreadsCollapsed.contains(scope.id)
         }
         inspectorShown = state.inspectorVisible
-        taskInspectorTab = state.inspectorTab
+        inspector.weights = state.inspectorWeights
+        inspector.viewerShare = min(max(state.viewerShare, InspectorModel.viewerShareRange.lowerBound),
+                                    InspectorModel.viewerShareRange.upperBound)
         places = state.places.filter { scope($0.key) != nil }
         base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
@@ -682,7 +670,7 @@ final class AppModel {
             selection = nil
         }
         currentScopeID = scopeID(of: selection) ?? state.currentScope.flatMap(scope)?.id ?? scopes.first?.id
-        if let id = currentScopeID, let tab = places[id]?.taskTab { taskInspectorTab = tab }
+        if let id = currentScopeID { inspector.sections = places[id]?.sections ?? .defaults }
         if selection == nil, let scope = currentScope {
             if let first = threads(in: scope.id).first {
                 selection = .thread(first.id)
@@ -695,7 +683,7 @@ final class AppModel {
 
     func persistUIState() {
         if let id = currentScope?.id {
-            places[id] = ScopePlace(selection: selection, thread: selectedThreadID, taskTab: taskInspectorTab)
+            places[id] = ScopePlace(selection: selection, thread: selectedThreadID, sections: inspector.sections)
         }
         var state = UIState()
         state.selectedItem = selection
@@ -704,7 +692,8 @@ final class AppModel {
         state.reposShown = Set(scopes.filter(\.reposShown).map(\.id))
         state.looseThreadsCollapsed = Set(scopes.filter { !$0.looseThreadsShown }.map(\.id))
         state.inspectorVisible = inspectorShown
-        state.inspectorTab = taskInspectorTab
+        state.inspectorWeights = inspector.weights
+        state.viewerShare = inspector.viewerShare
         state.basePins = base.pins
         state.places = places
         state.inspectorWidth = inspectorWidth
@@ -971,6 +960,9 @@ final class AppModel {
         }
         session.onExit = { [weak self] session, status in
             self?.threadExited(session, status: status)
+        }
+        session.onOpenLink = { [weak self] session, link in
+            self?.openFileLink(link, from: session) ?? false
         }
         threads.append(session)
         env.knownThreads.insert(session.id)
