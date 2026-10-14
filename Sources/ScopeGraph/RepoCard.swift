@@ -55,6 +55,9 @@ public struct RepoCard: Codable, Sendable, Equatable {
     public var edited: Bool
     /// Level that produced the current content; `nil` for a fully manual card.
     public var generatedBy: GenerationLevel?
+    /// The version of the level 1 prompt that wrote the card (`Level1Generator.promptVersion`); `nil` for a card
+    /// no driver wrote, or one written before prompts were numbered.
+    public var promptVersion: Int?
 
     public init(
         name: String,
@@ -70,7 +73,8 @@ public struct RepoCard: Codable, Sendable, Equatable {
         tags: [String] = [],
         lastActivity: Date? = nil,
         edited: Bool = false,
-        generatedBy: GenerationLevel? = nil
+        generatedBy: GenerationLevel? = nil,
+        promptVersion: Int? = nil
     ) {
         self.teardown = teardown
         self.name = name
@@ -86,6 +90,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
         self.lastActivity = lastActivity
         self.edited = edited
         self.generatedBy = generatedBy
+        self.promptVersion = promptVersion
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -93,6 +98,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
         case defaultBranch = "default_branch"
         case lastActivity = "last_activity"
         case generatedBy = "generated_by"
+        case promptVersion = "prompt_version"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -111,6 +117,7 @@ public struct RepoCard: Codable, Sendable, Equatable {
         lastActivity = try c.decodeIfPresent(Date.self, forKey: .lastActivity)
         edited = try c.decodeIfPresent(Bool.self, forKey: .edited) ?? false
         generatedBy = try c.decodeIfPresent(GenerationLevel.self, forKey: .generatedBy)
+        promptVersion = try? c.decodeIfPresent(Int.self, forKey: .promptVersion)
     }
 
     /// Field-by-field merge of a freshly generated card over `self`: a generated value wins when
@@ -130,6 +137,8 @@ public struct RepoCard: Codable, Sendable, Equatable {
         merged.tags = generated.tags.isEmpty ? tags : generated.tags
         merged.lastActivity = generated.lastActivity ?? lastActivity
         merged.generatedBy = generated.generatedBy ?? generatedBy
+        // Follows `generatedBy`: a quick pass over a driver's card makes it a quick-pass card again.
+        merged.promptVersion = generated.generatedBy == nil ? promptVersion : generated.promptVersion
         return merged
     }
 }

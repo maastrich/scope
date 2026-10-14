@@ -98,11 +98,13 @@ public actor GraphGenerator {
                         try Task.checkCancellation()
                         let client = await registry.client(for: repo.url)
                         let cacheKey = await Level0Generator.cacheKey(repo: repo.url, using: client)
-                        // An unchanged repo is only done when its card came from the level asked for: the cache
+                        // An unchanged repo is only done when its card came from the level asked for, and from
+                        // the prompt as it stands: the cache
                         // key says nothing of who wrote the card, and an AI pass that skipped every repo the quick
                         // pass had seen left the README's first paragraph as the purpose.
                         if !force, snapshot.isCached(repo.key, cacheKey: cacheKey), let existing = snapshot.repos[repo.key],
-                           level1 == nil || existing.edited || existing.generatedBy == .level1 {
+                           level1 == nil || existing.edited
+                            || (existing.generatedBy == .level1 && existing.promptVersion == Level1Generator.promptVersion) {
                             progress(GraphProgress(repo: repo.name, index: index, total: total, phase: .skipped))
                             return nil
                         }

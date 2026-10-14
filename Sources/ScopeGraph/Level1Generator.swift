@@ -87,6 +87,11 @@ public struct Level1Generator: Sendable {
 
     // MARK: - Prompt
 
+    /// Bumped whenever the prompt asks for something else: a card an older prompt wrote is then redone by the
+    /// next analysis with AI, instead of keeping an answer to a question no longer asked. 2: the purpose as one
+    /// skill-like sentence.
+    public static let promptVersion = 2
+
     /// The JSON schema the driver must follow, as shown in the prompt.
     public static let schema = """
     {
@@ -156,6 +161,7 @@ public struct Level1Generator: Sendable {
             return Relation(kind: kind, repo: raw.repo)
         }
         card.generatedBy = .level1
+        card.promptVersion = promptVersion
         return card
     }
 
