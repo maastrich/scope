@@ -530,6 +530,7 @@ Where a behaviour was a judgement call it became a preference, with the judgemen
 | Scope tiles | by importance | in declared order |
 | Swipe sideways on the sidebar to switch scope | on | off |
 | Colours | neutral | ink |
+| Commit, push and pull-request buttons under Delta | hidden | shown |
 
 The four items left at that point followed:
 
