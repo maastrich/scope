@@ -2,8 +2,10 @@ import SwiftUI
 import ScopeGit
 import ScopeTasks
 
-/// Bottom bar of the Delta panel: Commit… (prominent), Push, Create PR / Open PR, and a caption naming
-/// the repo the actions apply to. `gh` missing disables Create PR with a tooltip.
+/// Bottom bar of the Delta panel: a caption naming the repo and its state, a link to the pull request when there
+/// is one, and Fix Conflicts when it needs it. With Settings ▸ Git ▸ Show commit and push buttons it also carries
+/// Commit… (prominent), Push, Create PR and Merge; off by default, since that is the agent's work in its thread.
+/// `gh` missing disables Create PR with a tooltip.
 struct DeltaActionBar: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -12,23 +14,28 @@ struct DeltaActionBar: View {
     var body: some View {
         let delta = model.delta
         let repo = delta.focusedRepo
+        let acts = model.config.preferences.showGitActions
         HStack(spacing: 8) {
-            Button {
-                showCommitSheet = true
-            } label: {
-                Label("Commit…", systemImage: "circle.circle")
-            }
-            .buttonStyle(.scopePrimary)
-            .disabled(repo == nil || delta.isActing || !isDirty(repo))
-            .help(isDirty(repo) ? "git add -A && git commit in the sandbox" : "Nothing to commit")
+            if acts {
+                Button {
+                    showCommitSheet = true
+                } label: {
+                    Label("Commit…", systemImage: "circle.circle")
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .buttonStyle(.scopePrimary)
+                .disabled(repo == nil || delta.isActing || !isDirty(repo))
+                .help(isDirty(repo) ? "git add -A && git commit in the sandbox" : "Nothing to commit")
 
-            Button {
-                Task { await model.delta.push(task: task) }
-            } label: {
-                Label("Push", systemImage: "arrow.up.to.line")
+                Button {
+                    Task { await model.delta.push(task: task) }
+                } label: {
+                    Label("Push", systemImage: "arrow.up.to.line")
+                }
+                .disabled(repo == nil || delta.isActing)
+                .help("git push -u origin \(task.branch)")
             }
-            .disabled(repo == nil || delta.isActing)
-            .help("git push -u origin \(task.branch)")
 
             if let repo, let url = task.record.pullRequest?.url ?? delta.prURLs[repo.repoRelativePath] {
                 Button {
@@ -38,7 +45,7 @@ struct DeltaActionBar: View {
                 }
                 .help(url.absoluteString)
                 pullRequestActions
-            } else {
+            } else if acts {
                 Button {
                     Task { await model.delta.createPR(task: task) }
                 } label: {
@@ -69,7 +76,7 @@ struct DeltaActionBar: View {
                 ThreadPicker(task: task, title: "Fix Conflicts", systemImage: "arrow.triangle.merge", showsTitle: true) { thread in
                     model.askToFixConflicts(of: task, to: thread)
                 }
-            case .mergeable:
+            case .mergeable where model.config.preferences.showGitActions:
                 Button {
                     Task { await model.mergePullRequest(of: task) }
                 } label: {
@@ -77,7 +84,7 @@ struct DeltaActionBar: View {
                 }
                 .disabled(pr.isDraft || model.pullRequests.merging.contains(task.id))
                 .help(pr.isDraft ? "A draft cannot be merged" : "gh pr merge #\(pr.number) into \(pr.baseRefName)")
-            case .unknown:
+            case .unknown, .mergeable:
                 EmptyView()
             }
         }

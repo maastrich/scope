@@ -395,6 +395,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var swipeBetweenScopes: Bool
     /// Neutral by default.
     public var chromeTheme: ChromeTheme
+    /// Commit…, Push, Create PR and Merge under the Delta panel. Off by default: committing and shipping is the
+    /// agent's work in its thread, and the panel is for reading what it did. Pulling a base checkout, opening a
+    /// pull request and asking a thread to fix conflicts are not part of this and stay.
+    public var showGitActions: Bool
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
 
@@ -428,6 +432,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
         chromeTheme: ChromeTheme = .neutral,
+        showGitActions: Bool = false,
         automation: AutomationSettings? = nil
     ) {
         self.defaultDriverID = defaultDriverID
@@ -451,6 +456,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.scopeTileOrder = scopeTileOrder
         self.swipeBetweenScopes = swipeBetweenScopes
         self.chromeTheme = chromeTheme
+        self.showGitActions = showGitActions
         self.automation = automation
     }
 
@@ -459,7 +465,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
              automation, autoRelaunchThreads
     }
 
@@ -499,6 +505,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
+        showGitActions = (try? container.decodeIfPresent(Bool.self, forKey: .showGitActions)) ?? defaults.showGitActions
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
     }
 

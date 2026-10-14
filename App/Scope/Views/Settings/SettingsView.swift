@@ -209,6 +209,14 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            SettingsSection("Git") {
+                Toggle("Show commit, push and pull-request buttons", isOn: preference(\.showGitActions))
+                    .toggleStyle(.scope)
+                Text("Off: the Delta panel is for reading what an agent did, and committing, pushing and opening a pull request stay its work in its thread. Pulling a base checkout, opening an existing pull request and asking a thread to fix conflicts are always there.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Threads opened by agents") {
                 SettingsRow("Bring them to the front") {
                     ScopePicker("Bring them to the front", selection: preference(\.agentOpenedFocus),
