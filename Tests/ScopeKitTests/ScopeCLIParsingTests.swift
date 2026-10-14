@@ -44,6 +44,15 @@ import Testing
                                "--repo=api", "--title=CI", "--prompt=why is it red?"]) == expected)
     }
 
+    @Test func archiveAndGarbageCollection() throws {
+        #expect(try Self.call(["task", "archive", "rework-auth"]) == .taskArchive(TaskArchiveParams(task: "rework-auth")))
+        #expect(throws: ScopeCLI.UsageError.self) { try Self.call(["task", "archive"]) }
+        #expect(try Self.call(["gc"]) == .gc(GCParams()))
+        #expect(try Self.call(["gc", "--dry-run"]) == .gc(GCParams(dryRun: true)))
+        // An older script's --force still parses; there is nothing left for it to force.
+        #expect(try Self.call(["task", "close", "t", "--force"]) == .taskClose(TaskCloseParams(task: "t")))
+    }
+
     @Test func taskNewTakesItsPromptAsWords() throws {
         #expect(try Self.call(["task", "new", "fix", "the", "flaky", "login", "test"])
             == .taskNew(TaskNewParams(prompt: "fix the flaky login test")))

@@ -32,7 +32,7 @@ public struct SkillInstaller: Sendable {
     public let serverName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 2
+    public static let version = 3
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -116,7 +116,8 @@ public struct SkillInstaller: Sendable {
         Inside a thread, `scope` is on the PATH and knows which scope and task you are in (`SCOPE_SCOPE`,
         `SCOPE_TASK`, `SCOPE_TASK_ROOT`, `SCOPE_THREAD`). From a session Scope did not launch, the same commands
         are the MCP tools `\(serverName)`: `scope_list`, `scope_task_new`, `scope_thread_new`, `scope_thread_read`,
-        `scope_thread_send`, `scope_thread_stop`, `scope_thread_close`, `scope_task_close`, `scope_ping`.
+        `scope_thread_send`, `scope_thread_stop`, `scope_thread_close`, `scope_task_archive`, `scope_task_close`,
+        `scope_gc`, `scope_ping`.
 
         ## Referring to a task
 
@@ -185,11 +186,13 @@ public struct SkillInstaller: Sendable {
         ## Finishing
 
         ```sh
-        scope task close rate-limiting                  # threads hung up, worktrees removed, branch kept
-        scope task close rate-limiting --delete-branch  # after the merge
+        scope task archive rate-limiting                # threads and processes stopped, worktrees removed, branch kept
+        scope task close rate-limiting --delete-branch  # after the merge: the task and its branch go too
         ```
 
-        Closing refuses to drop uncommitted work unless `--force` is given; say so to the user rather than forcing.
+        Neither refuses: uncommitted changes, and an unmerged branch's last commit, are kept under
+        `refs/scope/salvage/` and the answer names the ref. Scope also cleans up on its own (leftover folders,
+        processes of archived tasks, stale worktrees); `scope gc --dry-run` shows what it would remove.
 
         ## Rules
 

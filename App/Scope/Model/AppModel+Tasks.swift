@@ -325,10 +325,11 @@ extension AppModel {
         }
     }
 
-    /// `closeTask` for the control socket: the failure goes back to the caller instead of the problem list.
-    func removeTask(_ taskID: TaskID, deleteBranch: Bool) async throws {
+    /// Archive or close for the control socket: the failure goes back to the caller instead of the problem list.
+    @discardableResult
+    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode) async throws -> DismantleOutcome {
         guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
-        try await dismantle(task, .close(deleteBranch: deleteBranch))
+        return try await dismantle(task, mode)
     }
 
     /// The Retry of a failed archive or close: the same run again, from where the last one stopped.
@@ -357,7 +358,8 @@ extension AppModel {
 
     /// Archive and close: the row leaves the live list at once, the task manager does the rest (threads hung up
     /// inside its lock, through `prepare`), and the outcome is reported.
-    private func dismantle(_ task: TaskState, _ mode: DismantleMode) async throws {
+    @discardableResult
+    private func dismantle(_ task: TaskState, _ mode: DismantleMode) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
         let outcome: DismantleOutcome
@@ -379,6 +381,7 @@ extension AppModel {
         }
         reportOutcome(outcome, task: task, mode: mode)
         Task { await collectGarbage() }
+        return outcome
     }
 
     // MARK: Garbage collection
@@ -403,8 +406,9 @@ extension AppModel {
     /// `resumingPending` also reruns the archives and closes left half-done — at launch only, so a run that keeps
     /// failing is reported once per launch rather than every half hour.
     @discardableResult
-    func collectGarbage(dryRun: Bool = false, resumingPending: Bool = false) async -> GarbageReport? {
-        guard dryRun || config.preferences.cleanUpAutomatically else { return nil }
+    /// `force` runs it even with the preference off: someone asked for it (`scope gc`).
+    func collectGarbage(dryRun: Bool = false, resumingPending: Bool = false, force: Bool = false) async -> GarbageReport? {
+        guard dryRun || force || config.preferences.cleanUpAutomatically else { return nil }
         let bases = scopes.flatMap { scope in
             scope.repos.map { repo in
                 repo.id.isEmpty || repo.id == "." ? URL(fileURLWithPath: scope.declaration.path, isDirectory: true)

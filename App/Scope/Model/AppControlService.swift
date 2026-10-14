@@ -93,19 +93,63 @@ final class AppControlService: ControlService {
                                                        state: session.displayState.name, page: page)))
             }
         case .taskClose(let params):
-            guard let task = model.tasks.first(where: { $0.record.id.rawValue == params.task || $0.record.slug == params.task }) else {
-                return .failure(.notFound("no task “\(params.task)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
+            return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
+                                   done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
+        case .taskArchive(let params):
+            return await dismantle(params.task, .archive, method: .taskArchive,
+                                   done: "archived the task %@; its branch is kept")
+        case .gc(let params):
+            guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
+                return .failure(.failed("the cleanup did not run"))
             }
-            let slug = task.record.slug
-            do {
-                try await model.removeTask(task.id, deleteBranch: params.deleteBranch)
-            } catch {
-                return .failure(.failed("could not close the task \(slug)", detail: String(describing: error)))
-            }
-            return .success(.action(ActionResult(message: "closed the task \(slug)"
-                                                     + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"),
-                                                 task: task.record.id.rawValue), .taskClose))
+            return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
         }
+    }
+
+    /// Archive and close: the task named by id or slug, the outcome said in a few lines.
+    private func dismantle(_ name: String, _ mode: DismantleMode, method: ControlMethod, done: String) async -> Result<ControlResultPayload, ControlError> {
+        guard let task = model.tasks.first(where: { $0.record.id.rawValue == name || $0.record.slug == name }) else {
+            return .failure(.notFound("no task “\(name)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
+        }
+        let slug = task.record.slug
+        let outcome: DismantleOutcome
+        do {
+            outcome = try await model.dismantleTask(task.id, mode)
+        } catch {
+            return .failure(.failed("could not \(mode == .archive ? "archive" : "close") the task \(slug)",
+                                    detail: String(describing: error)))
+        }
+        var lines = [done.replacingOccurrences(of: "%@", with: slug)]
+        if !outcome.stoppedProcesses.isEmpty {
+            lines.append("stopped: " + outcome.stoppedProcesses.joined(separator: ", "))
+        }
+        for notice in outcome.notices {
+            switch notice {
+            case .changesSaved(let repo, let ref): lines.append("\(repo): uncommitted changes saved as \(ref)")
+            case .branchSaved(let repo, let branch, let ref): lines.append("\(repo): unmerged \(branch) saved as \(ref)")
+            case .teardownFailed(let repo, let summary, _): lines.append("\(repo): teardown failed (\(summary))")
+            case .processesSurvived(let names): lines.append("would not stop: " + names.joined(separator: ", "))
+            }
+        }
+        return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), method))
+    }
+
+    static func describe(_ report: GarbageReport, dryRun: Bool) -> String {
+        guard !report.isEmpty else { return "nothing to clean" }
+        var lines: [String] = []
+        func section(_ title: String, _ items: [String]) {
+            guard !items.isEmpty else { return }
+            lines.append(title)
+            lines += items.map { "  \($0)" }
+        }
+        section(dryRun ? "would remove these folders:" : "removed these folders:", report.removedFolders)
+        section("saved their uncommitted work:", report.savedChanges)
+        section(dryRun ? "would stop:" : "stopped:", report.stoppedProcesses)
+        section("would not stop:", report.survivors)
+        section(dryRun ? "would prune stale worktrees in:" : "pruned stale worktrees in:", report.prunedWorktrees)
+        section(dryRun ? "would delete expired saved changes:" : "deleted expired saved changes:", report.deletedRefs)
+        if report.emptiedTrash > 0 { lines.append((dryRun ? "would empty " : "emptied ") + "\(report.emptiedTrash) items from the trash") }
+        return lines.joined(separator: "\n")
     }
 
     /// The thread `raw` names, when `origin` may act on it (`AutomationPolicy.mayTouch`).

@@ -490,8 +490,8 @@ Problem Center with the end of the log and <b>Run Setup Again</b>. Untick <b>Run
 sheet — or pass <code>--no-setup</code> to <code>scope task new</code>, <code>run_setup: false</code> over MCP —
 to skip the command; the files are copied anyway.</p>
 <p>The <b>Teardown</b> field is the other end: it runs in each sandbox before Archive or Close removes it, with
-the same variables and a ten-minute limit. If it fails, the sandbox stays, the failure is shown, and you choose
-whether to remove it anyway.</p>
+the same variables and a ten-minute limit. If it fails, the failure is shown and the sandbox goes anyway:
+whatever the command was meant to stop is stopped by the process sweep that follows.</p>
 
 <h2 id="threads">Threads inside a task</h2>
 <p>Creating the task opens the first thread on the spot, in the sandbox, with your prompt already sent to the
@@ -529,10 +529,28 @@ others); other drivers start from the repository's file and their prompt.</p>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
   <tr><td><b>Archive</b></td><td>removes every worktree, keeps the branches and the record</td></tr>
-  <tr><td><b>Close…</b></td><td>removes the worktrees and the record; optionally deletes the branches</td></tr>
+  <tr><td><b>Close</b></td><td>the same, then the record goes; optionally the branches too</td></tr>
 </table>
-<p>Both refuse to run on a dirty sandbox unless you force them, and closing refuses to delete a branch that is
-not merged. Scope prunes stale worktrees on every launch.</p>
+<p>One click, no question. In order: the task's threads are hung up, its teardown runs, every process still
+running under its folder (or started with its <code>SCOPE_TASK_ROOT</code>) gets SIGTERM, then SIGKILL three
+seconds later, the uncommitted changes are saved, and the worktrees are moved out of the way in an instant and
+deleted in the background. The row leaves the sidebar as soon as you click; a second click joins the archive in
+progress.</p>
+<p>Nothing is lost. Uncommitted changes — tracked and untracked, ignored files aside — are committed to
+<code>refs/scope/salvage/&lt;slug&gt;-&lt;id&gt;/changes-&lt;time&gt;</code> in the repository, and the notice
+that says so has <b>Restore</b>, which brings the archived task back with its sandboxes and those changes. A
+branch deleted on close that git calls unmerged (a squash merge looks like that) keeps its last commit the same
+way. Saved changes no task points to are deleted after 30 days.</p>
+<p>If a step fails, the task stays out of the sidebar, the Problem Center says why with <b>Retry</b>, and the
+next launch finishes the job.</p>
+
+<h2 id="cleanup">Automatic cleanup</h2>
+<p>Scope tidies up after tasks on its own: when it opens, every 30 minutes, and after each archive or close. It
+stops the processes left by archived or closed tasks, moves to the trash the sandbox folders no task owns (their
+uncommitted work saved first), prunes stale worktree records in your repositories, and drops expired saved
+changes. A folder younger than ten minutes is left alone — a task being created — and nothing outside Scope's
+own home is touched. One quiet line in the Problem Center says what was cleaned. <b>Settings ▸ General ▸
+Tasks</b> turns it off; <code>scope gc --dry-run</code> shows what it would do.</p>
 
 <h2 id="from-pr">Starting from a pull request</h2>
 <p>Two ways in, one result. Name the pull request in the prompt, or open it from the <b>Pull Requests</b> sheet
@@ -759,7 +777,9 @@ scope thread read &lt;id&gt;              <span class="c"># the last lines of it
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
-scope task close &lt;id|slug&gt;          <span class="c"># undo a task (--delete-branch, --force)</span>
+scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
+scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
+scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
 <p>Every command takes <code>--json</code>. <code>--scope</code> accepts a slug, a name, an id or a path;
@@ -801,8 +821,9 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
-<code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_close</code>,
-<code>scope_ping</code>. They are the same
+<code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
+<code>scope_task_close</code>, <code>scope_gc</code>, <code>scope_ping</code>. An argument a tool does not
+declare is refused rather than ignored — <code>dryRun</code> for <code>dry_run</code> creates nothing. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
 <p><b>Settings ▸ Automation ▸ MCP server</b> registers it with Claude Code, Codex and Cursor for your user, so
 every session you start — in Scope or in any other terminal — has it: Claude Code through its own
