@@ -870,8 +870,8 @@ tell which repositories the work needs, so a task the agent can describe costs o
 <code>~/.cursor/skills</code> — so every session of those agents knows when to put work in a task, how to
 refer to one by name or slug, how to brief a thread so it finishes alone, wait for it and read its answer, and
 close the task — with both spellings of every command, since a session Scope did not launch has the MCP tools
-and no <code>scope</code> on its PATH. An app
-update that changes the text shows <i>Update</i> next to the agent; a folder of the same name that Scope did
+and no <code>scope</code> on its PATH. When an
+update changes the text, Scope rewrites the copies it installed at its next launch, and only those; a folder of the same name that Scope did
 not write is never touched. A task's name and slug are one right-click away in the sidebar (<i>Copy Task
 Name</i>, <i>Copy Task Slug</i>) and a click on the copy button next to the name in the inspector.</p>
 

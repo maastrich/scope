@@ -96,4 +96,22 @@ import Testing
         #expect(text.contains("untrusted"))
         #expect(SkillInstaller.installedVersion(text) == SkillInstaller.version)
     }
+
+    /// At launch, only our own older copies are rewritten: an agent the user never installed it for, and a folder
+    /// that is not ours, stay as they are.
+    @Test func launchRefreshesOnlyOurOutdatedCopies() throws {
+        let home = try Self.temporaryHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let installer = SkillInstaller(userHome: home, debug: false)
+        for client in [SkillInstaller.Client.claudeCode, .cursor] {
+            try FileManager.default.createDirectory(at: installer.skillDirectory(client), withIntermediateDirectories: true)
+        }
+        try "<!-- scope-skill-version: 1 -->\nold\n".write(to: installer.skillFile(.claudeCode), atomically: true, encoding: .utf8)
+        try "someone else's skill\n".write(to: installer.skillFile(.cursor), atomically: true, encoding: .utf8)
+        #expect(installer.refreshOutdated() == [.claudeCode])
+        #expect(installer.state(of: .claudeCode) == .installed)
+        #expect(installer.state(of: .codex) == .absent)
+        #expect(installer.state(of: .cursor) == .foreign)
+        #expect(installer.refreshOutdated().isEmpty, "nothing left to rewrite")
+    }
 }

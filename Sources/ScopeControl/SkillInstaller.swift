@@ -80,6 +80,17 @@ public struct SkillInstaller: Sendable {
         try MCPRegistration.write(Data(skillText.utf8), to: skillFile(client))
     }
 
+    /// Rewrites every copy of our skill an older app wrote, and nothing else: a client that never had it, or
+    /// whose folder is not ours, stays as the user left it. Run at launch, so an update reaches the agents
+    /// without a trip to Settings — the text is how they drive the new commands. Returns the clients rewritten.
+    @discardableResult
+    public func refreshOutdated(fileManager: FileManager = .default) -> [Client] {
+        Client.allCases.filter { client in
+            guard state(of: client, fileManager: fileManager) == .outdated else { return false }
+            return (try? install(client, fileManager: fileManager)) != nil
+        }
+    }
+
     /// Removes our skill folder; a foreign one or a missing one is left as it is.
     public func remove(_ client: Client, fileManager: FileManager = .default) throws {
         switch state(of: client, fileManager: fileManager) {
@@ -105,7 +116,7 @@ public struct SkillInstaller: Sendable {
         name: \(name)
         description: Work with Scope tasks and threads — sandbox work into a task (branch + git worktrees), hand it to agent threads, wait for them and read their answers, close the task — through the `scope` command line or the `\(serverName)` MCP tools. Use when the user names a Scope task, asks to start work "in a task", "in a sandbox" or "on a branch", wants another agent on a piece of work, or asks what Scope is running.
         ---
-        <!-- \(Self.marker) \(Self.version) — written by Scope; reinstall from Settings ▸ Automation after an update. -->
+        <!-- \(Self.marker) \(Self.version) — written by Scope, which rewrites it at launch when an update changes it. -->
 
         # Scope tasks
 
