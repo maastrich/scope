@@ -2,6 +2,9 @@
 #
 #   scopekit  swift build + swift test (Swift Testing) of the local SwiftPM package
 #   app       xcodegen -> xcodebuild Release build of Scope.app (ad-hoc signed) + app tests when a test target exists
+#             pull request: arm64 only, unoptimised; push to main: universal and optimised, as release.yml archives it
+#
+# Where the time goes, and why each step is shaped the way it is: docs/design/CI_PERFORMANCE.md.
 #
 # Runner: macos-26 (Apple Silicon, free and unlimited for public repositories).
 # Xcode is pinned through DEVELOPER_DIR; bump it here and in release.yml together.
@@ -52,11 +55,12 @@ jobs:
           restore-keys: |
             spm-build-${{ runner.os }}-${{ runner.arch }}-xcode26.6-
 
+      # One build for the products and the tests: a `swift test` that builds plans the package a second time.
       - name: Build
-        run: swift build --package-path "$PACKAGE_PATH"
+        run: swift build --package-path "$PACKAGE_PATH" --build-tests
 
       - name: Test (Swift Testing)
-        run: swift test --package-path "$PACKAGE_PATH" --parallel
+        run: swift test --package-path "$PACKAGE_PATH" --skip-build --parallel
 
   app:
     name: Scope.app (xcodebuild)
@@ -85,24 +89,33 @@ jobs:
       - name: Generate Scope.xcodeproj
         run: xcodegen generate --spec project.yml
 
-      - name: Resolve packages
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project Scope.xcodeproj -scheme Scope \
-            -clonedSourcePackagesDirPath SourcePackages \
-            -skipPackagePluginValidation
-
+      # No separate -resolvePackageDependencies step: the build resolves the graph again whatever ran before it,
+      # so resolving first only paid for it twice.
       - name: Build (Release, ad-hoc signed)
+        env:
+          FAST_BUILD: ${{ github.event_name == 'pull_request' }}
         run: |
           mkdir -p build
+          destination='platform=macOS'
+          overrides=()
+          if [ "$FAST_BUILD" = true ]; then
+            # Still the Release configuration -- same compile conditions, bundle id and Info.plist as the
+            # shipped app -- minus what makes it slow: the second architecture and the optimiser. The push to
+            # main keeps both, so nothing reaches a tag without the build release.yml archives.
+            destination='platform=macOS,arch=arm64'
+            overrides=(ONLY_ACTIVE_ARCH=YES SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=incremental ENABLE_DEBUG_DYLIB=NO)
+          fi
           xcodebuild build \
             -project Scope.xcodeproj -scheme Scope -configuration Release \
-            -destination 'platform=macOS' \
+            -destination "$destination" \
             -derivedDataPath build/DerivedData \
             -clonedSourcePackagesDirPath SourcePackages \
-            -skipPackagePluginValidation -skipMacroValidation \
+            -skipPackagePluginValidation -skipMacroValidation -showBuildTimingSummary \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= \
+            "${overrides[@]}" \
             | tee build/xcodebuild.log | { if command -v xcbeautify >/dev/null; then xcbeautify; else cat; fi; }
+          # xcbeautify drops the summary; it is the only per-task timing a run leaves behind.
+          sed -n '/^Build Timing Summary/,$p' build/xcodebuild.log
 
       - name: Verify the built app
         run: |
@@ -118,7 +131,8 @@ jobs:
 
       - name: App tests (only when the project has a test target)
         run: |
-          if xcodebuild -list -project Scope.xcodeproj -json | jq -e '.project.targets[] | select(test("Tests$"))' >/dev/null; then
+          # Read project.yml rather than ask `xcodebuild -list`, which resolves the package graph to answer (~25 s).
+          if grep -Eq '^[[:space:]]+type:[[:space:]]*bundle\.(unit|ui)-test' project.yml; then
             xcodebuild test \
               -project Scope.xcodeproj -scheme Scope -configuration Debug \
               -destination 'platform=macOS' \
@@ -128,7 +142,7 @@ jobs:
               CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= \
               | tee build/xcodebuild-test.log | { if command -v xcbeautify >/dev/null; then xcbeautify; else cat; fi; }
           else
-            echo "No *Tests target in Scope.xcodeproj: skipping xcodebuild test (ScopeKit tests run in the scopekit job)."
+            echo "No test bundle in project.yml: skipping xcodebuild test (ScopeKit tests run in the scopekit job)."
           fi
 
       - name: Upload build logs
