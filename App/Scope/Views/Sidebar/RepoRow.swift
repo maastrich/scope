@@ -10,11 +10,11 @@ struct RepoRow: View {
     let repo: RepoState
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: SidebarMetrics.spacing) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.scopeBody)
                 .foregroundStyle(Ink.secondary)
-                .frame(width: 16)
+                .frame(width: SidebarMetrics.glyphSlot)
 
             Text(repo.shortName)
                 .font(.scopeBody)
@@ -30,21 +30,20 @@ struct RepoRow: View {
                 Chip(text: branch, mono: true)
             }
 
-            // The gutter `ThreadRow` reserves for its close button, so every row's trailing marker lands in the
-            // same column whatever the section.
-            Color.clear.frame(width: 16, height: 1)
+            // Keeps the branch chip clear of the dot column, so the chip does not read as the dot's label.
+            Color.clear.frame(width: SidebarMetrics.glyphSlot, height: 1)
 
             if repo.isDirty {
                 Circle()
                     .fill(ThreadStateStyle.waiting)
-                    .frame(width: 8, height: 8)
+                    .frame(width: SidebarMetrics.stateDot, height: SidebarMetrics.stateDot)
                     .help("Uncommitted changes")
             } else {
-                Color.clear.frame(width: 8, height: 1)
+                Color.clear.frame(width: SidebarMetrics.stateDot, height: 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
+        .frame(height: SidebarMetrics.rowHeight(detailed: false))
         .contentShape(Rectangle())
         .accessibilityLabel(repo.isDirty ? "\(repo.shortName), uncommitted changes" : repo.shortName)
         .help(repo.displayName == repo.shortName ? repo.url.path : "\(repo.displayName)\n\(repo.url.path)")

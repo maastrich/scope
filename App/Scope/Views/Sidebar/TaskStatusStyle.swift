@@ -152,6 +152,8 @@ private struct SidebarHoverControls<Controls: View>: ViewModifier {
                     .padding(.trailing, fade.kept)
                     .opacity(active ? 1 : 0)
                     .allowsHitTesting(active)
+                    // Out of the key loop too, or Full Keyboard Access tabs onto a button nobody can see.
+                    .disabled(!active)
                     .accessibilityHidden(!active)
             }
     }
