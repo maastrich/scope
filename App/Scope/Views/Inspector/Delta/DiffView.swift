@@ -16,6 +16,10 @@ struct DiffView: View {
     let repo: TaskRepo
     let ref: DeltaFileRef
     let file: DiffFile
+    /// Controls the host puts at the ends of the header (the inspector's viewer: back, maximize, close), so the
+    /// viewer has one header rather than its own bar over this one.
+    var leading: AnyView?
+    var trailing: AnyView?
     @State private var popover = CommentPopover()
 
     var body: some View {
@@ -98,36 +102,44 @@ struct DiffView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            if let leading { leading }
             Image(systemName: ImageFiles.isImage(file.path) ? "photo" : "doc.text")
-                .font(.scopeBody)
+                .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
-            Text("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
-                .font(.system(size: 11.5, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
+            FilePathLabel(path: file.path)
+                .help("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
             if let old = file.oldPath, old != file.path {
                 Text("← \(old)")
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
+                    .truncationMode(.head)
             }
+            DeltaCounts(additions: file.additions, deletions: file.deletions)
+                .fixedSize()
             Spacer(minLength: 4)
-            Button { model.delta.copyPatch() } label: { Image(systemName: "doc.on.doc") }
-                .help("Copy patch")
-                .accessibilityLabel("Copy patch")
-            Button { Reveal.inFinder(fileURL) } label: { Image(systemName: "folder") }
-                .help("Reveal in Finder")
-                .accessibilityLabel("Reveal in Finder")
-            Button {
-                model.openInEditorOrCopy(path: repo.sandboxPath, file: fileURL.path, line: file.hunks.first?.newStart)
-            } label: { Image(systemName: "chevron.left.forwardslash.chevron.right") }
-                .help("Open in Editor at the first change (⌥-click copies the path)")
-                .accessibilityLabel("Open in Editor")
+            HStack(spacing: 2) {
+                Button { model.delta.copyPatch() } label: { Image(systemName: "doc.on.doc") }
+                    .help("Copy patch")
+                    .accessibilityLabel("Copy patch")
+                Button { Reveal.inFinder(fileURL) } label: { Image(systemName: "folder") }
+                    .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal in Finder")
+                Button {
+                    model.openInEditorOrCopy(path: repo.sandboxPath, file: fileURL.path, line: file.hunks.first?.newStart)
+                } label: { Image(systemName: "chevron.left.forwardslash.chevron.right") }
+                    .help("Open in Editor at the first change (⌥-click copies the path)")
+                    .accessibilityLabel("Open in Editor")
+                if let trailing { trailing }
+            }
+            .fixedSize()
         }
-        .buttonStyle(.icon)
-        .font(.system(size: 12))
-        .padding(.horizontal, 14)
+        .buttonStyle(.iconTight)
+        .foregroundStyle(Ink.secondary)
+        .font(.system(size: 11.5))
+        .padding(.horizontal, 10)
         .frame(height: 30)
+        .background(Surface.panel)
     }
 
     private var fileURL: URL { repo.sandboxURL.appending(path: file.path, directoryHint: .notDirectory) }

@@ -27,7 +27,6 @@ struct InspectorView: View {
     private typealias Layout = InspectorSectionLayout
     /// A section is its header, its body and the 1 pt rule above it.
     private static let ruleHeight: Double = 1
-    private static let viewerBarHeight: Double = 22
     /// The least the viewer keeps when the sections above need room: its bar, its file header and a few lines.
     private static let viewerFloor: Double = 180
     /// How much of a block's content the sections claim from the viewer before the block scrolls instead.
@@ -85,6 +84,7 @@ struct InspectorView: View {
         let viewer = resolvedViewer
         let stack: Double = {
             guard viewer != nil else { return total }
+            if model.inspector.viewerMaximized { return 0 }
             if fillOpen {
                 // The viewer gives way before the sections overflow: a header pushed out of sight is a section
                 // nobody knows is there.
@@ -103,18 +103,20 @@ struct InspectorView: View {
                                          weights: model.inspector.weights)
         let content = chrome + heights.values.reduce(0, +)
         VStack(spacing: 0) {
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
-                    ForEach(InspectorSection.allCases, id: \.self) { section in
-                        sectionView(section, heights: heights)
+            if stack > 0 {
+                ScrollView(.vertical) {
+                    VStack(spacing: 0) {
+                        ForEach(InspectorSection.allCases, id: \.self) { section in
+                            sectionView(section, heights: heights)
+                        }
                     }
                 }
+                .scrollDisabled(content <= stack + 0.5)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: stack)
             }
-            .scrollDisabled(content <= stack + 0.5)
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: stack)
             if let viewer {
-                viewerPane(viewer, total: total, draggable: fillOpen)
+                viewerPane(viewer, total: total, draggable: fillOpen && !model.inspector.viewerMaximized)
                     .frame(height: max(0, total - stack))
             }
         }
@@ -194,78 +196,63 @@ struct InspectorView: View {
     private func viewerPane(_ viewer: InspectorViewer, total: Double, draggable: Bool) -> some View {
         VStack(spacing: 0) {
             Divider()
-            viewerBar(viewer)
-                .overlay(alignment: .top) {
-                    if draggable { SashHandle(sash: viewerSash(total: total)) }
-                }
-            Divider()
             switch viewer {
             case .diff:
                 if let task = model.currentTask, let ref = model.delta.selectedFile, let file = model.delta.file(ref),
                    let repo = model.delta.taskRepo(ref.repo) {
-                    DiffView(task: task, repo: repo, ref: ref, file: file)
+                    DiffView(task: task, repo: repo, ref: ref, file: file,
+                             leading: AnyView(backButton), trailing: AnyView(viewerControls))
                         .modifier(DeltaKeyboard(focused: $viewerFocused))
                 }
             case .file:
-                BaseFileViewer()
+                BaseFileViewer(leading: AnyView(backButton), trailing: AnyView(viewerControls))
             }
+        }
+        .overlay(alignment: .top) {
+            if draggable { SashHandle(sash: viewerSash(total: total)) }
         }
         .frame(maxWidth: .infinity)
         .background(Surface.ground)
     }
 
-    /// The viewer's own header: what it shows, back to what it showed before, close.
-    private func viewerBar(_ viewer: InspectorViewer) -> some View {
-        let back = model.inspector.previousViewer.map(isShowable) == true
-        return HStack(spacing: 6) {
-            if back {
-                Button {
-                    model.inspector.goBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 9.5, weight: .bold))
-                }
-                .buttonStyle(.iconTight)
-                .foregroundStyle(Ink.secondary)
-                .help(model.inspector.previousViewer == .diff ? "Back to the diff" : "Back to the base file")
-                .accessibilityLabel("Back")
+    /// Back to what the viewer showed before, when that still has something to show.
+    @ViewBuilder
+    private var backButton: some View {
+        if let previous = model.inspector.previousViewer, isShowable(previous) {
+            Button {
+                model.inspector.goBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 10, weight: .semibold))
             }
-            Text(viewer == .diff ? "DIFF" : "BASE FILE")
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.4)
-                .foregroundStyle(Ink.primary)
-                .fixedSize()
-            Group {
-                switch viewer {
-                case .diff:
-                    if let file = model.delta.selectedDiffFile {
-                        DeltaCounts(additions: file.additions, deletions: file.deletions)
-                    }
-                case .file:
-                    if let repo = model.baseRepo {
-                        Text(repo.shortName)
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(1)
-                    }
-                }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.secondary)
+            .help(previous == .diff ? "Back to the diff" : "Back to the base file")
+            .accessibilityLabel("Back")
+        }
+    }
+
+    /// Maximize and close, at the end of the viewer's header.
+    private var viewerControls: some View {
+        let maximized = model.inspector.viewerMaximized
+        return HStack(spacing: 2) {
+            Button {
+                model.inspector.viewerMaximized.toggle()
+            } label: {
+                Image(systemName: maximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
             }
-            Spacer(minLength: 4)
+            .help(maximized ? "Show the sections again" : "Fill the inspector with the viewer")
+            .accessibilityLabel(maximized ? "Restore the sections" : "Maximize the viewer")
             Button {
                 model.inspector.closeViewer()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9.5, weight: .bold))
             }
-            .buttonStyle(.iconTight)
-            .foregroundStyle(Ink.secondary)
             .help("Close the viewer")
             .accessibilityLabel("Close the viewer")
         }
-        .padding(.horizontal, 8)
-        .frame(height: Self.viewerBarHeight)
-        .frame(maxWidth: .infinity)
-        .background(Surface.panel)
+        .buttonStyle(.iconTight)
+        .foregroundStyle(Ink.secondary)
     }
 
     private func viewerSash(total: Double) -> SectionSash {

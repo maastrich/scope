@@ -167,10 +167,7 @@ struct DeltaFileList: View {
                 .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(statusColor(file.status))
                 .frame(width: 14)
-            pathText(file.path)
-                .font(.system(size: 11.5, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
+            FilePathLabel(path: file.path)
                 .opacity(viewed ? 0.5 : 1)
             Spacer(minLength: 4)
             DeltaCounts(additions: file.additions, deletions: file.deletions)
@@ -204,13 +201,6 @@ struct DeltaFileList: View {
         .onTapGesture { model.showDiff(ref) }
     }
 
-    private func pathText(_ path: String) -> Text {
-        guard let slash = path.lastIndex(of: "/") else { return Text(path) }
-        let directory = String(path[...slash])
-        let name = String(path[path.index(after: slash)...])
-        return Text(directory).foregroundStyle(Ink.tertiary) + Text(name)
-    }
-
     static func letter(_ status: DiffFile.Status) -> String {
         switch status {
         case .added: "A"
@@ -230,5 +220,33 @@ struct DeltaFileList: View {
         case .modified, .renamed: Color(nsColor: .systemOrange)
         case .binary: Color(nsColor: .systemGray)
         }
+    }
+}
+
+/// A changed file's name first, then its folder in tertiary, truncated from the start: in a narrow column a path cut
+/// in the middle loses the one part you scan for, the name.
+struct FilePathLabel: View {
+    let path: String
+    var size: CGFloat = 11.5
+
+    var body: some View {
+        let slash = path.lastIndex(of: "/")
+        let name = slash.map { String(path[path.index(after: $0)...]) } ?? path
+        let folder = slash.map { String(path[..<$0]) }
+        HStack(spacing: 6) {
+            Text(name)
+                .font(.system(size: size, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(1)
+            if let folder {
+                Text(folder)
+                    .font(.system(size: size - 1))
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+        }
+        .help(path)
     }
 }
