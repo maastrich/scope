@@ -165,27 +165,29 @@ enum PaletteModel {
             }
         }
 
-        // Open in Editor
+        // Open in Editor: the current task's checkouts first — from a task, "the repo" means its sandbox.
+        if let task {
+            items.append(PaletteItem(id: "editor-task", section: .editor, icon: "rectangle.split.2x1",
+                                     label: "Task \(task.name)", hint: "every sandbox of the task", shortcut: "⇧⌘E",
+                                     path: task.record.threadCwd.path) {
+                model.openTaskInEditor(task)
+            })
+            if task.activeRepos.count > 1 {
+                for repo in task.activeRepos {
+                    let path = repo.sandboxURL.path
+                    items.append(PaletteItem(id: "editor-sandbox-\(repo.id)", section: .editor, icon: "chevron.left.forwardslash.chevron.right",
+                                             label: repo.name, hint: "sandbox · \(repo.branch)", path: path) { model.openInEditor(path: path) })
+                }
+            }
+        }
         if let scope {
             for repo in scope.repos {
                 let path = repo.url.path
                 items.append(PaletteItem(id: "editor-\(repo.id)", section: .editor, icon: "chevron.left.forwardslash.chevron.right",
-                                         label: repo.displayName, hint: "base · \(repo.id.isEmpty ? "." : repo.id)", path: path) {
+                                         label: repo.displayName, hint: "base checkout\(repo.branchLabel.map { " · \($0)" } ?? "")", path: path) {
                     model.openInEditor(path: path)
                 })
             }
-        }
-        if let task {
-            for repo in task.activeRepos {
-                let path = repo.sandboxURL.path
-                items.append(PaletteItem(id: "editor-sandbox-\(repo.id)", section: .editor, icon: "chevron.left.forwardslash.chevron.right",
-                                         label: "\(repo.name) · \(task.name)", hint: path, path: path) { model.openInEditor(path: path) })
-            }
-            let workspace = task.record.workspaceURL.path
-            items.append(PaletteItem(id: "editor-task", section: .editor, icon: "rectangle.split.2x1", label: "Task \(task.record.slug)",
-                                     hint: task.record.workspaceURL.lastPathComponent, shortcut: "⇧⌘E", path: workspace) {
-                model.openTaskInEditor(task)
-            })
         }
 
         // Pull Requests: the loaded open PRs of the current repo, then the PR-bound tasks of the scope ("#123").

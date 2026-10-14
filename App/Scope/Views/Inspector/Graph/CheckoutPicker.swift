@@ -10,7 +10,6 @@ struct CheckoutPicker: View {
 
     var body: some View {
         let sandboxes = model.sandboxes(of: repo, in: scope)
-        let disabled = model.config.preferences.editor == nil
         Group {
             if sandboxes.isEmpty {
                 Button {
@@ -42,8 +41,7 @@ struct CheckoutPicker: View {
                 .fixedSize()
             }
         }
-        .disabled(disabled)
-        .help(disabled ? "Choose an editor in Settings" : "⌥-click copies the path")
+        .help("⌥-click copies the path")
     }
 
     private func state(_ task: TaskState, _ repo: TaskRepo) -> String {

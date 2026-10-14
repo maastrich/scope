@@ -200,12 +200,12 @@ struct ThreadMenuItems: View {
         Button("Open in Editor") {
             model.openInEditor(thread: session.id)
         }
-        .disabled(model.config.preferences.editor == nil)
+        .keyboardShortcut("e", modifiers: .command)
         if let task = model.task(of: session) {
             Button("Open Task in Editor") {
                 model.openTaskInEditor(task)
             }
-            .disabled(model.config.preferences.editor == nil)
+            .keyboardShortcut("e", modifiers: [.command, .shift])
         }
         Button("Reveal cwd in Finder") {
             Reveal.inFinder(URL(fileURLWithPath: session.reportedDirectory ?? session.record.cwd, isDirectory: true))

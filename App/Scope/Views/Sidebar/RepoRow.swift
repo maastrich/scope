@@ -58,11 +58,9 @@ struct RepoRow: View {
             Task { _ = await model.newThread(in: scope.id, cwdKind: .repoBase(relativePath: repo.id)) }
         }
         Button("Open in Editor") {
-            model.selection = .repo(scope.id, relativePath: repo.id)
-            model.openInEditor(thread: nil)
+            model.openInEditor(path: repo.url.path)
         }
         .keyboardShortcut("e", modifiers: .command)
-        .disabled(model.config.preferences.editor == nil)
         Button("See Base") {
             model.showBase(repo: repo, in: scope)
         }

@@ -245,7 +245,7 @@ struct ScopeCommands: Commands {
                 if let model, let task = model.currentTask { model.openTaskInEditor(task) }
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
-            .disabled(model?.currentTask == nil || model?.config.preferences.editor == nil)
+            .disabled(model?.currentTask == nil)
 
             Divider()
 
@@ -434,8 +434,7 @@ struct ScopeCommands: Commands {
     }
 
     private var canOpenInEditor: Bool {
-        guard let model, model.config.preferences.editor != nil else { return false }
-        return model.selection != nil
+        model?.selection != nil
     }
 
 

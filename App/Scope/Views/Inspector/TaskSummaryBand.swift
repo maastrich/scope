@@ -44,7 +44,6 @@ struct TaskSummaryBand: View {
                 }
                 .buttonStyle(.icon)
                 .foregroundStyle(Ink.secondary)
-                .disabled(model.config.preferences.editor == nil)
                 .help("Open Task in Editor (⇧⌘E)")
                 .accessibilityLabel("Open \(task.name) in Editor")
                 Button {

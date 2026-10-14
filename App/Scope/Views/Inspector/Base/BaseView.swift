@@ -90,7 +90,6 @@ struct BaseView: View {
                     } label: {
                         Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
-                    .disabled(model.config.preferences.editor == nil)
                     .help("Open the base checkout in the editor (⌥-click copies the path)")
                     Button {
                         Task { await model.openBaseShell(repo: repo, in: scope) }

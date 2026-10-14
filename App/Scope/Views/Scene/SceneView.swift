@@ -91,9 +91,7 @@ struct SceneView: View {
                     }
                 }
                 .buttonStyle(.scopeGhost)
-                .disabled(model.config.preferences.editor == nil)
-                .help(model.config.preferences.editor == nil
-                      ? "Choose an editor in Settings to enable this" : "Open in Editor (⌘E, ⌥-click copies the path)")
+                .help("Open this checkout in your editor (⌘E, ⌥-click copies the path)")
             }
             ProblemPopover()
         }
