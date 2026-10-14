@@ -260,9 +260,15 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     public var icon: String?
     /// The tile's colour; `nil` derives one from the slug (`resolvedTint`).
     public var tint: ScopeTint?
-    /// File name of the scope's logo under `ScopeHome.scopeLogosURL`: a copy, so the app neither writes in the
-    /// scope's folder nor depends on a path the user may move. Shown in place of the letter and the colour.
+    /// File name of the scope's image under `ScopeHome.scopeLogosURL`: a normalised copy (`ScopeLogo`), so the
+    /// app neither writes in the scope's folder nor depends on a path the user may move. Shown in place of the
+    /// letter.
     public var logo: String?
+    /// The image shown in the dark appearance instead of `logo`; `nil` shows `logo` in both.
+    public var logoDark: String?
+    /// What every agent working in this scope should know, in the owner's words: added to the context file of
+    /// each task.
+    public var context: String?
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -278,12 +284,16 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         repoCommands: [String: RepoCommandOverride] = [:],
         icon: String? = nil,
         tint: ScopeTint? = nil,
-        logo: String? = nil
+        logo: String? = nil,
+        logoDark: String? = nil,
+        context: String? = nil
     ) {
         self.repoCommands = repoCommands
         self.icon = icon
         self.tint = tint
         self.logo = logo
+        self.logoDark = logoDark
+        self.context = context
         let normalized = ScopeDeclaration.normalizedPath(path)
         self.id = id
         self.path = normalized
@@ -316,7 +326,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo
+        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -334,6 +344,8 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         icon = try? container.decodeIfPresent(String.self, forKey: .icon)
         tint = try? container.decodeIfPresent(ScopeTint.self, forKey: .tint)
         logo = try? container.decodeIfPresent(String.self, forKey: .logo)
+        logoDark = try? container.decodeIfPresent(String.self, forKey: .logoDark)
+        context = try? container.decodeIfPresent(String.self, forKey: .context)
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.

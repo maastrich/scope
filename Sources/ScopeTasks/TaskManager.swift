@@ -134,7 +134,7 @@ public actor TaskManager {
                 created.append((repo, isNew))
                 record.repos.append(repo)
             }
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+            try await writeProjection(record, scopeContext: scope.context, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback(created, task: record)
@@ -174,7 +174,7 @@ public actor TaskManager {
             sandbox.branchCreated = isNew
             created.append((sandbox, isNew))
             record.repos.append(sandbox)
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+            try await writeProjection(record, scopeContext: scope.context, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback(created, task: record)
@@ -208,8 +208,8 @@ public actor TaskManager {
     }
 
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
-    public func addRepo(_ id: TaskID, repo: String, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
-                        contextFiles: [String] = []) async throws -> TaskRecord {
+    public func addRepo(_ id: TaskID, repo: String, scopeContext: String? = nil, scopeRepos: [String] = [],
+                        repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = []) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard !record.isArchived else { throw TaskError.taskArchived }
         let path = TaskRepo.normalize(repo)
@@ -221,7 +221,7 @@ public actor TaskManager {
         let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
         record.repos.append(sandbox)
         do {
-            try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+            try await writeProjection(record, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
             try await persist(record)
         } catch {
             await rollback([(sandbox, isNew)], task: record)
@@ -232,10 +232,10 @@ public actor TaskManager {
     }
 
     /// Rewrites `AGENTS.md` and the `.code-workspace` (after a Graph refresh, or a repo list change).
-    public func regenerateProjection(_ id: TaskID, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
-                                     contextFiles: [String] = []) async throws {
+    public func regenerateProjection(_ id: TaskID, scopeContext: String? = nil, scopeRepos: [String] = [],
+                                     repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = []) async throws {
         guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await writeProjection(record, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+        try await writeProjection(record, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
     }
 
     // MARK: - Setup / teardown
@@ -546,10 +546,11 @@ public actor TaskManager {
     /// Inside a sandbox the file is listed in `.git/info/exclude`, so the delta stays clean (spec §4.6).
     /// Adding a second repository moves the thread cwd from the sandbox up to the task root: the copies
     /// left behind are removed, so the agent can never read a stale one.
-    private func writeProjection(_ record: TaskRecord, scopeRepos: [String], repoSummaries: [RepoContextSummary],
-                                 contextFiles: [String]) async throws {
+    private func writeProjection(_ record: TaskRecord, scopeContext: String?, scopeRepos: [String],
+                                 repoSummaries: [RepoContextSummary], contextFiles: [String]) async throws {
         let others = scopeRepos.map(TaskRepo.normalize).filter { $0 != "." }
-        let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, repoSummaries: repoSummaries)
+        let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, scopeContext: scopeContext,
+                                                     repoSummaries: repoSummaries)
         let names = Self.contextFileNames(contextFiles)
         let directory = record.threadCwd
         // The thread starts inside a worktree whenever the cwd is a sandbox (always, for a repo scope).
