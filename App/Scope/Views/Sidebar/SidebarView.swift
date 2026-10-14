@@ -17,6 +17,12 @@ struct SidebarView: View {
     @State private var footerWidth: CGFloat = 0
     @FocusState private var filterFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Where a swipe has dragged the list, positive to the right (`ScopeSwipe`).
+    @State private var swipeOffset: CGFloat = 0
+    /// How the next scope switch animates: the keyboard's short slide, or a swipe's spring carrying its speed.
+    @State private var scopeSwitchAnimation = Self.keyboardSwitch
+
+    private static let keyboardSwitch = Animation.easeOut(duration: 0.12)
 
     /// Below this width the footer buttons drop their titles.
     private static let footerTitleThreshold: CGFloat = 230
@@ -32,7 +38,8 @@ struct SidebarView: View {
             } else if let scope = model.currentScope {
                 // The list is the part that belongs to the scope, so it is the part that slides when the scope
                 // changes: in from the side the new scope sits on, 120 ms, a fade alone under Reduce Motion. The
-                // header above it never moves.
+                // header above it never moves. A swipe drags it first; the offset sits inside the `.id` so the list
+                // being left slides on from where the fingers let it go.
                 ZStack {
                 List(selection: listSelection) {
                     workSection(scope)
@@ -51,14 +58,16 @@ struct SidebarView: View {
                 .scrollContentBackground(.hidden)
                 .background(ListSelectionHighlightRemover())
                 .background(Surface.surface.ignoresSafeArea())
+                .offset(x: swipeOffset)
                 .id(scope.id)
                 .transition(slide)
                 }
                 .clipped()
-                .animation(.easeOut(duration: 0.12), value: scope.id)
+                .animation(scopeSwitchAnimation, value: scope.id)
+                .background(Surface.surface.ignoresSafeArea())
                 .background {
                     if model.config.preferences.swipeBetweenScopes {
-                        ScopeSwipeArea { model.selectAdjacentScope($0) }
+                        ScopeSwipeArea(handlers: swipeHandlers)
                     }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -117,6 +126,38 @@ struct SidebarView: View {
         let forward = model.scopeSwitchForward
         return .asymmetric(insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
                            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity))
+    }
+
+    private var swipeHandlers: ScopeSwipe.Handlers {
+        ScopeSwipe.Handlers(
+            neighbours: { (model.adjacentScope(-1) != nil, model.adjacentScope(1) != nil) },
+            onMove: { offset in
+                // Under Reduce Motion nothing follows the fingers; the release still switches, with a fade.
+                guard !reduceMotion else { return }
+                swipeOffset = offset
+            },
+            onEnd: endSwipe
+        )
+    }
+
+    /// A released swipe either turns the page — the new scope's list comes in from the side the fingers pulled it
+    /// from, as fast as they were going — or springs the list back into place.
+    private func endSwipe(_ outcome: PageSwipe.Outcome, velocity: CGFloat, width: CGFloat) {
+        switch outcome {
+        case .turn(let delta) where model.adjacentScope(delta) != nil:
+            guard let target = model.adjacentScope(delta) else { return }
+            // The spring's initial velocity is in units of the distance it covers: the new list crosses a page.
+            let speed = min(max(-velocity * CGFloat(delta) / width, 0), 8)
+            scopeSwitchAnimation = reduceMotion ? Self.keyboardSwitch
+                : .interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)
+            model.selectScope(target)
+            swipeOffset = 0
+            DispatchQueue.main.async { scopeSwitchAnimation = Self.keyboardSwitch }
+        case .turn, .stay:
+            guard swipeOffset != 0 else { return }
+            let speed = min(max(-velocity / swipeOffset, 0), 8)
+            withAnimation(.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)) { swipeOffset = 0 }
+        }
     }
 
     /// Hands the keyboard to the visible terminal, one turn later: the thread's `TerminalHost` has to be in

@@ -1265,6 +1265,14 @@ final class AppModel {
         selectScope(scopes[index].id)
     }
 
+    /// The scope `delta` places from the current one in the declared order, without wrapping: what a swipe pages
+    /// to. Paging off the last scope onto the first would not feel like turning a page, so the ends rubber-band.
+    func adjacentScope(_ delta: Int) -> ScopeID? {
+        guard let current = currentScope, let index = scopes.firstIndex(where: { $0.id == current.id }),
+              scopes.indices.contains(index + delta) else { return nil }
+        return scopes[index + delta].id
+    }
+
     /// ⌥⌘→ / ⌥⌘←: the next or previous declared scope, wrapping around.
     func selectAdjacentScope(_ delta: Int) {
         guard scopes.count > 1, let current = currentScope, let index = scopes.firstIndex(where: { $0.id == current.id }) else { return }
