@@ -354,16 +354,22 @@ FIG_SETTINGS
 task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
-<p>The right-hand panel, three tabs, all about the selected task. A band at the top names the task and says
-where its branch stands: the base it forked from, the fork commit, how many commits it has made since, and
-whether the base has moved on underneath it.</p>
+<p>The right-hand panel, all about the selection. A band at the top names the task, then a column of
+collapsible sections, one header each: closed, a section costs one line and its header still says the essential;
+open, it shows the rest. Several can be open at once — the lists share the height, and you drag the line between
+two of them. Under the sections, one viewer shows the diff or the base file you last opened; close it to give its
+height back.</p>
 <table>
-  <tr><th>Tab</th><th>Shows</th><th>Key</th></tr>
-  <tr><td><b>Delta</b></td><td>the diff of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
-  <tr><td><b>Pull Request</b></td><td>the task's pull request and every one of its checks</td><td></td></tr>
-  <tr><td><b>Base</b></td><td>the untouched checkout of the task's repositories: branch and HEAD, files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
+  <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
+  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository</td><td></td></tr>
+  <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
+  <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
+  <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
+  <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
-<p>Without a task, Base follows the selected repository. Drag the panel's left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+<p>The inspector remembers which sections are open per scope, with and without a task. Without a task, the task's
+sections stay in place, dimmed, and Base follows the selected repository. Drag the panel's left edge to resize;
+<kbd>⌥⌘I</kbd> hides it.</p>
 
 <h2 id="global-views">Pull Requests and Graph</h2>
 <p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
@@ -578,7 +584,8 @@ FIG_AGENT_DELTA
 </table>
 FIG_DELTA_FILES
 <p>Files are grouped by repository, with an add/modify/delete filter, a fuzzy filter field and per-file line
-counts. <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
+counts. The mode is the menu in the section's header. Click a file to read its diff in the viewer under the
+sections; <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
 
 <h3 id="diff">The diff</h3>
 FIG_HUNK
@@ -586,9 +593,10 @@ FIG_HUNK
 open-in-editor row for the file.</p>
 
 <h3 id="publish">Commit, push, open the PR</h3>
-<p>The footer of the panel carries the three actions, per repository, with the state next to them
-(<i>10 uncommitted</i>, <i>clean</i>, <i>3 ahead</i>). <b>Create PR</b> shells out to <code>gh</code> and links
-the resulting pull request to the task, so the Pull Request tab keeps showing it and its checks.</p>
+<p>That is the agent's work in its thread, so the buttons are off by default. With Settings ▸ Git ▸ Show commit
+and push buttons, <b>Commit…</b> and <b>Push</b> appear when the pointer is on the Delta header, and <b>Create
+PR</b> on the Pull Request header. Create PR shells out to <code>gh</code> and links the resulting pull request to
+the task, so the Pull Request section keeps showing it and its checks.</p>
 
 <p>The box at the end of each file row marks it as <b>viewed</b>: the row dims, so what is left to read stands
 out. The mark lasts while the file's diff stays the one you looked at; as soon as the agent changes that file
@@ -598,7 +606,7 @@ again, it clears itself.</p>
 <p>Review the agent's work where you read it. In the diff, a <b>+</b> appears in the line-number gutter under
 the pointer: click it to comment on that line, or drag down the gutter to comment on a range. The comment
 editor opens under the lines (<kbd>⌘↩</kbd> adds it). Comments show as tinted rows under the lines they cover;
-click one to edit or delete it, or open the list from the review strip above the action bar.</p>
+click one to edit or delete it, or open the list from the review strip at the foot of the inspector.</p>
 <p>Comments are kept per task, under <code>~/.scope/reviews/</code> — never in the sandbox. Each remembers the
 exact text of its first line and three lines around it, so it follows the code as the agent keeps editing: a
 comment whose lines are gone is listed at the top of the file instead of pointing at the wrong place.</p>
@@ -612,12 +620,15 @@ soon as its hooks say the turn ended. Sent comments are cleared.</p>
 from.</p>
 FIG_BASE_VIEWER
 <ul>
-  <li><b>Files</b> — a tree and a read-only viewer with line numbers.</li>
-  <li><b>Search</b> — <code>git grep</code> across the checkout, with case, regex, whole-word and folder filters.</li>
+  <li><b>Files</b> — the tree of the checkout, every folder closed until you open it; a file opens read-only, with
+  line numbers, in the viewer.</li>
+  <li><b>Search</b> — <code>git grep</code> across the checkout, with case, regex, whole-word and folder filters. A
+  result opens in the viewer and opens just the folders above it in Files.</li>
   <li><b>History</b> — recent commits of the branch.</li>
 </ul>
 FIG_BASE_SEARCH
-<p><b>Pull</b> is fast-forward only and refuses on a dirty tree. <b>Shell</b> opens a thread rooted at the base
+<p><b>Pull</b> sits in the Base header as soon as origin is ahead; it is fast-forward only and refuses on a dirty
+tree. Fetch, Open in Editor, Shell and Reveal come on hover. <b>Shell</b> opens a thread rooted at the base
 checkout — useful when you want to run something against the real branch rather than a sandbox.</p>
 
 <h2 id="prs">Pull requests</h2>
@@ -628,17 +639,17 @@ browser, or turn it into a task whose sandbox sits on the PR's head.</p>
 simply shows nothing to list.</p></div>
 
 <h2 id="pr-lifecycle">A task's pull request, to the merge</h2>
-<p>Once a task has a pull request — created from the Delta panel, or the one it was opened on — the summary band
+<p>Once a task has a pull request — opened from its thread, or the one it was opened on — the Pull Request section
 lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
 <ul>
   <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
   and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so
   a thread mid-turn gets it when the turn ends. A check that is not a GitHub Actions job has no log to fetch; the
   thread gets its link.</li>
-  <li><b>Merge</b> appears in the action bar when GitHub says the pull request merges cleanly. It uses the method
+  <li><b>Merge</b> appears on the Pull Request header (with the commit and push buttons turned on) when GitHub says the pull request merges cleanly. It uses the method
   the repository allows (merge commit, else squash, else rebase), asks first, and then offers to close the task,
   which removes its sandboxes and deletes the branch the task created — never a branch name it would have to guess.</li>
-  <li><b>Fix Conflicts</b> replaces it when the pull request conflicts with its base: the thread is asked to merge
+  <li><b>Fix Conflicts</b> stays on the header when the pull request conflicts with its base: the thread is asked to merge
   the base into the branch, resolve, run the tests and push.</li>
 </ul>
 """

@@ -95,16 +95,22 @@ Codex CLI, Cursor CLI — and copied into <code>~/.scope/drivers/</code> on firs
 task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
-<p>The right-hand panel, three tabs, all about the selected task. A band at the top names the task and says
-where its branch stands: the base it forked from, the fork commit, how many commits it has made since, and
-whether the base has moved on underneath it.</p>
+<p>The right-hand panel, all about the selection. A band at the top names the task, then a column of
+collapsible sections, one header each: closed, a section costs one line and its header still says the essential;
+open, it shows the rest. Several can be open at once — the lists share the height, and you drag the line between
+two of them. Under the sections, one viewer shows the diff or the base file you last opened; close it to give its
+height back.</p>
 <table>
-  <tr><th>Tab</th><th>Shows</th><th>Key</th></tr>
-  <tr><td><b>Delta</b></td><td>the diff of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
-  <tr><td><b>Pull Request</b></td><td>the task's pull request and every one of its checks</td><td></td></tr>
-  <tr><td><b>Base</b></td><td>the untouched checkout of the task's repositories: branch and HEAD, files, search, history</td><td><kbd>⇧⌘B</kbd></td></tr>
+  <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
+  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository</td><td></td></tr>
+  <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
+  <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
+  <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
+  <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
-<p>Without a task, Base follows the selected repository. Drag the panel's left edge to resize; <kbd>⌥⌘I</kbd> hides it.</p>
+<p>The inspector remembers which sections are open per scope, with and without a task. Without a task, the task's
+sections stay in place, dimmed, and Base follows the selected repository. Drag the panel's left edge to resize;
+<kbd>⌥⌘I</kbd> hides it.</p>
 
 <h2 id="global-views">Pull Requests and Graph</h2>
 <p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
