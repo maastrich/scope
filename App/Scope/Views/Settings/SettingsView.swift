@@ -66,7 +66,7 @@ private struct GeneralSettingsView: View {
                         }
                     }
                 }
-                Text("Neutral is white or near-black with grey chrome. Ink is the brand's navy and ivory. The state colours are the same in both.")
+                Text("Brand is the Mobsuccess charter: ivory or onyx ground, white or navy cards. Neutral is white or near-black with grey chrome. The state colours and the terminal are the same in both.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)

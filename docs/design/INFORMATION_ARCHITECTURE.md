@@ -529,7 +529,7 @@ Where a behaviour was a judgement call it became a preference, with the judgemen
 | Sidebar arrangement | as a tree | by state |
 | Scope tiles | by importance | in declared order |
 | Swipe sideways on the sidebar to switch scope | on | off |
-| Colours | neutral | ink |
+| Colours | brand (the charter) | neutral |
 | Commit, push and pull-request buttons under Delta | hidden | shown |
 
 The four items left at that point followed:
@@ -553,10 +553,20 @@ in particular; daily references are GitHub, Slack, Linear, Sentry, Zed, Arc, Cla
 - **Flat columns.** `NavigationSplitView` drew the sidebar as a rounded panel floating over the window on macOS
   26. `RootView` is now three plain columns under one toolbar, with hairlines for dividers; the sidebar's width
   and ⌃⌘S are the app's own (`AppModel.sidebarWidth`, `toggleSidebar`).
-- **Neutral chrome.** White / near-black ground with grey chrome is the default; the Ink and Ivory palette of
-  [`RESEARCH.md`](RESEARCH.md) stays available (**Settings ▸ Appearance ▸ Colours**). Both live in the asset
-  catalogue, the brand's under names suffixed `Ink`; the tokens in `Theme.swift` are computed from
-  `ChromePalette.theme`.
+- **The charter's colours, as written.** After a first neutral pass the owner pointed at the Mobsuccess design
+  system (`mobsuccess-devops/design-system`: `DESIGN.md` §1.2–1.3, `references/color-palette.md`), and the default
+  is now exactly its theme roles: Ivory `#FFFFF9` ground with pure-white cards and Ink text in light; Onyx
+  `#101010` with `#191D2C` / `#232838` surfaces and Ivory text in dark; borders, fills and soft text are the text
+  colour at the charter's opacities (14 / 16 % border, 62 / 66 % soft text, 4 / 6 % hover), flattened onto the
+  ground so every token stays opaque. The accent is Electric in light and Periwinkle in dark, where Electric is
+  3.0:1. The states take the charter's semantic set — success for running and passing checks, danger for failed,
+  info for an unread result, warning for pending — and waiting keeps Pumpkin as its marker in dark. What the
+  earlier Ink palette got wrong, by the charter's own words: *Ink is not a ground* (it was the dark sidebar), and
+  the light chrome was a blue-grey the charter does not contain. A neutral grey set stays available
+  (**Settings ▸ Appearance ▸ Colours**). Both live in the asset catalogue, the brand's under names suffixed
+  `Brand`; the tokens in `Theme.swift` are computed from `ChromePalette.theme`.
+- **The terminal is left alone.** It paints its own ground (`TerminalGround`, the Ivory / Onyx it always had) and
+  its ANSI colours are untouched, whatever the chrome.
 - **Quiet selection.** A selected sidebar row is a rounded neutral fill with its ordinary text colours, not the
   system's full-width accent bar (`ListSelectionHighlightRemover`, `sidebarRow`). Row separators are gone.
 - **One ground.** The inspector panels were painted with `textBackgroundColor`, a system grey off the palette in

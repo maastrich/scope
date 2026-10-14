@@ -15,14 +15,16 @@ import ScopeGit
 // Nothing in the app is translucent any more except `PaletteDim`, which is a modal scrim rather than a
 // material: it is meant to dim what is behind it, not to sample it.
 
-/// Which set of chrome colours is in force (Settings ▸ Appearance ▸ Chrome). The asset catalogue holds both: the
-/// neutral one under the plain names, the brand's under the same names suffixed `Ink`. The tokens below are
+/// Which set of chrome colours is in force (Settings ▸ Appearance ▸ Colours). The asset catalogue holds both: the
+/// neutral one under the plain names, the brand's under the same names suffixed `Brand`. The brand values are the
+/// theme roles of the Mobsuccess design system (`DESIGN.md` §1.2, `references/color-palette.md` §5), with its
+/// opacities flattened onto the ground so every token stays opaque. The tokens below are
 /// computed so a change of theme reaches every view the next time it is drawn; `RootView` redraws on the change.
 enum ChromePalette {
-    nonisolated(unsafe) static var theme: ChromeTheme = .neutral
+    nonisolated(unsafe) static var theme: ChromeTheme = .brand
 
     static func name(_ token: String) -> String {
-        theme == .ink ? token + "Ink" : token
+        theme == .brand ? token + "Brand" : token
     }
 
     static func color(_ token: String) -> Color {

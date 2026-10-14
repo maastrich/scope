@@ -36,7 +36,7 @@ enum TerminalAppearance {
             // `Surface.ground` now, and in light that is Ivory rather than the system grey — reading the
             // system colour here would leave a visible seam at the terminal's edge and mix every derived
             // ANSI colour against a ground nothing else uses.
-            let background = resolve(NSColor(named: ChromePalette.name("Ground")) ?? .windowBackgroundColor, over: nil)
+            let background = resolve(NSColor(named: "TerminalGround") ?? .windowBackgroundColor, over: nil)
             let foreground = resolve(.labelColor, over: background)
             let secondary = resolve(.secondaryLabelColor, over: background)
             let tertiary = resolve(.tertiaryLabelColor, over: background)
