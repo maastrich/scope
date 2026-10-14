@@ -20,6 +20,9 @@ extension ScopeDeclaration {
     /// The colour of the tile: the chosen one, else the one derived from the slug.
     public var resolvedTint: ScopeTint { tint ?? .derived(from: slug) }
 
+    /// The image file the tile shows in an appearance: the dark one when there is one, else the one image.
+    public func logo(dark: Bool) -> String? { dark ? logoDark ?? logo : logo }
+
     /// What the tile shows without a logo: the chosen icon (an emoji or a few letters), else the first letter of
     /// the name, skipping the `@` of an organisation folder.
     public var monogram: String {

@@ -39,6 +39,12 @@ import ScopeCore
         #expect(!TaskProjection.agentsMarkdown(task: task, otherRepos: [], scopeName: "Acme").contains("## Goal"))
     }
 
+    @Test func theScopeContextIsQuotedBeforeTheRepositories() {
+        let md = TaskProjection.agentsMarkdown(task: task, otherRepos: [], scopeName: "Acme", scopeContext: "  Billing lives in api.\n")
+        #expect(md.contains("\n\n## About Acme\n\nBilling lives in api.\n\n## Repositories of this task\n"))
+        #expect(!TaskProjection.agentsMarkdown(task: task, otherRepos: [], scopeName: "Acme", scopeContext: " \n").contains("## About"))
+    }
+
     @Test func withoutSummariesOutputIsUnchanged() {
         let md = TaskProjection.agentsMarkdown(task: task, otherRepos: ["web"], scopeName: "Acme")
         #expect(md.contains("- **api** — sandbox: `/h/sandboxes/acme/auth/api` (branch `scope/auth`)\n\n## Other"))

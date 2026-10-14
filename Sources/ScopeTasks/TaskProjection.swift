@@ -34,9 +34,11 @@ public enum TaskProjection {
     ///   - task: the task; its active repos are listed with their sandbox paths.
     ///   - otherRepos: relative paths of the scope's other repos.
     ///   - scopeName: display name of the scope.
+    ///   - scopeContext: what the owner wrote about the scope (`ScopeDeclaration.context`), quoted as it is.
     ///   - repoSummaries: graph cards (purpose / stack / setup / test), keyed by relative path; missing entries fall back to names only.
     public static func agentsMarkdown(
-        task: TaskRecord, otherRepos: [String], scopeName: String, repoSummaries: [RepoContextSummary] = []
+        task: TaskRecord, otherRepos: [String], scopeName: String, scopeContext: String? = nil,
+        repoSummaries: [RepoContextSummary] = []
     ) -> String {
         let summaries = Dictionary(repoSummaries.map { (TaskRepo.normalize($0.path), $0) }, uniquingKeysWith: { first, _ in first })
         var lines: [String] = [generatedMarker, "# Task: \(task.name)", ""]
@@ -48,6 +50,12 @@ public enum TaskProjection {
             lines.append("## Goal")
             lines.append("")
             lines.append(prompt)
+            lines.append("")
+        }
+        if let context = scopeContext?.trimmingCharacters(in: .whitespacesAndNewlines), !context.isEmpty {
+            lines.append("## About \(scopeName)")
+            lines.append("")
+            lines.append(context)
             lines.append("")
         }
         lines.append("## Repositories of this task")
