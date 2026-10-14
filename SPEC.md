@@ -150,10 +150,11 @@ Un adaptateur transforme les événements d'un driver en états de thread. Méca
 
 Geste de premier rang, partout, toujours sur le **bon checkout** : la sandbox si on part d'une task ou d'un thread, la base si on part de la vue Base.
 
-- **Éditeur par défaut** : détecté au premier lancement (Cursor, VS Code, Zed, Sublime, JetBrains, Nova), réglable. Chaque éditeur est un template : `cursor {path}`, `code -g {file}:{line}`, `zed {path}:{line}`, `open -a "Nova" {path}`. Template libre pour tout autre.
-- **Cible résolue selon le contexte** : depuis un thread ou une ligne de task → `<task-root>/<repo>/` ; depuis Base → `<scope>/<repo>/` ; depuis un fichier du Delta → la sandbox, sur le fichier et la ligne ; depuis le Graph → sélecteur si le repo a plusieurs checkouts (base + N sandboxes), avec branche et état de chacun.
-- **Task entière** : ouvre `<task-root>/<slug>.code-workspace` (un dossier par sandbox) pour Cursor / VS Code ; le dossier racine pour les autres.
-- **Points d'entrée** : barre de titre du thread, clic droit sur un repo, icône sur chaque fichier du delta, palette, `⌘E` (repo courant), `⌘⇧E` (task entière). `⌥`-clic copie le chemin.
+- **Éditeur par défaut** : détecté au premier geste (Cursor, VS Code, Zed, Sublime, JetBrains, Nova ; celui qui tourne déjà d'abord), enregistré, réglable. Aucun point d'entrée n'est grisé faute d'éditeur. Un éditeur connu est piloté à sa façon — son outil en ligne de commande est pris dans le bundle de l'app, pas sur le `PATH` — ; tout autre est un template libre : `{path}`, `{file}`, `{line}`.
+- **Une fenêtre par checkout, retrouvée** : rouvrir un checkout revient à sa fenêtre au lieu d'en créer une (`zed -e`, comportement natif de Cursor / VS Code). On passe toujours la racine du checkout, jamais le sous-dossier où le thread s'est déplacé.
+- **Cible résolue selon le contexte** : depuis un thread → sa sandbox (dans une task à plusieurs repos, celle où l'agent a touché un fichier en dernier ; la task entière à défaut), ou le repo qui contient son dossier pour un thread libre ; depuis Base → `<scope>/<repo>/` ; depuis un fichier du Delta → la sandbox **et** le fichier, sur la ligne, pour qu'il s'ouvre dans son projet ; depuis le Graph → sélecteur si le repo a plusieurs checkouts (base + N sandboxes), avec branche et état de chacun.
+- **Task entière** : Cursor / VS Code → `<task-root>/<slug>.code-workspace` (un dossier par sandbox) dès qu'il y a plusieurs sandboxes, la sandbox seule sinon ; Zed, Sublime → les sandboxes côte à côte dans une fenêtre ; les autres → le dossier racine.
+- **Points d'entrée** : barre de titre du thread, survol d'une ligne de task, clic droit sur un repo, icône sur chaque fichier du delta, palette, `⌘E` (repo courant), `⌘⇧E` (task entière). `⌥`-clic copie le chemin.
 
 ---
 

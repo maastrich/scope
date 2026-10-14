@@ -602,6 +602,23 @@ most of a minute to appear after a launch that restarts six shell threads; not i
 
 ---
 
+### As built — Open in Editor (2026-10-14)
+
+An audit of §4.8 of the spec, after "getting my editor on the task's files is still a manual job". The gesture
+count was already one (⌘E); it was the landing that was wrong.
+
+- **One window per checkout, found again.** Zed was handed the task's `.code-workspace`, which it opens as a
+  JSON file, and opened a new window on every ⌘E. It now gets the sandboxes themselves with `-e`. A Delta file
+  opens with its sandbox, so it lands in the project instead of a lone window.
+- **The checkout, not the cwd.** A thread opens its sandbox root wherever its shell has gone; in a task of
+  several repositories, the one the agent last touched.
+- **A third hover control on the task row**: the editor, before archive and "…" (`hoverControlsWidth` 44 → 62).
+  It is where the eye is when the idea comes.
+- **Nothing is greyed out for want of an editor.** The first gesture picks an installed editor, a running one
+  first, and saves it; Settings shows *Automatic (Zed)* instead of *None*.
+- **Palette**: the current task's entry and sandboxes come before the base checkouts, and each row says which
+  checkout it is ("sandbox · branch", "base checkout · branch").
+
 ## 8. Open questions
 
 - **Should Base browse the sandbox too?** In a task, "the files" most often means the worktree the agent is
