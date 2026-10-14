@@ -28,6 +28,10 @@ struct InspectorView: View {
     /// A section is its header, its body and the 1 pt rule above it.
     private static let ruleHeight: Double = 1
     private static let viewerBarHeight: Double = 22
+    /// The least the viewer keeps when the sections above need room: its bar, its file header and a few lines.
+    private static let viewerFloor: Double = 180
+    /// How much of a block's content the sections claim from the viewer before the block scrolls instead.
+    private static let blockFloorWithViewer: Double = 120
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,7 +85,16 @@ struct InspectorView: View {
         let viewer = resolvedViewer
         let stack: Double = {
             guard viewer != nil else { return total }
-            if fillOpen { return (total * (1 - model.inspector.viewerShare)).rounded() }
+            if fillOpen {
+                // The viewer gives way before the sections overflow: a header pushed out of sight is a section
+                // nobody knows is there.
+                let open = items.filter(\.isOpen)
+                let least = chrome + open.reduce(0) {
+                    $0 + ($1.section.fills ? Layout.minimumFill : min($1.natural, Self.blockFloorWithViewer))
+                }
+                let shared = total * (1 - model.inspector.viewerShare)
+                return max(shared, min(least, total - Self.viewerFloor)).rounded()
+            }
             // Nothing above stretches: the sections take what they need and the viewer the rest.
             let blocks = items.filter { $0.isOpen }.reduce(0) { $0 + $1.natural }
             return min(chrome + blocks, total * 0.8).rounded()
