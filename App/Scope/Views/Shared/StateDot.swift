@@ -18,7 +18,6 @@ struct StateDot: View {
     var pulses = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isOnAccent) private var isOnAccent
-    @State private var pulsePhase = false
 
     var body: some View {
         Group {
@@ -38,14 +37,17 @@ struct StateDot: View {
         .frame(width: size, height: size)
         .overlay {
             if animatesPulse {
-                Circle()
-                    .stroke(fill, lineWidth: 1)
-                    .scaleEffect(pulsePhase ? 2.1 : 1)
-                    .opacity(pulsePhase ? 0 : 0.8)
-                    .onAppear {
-                        withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulsePhase = true }
-                    }
-                    .onDisappear { pulsePhase = false }
+                // Read off the clock, like `ScopeSpinner`: a `withAnimation(.repeatForever)` in `onAppear`
+                // animated the layout around the dot too — the toolbar pill changing width as its label changed,
+                // a row moving as its thread started — and replayed it at every pulse.
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+                    let eased = 1 - (1 - phase) * (1 - phase)
+                    Circle()
+                        .stroke(fill, lineWidth: 1)
+                        .scaleEffect(1 + 1.1 * eased)
+                        .opacity(0.8 * (1 - eased))
+                }
             }
         }
         .accessibilityLabel(state.displayLabel)
@@ -98,5 +100,9 @@ struct StatePill: View {
         .padding(.trailing, 9)
         .frame(height: 22)
         .background(Fill.quiet, in: Capsule())
+        // A toolbar item is proposed whatever room is left, and the label gave way down to its first letter.
+        // The cap is for the error of a failed turn, which can be a paragraph.
+        .frame(maxWidth: 320)
+        .fixedSize()
     }
 }

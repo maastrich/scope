@@ -260,13 +260,18 @@ final class ThreadSession: Identifiable {
     func apply(_ event: AdapterEvent) {
         guard phase.isAlive else { return }
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event)
-        adapterState = next
-        lastFailure = next == .failed ? (event.payload[HookEvent.errorKey] ?? lastFailure) : nil
-        record.lastState = next
-        if let directory = event.payload[HookEvent.directoryKey], !directory.isEmpty {
+        // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
+        // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
+        // state that had not moved.
+        if adapterState != next { adapterState = next }
+        let failure = next == .failed ? (event.payload[HookEvent.errorKey] ?? lastFailure) : nil
+        if lastFailure != failure { lastFailure = failure }
+        if record.lastState != next { record.lastState = next }
+        if let directory = event.payload[HookEvent.directoryKey], !directory.isEmpty, agentDirectory != directory {
             agentDirectory = directory
         }
-        if let session = event.payload["session_id"] ?? event.payload["resume_id"], !session.isEmpty {
+        if let session = event.payload["session_id"] ?? event.payload["resume_id"], !session.isEmpty,
+           record.resumeID != session {
             record.resumeID = session
         }
         onRecordChanged?(record)

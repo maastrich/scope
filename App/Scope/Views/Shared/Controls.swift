@@ -438,19 +438,21 @@ struct ScopeStepper: View {
 /// takes the size as an argument and every call site states it.
 struct ScopeSpinner: View {
     var size: CGFloat = 12
-    @State private var spinning = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.7)
-            .stroke(Ink.tertiary, style: StrokeStyle(lineWidth: max(1, size / 8), lineCap: .round))
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(spinning ? 360 : 0))
-            .animation(reduceMotion ? nil : .linear(duration: 0.9).repeatForever(autoreverses: false),
-                       value: spinning)
-            .onAppear { spinning = true }
-            .accessibilityLabel("Working")
+        // The angle is read off the clock. A state flipped in `onAppear` under a repeating animation carried
+        // whatever else moved in that transaction along with it: in a sheet still settling, the spinner
+        // travelled from where it first landed to its place, for ever.
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+            Circle()
+                .trim(from: 0, to: 0.7)
+                .stroke(Ink.tertiary, style: StrokeStyle(lineWidth: max(1, size / 8), lineCap: .round))
+                .rotationEffect(.degrees(reduceMotion ? 0 : turn * 360))
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Working")
     }
 }
 
