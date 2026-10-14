@@ -120,6 +120,8 @@ Panneau unique, indépendant du driver, agrégé sur les repos de la task.
 - *Pull* (fast-forward uniquement) ; indicateur "en retard de N commits".
 - *Ouvrir un shell ici* : un terminal secondaire, sans driver, dans la base. Pour lancer les tests sur `main`, comparer un comportement, etc.
 - *Ouvrir dans l'éditeur*.
+- **Quel repo est montré.** Dans l'ordre : le repo épinglé dans le contexte courant, la ligne de repo sélectionnée, le repo où travaille le thread affiché (le dossier annoncé par son shell, ou celui du dernier fichier touché par l'agent, remonté par ses hooks), le repo du fichier ouvert dans le Delta, le premier repo de la task, le dernier repo montré dans le scope, le premier du scope. Le panneau dit laquelle de ces raisons s'applique.
+- **Épingle.** Choisir un repo dans l'en-tête l'épingle pour le contexte courant — la task, le thread libre ou le scope — et seulement pour lui. Elle est visible, se retire d'un clic, et survit au redémarrage.
 
 ### 4.6 Graph
 
@@ -226,13 +228,16 @@ Scope
 
 ## 7. Interface
 
-Détaillée en maquettes SVG à l'étape 3. Squelette :
+Le raisonnement, les options écartées et ce qui a été construit sont dans `docs/design/INFORMATION_ARCHITECTURE.md`. Squelette :
 
-- **Sidebar** : scopes → tasks → threads, pastille d'état par thread. Détail d'une task : une ligne par repo (branche, `+/-`, état de la sandbox) avec *Ouvrir dans l'éditeur* et *Voir le delta* au survol. En bas : *Nouveau thread*, *Nouvelle task*.
-- **Scène** (centre) : onglets de terminaux, splits. Barre de titre : driver · scope · task · état · *Ouvrir dans l'éditeur*.
-- **Inspecteur** (droite, masquable) : *Graph*, *Delta*, *Base*. Le Delta suit la task du thread actif.
+- **Trois colonnes à plat** sous une seule barre d'outils, séparées par des filets : sidebar, scène, inspecteur. Pas de panneau flottant, pas de matériau translucide. Couleurs neutres par défaut ; la palette de marque (Ink / Ivory) reste un réglage.
+- **Sidebar** : le travail du scope courant — threads libres, puis tasks avec leurs threads. Une ligne dit ce qui se passe en mots (*waiting for your permission*, *an agent is working*), sur une ou deux lignes au choix, rangée en arbre ou par état (*needs you*, *working*, *finished*, *quiet*). La ligne sélectionnée est un fond gris arrondi qui garde les couleurs du texte. La section *Repositories*, repliée par défaut, annonce le nombre de repos modifiés. En bas : *Nouveau thread*, *Nouvelle task*.
+- **Scopes** : chaque scope est une tuile dans l'en-tête de la sidebar — sa première lettre sur une couleur à lui, une icône ou un logo choisis. Le scope courant porte son nom ; les autres tiennent à côté tant qu'il y a de la place, le reste derrière un compteur `+N`. Une marque au coin dit ce qui s'y passe : un thread attend, un tour a échoué, un résultat n'est pas lu, des agents travaillent ; rien si rien ne se passe. Les tuiles sont rangées par urgence (ou dans l'ordre déclaré, au choix). Changer de scope ramène là où on en était : la ligne, le thread, l'onglet.
+- **Ce qu'ouvre un agent ne prend pas l'écran.** Un thread ou une task ouverts par un agent apparaissent dans la sidebar avec leur état, mais ne remplacent le terminal affiché que si aucun thread n'est à l'écran dans ce scope (réglable : jamais, toujours).
+- **Scène** (centre) : le terminal du thread sélectionné. Barre de titre : le chemin *scope › task › thread*, puis driver · dossier · état · *Ouvrir dans l'éditeur*.
+- **Inspecteur** (droite, masquable) : *Delta*, *Pull Request*, *Base*. Delta et Pull Request suivent la task sélectionnée et sont grisés sans task ; Base a toujours un sujet (§4.5). L'onglet choisi pour les tasks est gardé quand on passe par une ligne sans task. Le *Graph* et la liste des pull requests du scope sont des feuilles ouvertes depuis la sidebar. Les boutons *Commit*, *Push*, *Créer la PR* et *Merge* sont masqués par défaut : c'est le travail de l'agent dans son thread, le panneau sert à lire ce qu'il a fait.
 - **Palette** `⌘K` : nouveau thread, nouvelle task, ajouter un repo à la task, ouvrir `<repo>` dans l'éditeur, ouvrir la task dans l'éditeur, analyser le graph, aller à un thread, déclarer un scope.
-- **Raccourcis** : `⌘O` déclarer un scope, `⌘T` nouveau thread, `⌘⇧T` nouvelle task, `⌘E` / `⌘⇧E` éditeur, `⌘D` delta, `⌘⇧B` base, `⌘1..9` threads.
+- **Raccourcis** : `⌘O` déclarer un scope, `⌘T` nouveau thread, `⌘⇧T` nouvelle task, `⌘E` / `⌘⇧E` éditeur, `⌘D` delta, `⌘⇧B` base, `⌘1..9` threads, `⌃1..9` scopes (dans l'ordre déclaré), `⌥⌘←` / `⌥⌘→` scope précédent / suivant, `⌃⌘S` sidebar, `⌃⌘L` lignes détaillées ou compactes, `⌃⌘G` rangement en arbre ou par état. Un balayage horizontal à deux doigts sur la sidebar change aussi de scope.
 - **Menu bar extra** (optionnel) : threads en attente, accès rapide.
 
 ---
