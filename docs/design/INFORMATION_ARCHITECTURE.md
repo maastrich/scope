@@ -600,6 +600,44 @@ selection after a scope switch.
 **Not tried:** anything that needs a hand — the swipe, the tile drag, the pickers' menus, the slide. Git facts took
 most of a minute to appear after a launch that restarts six shell threads; not investigated, and not new.
 
+### Image icons — as built (2026-10-14)
+
+What v0.14.0 shipped copied the picked file as it was: a 20 MB PNG stayed 20 MB, a 1 × 1 file made a black tile, a
+wordmark was cropped to its middle, a black mark on transparency vanished on the dark sidebar, a refused file only
+bumped the problems badge, and a right-click on a neighbour's tile edited the scope on screen.
+
+- **Stored form** (`ScopeLogo`, in the package, `ScopeLogoTests`): a square PNG of at most 128 px, named
+  `<slug>-<8 hex>.png`. The size is read before anything is decoded and the work happens on a 512 px copy.
+  Refused, each with its sentence: not an image, over 64 MB, under 16 px or over 16 384 px on a side, one side
+  more than three times the other, fully transparent.
+- **Always inside the square, never cropped blind.** An opaque picture fills the square from its centre. An opaque
+  image whose whole edge is one colour (a wordmark on white) is fitted whole on that colour. An image with
+  transparency is trimmed to what it shows and fitted whole.
+- **How the tile draws it** is read off the stored pixels (`ScopeLogo.Style`): opaque is the tile; a one-tone grey
+  glyph on transparency is drawn like the letter, in the tile's ink on its tint, so the colour still means
+  something; colours on transparency sit on a plate — white, or Onyx when the image is light on the whole — with
+  a hairline. The plates are the same in both appearances: they answer the image, not the window.
+- **Dark appearance**: an optional second image (`logoDark`) replaces the first in dark. Without one the same
+  image is shown in both, which the plate and the template make safe by default.
+- **Ways in**: a file picker, **Paste** (a copied file or copied pixels), and a drop — a file from Finder or a
+  picture from a browser — on a well of the settings sheet or on the scope's tile in the sidebar, where it sets
+  the first image. SVG and PDF are rasterised by AppKit before the package sees them. Left out: ⌘V on the tile
+  (it cannot hold the keyboard, and the terminal owns ⌘V), following a dragged link (no drop makes the app fetch
+  from the network), the folder's Finder icon and an application's icon (generic for the first, a niche for the
+  second), a per-scope switch to overrule the automatic style.
+- **Scope settings** (`ScopeSettingsSheet`): one sheet per scope, from its menu or a right-click on its tile —
+  any tile, each about its own scope. Name, folder, the two images shown on their own grounds, letter, colour,
+  the context for agents, the discovery depth, the graph (how many repositories are described, analyse, open).
+  It replaces the **Tile** submenu and its alert. The tile and the depth apply at once; the name and the context
+  when the sheet closes.
+- **Context for agents** (`ScopeDeclaration.context`): the owner's words about the scope, written under
+  *About <scope>* in the context file of every task, and rewritten in running tasks when it changes.
+- **Lifecycle**: replacing or removing an image deletes its file; so does removing the scope. At launch, a copy
+  v0.14.0 made is brought to the stored form (or dropped, with a line in the problems list, when it cannot be),
+  and files no scope names are deleted. A file deleted behind the app falls back to the letter; the miss is
+  remembered, so the disk is not asked at every redraw.
+- **A refusal is said where the user is looking**: under the wells in the sheet, in an alert for a drop on a tile.
+
 ---
 
 ## 8. Open questions
