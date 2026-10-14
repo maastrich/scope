@@ -79,9 +79,16 @@ final class AppModel {
     var currentScopeID: ScopeID? {
         didSet {
             guard !isRestoringUIState, currentScopeID != oldValue else { return }
-            let from = scopes.firstIndex { $0.id == oldValue } ?? 0
-            let to = scopes.firstIndex { $0.id == currentScopeID } ?? 0
-            scopeSwitchForward = to >= from
+            // A step that said which way it went (a swipe, ⌥⌘←/→) slides that way: with two scopes the other one is
+            // both next and previous. Otherwise the ring's shorter way round, not the raw indices — the last scope to
+            // the first is a step forwards.
+            if let hint = scopeStepForward {
+                scopeSwitchForward = hint
+            } else if let old = oldValue, let new = currentScopeID {
+                scopeSwitchForward = ScopeCycle.isForward(from: old, to: new, in: scopes.map(\.id))
+            } else {
+                scopeSwitchForward = true
+            }
             if let id = currentScopeID { taskInspectorTab = places[id]?.taskTab ?? .delta }
             searchUI.sidebarFilter = ""
             globalSheet = nil
@@ -91,6 +98,17 @@ final class AppModel {
 
     /// Whether the last scope switch went towards a later scope: the side the sidebar's content slides in from.
     private(set) var scopeSwitchForward = true
+
+    /// The direction of the ring step being taken by `selectAdjacentScope`, for `currentScopeID` to slide by.
+    @ObservationIgnored private var scopeStepForward: Bool?
+
+    /// The scope a swipe in progress is dragging towards, for the header to light its tile. Transient: never saved.
+    private(set) var swipeTargetID: ScopeID?
+
+    func setSwipeTarget(_ id: ScopeID?) {
+        // A swipe reports every trackpad event; only a change of side is worth redrawing the header for.
+        if swipeTargetID != id { swipeTargetID = id }
+    }
 
     /// Where the user was in each scope (`ScopePlace`), kept current by `persistUIState` and read by `selectScope`.
     private(set) var places: [ScopeID: ScopePlace] = [:]
@@ -848,11 +866,11 @@ final class AppModel {
         ScopeActivity(threads: threads(in: scope.id).map(\.displayState), missing: scope.kind == .missing)
     }
 
-    /// The other scopes in tile order (`Preferences.scopeTileOrder`).
-    func scopeTiles(besides current: ScopeState) -> [ScopeState] {
-        let others = scopes.filter { $0.id != current.id }
-        let ids = config.preferences.scopeTileOrder.arranged(others.map { (id: $0.id, activity: activity(of: $0)) })
-        return ids.compactMap(scope)
+    /// The other scopes in ring order (`ScopeCycle.rotated`), starting with the one a swipe to the next goes to.
+    func scopeTiles(besides current: ScopeState) -> ScopeTiles {
+        let ring = ScopeCycle.rotated(scopes.map(\.id), after: current.id).compactMap(scope)
+        return ScopeTiles(ring: ring.map { (scope: $0, activity: activity(of: $0)) },
+                          order: config.preferences.scopeTileOrder)
     }
 
     /// Changes what the owner chose for a scope (icon, tint, images, context) and saves it.
@@ -1268,18 +1286,20 @@ final class AppModel {
         selectScope(scopes[index].id)
     }
 
-    /// The scope `delta` places from the current one in the declared order, without wrapping: what a swipe pages
-    /// to. Paging off the last scope onto the first would not feel like turning a page, so the ends rubber-band.
+    /// The scope `delta` places from the current one around the ring (`ScopeCycle`): what a swipe pages to, and
+    /// what the header tiles are arranged by. The ring has no end — past the last scope comes the first — so this
+    /// is `nil` only when there is no other scope to reach, where a swipe rubber-bands instead.
     func adjacentScope(_ delta: Int) -> ScopeID? {
-        guard let current = currentScope, let index = scopes.firstIndex(where: { $0.id == current.id }),
-              scopes.indices.contains(index + delta) else { return nil }
-        return scopes[index + delta].id
+        guard let current = currentScope else { return nil }
+        return ScopeCycle.neighbour(of: current.id, in: scopes.map(\.id), delta: delta)
     }
 
-    /// ⌥⌘→ / ⌥⌘←: the next or previous declared scope, wrapping around.
+    /// ⌥⌘→ / ⌥⌘←: the next or previous scope around the ring.
     func selectAdjacentScope(_ delta: Int) {
-        guard scopes.count > 1, let current = currentScope, let index = scopes.firstIndex(where: { $0.id == current.id }) else { return }
-        selectScope(scopes[((index + delta) % scopes.count + scopes.count) % scopes.count].id)
+        guard let target = adjacentScope(delta) else { return }
+        scopeStepForward = delta > 0
+        defer { scopeStepForward = nil }
+        selectScope(target)
     }
 
     private var currentTabs: [ThreadSession] {
@@ -1393,5 +1413,21 @@ final class AppModel {
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+/// The scopes beside the current one in the header, in ring order, with what is happening in each — worked out
+/// once, then split as many times as the header tries a width.
+struct ScopeTiles {
+    let ring: [(scope: ScopeState, activity: ScopeActivity)]
+    let order: ScopeTileOrder
+
+    var count: Int { ring.count }
+
+    /// The `visible` scopes that keep a tile and the ones behind the `+N` counter, both in ring order.
+    func split(visible: Int) -> (shown: [ScopeState], hidden: [ScopeState]) {
+        let ids = order.split(ring.map { (id: $0.scope.id, activity: $0.activity) }, visible: visible)
+        let byID = Dictionary(uniqueKeysWithValues: ring.map { ($0.scope.id, $0.scope) })
+        return (ids.shown.compactMap { byID[$0] }, ids.hidden.compactMap { byID[$0] })
     }
 }

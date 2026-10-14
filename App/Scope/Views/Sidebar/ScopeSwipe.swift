@@ -2,7 +2,8 @@ import AppKit
 import ScopeCore
 import SwiftUI
 
-/// A two-finger horizontal swipe over the sidebar pages to the next or previous scope (Settings ▸ Sidebar).
+/// A two-finger horizontal swipe over the sidebar pages to the next or previous scope around the ring
+/// (`ScopeCycle`), endlessly in either direction (Settings ▸ Sidebar).
 ///
 /// A local monitor rather than a gesture: SwiftUI has no scroll-wheel gesture, and an `NSView` placed over the list
 /// to catch the events would also catch the vertical ones the list needs. `PageSwipe` decides what a gesture is;
@@ -15,7 +16,7 @@ import SwiftUI
 @MainActor
 enum ScopeSwipe {
     struct Handlers {
-        /// Whether there is a scope before and after the current one: the sides a page can turn to.
+        /// The sides a page can turn to. The ring has no ends, so both are open as soon as there is a second scope.
         var neighbours: () -> (previous: Bool, next: Bool)
         /// The page's offset while the fingers move, positive to the right.
         var onMove: (CGFloat) -> Void

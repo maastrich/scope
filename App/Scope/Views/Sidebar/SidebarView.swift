@@ -19,6 +19,11 @@ struct SidebarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Where a swipe has dragged the list, positive to the right (`ScopeSwipe`).
     @State private var swipeOffset: CGFloat = 0
+    /// The scope the swipe is pulling in, previewed in the gap the list leaves, and the side it comes from: +1 on
+    /// the right (the next scope), −1 on the left. The side outlives the drag so the card slides out the way it came
+    /// when the list springs back.
+    @State private var swipePreview: (id: ScopeID, side: CGFloat)?
+    @State private var swipeWidth: CGFloat = 0
     /// How the next scope switch animates: the keyboard's short slide, or a swipe's spring carrying its speed.
     @State private var scopeSwitchAnimation = Self.keyboardSwitch
 
@@ -39,7 +44,8 @@ struct SidebarView: View {
                 // The list is the part that belongs to the scope, so it is the part that slides when the scope
                 // changes: in from the side the new scope sits on, 120 ms, a fade alone under Reduce Motion. The
                 // header above it never moves. A swipe drags it first; the offset sits inside the `.id` so the list
-                // being left slides on from where the fingers let it go.
+                // being left slides on from where the fingers let it go. The scope it drags towards shows as a card
+                // in the gap, a page away from the list.
                 ZStack {
                 List(selection: listSelection) {
                     workSection(scope)
@@ -61,7 +67,14 @@ struct SidebarView: View {
                 .offset(x: swipeOffset)
                 .id(scope.id)
                 .transition(slide)
+                if let preview = swipePreview, let target = model.scope(preview.id) {
+                    ScopeSwipePreview(scope: target)
+                        .offset(x: swipeOffset + preview.side * swipeWidth)
+                        // On a turn the arriving list takes over; the card must not linger or slide across it.
+                        .transition(.identity)
                 }
+                }
+                .onGeometryChange(for: CGFloat.self, of: \.size.width) { swipeWidth = $0 }
                 .clipped()
                 .animation(scopeSwitchAnimation, value: scope.id)
                 .background(Surface.surface.ignoresSafeArea())
@@ -132,8 +145,15 @@ struct SidebarView: View {
         ScopeSwipe.Handlers(
             neighbours: { (model.adjacentScope(-1) != nil, model.adjacentScope(1) != nil) },
             onMove: { offset in
+                // Fingers moving left drag the list left and pull the next scope in from the right.
+                let side: CGFloat = offset < 0 ? 1 : -1
+                let target = offset == 0 ? nil : model.adjacentScope(Int(side))
+                model.setSwipeTarget(target)
                 // Under Reduce Motion nothing follows the fingers; the release still switches, with a fade.
                 guard !reduceMotion else { return }
+                if swipePreview?.id != target || swipePreview?.side != side {
+                    swipePreview = target.map { ($0, side) }
+                }
                 swipeOffset = offset
             },
             onEnd: endSwipe
@@ -141,22 +161,33 @@ struct SidebarView: View {
     }
 
     /// A released swipe either turns the page — the new scope's list comes in from the side the fingers pulled it
-    /// from, as fast as they were going — or springs the list back into place.
+    /// from, as fast as they were going — or springs the list back into place, the preview sliding out with it.
     private func endSwipe(_ outcome: PageSwipe.Outcome, velocity: CGFloat, width: CGFloat) {
+        model.setSwipeTarget(nil)
         switch outcome {
         case .turn(let delta) where model.adjacentScope(delta) != nil:
-            guard let target = model.adjacentScope(delta) else { return }
             // The spring's initial velocity is in units of the distance it covers: the new list crosses a page.
             let speed = min(max(-velocity * CGFloat(delta) / width, 0), 8)
             scopeSwitchAnimation = reduceMotion ? Self.keyboardSwitch
                 : .interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)
-            model.selectScope(target)
+            // Through the ring step, so the list slides the way the fingers went even when, with two scopes, the
+            // other one is both the next and the previous.
+            model.selectAdjacentScope(delta)
             swipeOffset = 0
+            swipePreview = nil
             DispatchQueue.main.async { scopeSwitchAnimation = Self.keyboardSwitch }
         case .turn, .stay:
-            guard swipeOffset != 0 else { return }
+            guard swipeOffset != 0 else {
+                swipePreview = nil
+                return
+            }
             let speed = min(max(-velocity / swipeOffset, 0), 8)
-            withAnimation(.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)) { swipeOffset = 0 }
+            withAnimation(.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)) {
+                swipeOffset = 0
+            } completion: {
+                // A new swipe may already have begun dragging; its preview is its own.
+                if swipeOffset == 0 { swipePreview = nil }
+            }
         }
     }
 
@@ -472,5 +503,31 @@ struct SidebarView: View {
             .accessibilityLabel("New Task")
         }
         .labelStyle(style)
+    }
+}
+
+/// The scope a swipe is pulling in, as a card in the gap the list leaves: its tile and its name, enough to know where
+/// the release will land without drawing that scope's whole list.
+private struct ScopeSwipePreview: View {
+    @Environment(AppModel.self) private var model
+    let scope: ScopeState
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ScopeTile(scope: scope, activity: model.activity(of: scope), size: 36)
+            Text(scope.name)
+                .font(.scopeTitle)
+                .foregroundStyle(scope.kind == .missing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+            Text(model.activity(of: scope).label)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Surface.surface)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
