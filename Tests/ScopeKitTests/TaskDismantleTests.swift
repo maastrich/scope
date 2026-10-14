@@ -1,0 +1,87 @@
+import Foundation
+import Synchronization
+import Testing
+import ScopeCore
+import ScopeGit
+@testable import ScopeTasks
+
+/// Archive and close share one pipeline (`TaskManager.dismantle`): locked per task, persisted after each step,
+/// safe to run again.
+@Suite(.serialized) struct TaskDismantleTests {
+    private func makeManager(_ scope: TestScope) -> TaskManager {
+        TaskManager(home: scope.home, registry: scope.registry, store: TaskRecordStore(home: scope.home))
+    }
+
+    @Test func twoConcurrentArchivesBothSucceed() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        try await scope.makeRepo("web")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "twice", branch: "feat/twice", in: scope.declaration, repos: ["api", "web"])
+
+        async let first = manager.archive(task.id)
+        async let second = manager.archive(task.id)
+        let (a, b) = try await (first, second)
+
+        #expect(a.isArchived && b.isArchived && a.archivedAt == b.archivedAt)
+        #expect(!scope.exists(task.rootURL))
+        #expect(await scope.client(for: api).branchExists("feat/twice"))
+        #expect(await TaskRecordStore(home: scope.home).loadAll().records == [a])
+    }
+
+    @Test func concurrentRequestsPrepareOnceAndACloseWaitsForTheArchive() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "race", branch: "feat/race", in: scope.declaration, repos: ["api"])
+        let prepared = Mutex(0)
+        let prepare: @Sendable () async -> Void = { prepared.withLock { $0 += 1 } }
+
+        async let first = manager.dismantle(task.id, .archive, prepare: prepare)
+        async let second = manager.dismantle(task.id, .archive, prepare: prepare)
+        async let third = manager.dismantle(task.id, .close(deleteBranch: true), prepare: prepare)
+        let (a, b, c) = try await (first, second, third)
+
+        #expect(a.record?.isArchived == true && a == b && c.record == nil)
+        #expect(prepared.withLock { $0 } <= 2)
+        #expect(await manager.task(task.id) == nil)
+        #expect(!(await scope.client(for: api).branchExists("feat/race")))
+    }
+
+    @Test func archivingTwiceKeepsTheFirstDate() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "once", branch: "feat/once", in: scope.declaration, repos: ["api"])
+        let first = try await manager.archive(task.id)
+        let again = try await manager.archive(task.id)
+        #expect(first == again && first.cleanup == nil)
+        // Closing a task that is already gone is not an error either.
+        try await manager.close(task.id, deleteBranch: false)
+        try await manager.close(task.id, deleteBranch: false)
+    }
+
+    @Test func aFailedStepIsPersistedAndTheNextRunResumes() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let web = try await scope.makeRepo("web")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "half", branch: "feat/half", in: scope.declaration, repos: ["api", "web"])
+
+        // The web base checkout disappears mid-run: its sandbox cannot be removed through it.
+        let parked = web.deletingLastPathComponent().appending(path: "web-parked")
+        await #expect(throws: TaskError.self) {
+            try await manager.dismantle(task.id, .archive) { try? FileManager.default.moveItem(at: web, to: parked) }
+        }
+
+        let stored = try #require(await TaskRecordStore(home: scope.home).loadAll().records.first)
+        #expect(stored.repos.map(\.state) == [.archived, .active])
+        #expect(stored.cleanup?.mode == .archive && stored.cleanup?.error != nil && !stored.isArchived)
+        #expect(!scope.exists(task.repos[0].sandboxURL) && scope.exists(task.repos[1].sandboxURL))
+
+        try FileManager.default.moveItem(at: parked, to: web)
+        let archived = try await manager.archive(task.id)
+        #expect(archived.isArchived && archived.cleanup == nil && archived.repos.allSatisfy { $0.state == .archived })
+        #expect(!scope.exists(task.rootURL))
+    }
+}

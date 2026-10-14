@@ -14,6 +14,8 @@ public actor TaskManager {
     private let store: TaskRecordStore
     private let ports: Range<Int>
     private var records: [TaskID: TaskRecord] = [:]
+    /// The dismantle running for a task, so a second request joins it instead of racing it (`dismantle`).
+    private var dismantling: [TaskID: (token: UUID, mode: DismantleMode, run: Task<DismantleOutcome, any Error>)] = [:]
     /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
 
     /// - Parameter ports: where `SCOPE_PORT` blocks come from (`PortAllocator.range(debugBuild:)` in the app).
@@ -322,10 +324,11 @@ public actor TaskManager {
         }
     }
 
-    /// Runs the teardown command of every active sandbox that has one. The first failure throws
-    /// `TaskError.teardownFailed` and nothing is removed: whatever the command was meant to stop is still running.
-    private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async throws {
-        guard let teardown else { return }
+    /// Runs the teardown command of every active sandbox that has one. A failure does not stop the dismantle:
+    /// whatever the command was meant to stop is what the process sweep catches next. It comes back as a notice.
+    private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async -> [DismantleNotice] {
+        guard let teardown else { return [] }
+        var notices: [DismantleNotice] = []
         for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
             guard let command = teardown.commands[repo.repoRelativePath]?.teardown else { continue }
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
@@ -333,67 +336,119 @@ public actor TaskManager {
             let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,
                                                            defaultBranch: await client?.defaultBranch())
             let outcome = await teardown.runner.run(command, in: repo.sandboxURL, environment: environment, timeout: teardown.timeout)
-            guard outcome.succeeded else {
-                throw TaskError.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
-                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output))
+            if !outcome.succeeded {
+                notices.append(.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
+                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output)))
             }
         }
+        return notices
     }
 
     // MARK: - Archive / close
 
-    /// Removes every sandbox but keeps the branches; the record stays, marked archived.
-    /// Guardrail: `TaskError.uncommittedChanges` on the first dirty sandbox unless `force`. Nothing is
-    /// removed before every sandbox passed the check and its teardown ran (`TaskError.teardownFailed`).
+    /// Removes every sandbox but keeps the branches; the record stays, marked archived. See `dismantle`.
     @discardableResult
     public func archive(_ id: TaskID, force: Bool = false, teardown: Teardown? = nil) async throws -> TaskRecord {
-        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await guardClean(record, force: force)
-        try await runTeardown(record, teardown)
-        for index in record.repos.indices where record.repos[index].state == .active {
-            try await removeSandbox(record.repos[index], task: record, force: force)
-            record.repos[index].state = .archived
+        guard let record = try await dismantle(id, .archive, force: force, teardown: teardown).record else {
+            throw TaskError.persistence("unknown task \(id)")
         }
-        removeRootIfNotSandbox(record)
-        record.archivedAt = TaskRecord.roundedToMilliseconds(.now)
-        try await persist(record)
-        records[id] = record
         return record
     }
 
-    /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`.
-    ///
-    /// Guardrails: `TaskError.uncommittedChanges` for a dirty sandbox and `TaskError.branchNotMerged`
-    /// for an unmerged branch (`git branch -d`), both bypassed by `force` (`-D`) once the user confirmed.
+    /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`. See `dismantle`.
     public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false, teardown: Teardown? = nil) async throws {
-        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await guardClean(record, force: force)
-        try await runTeardown(record, teardown)
-        for index in record.repos.indices where record.repos[index].state == .active {
-            try await removeSandbox(record.repos[index], task: record, force: force)
-            record.repos[index].state = .archived
+        try await dismantle(id, .close(deleteBranch: deleteBranch), force: force, teardown: teardown)
+    }
+
+    /// The one path that takes a task apart — archive, close, a Retry and the GC all come through here.
+    ///
+    /// One run per task at a time: a second request for the same mode joins the running one (a double click, the
+    /// CLI racing the UI), another mode waits for it and starts from what it left. Every step is persisted as it
+    /// completes and the record carries `cleanup` until the end, so a run cut short resumes instead of finding
+    /// half a task. Running it on a task that is already archived (or already gone, for a close) does nothing.
+    ///
+    /// Steps: the dirty-sandbox guardrail (`TaskError.uncommittedChanges` unless `force`), `prepare` (the app hangs
+    /// up the task's threads and cancels its setup), the teardown commands, the worktrees, the task root, then
+    /// the branches and the record for a close (`TaskError.branchNotMerged` unless `force`).
+    @discardableResult
+    public func dismantle(_ id: TaskID, _ mode: DismantleMode, force: Bool = false, teardown: Teardown? = nil,
+                          prepare: (@Sendable () async -> Void)? = nil) async throws -> DismantleOutcome {
+        while let running = dismantling[id] {
+            if running.mode == mode { return try await running.run.value }
+            _ = try? await running.run.value
         }
-        removeRootIfNotSandbox(record)
-        if deleteBranch {
-            for repo in record.repos {
-                let client = try await baseClient(for: repo.repoRelativePath, task: record)
-                do {
-                    try await client.deleteBranch(name: repo.branch, force: force)
-                } catch let error as GitError {
-                    if !force, error.message.contains("not fully merged") {
-                        // Sandboxes are gone but the record stays so the user can retry with force.
-                        try? await persist(record)
-                        records[id] = record
-                        throw TaskError.branchNotMerged(repo: repo.repoRelativePath, branch: repo.branch)
-                    }
-                    if !error.message.contains("not found") {
-                        throw TaskError.git(repo: repo.repoRelativePath, error)
-                    }
+        let token = UUID()
+        // The run clears its own entry before it completes, so a waiter never sees a finished run still listed.
+        let run = Task {
+            defer { finishDismantle(id, token: token) }
+            return try await runDismantle(id, mode, force: force, teardown: teardown, prepare: prepare)
+        }
+        dismantling[id] = (token, mode, run)
+        return try await run.value
+    }
+
+    private func finishDismantle(_ id: TaskID, token: UUID) {
+        if dismantling[id]?.token == token { dismantling[id] = nil }
+    }
+
+    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, force: Bool, teardown: Teardown?,
+                              prepare: (@Sendable () async -> Void)?) async throws -> DismantleOutcome {
+        guard var record = records[id] else {
+            if mode.isClose { return DismantleOutcome(record: nil) }
+            throw TaskError.persistence("unknown task \(id)")
+        }
+        if mode == .archive, record.isArchived, record.cleanup == nil { return DismantleOutcome(record: record) }
+
+        try await guardClean(record, force: force)
+        record.cleanup = PendingCleanup(mode: mode, since: record.cleanup?.since ?? TaskRecord.roundedToMilliseconds(.now))
+        try await save(record)
+        do {
+            await prepare?()
+            let notices = await runTeardown(record, teardown)
+            for index in record.repos.indices where record.repos[index].state == .active {
+                try await removeSandbox(record.repos[index], task: record, force: force)
+                record.repos[index].state = .archived
+                try await save(record)
+            }
+            try removeRoot(record)
+
+            if case .close(let deleteBranch) = mode {
+                if deleteBranch { try await deleteBranches(&record, force: force) }
+                do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
+                records[id] = nil
+                return DismantleOutcome(record: nil, notices: notices)
+            }
+            record.archivedAt = record.archivedAt ?? TaskRecord.roundedToMilliseconds(.now)
+            record.cleanup = nil
+            try await save(record)
+            return DismantleOutcome(record: record, notices: notices)
+        } catch {
+            // Whatever was removed is already on the record; the failure goes on it too, for the next attempt.
+            record.cleanup?.error = String(describing: error)
+            try? await save(record)
+            throw error
+        }
+    }
+
+    /// `git branch -d` (or `-D` with `force`) in every repo of the task. An unmerged branch stops the close:
+    /// the sandboxes are gone by then, so the record turns archived and stays for a retry with `force`.
+    private func deleteBranches(_ record: inout TaskRecord, force: Bool) async throws {
+        for repo in record.repos {
+            let client = try await baseClient(for: repo.repoRelativePath, task: record)
+            do {
+                try await client.deleteBranch(name: repo.branch, force: force)
+            } catch let error as GitError {
+                if !force, error.message.contains("not fully merged") {
+                    record.archivedAt = record.archivedAt ?? TaskRecord.roundedToMilliseconds(.now)
+                    record.cleanup = nil
+                    try? await save(record)
+                    throw TaskError.branchNotMerged(repo: repo.repoRelativePath, branch: repo.branch)
+                }
+                if !error.message.contains("not found") {
+                    throw TaskError.git(repo: repo.repoRelativePath, error)
                 }
             }
         }
-        do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
-        records[id] = nil
     }
 
     /// `git worktree prune` on each base checkout (spec §4.3: at startup). Failures are logged, never thrown.
@@ -505,7 +560,8 @@ public actor TaskManager {
     private func guardClean(_ record: TaskRecord, force: Bool) async throws {
         guard !force else { return }
         for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
-            let client = try await baseClient(for: repo.repoRelativePath, task: record)
+            // `status -C <sandbox>` needs the worktree only, not its base checkout.
+            let client = await registry.client(for: repo.sandboxURL)
             let dirty: Bool
             do { dirty = try await client.hasUncommittedChanges(at: repo.sandboxURL) }
             catch let error as GitError { throw TaskError.git(repo: repo.repoRelativePath, error) }
@@ -524,10 +580,26 @@ public actor TaskManager {
         }
     }
 
-    /// Deletes the task root (projection files, empty folders) — never when the root is itself a sandbox.
+    /// Deletes the task root (projection files, empty folders) — for a one-repository scope the root is the
+    /// sandbox and is already gone. Something left behind (a process that wrote into it) is a failure, not a shrug.
+    private func removeRoot(_ record: TaskRecord) throws {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: record.rootURL.path) else { return }
+        do { try fileManager.removeItem(at: record.rootURL) } catch {
+            throw TaskError.persistence("could not remove \(record.root): \(error.localizedDescription)")
+        }
+    }
+
+    /// Rollback after a failed create: best effort, the create's own error is the one reported.
     private func removeRootIfNotSandbox(_ record: TaskRecord) {
         guard !record.isMonoRepo else { return }
         try? FileManager.default.removeItem(at: record.rootURL)
+    }
+
+    /// `persist`, and the in-memory copy with it.
+    private func save(_ record: TaskRecord) async throws {
+        try await persist(record)
+        records[record.id] = record
     }
 
     private func persist(_ record: TaskRecord) async throws {

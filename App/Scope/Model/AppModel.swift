@@ -1398,6 +1398,8 @@ final class AppModel {
             if let id = TaskID(rawValue: raw), let task = task(id) {
                 startSetup(for: task, runCommands: true)
             }
+        case .retryTaskCleanup(let raw):
+            if let id = TaskID(rawValue: raw) { Task { await retryCleanup(id) } }
         case .dismiss:
             break
         }
