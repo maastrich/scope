@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import ScopeCore
 import ScopeGit
 
@@ -13,13 +14,27 @@ public actor TaskManager {
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
     private let ports: Range<Int>
+    /// Stops the processes left under a task's folders (`ProcessSweep.stop`); a stub in tests that must not kill.
+    private let sweep: @Sendable ([URL]) async -> ProcessSweep.Result
+    /// Stops the processes the garbage collection found.
+    private let sweepProcesses: @Sendable ([ProcessSweep.Match]) async -> ProcessSweep.Result
     private var records: [TaskID: TaskRecord] = [:]
+    /// The dismantle running for a task, so a second request joins it instead of racing it (`dismantle`).
+    /// A garbage collection is running; another one is skipped rather than queued.
+    private var collecting = false
+    /// Record files `loadAll` could not read; the garbage collection removes no folder while there are any.
+    private var loadProblems = 0
+    private var dismantling: [TaskID: (token: UUID, mode: DismantleMode, run: Task<DismantleOutcome, any Error>)] = [:]
     /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
 
     /// - Parameter ports: where `SCOPE_PORT` blocks come from (`PortAllocator.range(debugBuild:)` in the app).
     public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore,
-                ports: Range<Int> = PortAllocator.range) {
+                ports: Range<Int> = PortAllocator.range,
+                sweep: @escaping @Sendable ([URL]) async -> ProcessSweep.Result = { await ProcessSweep.stop(under: $0) },
+                sweepProcesses: @escaping @Sendable ([ProcessSweep.Match]) async -> ProcessSweep.Result = { await ProcessSweep.stop($0) }) {
         self.ports = ports
+        self.sweep = sweep
+        self.sweepProcesses = sweepProcesses
         self.home = home
         self.registry = registry
         self.store = store
@@ -34,6 +49,7 @@ public actor TaskManager {
     /// ports were handed out gets its block now. Both are saved at once so the answer never changes.
     public func loadAll() async -> [StoreProblem] {
         let loaded = await store.loadAll()
+        loadProblems = loaded.problems.count
         records = Dictionary(uniqueKeysWithValues: loaded.records.map { ($0.id, $0) })
         for original in allTasks {
             var record = original
@@ -322,10 +338,11 @@ public actor TaskManager {
         }
     }
 
-    /// Runs the teardown command of every active sandbox that has one. The first failure throws
-    /// `TaskError.teardownFailed` and nothing is removed: whatever the command was meant to stop is still running.
-    private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async throws {
-        guard let teardown else { return }
+    /// Runs the teardown command of every active sandbox that has one. A failure does not stop the dismantle:
+    /// whatever the command was meant to stop is what the process sweep catches next. It comes back as a notice.
+    private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async -> [DismantleNotice] {
+        guard let teardown else { return [] }
+        var notices: [DismantleNotice] = []
         for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
             guard let command = teardown.commands[repo.repoRelativePath]?.teardown else { continue }
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
@@ -333,76 +350,358 @@ public actor TaskManager {
             let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,
                                                            defaultBranch: await client?.defaultBranch())
             let outcome = await teardown.runner.run(command, in: repo.sandboxURL, environment: environment, timeout: teardown.timeout)
-            guard outcome.succeeded else {
-                throw TaskError.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
-                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output))
+            if !outcome.succeeded {
+                notices.append(.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
+                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output)))
             }
         }
+        return notices
     }
 
     // MARK: - Archive / close
 
-    /// Removes every sandbox but keeps the branches; the record stays, marked archived.
-    /// Guardrail: `TaskError.uncommittedChanges` on the first dirty sandbox unless `force`. Nothing is
-    /// removed before every sandbox passed the check and its teardown ran (`TaskError.teardownFailed`).
+    /// Removes every sandbox but keeps the branches; the record stays, marked archived. See `dismantle`.
     @discardableResult
-    public func archive(_ id: TaskID, force: Bool = false, teardown: Teardown? = nil) async throws -> TaskRecord {
-        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await guardClean(record, force: force)
-        try await runTeardown(record, teardown)
-        for index in record.repos.indices where record.repos[index].state == .active {
-            try await removeSandbox(record.repos[index], task: record, force: force)
-            record.repos[index].state = .archived
+    public func archive(_ id: TaskID, teardown: Teardown? = nil) async throws -> TaskRecord {
+        guard let record = try await dismantle(id, .archive, teardown: teardown).record else {
+            throw TaskError.persistence("unknown task \(id)")
         }
-        removeRootIfNotSandbox(record)
-        record.archivedAt = TaskRecord.roundedToMilliseconds(.now)
-        try await persist(record)
-        records[id] = record
         return record
     }
 
-    /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`.
+    /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`. See `dismantle`.
+    public func close(_ id: TaskID, deleteBranch: Bool, teardown: Teardown? = nil) async throws {
+        try await dismantle(id, .close(deleteBranch: deleteBranch), teardown: teardown)
+    }
+
+    /// The one path that takes a task apart — archive, close, a Retry and the GC all come through here.
     ///
-    /// Guardrails: `TaskError.uncommittedChanges` for a dirty sandbox and `TaskError.branchNotMerged`
-    /// for an unmerged branch (`git branch -d`), both bypassed by `force` (`-D`) once the user confirmed.
-    public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false, teardown: Teardown? = nil) async throws {
-        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        try await guardClean(record, force: force)
-        try await runTeardown(record, teardown)
-        for index in record.repos.indices where record.repos[index].state == .active {
-            try await removeSandbox(record.repos[index], task: record, force: force)
-            record.repos[index].state = .archived
+    /// One run per task at a time: a second request for the same mode joins the running one (a double click, the
+    /// CLI racing the UI), another mode waits for it and starts from what it left. Every step is persisted as it
+    /// completes and the record carries `cleanup` until the end, so a run cut short resumes instead of finding
+    /// half a task. Running it on a task that is already archived (or already gone, for a close) does nothing.
+    ///
+    /// Steps: `prepare` (the app hangs up the task's threads and cancels its setup), the teardown commands, the
+    /// process sweep, the salvage of uncommitted changes, the worktrees, the task root, then the branches and the
+    /// record for a close. Nothing asks and nothing refuses: what could be lost is saved under
+    /// `refs/scope/salvage/` first (`DismantleNotice.changesSaved`, `.branchSaved`).
+    @discardableResult
+    public func dismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown? = nil,
+                          prepare: (@Sendable () async -> Void)? = nil) async throws -> DismantleOutcome {
+        while let running = dismantling[id] {
+            if running.mode == mode { return try await running.run.value }
+            _ = try? await running.run.value
         }
-        removeRootIfNotSandbox(record)
-        if deleteBranch {
-            for repo in record.repos {
-                let client = try await baseClient(for: repo.repoRelativePath, task: record)
+        let token = UUID()
+        // The run clears its own entry before it completes, so a waiter never sees a finished run still listed.
+        let run = Task {
+            defer { finishDismantle(id, token: token) }
+            return try await runDismantle(id, mode, teardown: teardown, prepare: prepare)
+        }
+        dismantling[id] = (token, mode, run)
+        return try await run.value
+    }
+
+    private func finishDismantle(_ id: TaskID, token: UUID) {
+        if dismantling[id]?.token == token { dismantling[id] = nil }
+    }
+
+    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown?,
+                              prepare: (@Sendable () async -> Void)?) async throws -> DismantleOutcome {
+        guard var record = records[id] else {
+            if mode.isClose { return DismantleOutcome(record: nil) }
+            throw TaskError.persistence("unknown task \(id)")
+        }
+        if mode == .archive, record.isArchived, record.cleanup == nil { return DismantleOutcome(record: record) }
+
+        record.cleanup = PendingCleanup(mode: mode, since: record.cleanup?.since ?? TaskRecord.roundedToMilliseconds(.now))
+        try await save(record)
+        do {
+            await prepare?()
+            var notices = await runTeardown(record, teardown)
+            let swept = await sweep([record.rootURL])
+            if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
+            for index in record.repos.indices where record.repos[index].state == .active {
+                // Saved and written down before the folder goes, so a failure in between never loses it.
+                if let saved = try await salvage(record.repos[index], task: record) {
+                    record.repos[index].salvageRef = saved.ref
+                    try await save(record)
+                    notices.append(.changesSaved(repo: record.repos[index].repoRelativePath, ref: saved.ref, skipped: saved.skipped))
+                }
+                try await removeSandbox(record.repos[index], task: record)
+                record.repos[index].state = .archived
+                try await save(record)
+            }
+            try removeRoot(record)
+            emptyTrashInBackground()
+
+            if case .close(let deleteBranch) = mode {
+                if deleteBranch { notices += try await deleteBranches(record) }
+                do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
+                records[id] = nil
+                return DismantleOutcome(record: nil, notices: notices, stoppedProcesses: swept.stopped.map(\.description))
+            }
+            record.archivedAt = record.archivedAt ?? TaskRecord.roundedToMilliseconds(.now)
+            record.cleanup = nil
+            try await save(record)
+            return DismantleOutcome(record: record, notices: notices, stoppedProcesses: swept.stopped.map(\.description))
+        } catch {
+            // Whatever was removed is already on the record; the failure goes on it too, for the next attempt.
+            record.cleanup?.error = String(describing: error)
+            try? await save(record)
+            throw error
+        }
+    }
+
+    /// Deletes the task branch in every repo. A branch git calls unmerged (a squash merge looks like that too)
+    /// is deleted all the same once its last commit is kept under `refs/scope/salvage/`.
+    private func deleteBranches(_ record: TaskRecord) async throws -> [DismantleNotice] {
+        var notices: [DismantleNotice] = []
+        for repo in record.repos {
+            let client = try await baseClient(for: repo.repoRelativePath, task: record)
+            do {
+                try await client.deleteBranch(name: repo.branch)
+            } catch let error as GitError where error.message.contains("not fully merged") {
+                let ref = Self.salvageRef(for: record, kind: "branch")
                 do {
-                    try await client.deleteBranch(name: repo.branch, force: force)
+                    try await client.run(["update-ref", ref, "refs/heads/\(repo.branch)"])
+                    try await client.deleteBranch(name: repo.branch, force: true)
                 } catch let error as GitError {
-                    if !force, error.message.contains("not fully merged") {
-                        // Sandboxes are gone but the record stays so the user can retry with force.
-                        try? await persist(record)
-                        records[id] = record
-                        throw TaskError.branchNotMerged(repo: repo.repoRelativePath, branch: repo.branch)
-                    }
-                    if !error.message.contains("not found") {
+                    throw TaskError.git(repo: repo.repoRelativePath, error)
+                }
+                notices.append(.branchSaved(repo: repo.repoRelativePath, branch: repo.branch, ref: ref))
+            } catch let error as GitError where error.message.contains("not found") {
+                continue
+            } catch let error as GitError {
+                throw TaskError.git(repo: repo.repoRelativePath, error)
+            }
+        }
+        return notices
+    }
+
+    /// `refs/scope/salvage/<slug>-<id>/<kind>-<unix time>`: shared by every worktree of the repository, so it outlives the
+    /// sandbox, and out of `git branch` and `git stash list`.
+    /// The name carries its creation time (`changes-1760000000`): the commit's own date says nothing about when
+    /// it was saved, an unmerged branch's tip can be months old.
+    static func salvageRef(for record: TaskRecord, kind: String, at date: Date = .now) -> String {
+        "\(salvageNamespace)/\(record.slug)-\(record.id.rawValue)/\(kind)-\(Int(date.timeIntervalSince1970))"
+    }
+
+    /// When a salvage ref was written, read back from its name.
+    static func salvageDate(of ref: String) -> Date? {
+        guard let stamp = ref.split(separator: "-").last, let seconds = TimeInterval(stamp) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    static let salvageNamespace = "refs/scope/salvage"
+
+    /// Commits the sandbox's tracked and untracked changes (ignored files excluded) through a private index — the
+    /// sandbox's own index and the shared stash stay untouched — and points a salvage ref at the commit.
+    /// `nil` when the sandbox is clean or already gone.
+    private func salvage(_ repo: TaskRepo, task: TaskRecord) async throws -> (ref: String, skipped: [String])? {
+        do {
+            return try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: task, kind: "changes"),
+                                     message: "Scope: uncommitted changes of \(task.name) (\(repo.repoRelativePath)) when its sandbox was removed")
+                .map { ($0.ref, $0.skipped) }
+        } catch let error as GitError {
+            throw TaskError.git(repo: repo.repoRelativePath, error)
+        }
+    }
+
+    /// Untracked files bigger than this stay out of a salvage commit: a dump or a build output an agent left behind
+    /// would otherwise sit in the user's repository for as long as the ref lives.
+    static let salvageFileLimit = 50 * 1024 * 1024
+
+    private func salvage(sandbox: URL, ref: String, message: String) async throws -> (ref: String, skipped: [String])? {
+        guard FileManager.default.fileExists(atPath: sandbox.path) else { return nil }
+        let client = await registry.client(for: sandbox)
+        let path = sandbox.filesystemPath
+        guard try await client.hasUncommittedChanges(at: sandbox) else { return nil }
+        let index = FileManager.default.temporaryDirectory.appending(path: "scope-salvage-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: index) }
+        let environment = ["GIT_INDEX_FILE": index.path,
+                           "GIT_AUTHOR_NAME": "Scope", "GIT_AUTHOR_EMAIL": "scope@localhost",
+                           "GIT_COMMITTER_NAME": "Scope", "GIT_COMMITTER_EMAIL": "scope@localhost"]
+        try await client.run(["-C", path, "read-tree", "HEAD"], environment: environment)
+        let untracked = try await client.run(["-C", path, "ls-files", "-o", "--exclude-standard", "-z"])
+            .stdoutText.split(separator: "\0").map(String.init)
+        let tooBig = untracked.filter { name in
+            let size = (try? FileManager.default.attributesOfItem(atPath: sandbox.appending(path: name).path)[.size] as? Int) ?? 0
+            return size > Self.salvageFileLimit
+        }
+        try await client.run(["-C", path, "add", "-A"], environment: environment, timeout: .seconds(600))
+        if !tooBig.isEmpty {
+            try await client.run(["-C", path, "rm", "--cached", "-q", "--"] + tooBig, environment: environment)
+        }
+        let tree = try await client.run(["-C", path, "write-tree"], environment: environment)
+            .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commit = try await client.run(["-C", path, "commit-tree", tree, "-p", "HEAD", "-m", message], environment: environment)
+            .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await client.run(["-C", path, "update-ref", ref, commit])
+        return (ref, tooBig)
+    }
+
+    /// The worktrees in a folder no record owns: the folder itself, or its direct subfolders (one per repository).
+    private static func worktrees(in folder: URL) -> [URL] {
+        let isWorktree = { (url: URL) in FileManager.default.fileExists(atPath: url.appending(path: ".git").path) }
+        if isWorktree(folder) { return [folder] }
+        return visibleFolders(in: folder).filter(isWorktree)
+    }
+
+    /// Brings an archived task back where it was: one worktree per repository on the branch it kept, and the
+    /// changes saved when it was archived put back as uncommitted changes. The app rewrites the context files.
+    @discardableResult
+    public func reopen(_ id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.isArchived, record.cleanup == nil else { return record }
+        var created: [(TaskRepo, branchWasNew: Bool)] = []
+        do {
+            for index in record.repos.indices {
+                let repo = record.repos[index]
+                let (sandbox, isNew) = try await makeSandbox(repoRelativePath: repo.repoRelativePath, task: record,
+                                                             startPoint: .existingBranch(repo.branch))
+                created.append((sandbox, isNew))
+                if let ref = repo.salvageRef {
+                    let client = await registry.client(for: sandbox.sandboxURL)
+                    do {
+                        try await client.run(["-C", sandbox.sandboxURL.filesystemPath, "restore", "--source=\(ref)",
+                                              "--worktree", "--", "."], timeout: .seconds(600))
+                    } catch let error as GitError {
                         throw TaskError.git(repo: repo.repoRelativePath, error)
                     }
                 }
+                record.repos[index].state = .active
+                record.repos[index].sandboxPath = sandbox.sandboxPath
+                record.repos[index].salvageRef = nil
             }
+        } catch {
+            await rollback(created, task: record)
+            throw error
         }
-        do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
-        records[id] = nil
+        record.archivedAt = nil
+        record.portBase = allocatePort(excluding: id)
+        try await save(record)
+        return record
     }
 
-    /// `git worktree prune` on each base checkout (spec §4.3: at startup). Failures are logged, never thrown.
-    public func pruneWorktrees(in scope: ScopeDeclaration, repos: [String]) async {
-        for path in repos {
-            let base = Self.baseURL(scopeRoot: scope.path, repoRelativePath: TaskRepo.normalize(path))
-            let client = await registry.client(for: base)
-            do { try await client.prune() } catch { Log.tasks.error("prune failed in \(base.path): \(String(describing: error))") }
+    // MARK: - Garbage collection
+
+    /// What Scope cleans on its own (launch, every 30 minutes, after each archive), confined to its own home:
+    ///
+    /// - processes of the current user whose working directory or `SCOPE_TASK_ROOT` lies under `sandboxes/` but in
+    ///   no live task (archived, closed, unknown, or in the trash) — stopped like `dismantle` stops a task's;
+    /// - folders under `sandboxes/<scope>/` no live task owns — moved to the trash, then the trash is emptied;
+    /// - stale worktree records in every base checkout tasks used (and `extraBases`) — `git worktree prune`;
+    /// - salvage refs older than `retention` that no record points to.
+    ///
+    /// A folder younger than `grace` is left alone, with whatever runs in it: a task being created has its folder
+    /// before its record. Tasks whose archive or close never finished are listed, not resumed — the app resumes
+    /// them, since only it can hang up their threads.
+    public func collectGarbage(extraBases: [URL] = [], dryRun: Bool = false, now: Date = .now,
+                               grace: TimeInterval = 600, retention: TimeInterval = 30 * 86_400) async -> GarbageReport {
+        var report = GarbageReport()
+        guard !collecting else {
+            report.skipped = true
+            return report
         }
+        collecting = true
+        defer { collecting = false }
+        let fileManager = FileManager.default
+        let sandboxes = ScopeHome.sandboxesURL(home: home)
+
+        // Everything a task still owns or is about to own; the rest of `sandboxes/` is fair game.
+        var keep = records.values.filter { !$0.isArchived || $0.cleanup != nil || dismantling[$0.id] != nil }.map(\.rootURL)
+        var orphans: [URL] = []
+        // Compared resolved: a listing can spell the same folder differently than a record (`/var` → `/private/var`).
+        let owned = Set(keep.map { $0.resolvingSymlinksInPath().path })
+        for scopeFolder in Self.visibleFolders(in: sandboxes) {
+            for folder in Self.visibleFolders(in: scopeFolder) where !owned.contains(folder.resolvingSymlinksInPath().path) {
+                let created = (try? folder.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? now
+                if now.timeIntervalSince(created) < grace { keep.append(folder) } else { orphans.append(folder) }
+            }
+        }
+
+        let kept = keep.flatMap(ProcessSweep.spellings)
+        let strays = ProcessSweep.processes(under: [sandboxes]).filter { match in
+            ![match.directory, match.taskRoot].contains { $0.map { ProcessSweep.isInside($0, kept) } ?? false }
+        }
+        if dryRun {
+            report.stoppedProcesses = strays.map(\.description)
+        } else {
+            let result = await sweepProcesses(strays)
+            report.stoppedProcesses = result.stopped.map(\.description)
+            report.survivors = result.survivors.map(\.description)
+        }
+
+        let trash = ScopeHome.trashURL(home: home)
+        // A record that could not be read still owns its folder: nothing goes until the store reads cleanly.
+        if loadProblems > 0 { orphans = [] }
+        for folder in orphans {
+            guard !dryRun else { report.removedFolders.append(folder.path); continue }
+            // An orphan can still hold work (its record lost, a quit mid-create): saved like a task's before it goes.
+            var saved = true
+            for worktree in Self.worktrees(in: folder) {
+                let ref = "\(Self.salvageNamespace)/orphan-\(folder.lastPathComponent)/changes-\(Int(now.timeIntervalSince1970))"
+                do {
+                    if let saved = try await salvage(sandbox: worktree, ref: ref,
+                                                     message: "Scope: uncommitted changes of \(worktree.path), removed by the cleanup") {
+                        let skipped = saved.skipped.isEmpty ? "" : " (too big to keep: \(saved.skipped.joined(separator: ", ")))"
+                        report.savedChanges.append("\(worktree.lastPathComponent): \(saved.ref)\(skipped)")
+                    }
+                } catch {
+                    Log.tasks.error("could not save \(worktree.path): \(String(describing: error)); keeping it")
+                    report.keptFolders.append("\(folder.path): its uncommitted work could not be saved (\(error))")
+                    saved = false
+                }
+            }
+            guard saved else { continue }
+            report.removedFolders.append(folder.path)
+            try? fileManager.createDirectory(at: trash, withIntermediateDirectories: true)
+            do {
+                try fileManager.moveItem(at: folder, to: trash.appending(path: "\(UUID().uuidString)-\(folder.lastPathComponent)"))
+            } catch {
+                Log.tasks.error("could not move \(folder.path) to the trash: \(String(describing: error))")
+            }
+        }
+        report.emptiedTrash = ((try? fileManager.contentsOfDirectory(atPath: trash.path)) ?? []).count
+        if !dryRun { emptyTrashInBackground() }
+
+        let referenced = Set(records.values.flatMap { $0.repos.compactMap(\.salvageRef) })
+        for base in baseCheckouts(extra: extraBases) {
+            let client = await registry.client(for: base)
+            let stale = await staleSandboxWorktrees(in: client)
+            if !stale.isEmpty {
+                report.prunedWorktrees.append("\(base.path): \(stale.count)")
+                if !dryRun { for admin in stale { try? fileManager.removeItem(at: admin) } }
+            }
+            let refs = (try? await client.output(["for-each-ref", "--format=%(refname)", Self.salvageNamespace])) ?? ""
+            for ref in refs.split(separator: "\n").map(String.init) where !referenced.contains(ref) {
+                guard let date = Self.salvageDate(of: ref), now.timeIntervalSince(date) > retention else { continue }
+                report.deletedRefs.append("\(base.lastPathComponent): \(ref)")
+                if !dryRun { _ = try? await client.run(["update-ref", "-d", ref]) }
+            }
+        }
+
+        report.pendingTasks = records.values.filter { $0.cleanup != nil && dismantling[$0.id] == nil }.map(\.id).sorted()
+        return report
+    }
+
+    /// The base checkout of every repository a record names, plus `extra`, once each and only when it exists.
+    private func baseCheckouts(extra: [URL]) -> [URL] {
+        let fromRecords = records.values.flatMap { record in
+            record.repos.map { Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: $0.repoRelativePath) }
+        }
+        var seen = Set<String>()
+        return (fromRecords + extra).filter { url in
+            let path = url.standardizedFileURL.path
+            return seen.insert(path).inserted && RepoDiscovery.gitKind(at: url) != nil
+        }.sorted { $0.path < $1.path }
+    }
+
+    private static func visibleFolders(in directory: URL) -> [URL] {
+        let items = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
+        return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
     }
 
     // MARK: - Internals
@@ -502,32 +801,109 @@ public actor TaskManager {
         removeRootIfNotSandbox(task)
     }
 
-    private func guardClean(_ record: TaskRecord, force: Bool) async throws {
-        guard !force else { return }
-        for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
-            let client = try await baseClient(for: repo.repoRelativePath, task: record)
-            let dirty: Bool
-            do { dirty = try await client.hasUncommittedChanges(at: repo.sandboxURL) }
-            catch let error as GitError { throw TaskError.git(repo: repo.repoRelativePath, error) }
-            if dirty { throw TaskError.uncommittedChanges(repo: repo.repoRelativePath) }
+    /// Moves the worktree into the trash and drops git's record of it. A rename never trips on what git
+    /// refuses to remove (submodules, a lock, files a process wrote a moment ago) and never times out on a
+    /// sandbox of several gigabytes; its uncommitted work has been saved just before.
+    private func removeSandbox(_ repo: TaskRepo, task: TaskRecord) async throws {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: repo.sandboxPath) {
+            let admin = Self.worktreeAdminDirectory(of: repo.sandboxURL)
+            let trash = ScopeHome.trashURL(home: home)
+            let destination = trash.appending(path: "\(UUID().uuidString)-\(repo.sandboxURL.lastPathComponent)")
+            do {
+                try fileManager.createDirectory(at: trash, withIntermediateDirectories: true)
+                try fileManager.moveItem(at: repo.sandboxURL, to: destination)
+            } catch {
+                throw TaskError.persistence("could not remove \(repo.sandboxPath): \(error.localizedDescription)")
+            }
+            // Git's record of this worktree and nothing else: `git worktree prune` would also drop the user's own
+            // worktrees that happen to be unreachable (an unmounted volume, a moved folder).
+            if let admin { try? fileManager.removeItem(at: admin) }
         }
     }
 
-    private func removeSandbox(_ repo: TaskRepo, task: TaskRecord, force: Bool) async throws {
-        let client = try await baseClient(for: repo.repoRelativePath, task: task)
-        do {
-            try await client.removeWorktree(at: repo.sandboxURL, force: force)
-        } catch let error as WorktreeError {
-            throw TaskError.worktree(repo: repo.repoRelativePath, error)
-        } catch let error as GitError {
-            throw TaskError.git(repo: repo.repoRelativePath, error)
+    /// The admin folders (`<common dir>/worktrees/<name>`) of worktrees git lists as prunable *and* that lived
+    /// under `sandboxes/` — Scope's own, never the user's.
+    private func staleSandboxWorktrees(in client: GitClient) async -> [URL] {
+        guard let list = try? await client.output(["worktree", "list", "--porcelain"]),
+              let common = try? await client.output(["rev-parse", "--path-format=absolute", "--git-common-dir"]) else { return [] }
+        let sandboxes = ProcessSweep.spellings(ScopeHome.sandboxesURL(home: home))
+        let stale = list.components(separatedBy: "\n\n").compactMap { entry -> String? in
+            let lines = entry.split(separator: "\n").map(String.init)
+            guard lines.contains(where: { $0.hasPrefix("prunable") }),
+                  let path = lines.first(where: { $0.hasPrefix("worktree ") })?.dropFirst("worktree ".count) else { return nil }
+            return ProcessSweep.isInside(String(path), sandboxes) ? String(path) : nil
+        }
+        guard !stale.isEmpty else { return [] }
+        let admins = URL(fileURLWithPath: common, isDirectory: true).appending(path: "worktrees", directoryHint: .isDirectory)
+        return Self.visibleFolders(in: admins).filter { admin in
+            guard let gitdir = try? String(contentsOf: admin.appending(path: "gitdir"), encoding: .utf8) else { return false }
+            let checkout = (gitdir.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).deletingLastPathComponent
+            return stale.contains(checkout)
         }
     }
 
-    /// Deletes the task root (projection files, empty folders) — never when the root is itself a sandbox.
+    /// `<base>/.git/worktrees/<name>`, read from the worktree's `.git` file (`gitdir: …`) — only when that folder
+    /// points back at this worktree, so a hand-edited `.git` file can never send a deletion elsewhere.
+    static func worktreeAdminDirectory(of sandbox: URL) -> URL? {
+        guard let text = try? String(contentsOf: sandbox.appending(path: ".git"), encoding: .utf8),
+              let line = text.split(separator: "\n").first(where: { $0.hasPrefix("gitdir:") }) else { return nil }
+        let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
+        let admin = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+            : sandbox.appending(path: path, directoryHint: .isDirectory).standardizedFileURL
+        guard admin.deletingLastPathComponent().lastPathComponent == "worktrees",
+              let back = try? String(contentsOf: admin.appending(path: "gitdir"), encoding: .utf8),
+              URL(fileURLWithPath: back.trimmingCharacters(in: .whitespacesAndNewlines)).deletingLastPathComponent()
+                .resolvingSymlinksInPath().path == sandbox.resolvingSymlinksInPath().path else { return nil }
+        return admin
+    }
+
+    /// Deletes everything in the trash, until it stays empty. One deleter at a time per home: a second call while
+    /// one runs returns at once, the running one picks up what was added meanwhile. Never on the actor — deleting
+    /// gigabytes there would hold every archive and create behind it.
+    public nonisolated func emptyTrash() {
+        let trash = ScopeHome.trashURL(home: home)
+        guard Self.emptying.withLock({ $0.insert(trash.path).inserted }) else { return }
+        defer { _ = Self.emptying.withLock { $0.remove(trash.path) } }
+        let fileManager = FileManager.default
+        while let items = try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil), !items.isEmpty {
+            var removed = 0
+            for item in items {
+                do { try fileManager.removeItem(at: item); removed += 1 } catch {
+                    Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
+                }
+            }
+            if removed == 0 { return }
+        }
+    }
+
+    /// The trash folders being emptied right now.
+    private static let emptying = Mutex<Set<String>>([])
+
+    private nonisolated func emptyTrashInBackground() {
+        Task.detached(priority: .background) { [self] in emptyTrash() }
+    }
+
+    /// Deletes the task root (projection files, empty folders) — for a one-repository scope the root is the
+    /// sandbox and is already gone. Something left behind (a process that wrote into it) is a failure, not a shrug.
+    private func removeRoot(_ record: TaskRecord) throws {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: record.rootURL.path) else { return }
+        do { try fileManager.removeItem(at: record.rootURL) } catch {
+            throw TaskError.persistence("could not remove \(record.root): \(error.localizedDescription)")
+        }
+    }
+
+    /// Rollback after a failed create: best effort, the create's own error is the one reported.
     private func removeRootIfNotSandbox(_ record: TaskRecord) {
         guard !record.isMonoRepo else { return }
         try? FileManager.default.removeItem(at: record.rootURL)
+    }
+
+    /// `persist`, and the in-memory copy with it.
+    private func save(_ record: TaskRecord) async throws {
+        try await persist(record)
+        records[record.id] = record
     }
 
     private func persist(_ record: TaskRecord) async throws {

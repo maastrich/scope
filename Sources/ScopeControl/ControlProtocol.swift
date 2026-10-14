@@ -49,6 +49,10 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case threadSend = "thread.send"
     case taskNew = "task.new"
     case taskClose = "task.close"
+    /// Archive a task: its threads and processes stopped, its worktrees removed, branch and record kept.
+    case taskArchive = "task.archive"
+    /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
+    case gc
     /// The last lines of a thread's terminal, scrollback included.
     case threadRead = "thread.read"
 
@@ -56,7 +60,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     public var isMutating: Bool {
         switch self {
         case .ping, .list, .threadRead: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose: true
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .gc: true
         }
     }
 
@@ -160,6 +164,8 @@ public enum ControlCall: Sendable, Equatable {
     case threadSend(ThreadSendParams)
     case taskNew(TaskNewParams)
     case taskClose(TaskCloseParams)
+    case taskArchive(TaskArchiveParams)
+    case gc(GCParams)
     case threadRead(ThreadReadParams)
 
     public var method: ControlMethod {
@@ -172,6 +178,8 @@ public enum ControlCall: Sendable, Equatable {
         case .threadSend: .threadSend
         case .taskNew: .taskNew
         case .taskClose: .taskClose
+        case .taskArchive: .taskArchive
+        case .gc: .gc
         case .threadRead: .threadRead
         }
     }
@@ -187,7 +195,7 @@ public enum ControlCall: Sendable, Equatable {
         case .list, .threadRead: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend: .seconds(30)
-        case .taskNew, .taskClose: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .gc: .seconds(300)
         }
     }
 }
@@ -238,13 +246,40 @@ public struct ThreadReadParams: Codable, Sendable, Equatable {
     }
 }
 
+/// `scope task archive <id|slug>` — threads and processes stopped, worktrees removed, uncommitted work saved;
+/// the branch and the record stay.
+public struct TaskArchiveParams: Codable, Sendable, Equatable {
+    /// Task id or slug.
+    public var task: String
+
+    public init(task: String) {
+        self.task = task
+    }
+}
+
+/// `scope gc` — what Scope cleans on its own, now.
+public struct GCParams: Codable, Sendable, Equatable {
+    /// Say what would go, touch nothing.
+    public var dryRun: Bool
+
+    public init(dryRun: Bool = false) {
+        self.dryRun = dryRun
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
+    }
+}
+
 /// `scope task close <id|slug>` — the undo of a task: its threads hung up, its worktrees removed.
 public struct TaskCloseParams: Codable, Sendable, Equatable {
     /// Task id or slug.
     public var task: String
-    /// Deletes the task's branch too (refused when it is not merged, unless `force`).
+    /// Deletes the task's branch too; an unmerged one's last commit is kept under `refs/scope/salvage/`.
     public var deleteBranch: Bool
-    /// Closes even with uncommitted changes or an unmerged branch — both are lost.
+    /// Ignored, kept so an older client's request still decodes: a close no longer refuses anything, it saves
+    /// uncommitted work and unmerged branches before removing them.
     public var force: Bool
 
     public init(task: String, deleteBranch: Bool = false, force: Bool = false) {

@@ -151,7 +151,7 @@ struct ScopeCommands: Commands {
                     if let model, let task = model.currentTask { Task { await model.archiveTask(task.id) } }
                 }
                 .disabled(model?.currentTask == nil)
-                Button("Close Task…") {
+                Button("Close Task") {
                     if let model, let task = model.currentTask { Task { await model.closeTask(task.id, deleteBranch: false) } }
                 }
                 .disabled(model?.currentTask == nil)

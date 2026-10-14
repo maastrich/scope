@@ -145,8 +145,8 @@ Problem Center with the end of the log and <b>Run Setup Again</b>. Untick <b>Run
 sheet — or pass <code>--no-setup</code> to <code>scope task new</code>, <code>run_setup: false</code> over MCP —
 to skip the command; the files are copied anyway.</p>
 <p>The <b>Teardown</b> field is the other end: it runs in each sandbox before Archive or Close removes it, with
-the same variables and a ten-minute limit. If it fails, the sandbox stays, the failure is shown, and you choose
-whether to remove it anyway.</p>
+the same variables and a ten-minute limit. If it fails, the failure is shown and the sandbox goes anyway:
+whatever the command was meant to stop is stopped by the process sweep that follows.</p>
 
 <h2 id="threads">Threads inside a task</h2>
 <p>Creating the task opens the first thread on the spot, in the sandbox, with your prompt already sent to the
@@ -184,17 +184,36 @@ others); other drivers start from the repository's file and their prompt.</p>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
   <tr><td><b>Archive</b></td><td>removes every worktree, keeps the branches and the record</td></tr>
-  <tr><td><b>Close…</b></td><td>removes the worktrees and the record; optionally deletes the branches</td></tr>
+  <tr><td><b>Close</b></td><td>the same, then the record goes; optionally the branches too</td></tr>
 </table>
-<p>Both refuse to run on a dirty sandbox unless you force them, and closing refuses to delete a branch that is
-not merged. Scope prunes stale worktrees on every launch.</p>
+<p>One click, no question. In order: the task's threads are hung up, its teardown runs, every process still
+running under its folder (or started with its <code>SCOPE_TASK_ROOT</code>) gets SIGTERM, then SIGKILL three
+seconds later, the uncommitted changes are saved, and the worktrees are moved out of the way in an instant and
+deleted in the background. The row leaves the sidebar as soon as you click; a second click joins the archive in
+progress.</p>
+<p>Nothing is lost. Uncommitted changes — tracked and untracked, ignored files aside — are committed to
+<code>refs/scope/salvage/&lt;slug&gt;-&lt;id&gt;/changes-&lt;time&gt;</code> in the repository, and the notice
+that says so has <b>Restore</b>, which brings the archived task back with its sandboxes and those changes. A
+branch deleted on close that git calls unmerged (a squash merge looks like that) keeps its last commit the same
+way. Saved changes no task points to are deleted after 30 days.</p>
+<p>If a step fails, the task stays out of the sidebar, the Problem Center says why with <b>Retry</b>, and the
+next launch finishes the job.</p>
+
+<h2 id="cleanup">Automatic cleanup</h2>
+<p>Scope tidies up after tasks on its own: when it opens, every 30 minutes, and after each archive or close. It
+stops the processes left by archived or closed tasks, moves to the trash the sandbox folders no task owns (their
+uncommitted work saved first), drops git's records of sandboxes that no longer exist, and deletes expired saved
+changes. A folder younger than ten minutes is left alone — a task being created. Only what lives under Scope's
+own home is cleaned: a worktree of yours that git calls stale is not Scope's to prune. Large untracked files
+(over 50 MB) are not saved into your repository; the notice names them. One quiet line in the Problem Center says what was cleaned. <b>Settings ▸ General ▸
+Tasks</b> turns it off; <code>scope gc --dry-run</code> shows what it would do.</p>
 
 <h2 id="from-pr">Starting from a pull request</h2>
 <p>Two ways in, one result. Name the pull request in the prompt, or open it from the <b>Pull Requests</b> sheet
 (<kbd>⇧⌘P</kbd>), which lists the open pull requests of a repository through <code>gh</code>. Either way the sandbox sits on the PR's
 head branch — including a fork's head — the task is bound to the pull request, and you review and push back
 without touching your own checkout.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#from-pr">Starting from a pull request</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

@@ -122,6 +122,8 @@ import Testing
             .threadClose(ThreadTargetParams(thread: "3f9a2c17be04")),
             .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "run the tests\nplease", submit: false)),
             .taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true, force: false)),
+            .taskArchive(TaskArchiveParams(task: "rework-auth")),
+            .gc(GCParams(dryRun: true)),
         ]
         for call in calls {
             let request = ControlRequest(id: "abcd", caller: Self.caller, call: call)
@@ -134,6 +136,8 @@ import Testing
         #expect(try ControlRequest.decode(send).get().call == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "hi", submit: true)))
         let close = Data(#"{"caller":{"client":"x"},"id":"1","method":"task.close","params":{"task":"t"},"rpc":1}"#.utf8)
         #expect(try ControlRequest.decode(close).get().call == .taskClose(TaskCloseParams(task: "t")))
+        let gc = Data(#"{"caller":{"client":"x"},"id":"1","method":"gc","rpc":1}"#.utf8)
+        #expect(try ControlRequest.decode(gc).get().call == .gc(GCParams()))
     }
 
     @Test func anActionWithoutParametersIsABadRequest() {

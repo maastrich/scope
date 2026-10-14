@@ -43,6 +43,8 @@ final class TaskState: Identifiable {
     /// Bumped after every completed refresh; the Delta inspector reloads when it changes.
     private(set) var changeTick = 0
     var isExpanded = true
+    /// An archive or close is running: the row leaves the live list at once instead of when git is done.
+    var isDismantling = false
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private var watcher: FSEventsWatcher?
@@ -60,7 +62,9 @@ final class TaskState: Identifiable {
     var name: String { record.name }
     var branch: String { record.branch }
     var scopeID: ScopeID { record.scopeID }
-    var isArchived: Bool { record.isArchived }
+    /// Archived, or on its way out: being dismantled now, or left half-done by a run that failed (the launch GC
+    /// and the Retry action finish it). Either way it is no longer a live task.
+    var isArchived: Bool { record.isArchived || record.cleanup != nil || isDismantling }
     var activeRepos: [TaskRepo] { record.activeRepos }
     var scopeRootURL: URL { URL(fileURLWithPath: record.scopeRoot, isDirectory: true) }
 

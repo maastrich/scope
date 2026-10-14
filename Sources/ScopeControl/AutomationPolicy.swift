@@ -114,8 +114,12 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
                 return .allow
-            case .taskClose:
+            case .taskClose, .taskArchive:
                 // Undoing a task removes worktrees and can delete a branch: the same approval as creating one.
+                approval = settings.tasks
+            case .gc:
+                // A preview reads; the real pass stops processes and removes folders no task owns.
+                if case .gc(let params) = call, params.dryRun { return .allow }
                 approval = settings.tasks
             case .threadNew, .taskNew:
                 let childDepth = depth + 1
@@ -193,6 +197,8 @@ public struct AutomationPolicy: Sendable, Equatable {
             "create the task “\(params.title ?? params.prompt.prefix(60).trimmingCharacters(in: .whitespacesAndNewlines))”"
         case .taskClose(let params):
             "close the task “\(params.task)”" + (params.deleteBranch ? " and delete its branch" : "")
+        case .taskArchive(let params): "archive the task “\(params.task)”"
+        case .gc: "clean up leftover sandboxes and processes"
         case .threadStop(let params): "stop the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"
         case .threadSend(let params): "type into the thread \(params.thread)"

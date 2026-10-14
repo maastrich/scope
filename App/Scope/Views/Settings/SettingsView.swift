@@ -141,6 +141,14 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            SettingsSection("Tasks") {
+                Toggle("Clean up after tasks automatically", isOn: preference(\.cleanUpAutomatically))
+                    .toggleStyle(.scope)
+                Text("When Scope opens, every 30 minutes and after each archive: sandbox folders no task owns, stale git worktrees, processes left by archived tasks, and saved changes older than 30 days. Archiving always stops a task's processes and saves its uncommitted changes.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Sidebar") {
                 SettingsRow("Rows") {
                     ScopePicker("Rows", selection: preference(\.sidebarRows),

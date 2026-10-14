@@ -43,6 +43,8 @@ public struct ControlRequest: Sendable, Equatable {
         case .threadSend(let params): try encoder.encode(wire(params))
         case .taskNew(let params): try encoder.encode(wire(params))
         case .taskClose(let params): try encoder.encode(wire(params))
+        case .taskArchive(let params): try encoder.encode(wire(params))
+        case .gc(let params): try encoder.encode(wire(params))
         case .threadRead(let params): try encoder.encode(wire(params))
         }
     }
@@ -82,6 +84,8 @@ public struct ControlRequest: Sendable, Equatable {
             case .threadClose: .threadClose(try required(ThreadTargetParams.self))
             case .threadSend: .threadSend(try required(ThreadSendParams.self))
             case .taskClose: .taskClose(try required(TaskCloseParams.self))
+            case .taskArchive: .taskArchive(try required(TaskArchiveParams.self))
+            case .gc: .gc(try decoder.decode(Params<GCParams>.self, from: data).params ?? GCParams())
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
@@ -187,7 +191,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
-            case .threadStop, .threadClose, .threadSend, .taskClose:
+            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .gc:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             }

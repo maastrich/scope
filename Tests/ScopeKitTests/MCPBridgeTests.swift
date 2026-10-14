@@ -100,6 +100,25 @@ import Testing
             == .success(.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go", submit: true))))
         #expect(Self.call("scope_task_close", #"{"task":"t","delete_branch":true}"#)
             == .success(.taskClose(TaskCloseParams(task: "t", deleteBranch: true, force: false))))
+        #expect(Self.call("scope_task_archive", #"{"task":"t"}"#) == .success(.taskArchive(TaskArchiveParams(task: "t"))))
+        #expect(Self.call("scope_gc", "{}") == .success(.gc(GCParams())))
+        #expect(Self.call("scope_gc", #"{"dry_run":true}"#) == .success(.gc(GCParams(dryRun: true))))
+    }
+
+    /// `dryRun` for `dry_run` once created the task it was meant to preview: an argument the schema does not
+    /// declare is refused before anything is decoded, with the spelling that was meant.
+    @Test func anUnknownArgumentIsRefusedNotDropped() throws {
+        guard case .failure(let error) = Self.call("scope_task_new", #"{"prompt":"x","dryRun":true}"#) else {
+            Issue.record("dryRun was accepted"); return
+        }
+        #expect(error.code == .badRequest && error.message.contains("dryRun"))
+        #expect(error.detail?.contains("did you mean “dry_run”") == true)
+        guard case .failure = Self.call("scope_task_close", #"{"task":"t","force":true}"#) else {
+            Issue.record("force was accepted"); return
+        }
+        guard case .failure = Self.call("scope_list", #"{"kind":"threads","verbose":true}"#) else {
+            Issue.record("verbose was accepted"); return
+        }
     }
 
     @Test func closingIsMarkedDestructive() {

@@ -46,8 +46,10 @@ public enum ScopeCLI {
                                           from a thread, the message says which thread sent it
       scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
-      scope task close <id|slug>          close a task: threads hung up, worktrees removed
-                                          (--delete-branch, --force to lose uncommitted work)
+      scope task archive <id|slug>        put a finished task away: threads and processes stopped,
+                                          uncommitted work saved, worktrees removed; branch kept
+      scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
+      scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
       scope mcp                           speak MCP on stdio, same commands
       scope ping                          check that Scope is listening
 
@@ -96,6 +98,14 @@ public enum ScopeCLI {
             return .call(.ping, try options(&rest, command: "ping"))
         case "mcp":
             return .mcp(try options(&rest, command: "mcp"))
+        case "gc":
+            var parameters = GCParams()
+            let shared = try options(&rest, command: "gc", specific: { flag, _ in
+                guard flag == "--dry-run" else { return false }
+                parameters.dryRun = true
+                return true
+            })
+            return .call(.gc(parameters), shared)
         case "list":
             var kind = ListParams.Kind.all
             if let word = rest.first, !word.hasPrefix("-") {
@@ -172,13 +182,20 @@ public enum ScopeCLI {
         case "task":
             let sub = rest.first
             rest = rest.dropFirst()
+            if sub == "archive" {
+                var words: [String] = []
+                let shared = try options(&rest, command: "task archive", positional: { words.append($0) })
+                guard words.count == 1 else { throw UsageError(message: "task archive takes one task id or slug", usage: usage) }
+                return .call(.taskArchive(TaskArchiveParams(task: words[0])), shared)
+            }
             if sub == "close" {
                 var words: [String] = []
                 var parameters = TaskCloseParams(task: "")
                 let shared = try options(&rest, command: "task close", positional: { words.append($0) }, specific: { flag, _ in
                     switch flag {
                     case "--delete-branch": parameters.deleteBranch = true
-                    case "--force": parameters.force = true
+                    // Accepted from older scripts; a close no longer refuses anything, so there is nothing to force.
+                    case "--force": break
                     default: return false
                     }
                     return true
@@ -188,7 +205,7 @@ public enum ScopeCLI {
                 return .call(.taskClose(parameters), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, close", usage: usage)
+                throw UsageError(message: "task commands: new, archive, close", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

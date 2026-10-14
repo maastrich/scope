@@ -55,14 +55,18 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     /// `true` when the task created the branch, `false` when it checked out one that already existed, `nil`
     /// on records written before the flag existed. What tells an undo whether deleting the branch is safe.
     public var branchCreated: Bool?
+    /// The commit holding what the sandbox had not committed when it was removed (`TaskManager.dismantle`),
+    /// under `refs/scope/salvage/` in the base checkout; `nil` when it was clean.
+    public var salvageRef: String?
 
     public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active,
-                branchCreated: Bool? = nil) {
+                branchCreated: Bool? = nil, salvageRef: String? = nil) {
         self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
         self.sandboxPath = sandboxPath
         self.branch = branch
         self.state = state
         self.branchCreated = branchCreated
+        self.salvageRef = salvageRef
     }
 
     public var id: String { repoRelativePath }
@@ -150,6 +154,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var portBase: Int?
     /// The setup of the sandboxes, `nil` on records written before setup existed.
     public var setup: TaskSetupRecord?
+    /// An archive or close that started and has not finished (`TaskManager.dismantle`).
+    public var cleanup: PendingCleanup?
 
     public init(
         id: TaskID = .generate(),
@@ -168,7 +174,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         prompt: String? = nil,
         createdBy: String? = nil,
         portBase: Int? = nil,
-        setup: TaskSetupRecord? = nil
+        setup: TaskSetupRecord? = nil,
+        cleanup: PendingCleanup? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -188,6 +195,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.createdBy = createdBy
         self.portBase = portBase
         self.setup = setup
+        self.cleanup = cleanup
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -257,7 +265,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy, portBase, setup
+        case createdBy, portBase, setup, cleanup
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -281,5 +289,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
         portBase = try container.decodeIfPresent(Int.self, forKey: .portBase)
         setup = try container.decodeIfPresent(TaskSetupRecord.self, forKey: .setup)
+        cleanup = try? container.decodeIfPresent(PendingCleanup.self, forKey: .cleanup)
     }
 }

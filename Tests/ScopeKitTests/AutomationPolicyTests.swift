@@ -227,6 +227,18 @@ import Testing
         #expect(AutomationPolicy(settings: AutomationSettings()).decide(close, from: .user) == .allow)
     }
 
+    @Test func archivingAndCleaningAskLikeClosing() {
+        let ask = AutomationPolicy(settings: AutomationSettings(tasks: .ask))
+        guard case .ask = ask.decide(.taskArchive(TaskArchiveParams(task: "t")), from: Self.external) else {
+            Issue.record("archiving a task from an agent asks the user"); return
+        }
+        guard case .ask = ask.decide(.gc(GCParams()), from: Self.external) else {
+            Issue.record("a real cleanup from an agent asks the user"); return
+        }
+        // A preview only reads.
+        #expect(ask.decide(.gc(GCParams(dryRun: true)), from: Self.external) == .allow)
+    }
+
     @Test func agentsTurnedOffCannotActEither() {
         let off = AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false))
         guard case .refuse = off.decide(.threadClose(ThreadTargetParams(thread: "x")), from: .thread(Self.agent, depth: 0)) else {

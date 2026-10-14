@@ -289,12 +289,6 @@ extension AppModel {
         TaskManager.Teardown(commands: await sandboxCommands(for: task.record), runner: await commandRunner())
     }
 
-    private func reportTeardownFailure(_ task: TaskState, repo: String, summary: String, log: String) {
-        problems.error("The teardown of \(task.name) failed; its sandboxes were kept",
-                       detail: "\(repo): \(summary)\n\n\(SetupLog.tail(log, lines: 60))", scope: task.scopeID,
-                       actions: [.reveal(task.record.threadCwd.path, title: "Reveal Sandbox")])
-    }
-
     /// What `TaskStatus.resolve` decides from: the task's threads, its delta, its setup and its pull request.
     func taskFacts(for task: TaskState) -> TaskFacts {
         let pullRequest = task.record.pullRequest.map { link in
@@ -315,106 +309,179 @@ extension AppModel {
         return scope.repos.filter { !taken.contains($0.id) && !$0.id.isEmpty }
     }
 
-    /// Removes the worktrees, keeps the branches and the record. Refused with uncommitted changes unless forced.
-    /// The teardown commands run first; when one fails nothing is removed, unless the user says to go on without.
-    func archiveTask(_ taskID: TaskID, force: Bool = false, skipTeardown: Bool = false) async {
-        guard let task = task(taskID) else { return }
-        cancelSetup(taskID)
-        for session in threads(in: taskID) {
-            await close(session.id, force: true)
+    /// Removes the worktrees, keeps the branches and the record. One click, no question: uncommitted changes are
+    /// saved first and the notice offers them back (`reopenTask`).
+    func archiveTask(_ taskID: TaskID) async {
+        guard let task = task(taskID), !task.isDismantling else { return }
+        do { try await dismantle(task, .archive) } catch { dismantleFailed(task, verb: "archive", error: error) }
+    }
+
+    /// Closes the task for good: threads hung up, worktrees removed, record deleted, the branch too when asked.
+    /// Nothing asks: what could be lost is saved under `refs/scope/salvage/` and the notice says where.
+    func closeTask(_ taskID: TaskID, deleteBranch: Bool) async {
+        guard let task = task(taskID), !task.isDismantling else { return }
+        do { try await dismantle(task, .close(deleteBranch: deleteBranch)) } catch {
+            dismantleFailed(task, verb: "close", error: error)
         }
+    }
+
+    /// Archive or close for the control socket: the failure goes back to the caller instead of the problem list.
+    @discardableResult
+    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode) async throws -> DismantleOutcome {
+        guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
+        return try await dismantle(task, mode)
+    }
+
+    /// The Retry of a failed archive or close: the same run again, from where the last one stopped.
+    func retryCleanup(_ taskID: TaskID) async {
+        guard let task = task(taskID) else { return }
+        switch task.record.cleanup?.mode ?? .archive {
+        case .archive: await archiveTask(taskID)
+        case .close(let deleteBranch): await closeTask(taskID, deleteBranch: deleteBranch)
+        }
+    }
+
+    /// The Restore of an archive notice: the task comes back with its sandboxes and the changes it had.
+    func reopenTask(_ taskID: TaskID) async {
+        guard let task = task(taskID), task.record.isArchived else { return }
         do {
-            let record = try await env.tasks.archive(taskID, force: force, teardown: skipTeardown ? nil : await teardown(for: task))
+            let record = try await env.tasks.reopen(taskID)
+            task.update(record: record)
+            task.startWatching()
+            if let scope = scope(task.scopeID) { await refreshContextFiles(of: scope) }
+            selection = .task(taskID)
+            scope(task.scopeID)?.refreshFacts()
+        } catch {
+            problems.error("Could not restore \(task.name)", detail: String(describing: error), scope: task.scopeID)
+        }
+    }
+
+    /// Archive and close: the row leaves the live list at once, the task manager does the rest (threads hung up
+    /// inside its lock, through `prepare`), and the outcome is reported.
+    @discardableResult
+    private func dismantle(_ task: TaskState, _ mode: DismantleMode) async throws -> DismantleOutcome {
+        task.isDismantling = true
+        if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
+        let outcome: DismantleOutcome
+        do {
+            outcome = try await env.tasks.dismantle(task.id, mode, teardown: await teardown(for: task), prepare: hangUp(task.id))
+        } catch {
+            // The record says how far the run got; `cleanup` keeps the row out of the live list until a retry.
+            task.isDismantling = false
+            if let record = await env.tasks.task(task.id) { task.update(record: record) }
+            throw error
+        }
+        task.isDismantling = false
+        if let record = outcome.record {
             task.stopWatching()
             task.update(record: record)
-            if selection == .task(taskID) { selection = .scope(task.scopeID) }
             scope(task.scopeID)?.refreshFacts()
-        } catch TaskError.uncommittedChanges(let repo) where !force {
-            if await confirmForce(title: "Archive “\(task.name)” anyway?",
-                                  detail: "The sandbox of \(repo) has uncommitted changes; archiving discards them.",
-                                  button: "Archive") {
-                await archiveTask(taskID, force: true, skipTeardown: skipTeardown)
+        } else {
+            forgetClosedTask(task)
+        }
+        reportOutcome(outcome, task: task, mode: mode)
+        Task { await collectGarbage() }
+        return outcome
+    }
+
+    // MARK: Garbage collection
+
+    static let garbageCollectionInterval: Duration = .seconds(30 * 60)
+
+    /// A pass now (finishing the archives and closes a quit or a crash interrupted), then one every 30 minutes.
+    func startGarbageCollection() {
+        garbageCollector?.cancel()
+        garbageCollector = Task { [weak self] in
+            await self?.collectGarbage(resumingPending: true)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: AppModel.garbageCollectionInterval)
+                guard !Task.isCancelled else { return }
+                await self?.collectGarbage()
             }
-        } catch TaskError.teardownFailed(let repo, let summary, let log) {
-            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
-            if await confirmForce(title: "Archive “\(task.name)” without its teardown?",
-                                  detail: "The teardown command of \(repo) failed (\(summary)); what it was meant to stop may still be running.",
-                                  button: "Archive Anyway") {
-                await archiveTask(taskID, force: force, skipTeardown: true)
-            }
-        } catch {
-            problems.error("Could not archive \(task.name)", detail: String(describing: error), scope: task.scopeID)
         }
     }
 
-    /// Closes the task for good: threads closed, worktrees removed, record deleted. Confirmation first;
-    /// `TaskError.uncommittedChanges` / `.branchNotMerged` come back as a second alert offering Force.
-    func closeTask(_ taskID: TaskID, deleteBranch: Bool, force: Bool = false, confirmed: Bool = false,
-                   skipTeardown: Bool = false) async {
-        guard let task = task(taskID) else { return }
-        if !confirmed {
-            let running = threads(in: taskID).filter(\.isAlive).count
-            var detail = "The sandboxes under \(task.record.root) are removed"
-            detail += deleteBranch ? " and the branch \(task.branch) is deleted." : "; the branch \(task.branch) is kept."
-            if running > 0 { detail += "\n\n\(running) running \(running == 1 ? "thread" : "threads") will be hung up." }
-            guard await confirmForce(title: "Close “\(task.name)”?", detail: detail, button: "Close Task") else { return }
+    /// One pass of `TaskManager.collectGarbage` over every scope, when Settings ▸ Tasks allows it. Quiet: one info
+    /// line when it removed something, an error only for a process that would not die.
+    /// `resumingPending` also reruns the archives and closes left half-done — at launch only, so a run that keeps
+    /// failing is reported once per launch rather than every half hour.
+    @discardableResult
+    /// `force` runs it even with the preference off: someone asked for it (`scope gc`).
+    func collectGarbage(dryRun: Bool = false, resumingPending: Bool = false, force: Bool = false) async -> GarbageReport? {
+        guard dryRun || force || config.preferences.cleanUpAutomatically else { return nil }
+        let bases = scopes.flatMap { scope in
+            scope.repos.map { repo in
+                repo.id.isEmpty || repo.id == "." ? URL(fileURLWithPath: scope.declaration.path, isDirectory: true)
+                    : URL(fileURLWithPath: scope.declaration.path, isDirectory: true).appending(path: repo.id, directoryHint: .isDirectory)
+            }
         }
+        let report = await env.tasks.collectGarbage(extraBases: bases, dryRun: dryRun)
+        guard !dryRun else { return report }
+        if resumingPending {
+            for id in report.pendingTasks { await retryCleanup(id) }
+        }
+        if !report.keptFolders.isEmpty {
+            problems.warn("\(report.keptFolders.count) leftover sandbox \(report.keptFolders.count == 1 ? "folder was" : "folders were") kept",
+                          detail: report.keptFolders.joined(separator: "\n"))
+        }
+        if !report.survivors.isEmpty {
+            problems.error("\(report.survivors.count) leftover \(report.survivors.count == 1 ? "process" : "processes") would not stop",
+                           detail: report.survivors.joined(separator: "\n"))
+        }
+        var done: [String] = []
+        if !report.removedFolders.isEmpty { done.append("\(report.removedFolders.count) leftover sandbox \(report.removedFolders.count == 1 ? "folder" : "folders")") }
+        if !report.stoppedProcesses.isEmpty { done.append("\(report.stoppedProcesses.count) leftover \(report.stoppedProcesses.count == 1 ? "process" : "processes")") }
+        if !report.prunedWorktrees.isEmpty { done.append("stale worktrees in \(report.prunedWorktrees.count) \(report.prunedWorktrees.count == 1 ? "repository" : "repositories")") }
+        if !report.savedChanges.isEmpty { done.append("saved the uncommitted work of \(report.savedChanges.count) of them") }
+        if !report.deletedRefs.isEmpty { done.append("\(report.deletedRefs.count) expired saved \(report.deletedRefs.count == 1 ? "change" : "changes")") }
+        if !done.isEmpty {
+            let detail = (report.removedFolders + report.savedChanges + report.stoppedProcesses + report.prunedWorktrees
+                + report.deletedRefs).joined(separator: "\n")
+            problems.report(Problem(severity: .info, title: "Cleaned up " + done.joined(separator: ", "), detail: detail))
+        }
+        return report
+    }
+
+    /// `prepare` for `TaskManager.dismantle`: runs inside the task's lock, before the teardown and the sweep.
+    private func hangUp(_ taskID: TaskID) -> @Sendable () async -> Void {
+        { [weak self] in await self?.hangUpThreads(of: taskID) }
+    }
+
+    private func hangUpThreads(of taskID: TaskID) async {
         cancelSetup(taskID)
         for session in threads(in: taskID) {
             await close(session.id, force: true)
         }
-        do {
-            try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force,
-                                      teardown: skipTeardown ? nil : await teardown(for: task))
-        } catch TaskError.uncommittedChanges(let repo) where !force {
-            if await confirmForce(title: "Close “\(task.name)” anyway?",
-                                  detail: "The sandbox of \(repo) has uncommitted changes; closing discards them.",
-                                  button: "Force Close") {
-                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true, skipTeardown: skipTeardown)
-            }
-            return
-        } catch TaskError.branchNotMerged(let repo, let branch) where !force {
-            if await confirmForce(title: "Delete unmerged branch \(branch)?",
-                                  detail: "\(repo): the branch is not merged; its commits will be lost.",
-                                  button: "Delete Branch") {
-                await closeTask(taskID, deleteBranch: deleteBranch, force: true, confirmed: true, skipTeardown: true)
-            }
-            return
-        } catch TaskError.teardownFailed(let repo, let summary, let log) {
-            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
-            if await confirmForce(title: "Close “\(task.name)” without its teardown?",
-                                  detail: "The teardown command of \(repo) failed (\(summary)); what it was meant to stop may still be running.",
-                                  button: "Close Anyway") {
-                await closeTask(taskID, deleteBranch: deleteBranch, force: force, confirmed: true, skipTeardown: true)
-            }
-            return
-        } catch {
-            problems.error("Could not close \(task.name)", detail: String(describing: error), scope: task.scopeID)
-            return
-        }
-        forgetClosedTask(task)
     }
 
-    /// Closes a task without asking anything — the control socket's path: its threads hung up, its sandboxes
-    /// removed, its branch deleted when asked. Throws `TaskError` (uncommitted changes, unmerged branch) where
-    /// `closeTask` would put up a dialog; `force` goes through both, losing that work.
-    func removeTask(_ taskID: TaskID, deleteBranch: Bool, force: Bool) async throws {
-        guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
-        // Refuse before hanging up anything: the sandbox check below would come too late for the threads.
-        if !force, task.dirtyRepoCount > 0 {
-            throw TaskError.uncommittedChanges(repo: task.record.slug)
+    private func dismantleFailed(_ task: TaskState, verb: String, error: any Error) {
+        problems.error("Could not \(verb) \(task.name)", detail: String(describing: error), scope: task.scopeID,
+                       actions: [ProblemAction(title: "Retry", kind: .retryTaskCleanup(task.id.rawValue)),
+                                 .reveal(task.record.root, title: "Reveal Task Folder")])
+    }
+
+    private func reportOutcome(_ outcome: DismantleOutcome, task: TaskState, mode: DismantleMode) {
+        var saved: [String] = []
+        for notice in outcome.notices {
+            switch notice {
+            case .teardownFailed(let repo, let summary, let log):
+                problems.warn("The teardown of \(task.name) failed; its sandboxes were removed anyway",
+                              detail: "\(repo): \(summary)\n\n\(SetupLog.tail(log, lines: 60))", scope: task.scopeID)
+            case .processesSurvived(let names):
+                problems.error("\(names.count) \(names.count == 1 ? "process" : "processes") of \(task.name) would not stop",
+                               detail: names.joined(separator: "\n"), scope: task.scopeID)
+            case .changesSaved(let repo, let ref, let skipped):
+                saved.append("\(repo): uncommitted changes → \(ref)"
+                             + (skipped.isEmpty ? "" : " (too big to keep, deleted: \(skipped.joined(separator: ", ")))"))
+            case .branchSaved(let repo, let branch, let ref):
+                saved.append("\(repo): unmerged branch \(branch) → \(ref)")
+            }
         }
-        cancelSetup(taskID)
-        for session in threads(in: taskID) {
-            await close(session.id, force: true)
-        }
-        do {
-            try await env.tasks.close(taskID, deleteBranch: deleteBranch, force: force, teardown: await teardown(for: task))
-        } catch TaskError.teardownFailed(let repo, let summary, let log) {
-            reportTeardownFailure(task, repo: repo, summary: summary, log: log)
-            throw TaskError.teardownFailed(repo: repo, summary: summary, log: log)
-        }
-        forgetClosedTask(task)
+        guard !saved.isEmpty else { return }
+        // Quiet: the work is safe, nothing to do unless the user wants it back.
+        let actions = mode == .archive ? [ProblemAction(title: "Restore", kind: .reopenTask(task.id.rawValue))] : []
+        problems.report(Problem(severity: .info, title: "\(task.name): unfinished work saved",
+                                detail: saved.joined(separator: "\n"), scopeID: task.scopeID, actions: actions))
     }
 
     /// What is left to do once the task manager has removed a task.

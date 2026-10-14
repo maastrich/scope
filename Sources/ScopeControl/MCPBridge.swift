@@ -44,7 +44,7 @@ public enum MCPBridge {
     to each other: scope_list shows every thread, in any task or scope, and scope_thread_send hands one a \
     message that names you as its sender (the setting Talking to threads can fence you into the threads you \
     opened). Answer another agent's message with scope_thread_send to its thread id, and only when it asked \
-    for something; scope_task_close undoes a task.
+    for something; scope_task_archive puts a finished task away (its branch kept), scope_task_close undoes one.
     """
 
     public static let tools: [MCPTool] = [
@@ -102,6 +102,7 @@ public enum MCPBridge {
             "repos":{"type":"array","items":{"type":"string"},"description":"Repositories relative to the scope root; omitted lets Scope work them out from the prompt."},\
             "branch":{"type":"string","description":"Branch to create; omitted lets the driver propose one."},\
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
+            "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
@@ -162,19 +163,50 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_task_archive",
+            title: "Archive a task",
+            description: """
+            Puts a finished task away: hangs up its threads, stops every process still running in its sandboxes, \
+            saves its uncommitted changes under refs/scope/salvage/ and removes its worktrees. The branch and the \
+            task stay, so the user can bring it back. Never refused for uncommitted work.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug."}\
+            },"required":["task"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
             name: "scope_task_close",
             title: "Close a task",
             description: """
-            Undoes a task: hangs up its threads and removes its worktrees; with delete_branch, deletes its branch \
-            too. Asks the user first. Refused when there is uncommitted work or an unmerged branch, unless force — \
-            which loses it.
+            Undoes a task: what scope_task_archive does, then the task itself goes; with delete_branch, its branch \
+            too. Nothing is refused and nothing is lost: uncommitted changes and an unmerged branch's last commit \
+            are kept under refs/scope/salvage/.
             """,
             schema: """
             {"type":"object","properties":{\
             "task":{"type":"string","description":"Task id or slug."},\
-            "delete_branch":{"type":"boolean","description":"Delete the task's branch as well."},\
-            "force":{"type":"boolean","description":"Close even with uncommitted changes or an unmerged branch."}\
+            "delete_branch":{"type":"boolean","description":"Delete the task's branch as well."}\
             },"required":["task"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
+            name: "scope_gc",
+            title: "Clean up after tasks",
+            description: """
+            Runs now the cleanup Scope does on its own every 30 minutes: sandbox folders no task owns, processes \
+            left by archived or closed tasks, stale git worktrees, saved changes past 30 days. With dry_run true, \
+            says what would go and touches nothing.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "dry_run":{"type":"boolean","description":"Report what would be cleaned, change nothing."}\
+            },"additionalProperties":false}
             """,
             readOnly: false,
             destructive: true
@@ -191,6 +223,9 @@ public enum MCPBridge {
     /// Turns a tool call into a control call. `arguments` is the raw JSON object the client sent.
     public static func call(tool name: String, arguments: Data) -> Result<ControlCall, ControlError> {
         let decoder = ControlProtocol.makeDecoder()
+        if let tool = tools.first(where: { $0.name == name }), let error = unknownArguments(arguments, of: tool) {
+            return .failure(error)
+        }
         do {
             switch name {
             case "scope_ping":
@@ -211,6 +246,10 @@ public enum MCPBridge {
                 return .success(.threadClose(try decoder.decode(ThreadTargetParams.self, from: arguments)))
             case "scope_task_close":
                 return .success(.taskClose(try decoder.decode(TaskCloseArguments.self, from: arguments).call))
+            case "scope_task_archive":
+                return .success(.taskArchive(try decoder.decode(TaskArchiveParams.self, from: arguments)))
+            case "scope_gc":
+                return .success(.gc(try decoder.decode(GCArguments.self, from: arguments).call))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -238,21 +277,46 @@ public enum MCPBridge {
         }
     }
 
+    /// An argument the tool's schema does not declare. Swift's decoding would drop it and carry on with the
+    /// default — `dryRun` for `dry_run` once created a task that was only meant to be previewed — so the
+    /// schema's `additionalProperties: false` is enforced here, with the spelling that was probably meant.
+    static func unknownArguments(_ arguments: Data, of tool: MCPTool) -> ControlError? {
+        guard let object = (try? JSONSerialization.jsonObject(with: arguments)) as? [String: Any],
+              let schema = (try? JSONSerialization.jsonObject(with: Data(tool.schema.utf8))) as? [String: Any] else { return nil }
+        let known = ((schema["properties"] as? [String: Any]) ?? [:]).keys.sorted()
+        let unknown = object.keys.filter { !known.contains($0) }.sorted()
+        guard !unknown.isEmpty else { return nil }
+        let squashed = { (key: String) in key.lowercased().filter { $0 != "_" && $0 != "-" } }
+        let hints = unknown.compactMap { key in known.first { squashed($0) == squashed(key) }.map { "did you mean “\($0)” for “\(key)”?" } }
+        let names = unknown.map { "“\($0)”" }.joined(separator: ", ")
+        return .badRequest("\(tool.name) does not take \(names); nothing was done",
+                           detail: (hints + ["It takes: " + known.joined(separator: ", ")]).joined(separator: "\n"))
+    }
+
     /// `scope_task_close` arguments, snake_case like the other task tool.
     struct TaskCloseArguments: Decodable {
         var task: String
         var deleteBranch: Bool?
-        var force: Bool?
 
         private enum CodingKeys: String, CodingKey {
             case task
             case deleteBranch = "delete_branch"
-            case force
         }
 
         var call: TaskCloseParams {
-            TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false, force: force ?? false)
+            TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false)
         }
+    }
+
+    /// `scope_gc` arguments.
+    struct GCArguments: Decodable {
+        var dryRun: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case dryRun = "dry_run"
+        }
+
+        var call: GCParams { GCParams(dryRun: dryRun ?? false) }
     }
 
     /// `scope_list` arguments, which differ from `ListParams` only in being lenient about `kind`.

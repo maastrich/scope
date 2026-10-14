@@ -234,7 +234,7 @@ final class RecordingRunner: SandboxCommandRunner {
         #expect(nothing.setupState == .skipped && runner.recorded.isEmpty)
     }
 
-    @Test func aFailedTeardownKeepsTheSandbox() async throws {
+    @Test func aFailedTeardownIsReportedAndTheSandboxStillGoes() async throws {
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
         let manager = makeManager(scope)
@@ -242,12 +242,19 @@ final class RecordingRunner: SandboxCommandRunner {
         let commands = ["api": SandboxCommands(teardown: "docker compose down")]
 
         let failing = TaskManager.Teardown(commands: commands, runner: RecordingRunner { _ in CommandOutcome(exitCode: 1, output: "no daemon") })
-        await #expect(throws: TaskError.self) { try await manager.close(task.id, deleteBranch: false, teardown: failing) }
-        #expect(scope.exists(task.repos[0].sandboxURL))
-        #expect(await manager.task(task.id) != nil)
-        await #expect(throws: TaskError.self) { try await manager.archive(task.id, teardown: failing) }
-        #expect(await manager.task(task.id)?.isArchived == false)
+        let outcome = try await manager.dismantle(task.id, .archive, teardown: failing)
+        guard case .teardownFailed(let repo, _, let log) = try #require(outcome.notices.first) else { return }
+        #expect(repo == "api" && log.contains("no daemon"))
+        #expect(outcome.record?.isArchived == true)
+        #expect(!scope.exists(task.repos[0].sandboxURL))
+    }
 
+    @Test func theTeardownRunsWithTheTaskEnvironment() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "Auth", branch: "feat/auth", in: scope.declaration, repos: ["api"])
+        let commands = ["api": SandboxCommands(teardown: "docker compose down")]
         let passing = RecordingRunner()
         try await manager.close(task.id, deleteBranch: false, teardown: TaskManager.Teardown(commands: commands, runner: passing))
         #expect(passing.recorded.map(\.command) == ["docker compose down"])
