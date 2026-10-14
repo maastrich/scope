@@ -207,7 +207,8 @@ extension AppModel {
         guard let task = task(taskID), let scope = scope(task.scopeID) else { return }
         do {
             let summaries = await graphSummaries(for: scope)
-            let record = try await env.tasks.addRepo(taskID, repo: relativePath, scopeRepos: scope.repos.map(\.id),
+            let record = try await env.tasks.addRepo(taskID, repo: relativePath, scopeContext: scope.declaration.context,
+                                                     scopeRepos: scope.repos.map(\.id),
                                                      repoSummaries: summaries, contextFiles: contextFileNames)
             task.update(record: record)
             task.stopWatching()

@@ -208,12 +208,19 @@ extension AppModel {
             level1 = Level1Generator(profile: profile, runner: SubprocessHeadlessRunner(path: shell.path, shell: shell.shell), home: env.home)
         }
         guard let result = await graph.analyze(scope: scope, level1: level1, force: force) else { return }
-        let summaries = result.contextSummaries()
+        await refreshContextFiles(of: scope, summaries: result.contextSummaries())
+    }
+
+    /// Rewrites the context file of every task of `scope`: after an analysis, or when the scope's own context
+    /// changed.
+    func refreshContextFiles(of scope: ScopeState, summaries known: [RepoContextSummary]? = nil) async {
+        let summaries: [RepoContextSummary]
+        if let known { summaries = known } else { summaries = await graphSummaries(for: scope) }
         let scopeRepos = scope.repos.map(\.id)
         for task in tasks(in: scope.id) {
             do {
-                try await env.tasks.regenerateProjection(task.id, scopeRepos: scopeRepos, repoSummaries: summaries,
-                                                         contextFiles: contextFileNames)
+                try await env.tasks.regenerateProjection(task.id, scopeContext: scope.declaration.context, scopeRepos: scopeRepos,
+                                                         repoSummaries: summaries, contextFiles: contextFileNames)
             } catch {
                 problems.warn("Could not refresh the context file of \(task.name)", detail: String(describing: error), scope: scope.id)
             }

@@ -6,15 +6,16 @@ import UniformTypeIdentifiers
 /// The sidebar header: the current scope as a tile and its name, then the other scopes as tiles — as many as fit,
 /// the rest behind a `+N` counter. A tile is one click to its scope, back where the user was in it; its corner
 /// mark says what is happening there. The name is still a menu (every declared scope, "Declare a Scope… ⌘O",
-/// "Remove Scope…"), and right-click keeps the scope actions, plus what the tile shows (icon, colour, logo).
+/// "Remove Scope…"), and right-click keeps the scope actions and opens the scope's settings (name, tile, context).
+/// A right-click on a neighbour's tile is about that neighbour. An image dropped on a tile becomes its image.
 struct ScopeSwitcher: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
     /// Called by the "Rename…" menu item; the sidebar owns the rename dialog.
     var onRename: @MainActor (ScopeState) -> Void
 
-    @State private var iconBeingEdited = false
-    @State private var iconText = ""
+    /// The tile an image is being dragged over.
+    @State private var dropTarget: ScopeID?
 
     var body: some View {
         let others = model.scopeTiles(besides: scope)
@@ -32,16 +33,19 @@ struct ScopeSwitcher: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .contextMenu { contextMenu }
-        .alert("Tile of \(scope.name)", isPresented: $iconBeingEdited) {
-            TextField("An emoji, or a letter or two", text: $iconText)
-            Button("Set") {
-                let icon = iconText.trimmingCharacters(in: .whitespacesAndNewlines)
-                model.updateScopeIdentity(scope.id) { $0.icon = icon.isEmpty ? nil : icon }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Shown on the tile in place of the first letter of the name. Leave it empty to go back to the letter.")
-        }
+    }
+
+    private func isDropTarget(_ id: ScopeID) -> Binding<Bool> {
+        Binding(get: { dropTarget == id }, set: { dropTarget = $0 ? id : (dropTarget == id ? nil : dropTarget) })
+    }
+
+    /// The ring around the tile an image is about to land on.
+    private func dropRing(_ id: ScopeID) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(Color.accentColor, lineWidth: 2)
+            .padding(-3)
+            .opacity(dropTarget == id ? 1 : 0)
+            .allowsHitTesting(false)
     }
 
     private func row(others: [ScopeState], visible: Int, truncatesName: Bool) -> some View {
@@ -52,6 +56,7 @@ struct ScopeSwitcher: View {
             } label: {
                 HStack(spacing: 7) {
                     ScopeTile(scope: scope)
+                        .overlay { dropRing(scope.id) }
                     Text(scope.name)
                         .font(.scopeTitle)
                         .lineLimit(1)
@@ -68,6 +73,9 @@ struct ScopeSwitcher: View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize(horizontal: !truncatesName, vertical: true)
+            .onDrop(of: ScopeImageDrop.types, isTargeted: isDropTarget(scope.id)) { providers in
+                ScopeImageDrop.load(providers) { ScopeActions.setImage($0, of: scope, model: model) }
+            }
             .help("\(scope.name) — \(caption) — \(scope.url.path)")
             .accessibilityLabel("Scope: \(scope.name). Switch scope")
 
@@ -91,16 +99,34 @@ struct ScopeSwitcher: View {
                     model.selectScope(other.id)
                 } label: {
                     ScopeTile(scope: other, activity: model.activity(of: other))
+                        .overlay { dropRing(other.id) }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 // Dragging a tile onto another moves its scope there in the declared order — the order of ⌃1…⌃9,
-                // and of the tiles themselves when Settings arranges them that way.
+                // and of the tiles themselves when Settings arranges them that way. One handler for both kinds
+                // of drop: two drop destinations on one view do not share it reliably, and a file dragged from
+                // Finder carries text too, so the image is looked for first.
                 .draggable(other.id.rawValue)
-                .dropDestination(for: String.self) { items, _ in
-                    guard let raw = items.first, model.scope(ScopeID(rawValue: raw)) != nil else { return false }
-                    model.moveScope(ScopeID(rawValue: raw), onto: other.id)
+                .onDrop(of: ScopeImageDrop.types + [.utf8PlainText], isTargeted: isDropTarget(other.id)) { providers in
+                    if ScopeImageDrop.load(providers, then: { ScopeActions.setImage($0, of: other, model: model) }) { return true }
+                    guard let text = providers.first(where: { $0.canLoadObject(ofClass: String.self) }) else { return false }
+                    _ = text.loadObject(ofClass: String.self) { raw, _ in
+                        guard let raw else { return }
+                        Task { @MainActor in
+                            guard model.scope(ScopeID(rawValue: raw)) != nil else { return }
+                            model.moveScope(ScopeID(rawValue: raw), onto: other.id)
+                        }
+                    }
                     return true
+                }
+                .contextMenu {
+                    Button("Scope Settings…") { model.scopeSettingsID = other.id }
+                    Button("Reveal in Finder") { Reveal.inFinder(other.url) }
+                    Divider()
+                    Button("Remove Scope…", role: .destructive) {
+                        Task { await ScopeActions.remove(other, model: model) }
+                    }
                 }
                 .help(tileHelp(other))
                 .accessibilityLabel("\(other.name), \(model.activity(of: other).label)")
@@ -185,6 +211,7 @@ struct ScopeSwitcher: View {
             }
         }
         Divider()
+        Button("Scope Settings…") { model.scopeSettingsID = scope.id }
         Button("Declare a Scope…") {
             Task {
                 let urls = await FolderPicker.chooseFolders()
@@ -251,38 +278,8 @@ struct ScopeSwitcher: View {
         Button("Rename…") {
             onRename(scope)
         }
-        Menu("Tile") {
-            Button("Set Icon…") {
-                iconText = scope.declaration.icon ?? ""
-                iconBeingEdited = true
-            }
-            Menu("Colour") {
-                Button {
-                    model.updateScopeIdentity(scope.id) { $0.tint = nil }
-                } label: {
-                    if scope.declaration.tint == nil { Label("Automatic", systemImage: "checkmark") } else { Text("Automatic") }
-                }
-                Divider()
-                ForEach(ScopeTint.allCases, id: \.self) { tint in
-                    Button {
-                        model.updateScopeIdentity(scope.id) { $0.tint = tint }
-                    } label: {
-                        if scope.declaration.tint == tint { Label(tint.title, systemImage: "checkmark") } else { Text(tint.title) }
-                    }
-                }
-            }
-            Divider()
-            Button("Choose Logo…") {
-                let panel = NSOpenPanel()
-                panel.allowedContentTypes = [.image]
-                panel.allowsMultipleSelection = false
-                panel.prompt = "Use as Logo"
-                panel.message = "Choose an image for the tile of \(scope.name). Scope keeps its own copy."
-                if panel.runModal() == .OK, let url = panel.url { model.setScopeLogo(scope.id, from: url) }
-            }
-            if scope.declaration.logo != nil {
-                Button("Remove Logo") { model.removeScopeLogo(scope.id) }
-            }
+        Button("Scope Settings…") {
+            model.scopeSettingsID = scope.id
         }
         Divider()
         Button("Reveal in Finder") {
@@ -312,6 +309,24 @@ enum ScopeActions {
     /// Confirms with a sheet ("Remove *acme* from Scope? Nothing is deleted on disk.") and removes the scope.
     /// Running threads are hung up. Sandboxes are never deleted from here (tasks own them), so the alert has no
     /// accessory.
+    /// Makes `source` the image of the scope's tile, and says why in a sheet when it cannot be one: the user just
+    /// picked or dropped it and is looking at the window, not at the problems badge.
+    static func setImage(_ source: ScopeLogoSource, _ slot: ScopeLogoSlot = .standard, of scope: ScopeState, model: AppModel) {
+        do {
+            try model.setScopeLogo(scope.id, slot, from: source)
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "That cannot be the image of “\(scope.name)”"
+            alert.informativeText = imageRefusal(error)
+            if let window = NSApp.keyWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
+        }
+    }
+
+    static func imageRefusal(_ error: any Error) -> String {
+        (error as? ScopeLogo.Failure)?.reason ?? error.localizedDescription
+    }
+
     static func remove(_ scope: ScopeState, model: AppModel) async {
         let running = model.threads(in: scope.id).filter(\.isAlive).count
         let alert = NSAlert()

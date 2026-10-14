@@ -2,21 +2,22 @@ import AppKit
 import SwiftUI
 import ScopeCore
 
-/// A scope as a 20 pt square: its logo when it has one, else a letter (or the icon chosen for it) on its tint.
+/// A scope as a 20 pt square: its image when it has one, else a letter (or the icon chosen for it) on its tint.
 /// The mark at its corner is the most pressing thing happening in the scope (`ScopeActivity`), in the shapes the
 /// thread rows already use — a square waits for the user, a diamond failed, a dot is a result to read — plus a
 /// ring for agents at work, the quietest of the four and never animated: a row of pulsing tiles would be the
 /// loudest thing in the window for the least urgent fact. A scope where nothing happens carries no mark.
 struct ScopeTile: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
     let scope: ScopeState
     /// `nil` draws no mark: the current scope's own tile, whose rows are on screen.
     var activity: ScopeActivity?
     var size: CGFloat = 20
 
     var body: some View {
-        face
-            .frame(width: size, height: size)
+        ScopeTileFace(declaration: scope.declaration, logo: model.scopeLogo(scope, dark: colorScheme == .dark),
+                      missing: scope.kind == .missing, size: size)
             .overlay(alignment: .topTrailing) {
                 if let activity, activity != .quiet, activity != .missing {
                     ScopeActivityMark(activity: activity)
@@ -25,30 +26,59 @@ struct ScopeTile: View {
             }
             .accessibilityHidden(true)
     }
+}
 
-    @ViewBuilder
-    private var face: some View {
+/// What a tile shows, without the model: the sidebar draws it for a scope, the settings sheet for each
+/// appearance side by side.
+///
+/// An image never leaves the square and is never cropped here — the stored form is already a square
+/// (`ScopeLogo`). What has no transparency is the tile; what has some sits inside it, on the tint when it is a
+/// one-tone glyph (drawn in the tile's ink, like the letter) and on a plate of its own otherwise, since a
+/// coloured mark made for a white page is lost on the sidebar's dark ground.
+struct ScopeTileFace: View {
+    let declaration: ScopeDeclaration
+    var logo: ScopeLogoStore.Logo?
+    var missing = false
+    var size: CGFloat = 20
+
+    var body: some View {
         let shape = RoundedRectangle(cornerRadius: size / 4, style: .continuous)
-        if scope.kind == .missing {
-            shape.strokeBorder(Ink.tertiary, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                .overlay(Text("?").font(.system(size: size * 0.55, weight: .bold)).foregroundStyle(Ink.tertiary))
-        } else if let logo = model.scopeLogo(scope) {
-            Image(nsImage: logo)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: size, height: size)
-                .clipShape(shape)
-        } else {
-            shape.fill(ScopeTintStyle.fill(scope.declaration.resolvedTint))
-                .overlay(
-                    Text(scope.declaration.monogram)
-                        .font(.system(size: size * 0.55, weight: .bold))
-                        .foregroundStyle(ScopeTintStyle.onFill)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                )
+        Group {
+            if missing {
+                shape.strokeBorder(Ink.tertiary, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                    .overlay(Text("?").font(.system(size: size * 0.55, weight: .bold)).foregroundStyle(Ink.tertiary))
+            } else if let logo {
+                switch logo.style {
+                case .opaque:
+                    picture(logo).clipShape(shape)
+                case .template:
+                    shape.fill(ScopeTintStyle.fill(declaration.resolvedTint))
+                        .overlay(picture(logo, template: true).foregroundStyle(ScopeTintStyle.onFill).padding(size * 0.2))
+                case .onLight, .onDark:
+                    shape.fill(logo.style == .onLight ? ScopeTintStyle.lightPlate : ScopeTintStyle.darkPlate)
+                        .overlay(picture(logo).padding(size * 0.14))
+                        .overlay(shape.strokeBorder(Surface.stroke, lineWidth: 1))
+                }
+            } else {
+                shape.fill(ScopeTintStyle.fill(declaration.resolvedTint))
+                    .overlay(
+                        Text(declaration.monogram)
+                            .font(.system(size: size * 0.55, weight: .bold))
+                            .foregroundStyle(ScopeTintStyle.onFill)
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                    )
+            }
         }
+        .frame(width: size, height: size)
+    }
+
+    private func picture(_ logo: ScopeLogoStore.Logo, template: Bool = false) -> some View {
+        Image(nsImage: logo.image)
+            .renderingMode(template ? .template : .original)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
     }
 }
 
@@ -90,6 +120,11 @@ enum ScopeTintStyle {
     static let onFill = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(hex: 0x101010) : .white
     })
+
+    /// The plates under an image with transparency, the same in both appearances: they answer the image, not the
+    /// window. White and Onyx, the charter's two grounds.
+    static let lightPlate = Color(nsColor: NSColor(hex: 0xFFFFFF))
+    static let darkPlate = Color(nsColor: NSColor(hex: 0x101010))
 
     private static func values(_ tint: ScopeTint) -> (dark: Int, light: Int) {
         switch tint {
