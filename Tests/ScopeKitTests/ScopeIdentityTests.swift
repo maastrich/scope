@@ -82,8 +82,9 @@ import Testing
 
     @Test func declaredKeepsTheNearestScopes() {
         let split = ScopeTileOrder.declared.split(ring, visible: 4)
-        #expect(split.shown == ["a", "b", "c", "f"])
-        #expect(split.hidden == ["d", "e"])
+        // `e` is two steps back, `c` three steps on.
+        #expect(split.shown == ["a", "b", "e", "f"])
+        #expect(split.hidden == ["c", "d"])
     }
 
     /// The first and last tiles are where a swipe goes, so they outrank any urgency elsewhere.
@@ -95,7 +96,7 @@ import Testing
     }
 
     @Test func importanceTiesGoToTheNearerScope() {
-        let quiet: [(id: String, activity: ScopeActivity)] = [("a", .quiet), ("b", .quiet), ("c", .quiet), ("d", .quiet)]
-        #expect(ScopeTileOrder.byImportance.split(quiet, visible: 3).shown == ["a", "b", "d"])
+        let quiet = ring.map { (id: $0.id, activity: ScopeActivity.quiet) }
+        #expect(ScopeTileOrder.byImportance.split(quiet, visible: 4).shown == ["a", "b", "e", "f"])
     }
 }

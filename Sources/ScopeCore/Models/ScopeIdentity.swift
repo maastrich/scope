@@ -112,14 +112,16 @@ public enum ScopeTileOrder: String, Codable, Sendable, CaseIterable {
         var kept = Set<Int>()
         if count >= 1 { kept.insert(0) }
         if count >= 2 { kept.insert(ring.count - 1) }
+        // Steps from the current scope either way round: the ring's last item is one step back.
+        let distance = { (index: Int) in min(index + 1, ring.count - index) }
         let candidates = ring.indices.filter { !kept.contains($0) }
         let ranked: [Int]
         switch self {
         case .declared:
-            ranked = candidates
+            ranked = candidates.sorted { (distance($0), $0) < (distance($1), $1) }
         case .byImportance:
-            // Stable: equally pressing scopes keep the ring's order between them.
-            ranked = candidates.sorted { (ring[$0].activity, $0) < (ring[$1].activity, $1) }
+            // Stable: equally pressing scopes go by distance, then by the ring's order.
+            ranked = candidates.sorted { (ring[$0].activity, distance($0), $0) < (ring[$1].activity, distance($1), $1) }
         }
         kept.formUnion(ranked.prefix(count - kept.count))
         let shown = ring.indices.filter(kept.contains).map { ring[$0].id }
