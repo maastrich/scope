@@ -609,7 +609,7 @@ bumped the problems badge, and a right-click on a neighbour's tile edited the sc
 - **Stored form** (`ScopeLogo`, in the package, `ScopeLogoTests`): a square PNG of at most 128 px, named
   `<slug>-<8 hex>.png`. The size is read before anything is decoded and the work happens on a 512 px copy.
   Refused, each with its sentence: not an image, over 64 MB, under 16 px or over 16 384 px on a side, one side
-  more than three times the other, fully transparent.
+  more than four times the other, fully transparent.
 - **Always inside the square, never cropped blind.** An opaque picture fills the square from its centre. An opaque
   image whose whole edge is one colour (a wordmark on white) is fitted whole on that colour. An image with
   transparency is trimmed to what it shows and fitted whole.
@@ -627,14 +627,16 @@ bumped the problems badge, and a right-click on a neighbour's tile edited the sc
   second), a per-scope switch to overrule the automatic style.
 - **Scope settings** (`ScopeSettingsSheet`): one sheet per scope, from its menu or a right-click on its tile —
   any tile, each about its own scope. Name, folder, the two images shown on their own grounds, letter, colour,
-  the context for agents, the discovery depth, the graph (how many repositories are described, analyse, open).
+  the context for agents, the discovery depth, the graph (analyse, open, and each repository in the one sentence
+  agents read).
   It replaces the **Tile** submenu and its alert. The tile and the depth apply at once; the name and the context
   when the sheet closes.
 - **Context for agents** (`ScopeDeclaration.context`): the owner's words about the scope, written under
   *About <scope>* in the context file of every task, and rewritten in running tasks when it changes.
 - **Lifecycle**: replacing or removing an image deletes its file; so does removing the scope. At launch, a copy
-  v0.14.0 made is brought to the stored form (or dropped, with a line in the problems list, when it cannot be),
-  and files no scope names are deleted. A file deleted behind the app falls back to the letter; the miss is
+  v0.14.0 made is brought to the stored form whatever its shape (the size and shape rules only refuse new
+  images; one that cannot be converted stays as it is), and files no scope names are deleted — unless the
+  config failed to load, when every file would look orphaned. A file deleted behind the app falls back to the letter; the miss is
   remembered, so the disk is not asked at every redraw.
 - **A refusal is said where the user is looking**: under the wells in the sheet, in an alert for a drop on a tile.
 
