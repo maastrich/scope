@@ -2,12 +2,18 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task: one status glyph, the name, `+N −M`.
+/// Sidebar row for a task: one status glyph, the name, `+N −M`, the state dot of its threads.
 ///
 /// The glyph is `TaskStatus.resolve` — the single most pressing thing about the task, a thread waiting on you
-/// first — and replaces what used to be a branch icon, a PR chip and a trailing state dot that each said part of
-/// it. The name takes the whole width: the hover controls (archive, menu) are drawn over the trailing counts,
-/// which fade out under them, instead of holding a gutter open when the pointer is elsewhere. The rest — branch,
+/// first, then its checks, its pull request, its changes — and replaces what used to be a branch icon and a PR chip
+/// that each said part of it. The trailing dot is the rule every sidebar row follows: the agents' state, in the
+/// shapes `StateDot` gives it, at the end of the row — a thread's own, the most urgent of a group's or a task's
+/// threads — so the eye can run down one column and find every thread that wants it. A task with no thread keeps
+/// the column blank.
+///
+/// The name takes the whole width: the hover controls (editor, archive, menu) are drawn over the end of the name
+/// and the counts, left of the dot, instead of holding a gutter open when the pointer is elsewhere. The counts step
+/// aside while they are there — a number half under a button reads as a different number. The rest — branch,
 /// repositories, pull request, prompt — is in the hover card.
 ///
 /// A task with one thread is one row: selecting it already shows that thread's terminal, so a nested row with the
@@ -28,8 +34,10 @@ struct TaskRow: View {
         let threads = model.threads(in: task.id)
         let facts = model.taskFacts(for: task)
         let status = TaskStatus.resolve(facts)
-        HStack(spacing: 7) {
-            disclosure(shown: threads.count > 1)
+        HStack(spacing: SidebarMetrics.spacing) {
+            SidebarDisclosure(isExpanded: threads.count > 1 ? task.isExpanded : nil) {
+                task.isExpanded.toggle()
+            }
 
             TaskStatusGlyph(status: status)
 
@@ -50,15 +58,19 @@ struct TaskRow: View {
 
             Spacer(minLength: 4)
 
+            // Whole or not at all: the name gives way first, and the controls cover the counts outright.
             DeltaCounts(additions: task.totalAdditions, deletions: task.totalDeletions)
-                .lineLimit(1)
+                .fixedSize()
+                .opacity(isHovered ? 0 : 1)
+
+            SidebarStateDot(
+                state: ThreadState.mostUrgent(threads.map(\.displayState)),
+                pulses: threads.contains(where: \.isWorking)
+            )
         }
-        .trailingFade(isHovered, width: SidebarMetrics.hoverControlsWidth)
-        .overlay(alignment: .trailing) {
-            if isHovered { hoverControls }
-        }
+        .sidebarHoverControls(isHovered) { hoverControls }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: detailed ? SidebarMetrics.detailedRowHeight : 28)
+        .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
         .contentShape(Rectangle())
         .onHover(perform: hover)
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
@@ -83,25 +95,6 @@ struct TaskRow: View {
     /// The row the List highlights.
     private var isListSelected: Bool {
         model.selection == .task(task.id)
-    }
-
-    /// The chevron, or its empty slot: task glyphs stay in one column whether or not a task has nested rows.
-    @ViewBuilder
-    private func disclosure(shown: Bool) -> some View {
-        if shown {
-            Button {
-                task.isExpanded.toggle()
-            } label: {
-                Image(systemName: task.isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Ink.tertiary)
-                    .frame(width: 12, height: 12)
-            }
-            .buttonStyle(.iconTight)
-            .help(task.isExpanded ? "Collapse" : "Expand")
-        } else {
-            Color.clear.frame(width: 12, height: 12)
-        }
     }
 
     private var hoverControls: some View {
@@ -135,7 +128,6 @@ struct TaskRow: View {
                 TaskContextMenu(task: task)
             }
         }
-        .transition(.opacity)
     }
 
     private func hover(_ hovering: Bool) {
