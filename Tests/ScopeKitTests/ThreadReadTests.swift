@@ -134,4 +134,14 @@ import Testing
         #expect(lines[1].hasPrefix("no reply to show"))
         #expect(lines.contains("$ ls"))
     }
+
+    @Test func aReplyOlderThanTheLatestPromptSaysSo() {
+        let reply = AgentReply(text: "pong", at: Date(timeIntervalSince1970: 0))
+        let result = ThreadReadResult(thread: "3f9a2c17be04", title: "acme", state: "running", reply: reply, terminalEnd: 3,
+                                      lastPromptAt: Date(timeIntervalSince1970: 10))
+        #expect(result.staleReply == true)
+        #expect(CLIRenderer.text(.read(result)).components(separatedBy: "\n")[1] == CLIRenderer.staleNotice)
+        let fresh = ThreadReadResult(thread: "3f9a2c17be04", title: "acme", state: "done", reply: reply, terminalEnd: 3)
+        #expect(fresh.staleReply == false && !CLIRenderer.text(.read(fresh)).contains(CLIRenderer.staleNotice))
+    }
 }

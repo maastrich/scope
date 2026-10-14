@@ -125,4 +125,12 @@ struct HookStdinTests {
         #expect(AgentReply.from(cut)?.text == "Long answer.")
         #expect(AgentReply.from(AdapterEvent(threadID: thread, kind: .turnEnded)) == nil)
     }
+
+    @Test("Codex notify hands its JSON as an argument, which is told apart from key=value")
+    func inlinePayload() {
+        #expect(HookStdin.isInlinePayload(#"{"type":"agent-turn-complete"}"#))
+        #expect(HookStdin.isInlinePayload("  {}"))
+        #expect(!HookStdin.isInlinePayload("session_id={x}"))
+        #expect(!HookStdin.isInlinePayload("turn.ended"))
+    }
 }

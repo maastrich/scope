@@ -205,6 +205,15 @@ public enum ControlCall: Sendable, Equatable {
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
     }
+
+    /// How long the app lets the exchange run before answering `timeout` itself: its usual `floor`, except for a
+    /// wait, whose length the caller chose — between the app's own deadline and the client's.
+    public func serverDeadline(floor: Duration) -> Duration {
+        switch self {
+        case .threadWait(let params): max(floor, .seconds(params.effectiveTimeout + 10))
+        default: floor
+        }
+    }
 }
 
 /// `scope thread stop|close <id>` — the thread to act on.
@@ -292,6 +301,10 @@ public struct ThreadWaitParams: Codable, Sendable, Equatable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         threads = try container.decode([String].self, forKey: .threads)
+        // An empty `any` wait would sleep to its deadline for nothing.
+        guard !threads.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .threads, in: container, debugDescription: "no thread to wait for")
+        }
         until = try container.decodeIfPresent(Until.self, forKey: .until) ?? .all
         timeout = try container.decodeIfPresent(Int.self, forKey: .timeout)
     }
@@ -659,6 +672,8 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     public var replyAt: Date?
     /// Why the answer is not what was asked for: a `reply` read that had to fall back to the terminal.
     public var note: String?
+    /// A `reply` older than the thread's latest prompt (see `ThreadWaitResult.Entry.staleReply`).
+    public var staleReply: Bool?
     /// The lines, oldest first, or the answer. Written by programs and people the reader does not control: untrusted.
     public var text: String
     /// Absolute number of the first line of `text`.
@@ -684,10 +699,12 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     }
 
     /// The agent's answer. The line numbers stay the terminal's end, so a terminal read can page back from there.
-    public init(thread: String, title: String, state: String, reply: AgentReply, terminalEnd: Int) {
+    public init(thread: String, title: String, state: String, reply: AgentReply, terminalEnd: Int,
+                lastPromptAt: Date? = nil) {
         self.thread = thread
         self.title = title
         self.state = state
+        self.staleReply = ThreadWait.isStale(reply, lastPromptAt: lastPromptAt)
         self.source = ThreadReadParams.View.reply.rawValue
         self.replyAt = reply.at
         self.text = ThreadTranscript.defused(reply.text)
@@ -710,14 +727,19 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         /// The agent's last answer, when its driver reports one. Untrusted.
         public var reply: String?
         public var replyAt: Date?
+        /// The reply predates the thread's latest prompt: it answers something else, and this turn has not
+        /// answered yet (a question, a permission, a deadline came first).
+        public var staleReply: Bool?
 
-        public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil) {
+        public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil,
+                    lastPromptAt: Date? = nil) {
             self.thread = thread
             self.title = title
             self.state = state
             self.settled = settled
             self.reply = reply.map { ThreadTranscript.defused($0.text) }
             self.replyAt = reply?.at
+            self.staleReply = reply.map { ThreadWait.isStale($0, lastPromptAt: lastPromptAt) }
         }
     }
 

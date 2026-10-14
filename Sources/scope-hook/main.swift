@@ -22,6 +22,8 @@ struct HookCommand: Equatable {
     var event: HookCommandEvent
     var payload: [String: String]
     var readStdin: Bool
+    /// The driver's hook JSON given as an argument rather than on stdin: Codex `notify` appends it to the argv.
+    var inlineJSON: String? = nil
 
     enum ParseError: Error, Equatable {
         case missingEvent
@@ -34,6 +36,7 @@ struct HookCommand: Equatable {
         var event: HookCommandEvent?
         var payload: [String: String] = [:]
         var readStdin = false
+        var inlineJSON: String?
         for argument in arguments {
             switch argument {
             case "--stdin":
@@ -41,7 +44,9 @@ struct HookCommand: Equatable {
             case "--help", "-h":
                 throw .help
             default:
-                if event == nil {
+                if event != nil, HookStdin.isInlinePayload(argument) {
+                    inlineJSON = argument
+                } else if event == nil {
                     guard let parsed = HookCommandEvent(word: argument) else { throw .unknownEvent(argument) }
                     event = parsed
                 } else if let separator = argument.firstIndex(of: "="), separator != argument.startIndex {
@@ -53,7 +58,7 @@ struct HookCommand: Equatable {
             }
         }
         guard let event else { throw .missingEvent }
-        return HookCommand(event: event, payload: payload, readStdin: readStdin || event.needsStdin)
+        return HookCommand(event: event, payload: payload, readStdin: readStdin || event.needsStdin, inlineJSON: inlineJSON)
     }
 }
 
@@ -107,8 +112,9 @@ enum HookCLI {
         var raw: String?
         var parsedStdin = HookStdin()
         var truncated = false
-        if command.readStdin {
-            var data = stdin.readDataToEndOfFile()
+        // An argument JSON wins over stdin, which the driver may have left attached to something that never ends.
+        if command.inlineJSON != nil || command.readStdin {
+            var data = command.inlineJSON.map { Data($0.utf8) } ?? stdin.readDataToEndOfFile()
             parsedStdin = HookStdin.parse(data)
             if data.count > maxRawBytes {
                 data = data.prefix(maxRawBytes)

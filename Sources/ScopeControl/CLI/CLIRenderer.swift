@@ -81,6 +81,7 @@ public enum CLIRenderer {
             if result.source == ThreadReadParams.View.reply.rawValue {
                 let at = result.replyAt.map { " at " + time($0) } ?? ""
                 lines = ["thread \(result.thread) — \(result.title) · last reply\(at) (\(result.state))"]
+                if result.staleReply == true { lines.append(staleNotice) }
             } else {
                 let range = result.toLine > result.fromLine ? "lines \(result.fromLine)–\(result.toLine - 1)" : "no lines"
                 lines = ["thread \(result.thread) — \(result.title) · \(range) (\(result.state))"]
@@ -100,6 +101,7 @@ public enum CLIRenderer {
                 lines.append("thread \(entry.thread) — \(entry.title) (\(entry.state)\(entry.settled ? "" : ", still at work"))")
                 if let reply = entry.reply {
                     lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
+                    if entry.staleReply == true { lines.append(staleNotice) }
                     lines += quoted(reply)
                 }
             }
@@ -112,6 +114,8 @@ public enum CLIRenderer {
         [ThreadTranscript.untrustedNotice, ThreadTranscript.openMarker] + (text.isEmpty ? [] : [text])
             + [ThreadTranscript.closeMarker]
     }
+
+    static let staleNotice = "(from before its latest prompt: that one has not been answered yet)"
 
     static func time(_ date: Date) -> String {
         date.formatted(.iso8601)

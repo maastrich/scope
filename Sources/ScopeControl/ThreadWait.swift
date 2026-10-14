@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAdapters
 
 /// When a thread is done with what it was last given, for `thread.wait`.
 ///
@@ -45,6 +46,12 @@ public enum ThreadWait {
             guard let since = snapshot.expectingSince else { return true }
             return !snapshot.starting && snapshot.reportsTurnStart && now.timeIntervalSince(since) >= startGrace
         }
+    }
+
+    /// A reply the agent gave before it was last handed a prompt answers that earlier prompt, not the latest.
+    public static func isStale(_ reply: AgentReply, lastPromptAt: Date?) -> Bool {
+        guard let lastPromptAt else { return false }
+        return reply.at < lastPromptAt
     }
 
     /// Whether the wait is over for `settled`, one flag per thread waited on.

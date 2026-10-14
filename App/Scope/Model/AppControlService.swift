@@ -102,7 +102,8 @@ final class AppControlService: ControlService {
                                                            page: page, note: "no reply to show (\(why)); its terminal instead:")))
                 }
                 return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
-                                                       reply: reply, terminalEnd: page.toLine)))
+                                                       reply: reply, terminalEnd: page.toLine,
+                                                       lastPromptAt: session.lastPromptAt)))
             }
         case .threadWait(let params):
             return await wait(params, from: origin)
@@ -139,7 +140,7 @@ final class AppControlService: ControlService {
         }
         let entries = zip(sessions, settled).map { session, settled in
             ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
-                                   settled: settled, reply: session.lastReply)
+                                   settled: settled, reply: session.lastReply, lastPromptAt: session.lastPromptAt)
         }
         return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
                                                waited: Int(Date.now.timeIntervalSince(started).rounded()))))

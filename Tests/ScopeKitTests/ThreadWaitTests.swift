@@ -100,4 +100,35 @@ import Testing
         }
         #expect(!ControlMethod.threadWait.isMutating && ControlMethod.threadWait.isGated)
     }
+
+    /// A wait that ends on a question, the grace or the deadline still shows the reply it has — flagged when that
+    /// reply answers an earlier prompt, so it is never taken for the answer to the latest one.
+    @Test func aReplyFromBeforeTheLatestPromptIsFlagged() {
+        let reply = AgentReply(text: "pong", at: Self.now)
+        #expect(!ThreadWait.isStale(reply, lastPromptAt: nil))
+        #expect(!ThreadWait.isStale(reply, lastPromptAt: Self.now.addingTimeInterval(-5)))
+        #expect(ThreadWait.isStale(reply, lastPromptAt: Self.now.addingTimeInterval(5)))
+        let entry = ThreadWaitResult.Entry(thread: "3f9a2c17be04", title: "api", state: "waiting", settled: true,
+                                           reply: reply, lastPromptAt: Self.now.addingTimeInterval(5))
+        #expect(entry.staleReply == true)
+        let text = CLIRenderer.text(.wait(ThreadWaitResult(threads: [entry], complete: true, waited: 3)))
+        #expect(text.contains(CLIRenderer.staleNotice))
+    }
+
+    /// The app's socket server must not cut a wait at its usual deadline, and must answer before the client gives up.
+    @Test func theServerLetsAWaitRunItsCourse() {
+        let floor = Duration.seconds(180)
+        let long = ControlCall.threadWait(ThreadWaitParams(threads: ["x"], timeout: 600))
+        #expect(long.serverDeadline(floor: floor) > .seconds(600))
+        #expect(long.serverDeadline(floor: floor) < long.timeout)
+        #expect(ControlCall.threadWait(ThreadWaitParams(threads: ["x"], timeout: 5)).serverDeadline(floor: floor) == floor)
+        #expect(ControlCall.taskNew(TaskNewParams(prompt: "x")).serverDeadline(floor: floor) == floor)
+    }
+
+    @Test func aWaitOnNothingIsRefused() {
+        guard case .failure(let error) = MCPBridge.call(tool: "scope_thread_wait", arguments: Data(#"{"threads":[],"until":"any"}"#.utf8)) else {
+            Issue.record("an empty wait was accepted"); return
+        }
+        #expect(error.code == .badRequest)
+    }
 }

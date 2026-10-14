@@ -39,6 +39,12 @@ public struct HookStdin: Sendable, Equatable {
         self.lastAssistantMessage = lastAssistantMessage
     }
 
+    /// `true` for a command-line argument that is the driver's hook JSON itself: Codex `notify` runs the
+    /// configured program with the notification as its last argument, not on stdin.
+    public static func isInlinePayload(_ argument: String) -> Bool {
+        argument.drop(while: \.isWhitespace).first == "{"
+    }
+
     /// Keys tried, in order, for the agent's last answer.
     public static let lastAssistantMessageKeys = ["last_assistant_message", "last-assistant-message"]
 

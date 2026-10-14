@@ -49,6 +49,8 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private(set) var lastReply: AgentReply?
     /// When the thread was handed a prompt its driver has not reported on yet (`ThreadWait`).
     @ObservationIgnored private(set) var expectingTurnSince: Date?
+    /// When the thread was last handed a prompt, reported on or not: a reply older than this answers something else.
+    @ObservationIgnored private(set) var lastPromptAt: Date?
     /// OSC 0/2 title.
     private(set) var terminalTitle: String?
     /// OSC 7 directory, decoded from its `file://` form.
@@ -280,6 +282,7 @@ final class ThreadSession: Identifiable {
     /// The thread was just handed a prompt: until its driver reports something, it counts as at work.
     func expectTurn() {
         expectingTurnSince = .now
+        lastPromptAt = .now
     }
 
     /// What `thread.wait` looks at.
