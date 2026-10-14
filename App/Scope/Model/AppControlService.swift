@@ -152,7 +152,9 @@ final class AppControlService: ControlService {
         section("kept, their work could not be saved:", report.keptFolders)
         section(dryRun ? "would prune stale worktrees in:" : "pruned stale worktrees in:", report.prunedWorktrees)
         section(dryRun ? "would delete expired saved changes:" : "deleted expired saved changes:", report.deletedRefs)
-        if report.emptiedTrash > 0 { lines.append((dryRun ? "would empty " : "emptied ") + "\(report.emptiedTrash) items from the trash") }
+        if report.emptiedTrash > 0 {
+            lines.append((dryRun ? "would empty " : "emptied ") + "\(report.emptiedTrash) \(report.emptiedTrash == 1 ? "item" : "items") from the trash")
+        }
         return lines.joined(separator: "\n")
     }
 
