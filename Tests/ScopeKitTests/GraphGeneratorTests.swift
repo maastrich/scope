@@ -101,6 +101,14 @@ import ScopeTasks
         try await generator.generate(scope: scope.declaration, repos: repos, useLevel1: true)
         #expect(good.calls.withLock { $0 } == 2)
 
+        // A card an older prompt wrote is redone, once.
+        #expect(graph.repos["api"]?.promptVersion == Level1Generator.promptVersion)
+        _ = try await store.update(slug: "acme") { $0.repos["api"]?.promptVersion = nil }
+        try await generator.generate(scope: scope.declaration, repos: repos, useLevel1: true)
+        #expect(good.calls.withLock { $0 } == 3)
+        try await generator.generate(scope: scope.declaration, repos: repos, useLevel1: true)
+        #expect(good.calls.withLock { $0 } == 3)
+
         // Invalid JSON from the driver: L0 card kept, failure reported, generation still succeeds.
         let bad = FakeRunner(output: "I cannot help with that.")
         let failing = GraphGenerator(
