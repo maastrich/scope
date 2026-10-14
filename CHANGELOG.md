@@ -11,6 +11,27 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.15.0](https://github.com/maastrich/scope/releases/tag/v0.15.0) - 2026-10-14
+
+### Added
+
+- **scopes:** keep a scope's image as a small square PNG, with a dark variant and a context by @maastrich
+- **scopes:** give each scope a settings sheet, and images that always sit inside the tile by @maastrich
+
+### Fixed
+
+- **graph:** make the AI analysis describe each repository in one sentence drawn from its code by @maastrich
+- **ui:** stop the spinner and the state pill from jumping around by @maastrich
+- **scopes:** never take an image away at launch, and list the graph in the scope settings by @maastrich
+- **graph:** redo with AI the cards an older prompt wrote by @maastrich
+
+### Documentation
+
+- describe scope images, the scope settings sheet and the one-sentence purpose by @maastrich
+- say what the launch cleanup keeps and when a card is redone by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.14.0...v0.15.0
+
 ## [0.14.0](https://github.com/maastrich/scope/releases/tag/v0.14.0) - 2026-10-14
 
 ### Added
