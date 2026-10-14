@@ -415,6 +415,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var showGitActions: Bool
     /// What agents may do through the control socket; `nil` means the defaults (see `AutomationSettings`).
     public var automation: AutomationSettings?
+    /// Scope tidies up after tasks on its own — at launch, every 30 minutes and after each archive: leftover
+    /// sandbox folders, stale git worktrees, processes of tasks that are gone, salvage refs past their 30 days.
+    /// On by default.
+    public var cleanUpAutomatically: Bool
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -447,7 +451,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         swipeBetweenScopes: Bool = true,
         chromeTheme: ChromeTheme = .brand,
         showGitActions: Bool = false,
-        automation: AutomationSettings? = nil
+        automation: AutomationSettings? = nil,
+        cleanUpAutomatically: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -472,6 +477,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.chromeTheme = chromeTheme
         self.showGitActions = showGitActions
         self.automation = automation
+        self.cleanUpAutomatically = cleanUpAutomatically
     }
 
     public static let `default` = Preferences()
@@ -480,7 +486,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads
+             automation, autoRelaunchThreads, cleanUpAutomatically
     }
 
     public init(from decoder: any Decoder) throws {
@@ -521,6 +527,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
         showGitActions = (try? container.decodeIfPresent(Bool.self, forKey: .showGitActions)) ?? defaults.showGitActions
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
+        cleanUpAutomatically = (try? container.decodeIfPresent(Bool.self, forKey: .cleanUpAutomatically))
+            ?? defaults.cleanUpAutomatically
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

@@ -378,6 +378,60 @@ extension AppModel {
             forgetClosedTask(task)
         }
         reportOutcome(outcome, task: task, mode: mode)
+        Task { await collectGarbage() }
+    }
+
+    // MARK: Garbage collection
+
+    static let garbageCollectionInterval: Duration = .seconds(30 * 60)
+
+    /// A pass now (finishing the archives and closes a quit or a crash interrupted), then one every 30 minutes.
+    func startGarbageCollection() {
+        garbageCollector?.cancel()
+        garbageCollector = Task { [weak self] in
+            await self?.collectGarbage(resumingPending: true)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: AppModel.garbageCollectionInterval)
+                guard !Task.isCancelled else { return }
+                await self?.collectGarbage()
+            }
+        }
+    }
+
+    /// One pass of `TaskManager.collectGarbage` over every scope, when Settings ▸ Tasks allows it. Quiet: one info
+    /// line when it removed something, an error only for a process that would not die.
+    /// `resumingPending` also reruns the archives and closes left half-done — at launch only, so a run that keeps
+    /// failing is reported once per launch rather than every half hour.
+    @discardableResult
+    func collectGarbage(dryRun: Bool = false, resumingPending: Bool = false) async -> GarbageReport? {
+        guard dryRun || config.preferences.cleanUpAutomatically else { return nil }
+        let bases = scopes.flatMap { scope in
+            scope.repos.map { repo in
+                repo.id.isEmpty || repo.id == "." ? URL(fileURLWithPath: scope.declaration.path, isDirectory: true)
+                    : URL(fileURLWithPath: scope.declaration.path, isDirectory: true).appending(path: repo.id, directoryHint: .isDirectory)
+            }
+        }
+        let report = await env.tasks.collectGarbage(extraBases: bases, dryRun: dryRun)
+        guard !dryRun else { return report }
+        if resumingPending {
+            for id in report.pendingTasks { await retryCleanup(id) }
+        }
+        if !report.survivors.isEmpty {
+            problems.error("\(report.survivors.count) leftover \(report.survivors.count == 1 ? "process" : "processes") would not stop",
+                           detail: report.survivors.joined(separator: "\n"))
+        }
+        var done: [String] = []
+        if !report.removedFolders.isEmpty { done.append("\(report.removedFolders.count) leftover sandbox \(report.removedFolders.count == 1 ? "folder" : "folders")") }
+        if !report.stoppedProcesses.isEmpty { done.append("\(report.stoppedProcesses.count) leftover \(report.stoppedProcesses.count == 1 ? "process" : "processes")") }
+        if !report.prunedWorktrees.isEmpty { done.append("stale worktrees in \(report.prunedWorktrees.count) \(report.prunedWorktrees.count == 1 ? "repository" : "repositories")") }
+        if !report.savedChanges.isEmpty { done.append("saved the uncommitted work of \(report.savedChanges.count) of them") }
+        if !report.deletedRefs.isEmpty { done.append("\(report.deletedRefs.count) expired saved \(report.deletedRefs.count == 1 ? "change" : "changes")") }
+        if !done.isEmpty {
+            let detail = (report.removedFolders + report.savedChanges + report.stoppedProcesses + report.prunedWorktrees
+                + report.deletedRefs).joined(separator: "\n")
+            problems.report(Problem(severity: .info, title: "Cleaned up " + done.joined(separator: ", "), detail: detail))
+        }
+        return report
     }
 
     /// `prepare` for `TaskManager.dismantle`: runs inside the task's lock, before the teardown and the sweep.

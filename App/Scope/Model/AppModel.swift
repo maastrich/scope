@@ -195,6 +195,8 @@ final class AppModel {
     /// Setups in flight, per task: a thread of the task waits for its task's entry before it launches. The token
     /// tells a finished run it is still the latest one before it removes itself.
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
+    /// The 30-minute garbage collection loop (`startGarbageCollection`).
+    @ObservationIgnored var garbageCollector: Task<Void, Never>?
 
     init(env: AppEnvironment) {
         self.env = env
@@ -582,6 +584,7 @@ final class AppModel {
         restoreUIState()
         await autoRelaunchThreads(orphans: restore.orphans, skippedOnce: skipAutoRelaunch)
         startFollowingVibeIsland()
+        startGarbageCollection()
         isBootstrapped = true
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }

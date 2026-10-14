@@ -12,6 +12,8 @@ public enum ProcessSweep {
         public var pid: pid_t
         public var name: String
         public var directory: String?
+        /// `SCOPE_TASK_ROOT` from its environment, when it has one.
+        public var taskRoot: String?
 
         public var description: String { "\(name) (\(pid))" }
     }
@@ -23,7 +25,8 @@ public enum ProcessSweep {
         public var survivors: [Match] = []
     }
 
-    /// The live processes of this user under any of `roots`, never the current process.
+    /// The live processes of this user under any of `roots` — by working directory, or by a `SCOPE_TASK_ROOT`
+    /// that is one of them or lies inside one — never the current process.
     public static func processes(under roots: [URL]) -> [Match] {
         let prefixes = roots.flatMap(Self.spellings)
         guard !prefixes.isEmpty else { return [] }
@@ -34,18 +37,24 @@ public enum ProcessSweep {
                 return nil
             }
             let cwd = currentDirectory(pid)
-            let inside = cwd.map { path in prefixes.contains { path == $0 || path.hasPrefix($0 + "/") } } ?? false
-            let named = !inside && (environment(pid)["SCOPE_TASK_ROOT"].map { value in
-                prefixes.contains { Self.trimmed(value) == $0 }
-            } ?? false)
-            guard inside || named else { return nil }
-            return Match(pid: pid, name: Self.name(info), directory: cwd)
+            let taskRoot = environment(pid)["SCOPE_TASK_ROOT"].map(Self.trimmed)
+            guard [cwd, taskRoot].contains(where: { path in path.map { isInside($0, prefixes) } ?? false }) else { return nil }
+            return Match(pid: pid, name: Self.name(info), directory: cwd, taskRoot: taskRoot)
         }
+    }
+
+    /// `path` is one of `prefixes` or lies under one.
+    public static func isInside(_ path: String, _ prefixes: [String]) -> Bool {
+        prefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 
     /// SIGTERM to every process under `roots`, SIGKILL to whatever is left after `grace`, then one more look.
     public static func stop(under roots: [URL], grace: Duration = .seconds(3)) async -> Result {
-        let found = processes(under: roots)
+        await stop(processes(under: roots), grace: grace)
+    }
+
+    /// SIGTERM to `found`, SIGKILL to whatever is left after `grace`, then one more look.
+    public static func stop(_ found: [Match], grace: Duration = .seconds(3)) async -> Result {
         guard !found.isEmpty else { return Result() }
         for match in found { kill(match.pid, SIGTERM) }
         var alive = await waitForExit(found, within: grace)
@@ -74,7 +83,7 @@ public enum ProcessSweep {
     }
 
     /// The path as given and as the kernel reports it (`/var` → `/private/var`), without a trailing slash.
-    private static func spellings(_ url: URL) -> [String] {
+    public static func spellings(_ url: URL) -> [String] {
         let plain = trimmed(url.path)
         var resolved = plain
         if let real = realpath(plain, nil) {
