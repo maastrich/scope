@@ -12,6 +12,30 @@ enum BaseFileContent: Equatable {
     case unavailable(String)
 }
 
+extension BaseFileContent {
+    /// Reads a file for the read-only viewer: an image as its bytes, text as a string, anything else as the reason it
+    /// is not shown. Blocking; call it off the main actor.
+    nonisolated static func load(_ file: URL) -> BaseFileContent {
+        let path = file.path
+        do {
+            if ImageFiles.isImage(path), let data = try ImageFiles.read(at: file) {
+                return .image(data)
+            }
+            return .text(try BaseFiles.readFile(at: file))
+        } catch let error as BaseError {
+            switch error {
+            case .binaryFile: return .unavailable("Binary file — not shown.")
+            case .fileTooLarge(_, let bytes):
+                let limit = ImageFiles.isImage(path) ? "\(ImageFiles.maxBytes / 1_048_576) MiB" : "1 MiB"
+                return .unavailable("File is larger than \(limit) (\(bytes) bytes) — not shown.")
+            default: return .unavailable(String(describing: error))
+            }
+        } catch {
+            return .unavailable(String(describing: error))
+        }
+    }
+}
+
 /// State of the Base inspector (spec §4.5) for one base checkout: branch, "behind N", file tree, the
 /// viewer, search and recent history. Git runs off the main actor through the shared registry; the
 /// "behind" fetch is throttled to one per minute per repo.
@@ -163,25 +187,7 @@ final class BaseModel {
         content = .loading
         expansion.reveal(path)
         Task.detached(priority: .userInitiated) {
-            let loaded: BaseFileContent
-            do {
-                let file = url.appending(path: path)
-                if ImageFiles.isImage(path), let data = try ImageFiles.read(at: file) {
-                    loaded = .image(data)
-                } else {
-                    loaded = .text(try BaseFiles.readFile(at: file))
-                }
-            } catch let error as BaseError {
-                switch error {
-                case .binaryFile: loaded = .unavailable("Binary file — not shown.")
-                case .fileTooLarge(_, let bytes):
-                    let limit = ImageFiles.isImage(path) ? "\(ImageFiles.maxBytes / 1_048_576) MiB" : "1 MiB"
-                    loaded = .unavailable("File is larger than \(limit) (\(bytes) bytes) — not shown.")
-                default: loaded = .unavailable(String(describing: error))
-                }
-            } catch {
-                loaded = .unavailable(String(describing: error))
-            }
+            let loaded = BaseFileContent.load(url.appending(path: path))
             await MainActor.run {
                 guard generation == self.generation, self.selectedPath == path else { return }
                 self.content = loaded

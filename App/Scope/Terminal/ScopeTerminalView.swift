@@ -19,6 +19,8 @@ final class ScopeTerminalView: LocalProcessTerminalView {
 
     /// Every chunk the user types, before it reaches the child (see `ThreadSession.handleUserInput`).
     var onUserInput: ((ArraySlice<UInt8>) -> Void)?
+    /// A clicked link, before SwiftTerm hands it to the system; `true` when Scope showed it (a file, in the viewer).
+    var onOpenLink: ((String) -> Bool)?
 
     override init(frame: CGRect, font: NSFont?, options: TerminalOptions) {
         super.init(frame: frame, font: font, options: options)
@@ -33,6 +35,13 @@ final class ScopeTerminalView: LocalProcessTerminalView {
     override func send(source: TerminalView, data: ArraySlice<UInt8>) {
         onUserInput?(data)
         super.send(source: source, data: data)
+    }
+
+    /// A file the agent printed opens in Scope's viewer, at the task's version of it; a web link, or a path that
+    /// names nothing on disk, goes to the system as before.
+    override func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        if onOpenLink?(link) == true { return }
+        super.requestOpenLink(source: source, link: link, params: params)
     }
 
     // MARK: Drops

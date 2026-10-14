@@ -5,6 +5,21 @@ import ScopeCore
 /// opened from Files or Search.
 enum InspectorViewer: Hashable, Sendable {
     case diff, file
+    /// A file a thread printed and the user clicked (`PathPreview`).
+    case path
+}
+
+/// A file opened from a link in a terminal: every file the link can mean (`FileLinkResolver`), which one is shown,
+/// the line to bring into view, and the content once read.
+struct PathPreview: Equatable {
+    var candidates: [FileLinkResolver.Candidate]
+    var index = 0
+    var line: Int?
+    var content: BaseFileContent?
+    /// Repository key (`TaskRepo.repoRelativePath`, or the repo's path in its scope) to the name shown.
+    var repoNames: [String: String] = [:]
+
+    var current: FileLinkResolver.Candidate { candidates[index] }
 }
 
 /// Layout state of the inspector column: which sections are open (per scope, through `ScopePlace`), how the lists
@@ -28,6 +43,8 @@ final class InspectorModel {
     /// What the viewer shows, `nil` when closed. Only a gesture opens it — a click on a file, `j` / `k`, a search
     /// jump — so a task comes up with its list, not with a diff nobody asked for.
     var viewer: InspectorViewer?
+    /// The file a terminal link opened, for the `.path` viewer.
+    var pathPreview: PathPreview?
     /// What the viewer showed before, for its back button.
     private(set) var previousViewer: InspectorViewer?
     /// A section that should take the keyboard (⌘D, opening Search), with a counter so asking twice asks again.

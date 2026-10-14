@@ -961,6 +961,9 @@ final class AppModel {
         session.onExit = { [weak self] session, status in
             self?.threadExited(session, status: status)
         }
+        session.onOpenLink = { [weak self] session, link in
+            self?.openFileLink(link, from: session) ?? false
+        }
         threads.append(session)
         env.knownThreads.insert(session.id)
     }
