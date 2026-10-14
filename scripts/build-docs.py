@@ -357,8 +357,9 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 <p>The right-hand panel, all about the selection. A band at the top names the task, then a column of
 collapsible sections, one header each: closed, a section costs one line and its header still says the essential;
 open, it shows the rest. Several can be open at once — the lists share the height, and you drag the line between
-two of them. Under the sections, one viewer shows the diff or the base file you last opened; close it to give its
-height back.</p>
+two of them. The sections hold lists only: a diff or a base file opens in a reading column between the terminal
+and the inspector, the height of the window and half the terminal's width by default (drag its edge; ✕ or Esc
+closes it).</p>
 <table>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository</td><td></td></tr>
@@ -584,8 +585,14 @@ FIG_AGENT_DELTA
 </table>
 FIG_DELTA_FILES
 <p>Files are grouped by repository, with an add/modify/delete filter, a fuzzy filter field and per-file line
-counts. The mode is the menu in the section's header. Click a file to read its diff in the viewer under the
-sections; <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
+counts. The mode is the menu in the section's header. Click a file to read its diff in the reading column beside
+the inspector; <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
+<h3 id="links">Files an agent mentions</h3>
+<p><kbd>⌘</kbd>-click a path, or a <code>file://</code> link, in a thread's terminal and the file opens in the same
+column, at the line it names: the task's copy while the thread belongs to a task, the base checkout's otherwise,
+the file itself when it lies elsewhere. A relative path is looked for from the thread's folder, then at the root of
+every repository of the task — agents often leave the repository's name out — and when several files match, the
+header lists them. A file the task changed has a button for its diff. Web links still open in the browser.</p>
 
 <h3 id="diff">The diff</h3>
 FIG_HUNK
@@ -621,9 +628,9 @@ from.</p>
 FIG_BASE_VIEWER
 <ul>
   <li><b>Files</b> — the tree of the checkout, every folder closed until you open it; a file opens read-only, with
-  line numbers, in the viewer.</li>
+  line numbers, in the reading column.</li>
   <li><b>Search</b> — <code>git grep</code> across the checkout, with case, regex, whole-word and folder filters. A
-  result opens in the viewer and opens just the folders above it in Files.</li>
+  result opens in the reading column and opens just the folders above it in Files.</li>
   <li><b>History</b> — recent commits of the branch.</li>
 </ul>
 FIG_BASE_SEARCH
