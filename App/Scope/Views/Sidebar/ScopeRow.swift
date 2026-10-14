@@ -3,8 +3,9 @@ import SwiftUI
 import ScopeCore
 import UniformTypeIdentifiers
 
-/// The sidebar header: the current scope as a tile and its name, then the other scopes as tiles — as many as fit,
-/// the rest behind a `+N` counter. A tile is one click to its scope, back where the user was in it; its corner
+/// The sidebar header: the current scope as a tile and its name, then the other scopes as tiles in the order a
+/// swipe walks them — the first is the next scope, the last the previous one — as many as fit, the rest behind a
+/// `+N` counter (which ones is `ScopeTileOrder`'s call). While a swipe drags towards a scope its tile is ringed. A tile is one click to its scope, back where the user was in it; its corner
 /// mark says what is happening there. The name is still a menu (every declared scope, "Declare a Scope… ⌘O",
 /// "Remove Scope…"), and right-click keeps the scope actions and opens the scope's settings (name, tile, context).
 /// A right-click on a neighbour's tile is about that neighbour. An image dropped on a tile becomes its image.
@@ -48,8 +49,18 @@ struct ScopeSwitcher: View {
             .allowsHitTesting(false)
     }
 
-    private func row(others: [ScopeState], visible: Int, truncatesName: Bool) -> some View {
-        let hidden = Array(others.dropFirst(visible))
+    /// The fainter ring around the tile a swipe in progress is heading to.
+    private func swipeRing(_ id: ScopeID) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1.5)
+            .padding(-3)
+            .opacity(model.swipeTargetID == id ? 1 : 0)
+            .animation(.easeOut(duration: 0.1), value: model.swipeTargetID)
+            .allowsHitTesting(false)
+    }
+
+    private func row(others: ScopeTiles, visible: Int, truncatesName: Bool) -> some View {
+        let (shown, hidden) = others.split(visible: visible)
         return HStack(spacing: 7) {
             Menu {
                 switcherMenu
@@ -94,11 +105,12 @@ struct ScopeSwitcher: View {
 
             Spacer(minLength: 2)
 
-            ForEach(others.prefix(visible)) { other in
+            ForEach(shown) { other in
                 Button {
                     model.selectScope(other.id)
                 } label: {
                     ScopeTile(scope: other, activity: model.activity(of: other))
+                        .overlay { swipeRing(other.id) }
                         .overlay { dropRing(other.id) }
                         .contentShape(Rectangle())
                 }
@@ -151,6 +163,8 @@ struct ScopeSwitcher: View {
                 .padding(.horizontal, 5)
                 .frame(height: 20)
                 .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                // A swipe heading to a scope with no tile rings the counter that holds it.
+                .overlay { swipeRingAround(hidden) }
                 .overlay(alignment: .topTrailing) {
                     if urgent != .quiet, urgent != .missing {
                         ScopeActivityMark(activity: urgent).offset(x: 3, y: -3)
@@ -164,6 +178,14 @@ struct ScopeSwitcher: View {
         .fixedSize()
         .help("\(hidden.count) more \(hidden.count == 1 ? "scope" : "scopes")")
         .accessibilityLabel("\(hidden.count) more scopes, \(urgent.label)")
+    }
+
+    private func swipeRingAround(_ hidden: [ScopeState]) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1.5)
+            .padding(-3)
+            .opacity(hidden.contains { $0.id == model.swipeTargetID } ? 1 : 0)
+            .allowsHitTesting(false)
     }
 
     /// `@acme — a thread needs you — 12 repos (⌃2)`: the number is the scope's declared position, which is what

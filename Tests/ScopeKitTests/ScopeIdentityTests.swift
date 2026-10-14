@@ -61,11 +61,42 @@ import Testing
         #expect(ScopeActivity(threads: [.waiting(reason: .permission)], missing: true) == .missing)
     }
 
-    @Test func tilesByImportanceKeepDeclaredOrderAmongEquals() {
-        let items: [(id: String, activity: ScopeActivity)] = [
-            ("a", .quiet), ("b", .working), ("c", .quiet), ("d", .waiting), ("e", .missing), ("f", .working),
-        ]
-        #expect(ScopeTileOrder.byImportance.arranged(items) == ["d", "b", "f", "a", "c", "e"])
-        #expect(ScopeTileOrder.declared.arranged(items) == ["a", "b", "c", "d", "e", "f"])
+    private let ring: [(id: String, activity: ScopeActivity)] = [
+        ("a", .quiet), ("b", .working), ("c", .quiet), ("d", .waiting), ("e", .missing), ("f", .working),
+    ]
+
+    @Test func everyTileFitsInRingOrder() {
+        for order in ScopeTileOrder.allCases {
+            let split = order.split(ring, visible: 6)
+            #expect(split.shown == ["a", "b", "c", "d", "e", "f"])
+            #expect(split.hidden.isEmpty)
+        }
+    }
+
+    /// The urgent ones survive the counter, but they are drawn where they sit in the ring, not first.
+    @Test func importancePicksTheSurvivorsNotTheirPlace() {
+        let split = ScopeTileOrder.byImportance.split(ring, visible: 4)
+        #expect(split.shown == ["a", "b", "d", "f"])
+        #expect(split.hidden == ["c", "e"])
+    }
+
+    @Test func declaredKeepsTheNearestScopes() {
+        let split = ScopeTileOrder.declared.split(ring, visible: 4)
+        // `e` is two steps back, `c` three steps on.
+        #expect(split.shown == ["a", "b", "e", "f"])
+        #expect(split.hidden == ["c", "d"])
+    }
+
+    /// The first and last tiles are where a swipe goes, so they outrank any urgency elsewhere.
+    @Test func swipeDestinationsKeepTheirTiles() {
+        #expect(ScopeTileOrder.byImportance.split(ring, visible: 2).shown == ["a", "f"])
+        #expect(ScopeTileOrder.byImportance.split(ring, visible: 1).shown == ["a"])
+        #expect(ScopeTileOrder.byImportance.split(ring, visible: 0).shown.isEmpty)
+        #expect(ScopeTileOrder.byImportance.split(ring, visible: 0).hidden.count == 6)
+    }
+
+    @Test func importanceTiesGoToTheNearerScope() {
+        let quiet = ring.map { (id: $0.id, activity: ScopeActivity.quiet) }
+        #expect(ScopeTileOrder.byImportance.split(quiet, visible: 4).shown == ["a", "b", "e", "f"])
     }
 }

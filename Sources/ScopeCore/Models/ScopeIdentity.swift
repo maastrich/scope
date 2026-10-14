@@ -82,30 +82,50 @@ public enum ScopeActivity: Int, Sendable, CaseIterable, Comparable {
     }
 }
 
-/// The order of the scope tiles beside the current scope.
+/// Which scope tiles keep their place beside the current scope when they do not all fit.
+///
+/// The tiles are always *shown* in the order of the ring (`ScopeCycle.rotated`) — the first is where a swipe to the
+/// next scope goes, the last where a swipe to the previous one does — so the header reads like the swipe. What
+/// this decides is only which of them fall behind the `+N` counter.
 public enum ScopeTileOrder: String, Codable, Sendable, CaseIterable {
-    /// Most pressing first, so what falls behind the `+N` counter is always the least urgent. Ties keep the
-    /// declared order.
+    /// The most pressing scopes keep a tile, so what falls behind the `+N` counter is the least urgent. Ties go
+    /// to the scope nearer in the ring.
     case byImportance
-    /// The order the scopes were declared in, which is also the order of ⌃1…⌃9.
+    /// The scopes nearest in the ring keep a tile; the farthest go behind the counter.
     case declared
 
     public var title: String {
         switch self {
-        case .byImportance: "By importance"
-        case .declared: "In declared order"
+        case .byImportance: "Most urgent"
+        case .declared: "Nearest"
         }
     }
 
-    /// `items` in tile order. The sort is stable: equally pressing scopes never swap places.
-    public func arranged<ID>(_ items: [(id: ID, activity: ScopeActivity)]) -> [ID] {
+    /// `ring` — the other scopes in ring order — split into the `visible` that keep a tile and the rest, both
+    /// still in ring order.
+    ///
+    /// The two swipe destinations, the first and the last of the ring, always keep theirs while there is room: a
+    /// tile row whose ends were not where a swipe goes would contradict the gesture it is there to explain. This
+    /// order only picks among the others.
+    public func split<ID>(_ ring: [(id: ID, activity: ScopeActivity)], visible: Int) -> (shown: [ID], hidden: [ID]) {
+        let count = min(max(visible, 0), ring.count)
+        var kept = Set<Int>()
+        if count >= 1 { kept.insert(0) }
+        if count >= 2 { kept.insert(ring.count - 1) }
+        // Steps from the current scope either way round: the ring's last item is one step back.
+        let distance = { (index: Int) in min(index + 1, ring.count - index) }
+        let candidates = ring.indices.filter { !kept.contains($0) }
+        let ranked: [Int]
         switch self {
         case .declared:
-            return items.map(\.id)
+            ranked = candidates.sorted { (distance($0), $0) < (distance($1), $1) }
         case .byImportance:
-            return items.enumerated()
-                .sorted { ($0.element.activity, $0.offset) < ($1.element.activity, $1.offset) }
-                .map(\.element.id)
+            // Stable: equally pressing scopes go by distance, then by the ring's order.
+            ranked = candidates.sorted { (ring[$0].activity, distance($0), $0) < (ring[$1].activity, distance($1), $1) }
         }
+        kept.formUnion(ranked.prefix(count - kept.count))
+        let shown = ring.indices.filter(kept.contains).map { ring[$0].id }
+        let hidden = ring.indices.filter { !kept.contains($0) }.map { ring[$0].id }
+        return (shown, hidden)
     }
 }

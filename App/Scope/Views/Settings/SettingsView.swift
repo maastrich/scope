@@ -166,15 +166,15 @@ private struct GeneralSettingsView: View {
                         }
                     }
                 }
-                SettingsRow("Scope tiles") {
-                    ScopePicker("Scope tiles", selection: preference(\.scopeTileOrder),
+                SettingsRow("Tiles kept") {
+                    ScopePicker("Tiles kept", selection: preference(\.scopeTileOrder),
                                 title: model.config.preferences.scopeTileOrder.title) {
                         ForEach(ScopeTileOrder.allCases, id: \.self) { order in
                             Text(order.title).tag(order)
                         }
                     }
                 }
-                Text("By importance puts the scope that needs you first, so what falls behind the +N counter is the least urgent. ⌃1…⌃9 always follow the declared order, whatever the tiles do.")
+                Text("The tiles follow the swipe: the first is the next scope, the last the previous one. When they do not all fit, this picks which stay and which go behind the +N counter. The next and previous scopes always keep theirs. ⌃1…⌃9 always follow the declared order.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)

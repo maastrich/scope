@@ -7,7 +7,8 @@ import Foundation
 /// - **Axis lock.** Nothing is decided until the fingers have moved `Tuning.lockDistance`; the dominant axis then
 ///   holds for the rest of the gesture. A vertical start stays a scroll of the list, however it curves afterwards.
 /// - **Follows the fingers.** `offset` moves one to one with them, up to a full page.
-/// - **Rubber band.** Towards a side with no neighbour, `offset` resists more the further it is pulled.
+/// - **Rubber band.** Towards a side with no neighbour, `offset` resists more the further it is pulled. The scopes
+///   form a ring, so in the sidebar that is only ever a lone scope.
 /// - **Release decides.** A page turns when it is dragged past `Tuning.commitFraction` of its width, or flicked
 ///   faster than `Tuning.flickVelocity` — and never against the flick.
 public struct PageSwipe: Sendable {
