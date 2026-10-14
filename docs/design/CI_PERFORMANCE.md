@@ -242,7 +242,11 @@ both helpers embedded, Sparkle key valid); `swift build --build-tests` then
 `Build (Release, ad-hoc signed)` between 130 and 150 s and the app job between 160 and 180 s, then confirm
 the push build is unchanged on the merge.
 
-**Expected result.** Pull request: app job 403 s → 160–180 s, ScopeKit job 168 s → ~158 s, run **7.2 min →
+**Measured on PR #25** (run 38521836749, one run): build step **95 s** (was 319 s), app job 120 s (was
+403 s), ScopeKit job 141 s, run **149 s (2.5 min, was 7.2 min)**. The ScopeKit job is now the longer one, so
+proposal 5 is next in line for pull requests. One run only; read a few more before trusting the figure.
+
+**Expected result (before the run).** Pull request: app job 403 s → 160–180 s, ScopeKit job 168 s → ~158 s, run **7.2 min →
 about 3 min**. Push to `main`: app job 403 s → 350–370 s, run **7.2 min → about 6 min**.
 
 ### Proposed, not applied
