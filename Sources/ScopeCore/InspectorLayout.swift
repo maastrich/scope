@@ -6,12 +6,12 @@ import Foundation
 /// window and the first file, and every tab hid what it held. The sections are always all there, one header each, so
 /// what exists is visible at a glance; a closed one costs one line and still says the essential in its header.
 public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable {
-    case task, changes, pullRequest, base, files, search, history
+    case task, delta, pullRequest, base, files, search, history
 
     public var title: String {
         switch self {
         case .task: "Task"
-        case .changes: "Changes"
+        case .delta: "Delta"
         case .pullRequest: "Pull Request"
         case .base: "Base"
         case .files: "Files"
@@ -23,7 +23,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// Whether the section has nothing to show without a task; it stays on screen, dimmed, so the column keeps its shape.
     public var needsTask: Bool {
         switch self {
-        case .task, .changes, .pullRequest: true
+        case .task, .delta, .pullRequest: true
         case .base, .files, .search, .history: false
         }
     }
@@ -32,7 +32,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// sections), rather than a block that takes its own height.
     public var fills: Bool {
         switch self {
-        case .changes, .files, .search, .history: true
+        case .delta, .files, .search, .history: true
         case .task, .pullRequest, .base: false
         }
     }
@@ -48,7 +48,7 @@ public struct InspectorSections: Codable, Sendable, Equatable {
 
     /// At rest very little is open: the changes of a task, the base checkout of anything else. Files never opens by
     /// itself.
-    public static let defaults = InspectorSections(withTask: [.changes], withoutTask: [.base])
+    public static let defaults = InspectorSections(withTask: [.delta], withoutTask: [.base])
 
     public init(withTask: Set<InspectorSection>, withoutTask: Set<InspectorSection>) {
         self.withTask = withTask

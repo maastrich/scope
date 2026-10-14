@@ -1,10 +1,39 @@
 import SwiftUI
 import ScopeGit
 
-/// Search section: the field (with the `Aa` / `.*` / `\b` toggles, the tool chip and the match count), an
+/// The Search section: closed, the last query and its match count; open, `BaseSearchView`. Opening it is asking to
+/// type, so it takes the keyboard then — and only then, never because it happens to be open when the column appears.
+struct SearchSection: View {
+    @Environment(AppModel.self) private var model
+    let bodyHeight: Double?
+    var sash: SectionSash?
+
+    var body: some View {
+        CollapsibleSection(section: .search, bodyHeight: bodyHeight, unavailable: "no repository", sash: sash) {
+            if let query = model.base.searchedQuery {
+                let count = model.base.results.count
+                Text("“\(query)” · \(count) \(count == 1 ? "match" : "matches")")
+            }
+        } actions: {
+            if !model.base.query.isEmpty {
+                Button {
+                    model.base.query = ""
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .help("Clear the search")
+                .accessibilityLabel("Clear the search")
+            }
+        } content: {
+            BaseSearchView()
+        }
+    }
+}
+
+/// The body of the Search section: the field (with the `Aa` / `.*` / `\b` toggles, the tool chip and the match count), an
 /// optional subpath scope, and the matches grouped by file. Typing searches after 250 ms from three
 /// characters, Return searches at once; ↑↓ move through the matches and Return opens the highlighted one
-/// in the Files section.
+/// in the inspector's viewer.
 struct BaseSearchView: View {
     @Environment(AppModel.self) private var model
     @FocusState private var focused: Bool
@@ -59,8 +88,9 @@ struct BaseSearchView: View {
                 resultsList(groups, visible: visible)
             }
         }
-        .task {
-            // Entering the section: take the keyboard from the terminal once the field exists.
+        .task(id: model.inspector.focusRequest) {
+            guard model.inspector.takeFocus(for: .search) else { return }
+            // Opening the section: take the keyboard from the terminal once the field exists.
             focused = true
             try? await Task.sleep(for: .milliseconds(60))
             focused = true
@@ -355,9 +385,8 @@ struct BaseSearchView: View {
     }
 
     private func open(_ match: SearchMatch) {
-        model.base.section = .files
-        model.base.selectedPath = match.path
         model.base.open(path: match.path, line: match.line)
+        model.inspector.show(.file)
     }
 }
 

@@ -2,13 +2,13 @@ import SwiftUI
 import ScopeCore
 import ScopeGit
 
-/// The checks of a task's pull request, on the Pull Request tab. One summary row — `✓ n ✗ n ● n` — then the
-/// rows: every check, failures first, in the `.full` layout the tab uses; the failing ones alone until unfolded,
+/// The checks of a task's pull request, in the Pull Request section. One summary row — `✓ n ✗ n ● n` — then the
+/// rows: every check, failures first, in the `.full` layout the section uses; the failing ones alone until unfolded,
 /// capped at `visibleRows` before it scrolls, in `.compact` — the shape it had under the summary band, kept for
 /// any host that needs the list to stay short.
 ///
 /// A row is: state, name, a link to the check's page, and for a failed one **Send to Thread** — the end of its
-/// log and a sentence naming it, pasted into the task's thread. The summary band drives the refresh.
+/// log and a sentence naming it, pasted into the task's thread. The inspector drives the refresh.
 struct TaskPullRequestPanel: View {
     enum Layout { case compact, full }
 
@@ -92,14 +92,18 @@ struct TaskPullRequestPanel: View {
 
     @ViewBuilder private func list(_ checks: [PullRequestCheck]) -> some View {
         if !checks.isEmpty {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(checks) { check in
-                        row(check)
-                    }
+            let rows = VStack(alignment: .leading, spacing: 0) {
+                ForEach(checks) { check in
+                    row(check)
                 }
             }
-            .frame(height: layout == .full ? nil : CGFloat(min(checks.count, Self.visibleRows)) * Self.rowHeight)
+            // The full list sits in the Pull Request section, which scrolls itself and sizes to its content.
+            if layout == .full {
+                rows
+            } else {
+                ScrollView(.vertical) { rows }
+                    .frame(height: CGFloat(min(checks.count, Self.visibleRows)) * Self.rowHeight)
+            }
         }
     }
 

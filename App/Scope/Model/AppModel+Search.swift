@@ -138,8 +138,8 @@ extension AppModel {
             guard let scope = scope(scopeID), let repo = scope.repo(relativePath: repoID) else { return }
             showBase(repo: repo, in: scope)
             base.show(repo: repo)
-            base.section = .files
             base.open(path: path)
+            inspector.show(.file)
         case .sandbox:
             openInEditor(path: root.url.path, file: root.url.appending(path: path).path)
         }

@@ -3,13 +3,6 @@ import ScopeCore
 import ScopeGit
 import ScopeTasks
 
-/// The three sub-sections of the Base panel.
-enum BaseSection: String, CaseIterable, Hashable {
-    case files = "Files"
-    case search = "Search"
-    case history = "History"
-}
-
 /// What the read-only viewer shows.
 enum BaseFileContent: Equatable {
     case loading
@@ -31,12 +24,17 @@ final class BaseModel {
     /// The repository last shown in each scope (graph key): what a scope row falls back to. Written when the panel
     /// shows a repository, so it is not observed — reading it must not redraw the panel that just wrote it.
     @ObservationIgnored var recent: [ScopeID: String] = [:]
-    var section: BaseSection = .files
     private(set) var repoURL: URL?
     private(set) var behind: Int?
     private(set) var isFetching = false
     private(set) var isPulling = false
-    private(set) var tree: FileNode?
+    private(set) var tree: FileNode? {
+        didSet { fileCount = tree.map(Self.countFiles) }
+    }
+    /// Files in `tree`, for the header of a closed Files section; counted once per listing, not per redraw.
+    private(set) var fileCount: Int?
+    /// The open folders of the tree: none when a repository is shown, so it starts at the root.
+    var expansion = FileTreeExpansion()
     var selectedPath: String?
     /// Line the viewer scrolls to after `open(path:line:)`.
     var targetLine: Int?
@@ -76,6 +74,7 @@ final class BaseModel {
         repoURL = repo.url
         behind = nil
         tree = nil
+        expansion = FileTreeExpansion()
         selectedPath = nil
         targetLine = nil
         content = nil
@@ -136,6 +135,10 @@ final class BaseModel {
 
     // MARK: Files
 
+    private static func countFiles(_ node: FileNode) -> Int {
+        node.isDirectory ? node.children.reduce(0) { $0 + countFiles($1) } : 1
+    }
+
     func loadTree() async {
         guard let url = repoURL else { return }
         let generation = generation
@@ -158,6 +161,7 @@ final class BaseModel {
         selectedPath = path
         targetLine = line
         content = .loading
+        expansion.reveal(path)
         Task.detached(priority: .userInitiated) {
             let loaded: BaseFileContent
             do {

@@ -201,10 +201,7 @@ struct DeltaFileList: View {
         .frame(height: 24)
         .background(selected ? Fill.selectedTint : .clear)
         .contentShape(Rectangle())
-        .onTapGesture {
-            model.delta.selectedFile = ref
-            model.delta.focusedHunk = nil
-        }
+        .onTapGesture { model.showDiff(ref) }
     }
 
     private func pathText(_ path: String) -> Text {

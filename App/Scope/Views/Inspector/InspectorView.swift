@@ -1,85 +1,272 @@
 import SwiftUI
+import ScopeCore
+import ScopeGit
+import ScopeTasks
 
-/// Right-hand inspector, about the selection alone: one segmented control in a 30 pt header — Delta, Pull
-/// Request, Base — then the summary band naming the subject, then the panel pinned to the top. ⌘D / ⇧⌘B
-/// switch tabs.
+/// Right-hand inspector, about the selection alone: a 30 pt band naming the subject, level with the window toolbar,
+/// then a column of collapsible sections — Task, Delta, Pull Request, Base, Files, Search, History — and, under
+/// them, one viewer for the diff or the base file last opened.
 ///
-/// Delta and Pull Request follow the selected task; Base follows `AppModel.baseSubject`, which always has a
-/// repository to show, so a repo row or a loose thread still has a Base. Without a task the inspector shows
-/// Base and keeps the task's own tab for the next task (`AppModel.inspectorTab`). The scope-wide views
-/// that used to share this header — the graph, a repo's open pull requests — moved to sheets opened from the
-/// sidebar: with them here the tabs followed two subjects at once and nothing said which applied.
+/// Sections, not tabs: every one is always there, so the column says at a glance what exists, and a closed one costs
+/// a line while its header keeps the essential (`+108 −12`, the branch and its lag, the checks). Several can be open;
+/// the lists among them share the height and the sash between two open lists moves it. Which are open is kept per
+/// scope (`ScopePlace`), separately with and without a task, and comes back as it was left.
+///
+/// The viewer is the departure from a plain VSCode sidebar. A diff or a file squeezed inside its own section shares
+/// the height with every other open list and gets a sliver of a 380 pt panel; under the sections it keeps a real
+/// share whatever is open above, and a Search result opens there without opening Files. It opens on a gesture — a
+/// click on a file, `j` / `k`, a search jump — and ✕ gives its height back.
+///
+/// The loads every header needs run here rather than in the section bodies, so a closed section's summary is current.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
+    /// Height each block section's content asks for, reported by the section.
+    @State private var naturals: [InspectorSection: Double] = [:]
+    @FocusState private var viewerFocused: Bool
+
+    private typealias Layout = InspectorSectionLayout
+    /// A section is its header, its body and the 1 pt rule above it.
+    private static let ruleHeight: Double = 1
+    private static let viewerBarHeight: Double = 22
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
-            // One 30 pt band, level with the window toolbar, so the header reads as a single line across the window.
-            HStack(spacing: 8) {
-                TabStrip(selection: $model.inspectorTab,
-                         items: InspectorTab.allCases.map { ($0, $0.title) },
-                         isEnabled: { !$0.needsTask || model.currentTask != nil },
-                         disabledHelp: "Select a task to see this")
-                    .accessibilityLabel("Panel")
-                Spacer(minLength: 4)
+            InspectorSubjectBand()
+            GeometryReader { geometry in
+                column(total: Double(geometry.size.height))
             }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .frame(maxWidth: .infinity)
-            .background(Surface.panel)
-            Divider()
-            if let task = model.currentTask {
-                TaskSummaryBand(task: task)
+            if let task = model.currentTask, !model.review.comments.isEmpty || model.queuedDelivery(in: task) != nil {
                 Divider()
-            } else if let repo = model.baseRepo {
-                RepoSummaryBand(repo: repo)
-                Divider()
+                ReviewBar(task: task)
             }
-            Group {
-                switch model.inspectorTab {
-                case .delta:
-                    DeltaView()
-                case .pullRequest:
-                    TaskPullRequestView()
-                case .base:
-                    BaseView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Surface.ground)
-    }
-}
-
-/// The band under the tab row when no task is selected: the repo the Base panel shows, so the panel still says
-/// *what* it is about. The task band's counterpart, one row tall.
-private struct RepoSummaryBand: View {
-    let repo: RepoState
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 12))
-                .foregroundStyle(Ink.secondary)
-            Text(repo.shortName)
-                .font(.scopeTitle)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Text("repository")
-                .font(.scopeCaption)
-                .foregroundStyle(Ink.tertiary)
-            Spacer(minLength: 4)
-            Text("No task selected")
-                .font(.scopeCaption)
-                .foregroundStyle(Ink.tertiary)
+        .task(id: model.baseSubject()?.repo.url) {
+            guard let scope = model.currentScope, let repo = model.baseSubject()?.repo else { return }
+            model.base.show(repo: repo)
+            model.base.recent[scope.id] = GraphModel.key(for: repo)
         }
-        .frame(height: 22)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: DeltaLoadKey(task: model.currentTask?.id, mode: model.delta.mode, tick: model.currentTask?.changeTick ?? 0)) {
+            if let task = model.currentTask { await model.delta.load(task: task) }
+        }
+        .task(id: model.currentTask?.id) {
+            guard let task = model.currentTask else { return }
+            await model.review.show(task: task.id)
+            // What notices the pull request a thread opened and binds it, and keeps its checks fresh.
+            while !Task.isCancelled {
+                await model.refreshTaskPullRequest(task)
+                try? await Task.sleep(for: TaskSection.pullRequestRefreshInterval)
+            }
+        }
+    }
+
+    private struct DeltaLoadKey: Hashable {
+        let task: TaskID?
+        let mode: DeltaMode
+        let tick: Int
+    }
+
+    // MARK: Column
+
+    @ViewBuilder
+    private func column(total: Double) -> some View {
+        let items = InspectorSection.allCases.map { section in
+            Layout.Item(section: section,
+                        isOpen: model.isSectionAvailable(section) && model.isSectionOpen(section),
+                        natural: naturals[section] ?? 0)
+        }
+        let chrome = Double(items.count) * (Layout.headerHeight + Self.ruleHeight)
+        let fillOpen = items.contains { $0.isOpen && $0.section.fills }
+        let viewer = resolvedViewer
+        let stack: Double = {
+            guard viewer != nil else { return total }
+            if fillOpen { return (total * (1 - model.inspector.viewerShare)).rounded() }
+            // Nothing above stretches: the sections take what they need and the viewer the rest.
+            let blocks = items.filter { $0.isOpen }.reduce(0) { $0 + $1.natural }
+            return min(chrome + blocks, total * 0.8).rounded()
+        }()
+        let heights = Layout.bodyHeights(available: stack - Double(items.count) * Self.ruleHeight, items: items,
+                                         weights: model.inspector.weights)
+        let content = chrome + heights.values.reduce(0, +)
+        VStack(spacing: 0) {
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    ForEach(InspectorSection.allCases, id: \.self) { section in
+                        sectionView(section, heights: heights)
+                    }
+                }
+            }
+            .scrollDisabled(content <= stack + 0.5)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: stack)
+            if let viewer {
+                viewerPane(viewer, total: total, draggable: fillOpen)
+                    .frame(height: max(0, total - stack))
+            }
+        }
+        .frame(height: total, alignment: .top)
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: InspectorSection, heights: [InspectorSection: Double]) -> some View {
+        let height = heights[section]
+        switch section {
+        case .task:
+            TaskSection(bodyHeight: height, onNatural: natural(for: .task))
+        case .delta:
+            DeltaSection(bodyHeight: height, sash: sash(above: .delta, heights: heights))
+        case .pullRequest:
+            PullRequestSection(bodyHeight: height, onNatural: natural(for: .pullRequest))
+        case .base:
+            BaseSection(bodyHeight: height, onNatural: natural(for: .base))
+        case .files:
+            FilesSection(bodyHeight: height, sash: sash(above: .files, heights: heights))
+        case .search:
+            SearchSection(bodyHeight: height, sash: sash(above: .search, heights: heights))
+        case .history:
+            HistorySection(bodyHeight: height, sash: sash(above: .history, heights: heights))
+        }
+    }
+
+    private func natural(for section: InspectorSection) -> (Double) -> Void {
+        { height in
+            // Rounded, and only on a real change: the report itself relays the column out.
+            let rounded = height.rounded()
+            if abs((naturals[section] ?? -1) - rounded) >= 1 { naturals[section] = rounded }
+        }
+    }
+
+    /// The sash on top of `section`'s header when another open list sits above it: dragging moves height between the
+    /// two and leaves every other list as it is.
+    private func sash(above section: InspectorSection, heights: [InspectorSection: Double]) -> SectionSash? {
+        guard heights[section] != nil else { return nil }
+        let order = InspectorSection.allCases
+        guard let index = order.firstIndex(of: section),
+              let upper = order[..<index].last(where: { $0.fills && heights[$0] != nil }) else { return nil }
+        let inspector = model.inspector
+        let lists = heights.filter { $0.key.fills }
+        return SectionSash(
+            began: { inspector.dragStart = lists },
+            moved: { delta in
+                guard let start = inspector.dragStart else { return }
+                inspector.weights = Layout.resize(heights: start, upper: upper, lower: section, by: delta)
+            },
+            ended: {
+                inspector.dragStart = nil
+                model.persistUIState()
+            }
+        )
+    }
+
+    // MARK: Viewer
+
+    /// The viewer asked for, if it still has something to show: a diff needs the selected file of the selected task in
+    /// a mode that has files, a file needs the base viewer to hold one.
+    private var resolvedViewer: InspectorViewer? {
+        model.inspector.viewer.flatMap(isShowable) == true ? model.inspector.viewer : nil
+    }
+
+    private func isShowable(_ viewer: InspectorViewer) -> Bool {
+        switch viewer {
+        case .diff:
+            guard let task = model.currentTask, model.delta.taskID == task.id, model.delta.mode != .baseVsOrigin,
+                  let ref = model.delta.selectedFile else { return false }
+            return model.delta.file(ref) != nil && model.delta.taskRepo(ref.repo) != nil
+        case .file:
+            return model.base.content != nil
+        }
+    }
+
+    private func viewerPane(_ viewer: InspectorViewer, total: Double, draggable: Bool) -> some View {
+        VStack(spacing: 0) {
+            Divider()
+            viewerBar(viewer)
+                .overlay(alignment: .top) {
+                    if draggable { SashHandle(sash: viewerSash(total: total)) }
+                }
+            Divider()
+            switch viewer {
+            case .diff:
+                if let task = model.currentTask, let ref = model.delta.selectedFile, let file = model.delta.file(ref),
+                   let repo = model.delta.taskRepo(ref.repo) {
+                    DiffView(task: task, repo: repo, ref: ref, file: file)
+                        .modifier(DeltaKeyboard(focused: $viewerFocused))
+                }
+            case .file:
+                BaseFileViewer()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(Surface.ground)
+    }
+
+    /// The viewer's own header: what it shows, back to what it showed before, close.
+    private func viewerBar(_ viewer: InspectorViewer) -> some View {
+        let back = model.inspector.previousViewer.map(isShowable) == true
+        return HStack(spacing: 6) {
+            if back {
+                Button {
+                    model.inspector.goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 9.5, weight: .bold))
+                }
+                .buttonStyle(.iconTight)
+                .foregroundStyle(Ink.secondary)
+                .help(model.inspector.previousViewer == .diff ? "Back to the diff" : "Back to the base file")
+                .accessibilityLabel("Back")
+            }
+            Text(viewer == .diff ? "DIFF" : "BASE FILE")
+                .font(.system(size: 10.5, weight: .semibold))
+                .tracking(0.4)
+                .foregroundStyle(Ink.primary)
+                .fixedSize()
+            Group {
+                switch viewer {
+                case .diff:
+                    if let file = model.delta.selectedDiffFile {
+                        DeltaCounts(additions: file.additions, deletions: file.deletions)
+                    }
+                case .file:
+                    if let repo = model.baseRepo {
+                        Text(repo.shortName)
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer(minLength: 4)
+            Button {
+                model.inspector.closeViewer()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9.5, weight: .bold))
+            }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.secondary)
+            .help("Close the viewer")
+            .accessibilityLabel("Close the viewer")
+        }
+        .padding(.horizontal, 8)
+        .frame(height: Self.viewerBarHeight)
+        .frame(maxWidth: .infinity)
         .background(Surface.panel)
-        .help(repo.url.path)
+    }
+
+    private func viewerSash(total: Double) -> SectionSash {
+        let inspector = model.inspector
+        return SectionSash(
+            began: { inspector.viewerDragStart = inspector.viewerShare },
+            moved: { delta in
+                guard let start = inspector.viewerDragStart, total > 0 else { return }
+                inspector.viewerShare = Layout.clampViewerShare(start - delta / total)
+            },
+            ended: {
+                inspector.viewerDragStart = nil
+                model.persistUIState()
+            }
+        )
     }
 }

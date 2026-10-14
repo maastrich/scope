@@ -29,28 +29,16 @@ enum SidebarItem: Hashable, Codable, Sendable {
     }
 }
 
-/// The inspector panels: Graph / Delta / Base / PRs.
-/// The inspector's three panels, every one about what is selected: the task's delta, the task's pull request
-/// and its checks, and the base checkout of the task's repositories (or of the selected repo when no task is).
-/// The scope-wide views — the graph, a repo's open pull requests — are `GlobalSheet`s opened from the sidebar.
-enum InspectorTab: String, CaseIterable, Codable, Sendable, Hashable {
+/// What the menu commands and the links of the app ask the inspector for (⌘D, ⇧⌘B, a task's menu, a notification):
+/// a section to open and focus. The inspector itself is a column of `InspectorSection`s.
+enum InspectorTab: String, CaseIterable, Sendable, Hashable {
     case delta, pullRequest, base
 
-    /// Segmented-control label.
-    var title: String {
+    var section: InspectorSection {
         switch self {
-        case .delta: "Delta"
-        case .pullRequest: "Pull Request"
-        case .base: "Base"
-        }
-    }
-
-    /// Whether the panel needs a task: Delta and Pull Request have no subject without one, Base falls back
-    /// to the selected repo.
-    var needsTask: Bool {
-        switch self {
-        case .delta, .pullRequest: true
-        case .base: false
+        case .delta: .delta
+        case .pullRequest: .pullRequest
+        case .base: .base
         }
     }
 }

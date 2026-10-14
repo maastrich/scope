@@ -9,8 +9,9 @@ struct ScopePlace: Codable, Sendable, Equatable {
     var selection: SidebarItem?
     /// The thread on screen; tells which thread of a selected task was being read.
     var thread: ThreadID?
-    /// The inspector tab of the scope's tasks (`AppModel.taskInspectorTab`).
-    var taskTab: InspectorTab = .delta
+    /// The open inspector sections (`InspectorModel.sections`); `nil` in a file written before sections, which
+    /// then start from the defaults.
+    var sections: InspectorSections?
 }
 
 struct UIState: Codable, Sendable, Equatable {
@@ -23,8 +24,10 @@ struct UIState: Codable, Sendable, Equatable {
     /// Scopes whose "Loose threads" group is collapsed (expanded by default, so the set holds the exceptions).
     var looseThreadsCollapsed: Set<ScopeID> = []
     var inspectorVisible = false
-    /// The tab of the inspector while a task is selected (`AppModel.taskInspectorTab`).
-    var inspectorTab: InspectorTab = .delta
+    /// Relative heights of the inspector's open lists (`InspectorModel.weights`).
+    var inspectorWeights: [InspectorSection: Double] = [:]
+    /// The share of the inspector column its viewer takes (`InspectorModel.viewerShare`).
+    var inspectorViewerShare: Double = 0.55
     /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
     var basePins: [String: String] = [:]
     /// Points; clamped to `sidebarWidthRange` on restore.
@@ -45,7 +48,7 @@ struct UIState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorTab, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
+        case inspectorVisible, inspectorWeights, inspectorViewerShare, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
     }
 
     init() {}
@@ -59,7 +62,8 @@ struct UIState: Codable, Sendable, Equatable {
         reposShown = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .reposShown)) ?? []
         looseThreadsCollapsed = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .looseThreadsCollapsed)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
-        inspectorTab = (try? container.decodeIfPresent(InspectorTab.self, forKey: .inspectorTab)) ?? .delta
+        inspectorWeights = (try? container.decodeIfPresent([InspectorSection: Double].self, forKey: .inspectorWeights)) ?? [:]
+        inspectorViewerShare = (try? container.decodeIfPresent(Double.self, forKey: .inspectorViewerShare)) ?? 0.55
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]

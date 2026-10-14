@@ -2,7 +2,7 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// The strip above the Delta action bar while the task has review comments: how many, the list to edit them, what
+/// The strip at the foot of the inspector while the task has review comments: how many, the list to edit them, what
 /// is queued, and **Send Review** — to the task's only running thread, or to the one picked from a menu.
 struct ReviewBar: View {
     @Environment(AppModel.self) private var model
@@ -89,7 +89,7 @@ private struct ReviewCommentList: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Button(location(comment)) {
-                    model.delta.selectedFile = DeltaFileRef(repo: comment.repo, path: comment.path)
+                    model.showDiff(DeltaFileRef(repo: comment.repo, path: comment.path))
                 }
                 .buttonStyle(.scopeLink)
                 .font(.scopeValue)

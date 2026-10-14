@@ -1,7 +1,38 @@
 import SwiftUI
 import ScopeGit
 
-/// History section: the last commits of the base (short sha, subject, author, relative date).
+/// The History section: closed, the HEAD commit; open, the last commits of the base.
+struct HistorySection: View {
+    @Environment(AppModel.self) private var model
+    let bodyHeight: Double?
+    var sash: SectionSash?
+
+    var body: some View {
+        CollapsibleSection(section: .history, bodyHeight: bodyHeight, unavailable: "no repository", sash: sash) {
+            if let head = model.base.commits.first {
+                HStack(spacing: 6) {
+                    Text(head.short).font(.scopeValue)
+                    Text(head.subject).truncationMode(.tail)
+                    Text("· \(head.date.formatted(.relative(presentation: .named)))")
+                        .foregroundStyle(Ink.tertiary)
+                        .fixedSize()
+                }
+            }
+        } actions: {
+            Button {
+                Task { await model.base.loadHistory() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .help("Reload the history")
+            .accessibilityLabel("Reload the history")
+        } content: {
+            BaseHistoryView()
+        }
+    }
+}
+
+/// The body of the History section: the last commits of the base (short sha, subject, author, relative date).
 struct BaseHistoryView: View {
     @Environment(AppModel.self) private var model
 

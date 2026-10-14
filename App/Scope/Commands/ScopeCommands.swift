@@ -315,10 +315,10 @@ struct ScopeCommands: Commands {
 
             Divider()
 
-            // Plain-key shortcuts of the Delta panel (they need the panel focused); listed here to be found.
+            // Plain-key shortcuts of the Delta section (they need the list or the diff focused); listed here to be found.
             Menu("Delta") {
-                Button("Next File (j)") { model?.delta.selectNextFile(1) }
-                Button("Previous File (k)") { model?.delta.selectNextFile(-1) }
+                Button("Next File (j)") { model?.delta.selectNextFile(1); model?.inspector.show(.diff) }
+                Button("Previous File (k)") { model?.delta.selectNextFile(-1); model?.inspector.show(.diff) }
                 Divider()
                 Button("Next Hunk (])") { model?.delta.focusHunk(1) }
                 Button("Previous Hunk ([)") { model?.delta.focusHunk(-1) }
