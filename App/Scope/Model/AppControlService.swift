@@ -98,7 +98,7 @@ final class AppControlService: ControlService {
             }
             let slug = task.record.slug
             do {
-                try await model.removeTask(task.id, deleteBranch: params.deleteBranch, force: params.force)
+                try await model.removeTask(task.id, deleteBranch: params.deleteBranch)
             } catch {
                 return .failure(.failed("could not close the task \(slug)", detail: String(describing: error)))
             }

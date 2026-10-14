@@ -120,4 +120,52 @@ import ScopeGit
         try await Task.sleep(for: .milliseconds(200))
         #expect(!server.isRunning)
     }
+
+    @Test func uncommittedChangesAreSavedAndComeBackOnReopen() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "wip", branch: "feat/wip", in: scope.declaration, repos: ["api"])
+        let sandbox = task.repos[0].sandboxURL
+        try scope.write(sandbox, ".gitignore", "build/\n")
+        try await scope.commit(in: sandbox, "ignore build")
+        try scope.write(sandbox, "README.md", "edited\n")
+        try scope.write(sandbox, "new.txt", "untracked\n")
+        try FileManager.default.createDirectory(at: sandbox.appending(path: "build"), withIntermediateDirectories: true)
+        try scope.write(sandbox, "build/out.bin", "cache\n")
+
+        let outcome = try await manager.dismantle(task.id, .archive)
+        let ref = try #require(outcome.record?.repos[0].salvageRef)
+        #expect(outcome.notices.contains(.changesSaved(repo: "api", ref: ref)))
+        #expect(!scope.exists(sandbox))
+        let base = await scope.client(for: api)
+        #expect(try await base.output(["show", "\(ref):new.txt"]) == "untracked")
+        #expect(try await base.output(["show", "\(ref):README.md"]) == "edited")
+        #expect(try await base.output(["ls-tree", "-r", "--name-only", ref]).contains("build/") == false)
+
+        let reopened = try await manager.reopen(task.id)
+        #expect(!reopened.isArchived && reopened.repos[0].state == .active && reopened.repos[0].salvageRef == nil)
+        #expect(try String(contentsOf: sandbox.appending(path: "README.md"), encoding: .utf8) == "edited\n")
+        #expect(try String(contentsOf: sandbox.appending(path: "new.txt"), encoding: .utf8) == "untracked\n")
+        #expect(try await base.hasUncommittedChanges(at: sandbox))
+    }
+
+    @Test func closingDeletesAnUnmergedBranchOnceItsTipIsSaved() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "gone", branch: "feat/gone", in: scope.declaration, repos: ["api"])
+        try scope.write(task.repos[0].sandboxURL, "work.txt", "work\n")
+        try await scope.commit(in: task.repos[0].sandboxURL, "work")
+        let base = await scope.client(for: api)
+        let tip = try await base.output(["rev-parse", "feat/gone"])
+
+        let outcome = try await manager.dismantle(task.id, .close(deleteBranch: true))
+        let saved = try #require(outcome.notices.first)
+        guard case .branchSaved(let repo, let branch, let ref) = saved else { Issue.record("unexpected \(saved)"); return }
+        #expect(repo == "api" && branch == "feat/gone")
+        #expect(!(await base.branchExists("feat/gone")))
+        #expect(try await base.output(["rev-parse", ref]) == tip)
+        #expect(await manager.task(task.id) == nil)
+    }
 }

@@ -55,14 +55,18 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     /// `true` when the task created the branch, `false` when it checked out one that already existed, `nil`
     /// on records written before the flag existed. What tells an undo whether deleting the branch is safe.
     public var branchCreated: Bool?
+    /// The commit holding what the sandbox had not committed when it was removed (`TaskManager.dismantle`),
+    /// under `refs/scope/salvage/` in the base checkout; `nil` when it was clean.
+    public var salvageRef: String?
 
     public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active,
-                branchCreated: Bool? = nil) {
+                branchCreated: Bool? = nil, salvageRef: String? = nil) {
         self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
         self.sandboxPath = sandboxPath
         self.branch = branch
         self.state = state
         self.branchCreated = branchCreated
+        self.salvageRef = salvageRef
     }
 
     public var id: String { repoRelativePath }

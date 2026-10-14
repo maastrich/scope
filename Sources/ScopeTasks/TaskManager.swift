@@ -352,16 +352,16 @@ public actor TaskManager {
 
     /// Removes every sandbox but keeps the branches; the record stays, marked archived. See `dismantle`.
     @discardableResult
-    public func archive(_ id: TaskID, force: Bool = false, teardown: Teardown? = nil) async throws -> TaskRecord {
-        guard let record = try await dismantle(id, .archive, force: force, teardown: teardown).record else {
+    public func archive(_ id: TaskID, teardown: Teardown? = nil) async throws -> TaskRecord {
+        guard let record = try await dismantle(id, .archive, teardown: teardown).record else {
             throw TaskError.persistence("unknown task \(id)")
         }
         return record
     }
 
     /// Removes every sandbox and the record; deletes the local branches when `deleteBranch`. See `dismantle`.
-    public func close(_ id: TaskID, deleteBranch: Bool, force: Bool = false, teardown: Teardown? = nil) async throws {
-        try await dismantle(id, .close(deleteBranch: deleteBranch), force: force, teardown: teardown)
+    public func close(_ id: TaskID, deleteBranch: Bool, teardown: Teardown? = nil) async throws {
+        try await dismantle(id, .close(deleteBranch: deleteBranch), teardown: teardown)
     }
 
     /// The one path that takes a task apart — archive, close, a Retry and the GC all come through here.
@@ -371,11 +371,12 @@ public actor TaskManager {
     /// completes and the record carries `cleanup` until the end, so a run cut short resumes instead of finding
     /// half a task. Running it on a task that is already archived (or already gone, for a close) does nothing.
     ///
-    /// Steps: the dirty-sandbox guardrail (`TaskError.uncommittedChanges` unless `force`), `prepare` (the app hangs
-    /// up the task's threads and cancels its setup), the teardown commands, the worktrees, the task root, then
-    /// the branches and the record for a close (`TaskError.branchNotMerged` unless `force`).
+    /// Steps: `prepare` (the app hangs up the task's threads and cancels its setup), the teardown commands, the
+    /// process sweep, the salvage of uncommitted changes, the worktrees, the task root, then the branches and the
+    /// record for a close. Nothing asks and nothing refuses: what could be lost is saved under
+    /// `refs/scope/salvage/` first (`DismantleNotice.changesSaved`, `.branchSaved`).
     @discardableResult
-    public func dismantle(_ id: TaskID, _ mode: DismantleMode, force: Bool = false, teardown: Teardown? = nil,
+    public func dismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown? = nil,
                           prepare: (@Sendable () async -> Void)? = nil) async throws -> DismantleOutcome {
         while let running = dismantling[id] {
             if running.mode == mode { return try await running.run.value }
@@ -385,7 +386,7 @@ public actor TaskManager {
         // The run clears its own entry before it completes, so a waiter never sees a finished run still listed.
         let run = Task {
             defer { finishDismantle(id, token: token) }
-            return try await runDismantle(id, mode, force: force, teardown: teardown, prepare: prepare)
+            return try await runDismantle(id, mode, teardown: teardown, prepare: prepare)
         }
         dismantling[id] = (token, mode, run)
         return try await run.value
@@ -395,7 +396,7 @@ public actor TaskManager {
         if dismantling[id]?.token == token { dismantling[id] = nil }
     }
 
-    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, force: Bool, teardown: Teardown?,
+    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown?,
                               prepare: (@Sendable () async -> Void)?) async throws -> DismantleOutcome {
         guard var record = records[id] else {
             if mode.isClose { return DismantleOutcome(record: nil) }
@@ -403,7 +404,6 @@ public actor TaskManager {
         }
         if mode == .archive, record.isArchived, record.cleanup == nil { return DismantleOutcome(record: record) }
 
-        try await guardClean(record, force: force)
         record.cleanup = PendingCleanup(mode: mode, since: record.cleanup?.since ?? TaskRecord.roundedToMilliseconds(.now))
         try await save(record)
         do {
@@ -412,6 +412,12 @@ public actor TaskManager {
             let swept = await sweep([record.rootURL])
             if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
             for index in record.repos.indices where record.repos[index].state == .active {
+                // Saved and written down before the folder goes, so a failure in between never loses it.
+                if let ref = try await salvage(record.repos[index], task: record) {
+                    record.repos[index].salvageRef = ref
+                    try await save(record)
+                    notices.append(.changesSaved(repo: record.repos[index].repoRelativePath, ref: ref))
+                }
                 try await removeSandbox(record.repos[index], task: record)
                 record.repos[index].state = .archived
                 try await save(record)
@@ -420,7 +426,7 @@ public actor TaskManager {
             emptyTrashInBackground()
 
             if case .close(let deleteBranch) = mode {
-                if deleteBranch { try await deleteBranches(&record, force: force) }
+                if deleteBranch { notices += try await deleteBranches(record) }
                 do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
                 records[id] = nil
                 return DismantleOutcome(record: nil, notices: notices, stoppedProcesses: swept.stopped.map(\.description))
@@ -437,25 +443,104 @@ public actor TaskManager {
         }
     }
 
-    /// `git branch -d` (or `-D` with `force`) in every repo of the task. An unmerged branch stops the close:
-    /// the sandboxes are gone by then, so the record turns archived and stays for a retry with `force`.
-    private func deleteBranches(_ record: inout TaskRecord, force: Bool) async throws {
+    /// Deletes the task branch in every repo. A branch git calls unmerged (a squash merge looks like that too)
+    /// is deleted all the same once its last commit is kept under `refs/scope/salvage/`.
+    private func deleteBranches(_ record: TaskRecord) async throws -> [DismantleNotice] {
+        var notices: [DismantleNotice] = []
         for repo in record.repos {
             let client = try await baseClient(for: repo.repoRelativePath, task: record)
             do {
-                try await client.deleteBranch(name: repo.branch, force: force)
-            } catch let error as GitError {
-                if !force, error.message.contains("not fully merged") {
-                    record.archivedAt = record.archivedAt ?? TaskRecord.roundedToMilliseconds(.now)
-                    record.cleanup = nil
-                    try? await save(record)
-                    throw TaskError.branchNotMerged(repo: repo.repoRelativePath, branch: repo.branch)
-                }
-                if !error.message.contains("not found") {
+                try await client.deleteBranch(name: repo.branch)
+            } catch let error as GitError where error.message.contains("not fully merged") {
+                let ref = Self.salvageRef(for: record, kind: "branch")
+                do {
+                    try await client.run(["update-ref", ref, "refs/heads/\(repo.branch)"])
+                    try await client.deleteBranch(name: repo.branch, force: true)
+                } catch let error as GitError {
                     throw TaskError.git(repo: repo.repoRelativePath, error)
                 }
+                notices.append(.branchSaved(repo: repo.repoRelativePath, branch: repo.branch, ref: ref))
+            } catch let error as GitError where error.message.contains("not found") {
+                continue
+            } catch let error as GitError {
+                throw TaskError.git(repo: repo.repoRelativePath, error)
             }
         }
+        return notices
+    }
+
+    /// `refs/scope/salvage/<slug>-<id>/<kind>`: shared by every worktree of the repository, so it outlives the
+    /// sandbox, and out of `git branch` and `git stash list`.
+    static func salvageRef(for record: TaskRecord, kind: String) -> String {
+        "\(salvageNamespace)/\(record.slug)-\(record.id.rawValue)/\(kind)"
+    }
+
+    static let salvageNamespace = "refs/scope/salvage"
+
+    /// Commits the sandbox's tracked and untracked changes (ignored files excluded) through a private index — the
+    /// sandbox's own index and the shared stash stay untouched — and points a salvage ref at the commit.
+    /// `nil` when the sandbox is clean or already gone.
+    private func salvage(_ repo: TaskRepo, task: TaskRecord) async throws -> String? {
+        guard FileManager.default.fileExists(atPath: repo.sandboxPath) else { return nil }
+        let client = await registry.client(for: repo.sandboxURL)
+        let sandbox = repo.sandboxURL.filesystemPath
+        do {
+            guard try await client.hasUncommittedChanges(at: repo.sandboxURL) else { return nil }
+            let index = FileManager.default.temporaryDirectory.appending(path: "scope-salvage-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: index) }
+            let environment = ["GIT_INDEX_FILE": index.path,
+                               "GIT_AUTHOR_NAME": "Scope", "GIT_AUTHOR_EMAIL": "scope@localhost",
+                               "GIT_COMMITTER_NAME": "Scope", "GIT_COMMITTER_EMAIL": "scope@localhost"]
+            try await client.run(["-C", sandbox, "read-tree", "HEAD"], environment: environment)
+            try await client.run(["-C", sandbox, "add", "-A"], environment: environment, timeout: .seconds(600))
+            let tree = try await client.run(["-C", sandbox, "write-tree"], environment: environment)
+                .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = "Scope: uncommitted changes of \(task.name) (\(repo.repoRelativePath)) when its sandbox was removed"
+            let commit = try await client.run(["-C", sandbox, "commit-tree", tree, "-p", "HEAD", "-m", message],
+                                              environment: environment)
+                .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let ref = Self.salvageRef(for: task, kind: "changes")
+            try await client.run(["-C", sandbox, "update-ref", ref, commit])
+            return ref
+        } catch let error as GitError {
+            throw TaskError.git(repo: repo.repoRelativePath, error)
+        }
+    }
+
+    /// Brings an archived task back where it was: one worktree per repository on the branch it kept, and the
+    /// changes saved when it was archived put back as uncommitted changes. The app rewrites the context files.
+    @discardableResult
+    public func reopen(_ id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.isArchived, record.cleanup == nil else { return record }
+        var created: [(TaskRepo, branchWasNew: Bool)] = []
+        do {
+            for index in record.repos.indices {
+                let repo = record.repos[index]
+                let (sandbox, isNew) = try await makeSandbox(repoRelativePath: repo.repoRelativePath, task: record,
+                                                             startPoint: .existingBranch(repo.branch))
+                created.append((sandbox, isNew))
+                if let ref = repo.salvageRef {
+                    let client = await registry.client(for: sandbox.sandboxURL)
+                    do {
+                        try await client.run(["-C", sandbox.sandboxURL.filesystemPath, "restore", "--source=\(ref)",
+                                              "--worktree", "--", "."], timeout: .seconds(600))
+                    } catch let error as GitError {
+                        throw TaskError.git(repo: repo.repoRelativePath, error)
+                    }
+                }
+                record.repos[index].state = .active
+                record.repos[index].sandboxPath = sandbox.sandboxPath
+                record.repos[index].salvageRef = nil
+            }
+        } catch {
+            await rollback(created, task: record)
+            throw error
+        }
+        record.archivedAt = nil
+        record.portBase = allocatePort(excluding: id)
+        try await save(record)
+        return record
     }
 
     /// `git worktree prune` on each base checkout (spec §4.3: at startup). Failures are logged, never thrown.
@@ -562,18 +647,6 @@ public actor TaskManager {
             if branchWasNew { try? await client.deleteBranch(name: repo.branch, force: true) }
         }
         removeRootIfNotSandbox(task)
-    }
-
-    private func guardClean(_ record: TaskRecord, force: Bool) async throws {
-        guard !force else { return }
-        for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
-            // `status -C <sandbox>` needs the worktree only, not its base checkout.
-            let client = await registry.client(for: repo.sandboxURL)
-            let dirty: Bool
-            do { dirty = try await client.hasUncommittedChanges(at: repo.sandboxURL) }
-            catch let error as GitError { throw TaskError.git(repo: repo.repoRelativePath, error) }
-            if dirty { throw TaskError.uncommittedChanges(repo: repo.repoRelativePath) }
-        }
     }
 
     /// Moves the worktree into the trash and drops git's record of it. A rename never trips on what git

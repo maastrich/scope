@@ -54,6 +54,8 @@ public struct ProblemAction: Identifiable, Sendable, Equatable {
         case rerunTaskSetup(String)
         /// Runs a task's interrupted archive or close again; the payload is the task id.
         case retryTaskCleanup(String)
+        /// Brings an archived task back with the changes saved when it was archived; the payload is the task id.
+        case reopenTask(String)
         case dismiss
     }
 

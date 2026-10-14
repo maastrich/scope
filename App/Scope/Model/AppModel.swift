@@ -1400,6 +1400,8 @@ final class AppModel {
             }
         case .retryTaskCleanup(let raw):
             if let id = TaskID(rawValue: raw) { Task { await retryCleanup(id) } }
+        case .reopenTask(let raw):
+            if let id = TaskID(rawValue: raw) { Task { await reopenTask(id) } }
         case .dismiss:
             break
         }

@@ -208,10 +208,10 @@ struct TaskContextMenu: View {
         Button("Archive") {
             Task { await model.archiveTask(task.id) }
         }
-        Button("Close Task…", role: .destructive) {
+        Button("Close Task", role: .destructive) {
             Task { await model.closeTask(task.id, deleteBranch: false) }
         }
-        Button("Close Task and Delete Branch…", role: .destructive) {
+        Button("Close Task and Delete Branch", role: .destructive) {
             Task { await model.closeTask(task.id, deleteBranch: true) }
         }
     }

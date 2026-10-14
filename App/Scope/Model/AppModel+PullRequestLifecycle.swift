@@ -116,7 +116,7 @@ extension AppModel {
         if await confirmForce(title: "#\(pr.number) is merged. Close “\(task.name)”?",
                               detail: "Its sandboxes are removed and its branch \(task.branch) is deleted.",
                               button: "Close Task") {
-            await closeTask(task.id, deleteBranch: true, confirmed: true)
+            await closeTask(task.id, deleteBranch: true)
         }
     }
 

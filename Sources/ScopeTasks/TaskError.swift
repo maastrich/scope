@@ -3,10 +3,6 @@ import ScopeGit
 
 /// Failures of `TaskManager`. Git failures are wrapped with the repo they concern.
 public enum TaskError: Error, Sendable, CustomStringConvertible {
-    /// Guardrail (spec §6): the sandbox of `repo` has uncommitted changes; pass `force` after the user confirmed.
-    case uncommittedChanges(repo: String)
-    /// `close(deleteBranch: true)` on a branch not merged into HEAD; pass `force` (→ `branch -D`) after confirmation.
-    case branchNotMerged(repo: String, branch: String)
     /// The base checkout `<scopeRoot>/<repo>` does not exist or is not a git repository.
     case repoNotFound(repo: String)
     /// The repo is already part of the task.
@@ -31,13 +27,9 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case branchNotFound(repo: String, branch: String)
     /// The branch is checked out in another working tree; git refuses a second worktree on it.
     case branchAlreadyCheckedOut(repo: String, branch: String, path: String)
-    /// The teardown command of `repo` failed; its sandbox was left in place. `log` is its output.
-    case teardownFailed(repo: String, summary: String, log: String)
 
     public var description: String {
         switch self {
-        case .uncommittedChanges(let repo): "\(repo) has uncommitted changes"
-        case .branchNotMerged(let repo, let branch): "\(repo): branch \(branch) is not merged"
         case .repoNotFound(let repo): "\(repo) is not a git repository of this scope"
         case .repoAlreadyInTask(let repo): "\(repo) is already part of this task"
         case .noDefaultBranch(let repo): "\(repo): cannot determine the default branch"
@@ -51,8 +43,6 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .branchNotFound(let repo, let branch): "\(repo): no branch \(branch), locally or on origin"
         case .branchAlreadyCheckedOut(let repo, let branch, let path):
             "\(repo): \(branch) is already checked out at \(path) — a branch can only live in one working tree"
-        case .teardownFailed(let repo, let summary, let log):
-            "\(repo): the teardown command failed (\(summary)); the sandbox was kept\n\n\(SetupLog.tail(log))"
         }
     }
 }

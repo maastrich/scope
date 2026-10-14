@@ -171,44 +171,24 @@ import ScopeGit
         #expect(await manager.task(task.id) == grown)
     }
 
-    @Test func closeGuardrailsThenForce() async throws {
+    @Test func closeNeverRefusesAndLosesNothing() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")
         try await scope.makeRepo("web")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "close me", branch: "feat/close-me", in: scope.declaration, repos: ["api", "web"])
-        let webSandbox = task.repos[1].sandboxURL
-        try scope.write(webSandbox, "wip.txt", "dirty\n")
+        try scope.write(task.repos[1].sandboxURL, "wip.txt", "dirty\n")
 
-        do {
-            try await manager.close(task.id, deleteBranch: true)
-            Issue.record("close should refuse a dirty sandbox")
-        } catch let error as TaskError {
-            guard case .uncommittedChanges(let repo) = error else { Issue.record("unexpected \(error)"); return }
-            #expect(repo == "web")
-        }
-        // Nothing was removed: the api sandbox (clean) is still there.
-        #expect(scope.exists(task.repos[0].sandboxURL) && scope.exists(webSandbox))
-
-        // Commit the change: clean, but the branch is now unmerged → branch guardrail.
-        try await scope.commit(in: webSandbox, "wip")
-        do {
-            try await manager.close(task.id, deleteBranch: true)
-            Issue.record("close should refuse to delete an unmerged branch")
-        } catch let error as TaskError {
-            guard case .branchNotMerged(let repo, let branch) = error else { Issue.record("unexpected \(error)"); return }
-            #expect(repo == "web" && branch == "feat/close-me")
-        }
-        #expect(await manager.task(task.id) != nil)   // record kept for a retry
-        let webClient = await scope.client(for: scope.scopeRoot.appending(path: "web"))
-        #expect(await webClient.branchExists("feat/close-me"))
-
-        try await manager.close(task.id, deleteBranch: true, force: true)
+        let outcome = try await manager.dismantle(task.id, .close(deleteBranch: true))
+        #expect(outcome.notices.contains { if case .changesSaved(let repo, _) = $0 { repo == "web" } else { false } })
         #expect(await manager.task(task.id) == nil)
+        let webClient = await scope.client(for: scope.scopeRoot.appending(path: "web"))
         #expect(!(await webClient.branchExists("feat/close-me")))
         #expect(!(await scope.client(for: api).branchExists("feat/close-me")))
         #expect(!scope.exists(task.rootURL))
         #expect(await TaskRecordStore(home: scope.home).loadAll().records.isEmpty)
+        let saved = try await webClient.output(["for-each-ref", "--format=%(refname)", "refs/scope/salvage"])
+        #expect(saved.contains("/changes"))
     }
 
     @Test func archiveRemovesSandboxesKeepsBranchesAndRecord() async throws {
@@ -227,7 +207,7 @@ import ScopeGit
         await #expect(throws: TaskError.self) { try await manager.addRepo(task.id, repo: "api") }
 
         // Close after archive: worktrees are gone, only the branch and the record remain.
-        try await manager.close(task.id, deleteBranch: true, force: true)
+        try await manager.close(task.id, deleteBranch: true)
         #expect(!(await scope.client(for: api).branchExists("feat/park")))
     }
 

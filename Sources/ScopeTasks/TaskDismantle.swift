@@ -31,6 +31,10 @@ public enum DismantleNotice: Sendable, Equatable {
     case teardownFailed(repo: String, summary: String, log: String)
     /// Processes of the task still alive after SIGKILL (`name (pid)`).
     case processesSurvived([String])
+    /// The uncommitted changes of `repo` were saved under `ref` before its sandbox went.
+    case changesSaved(repo: String, ref: String)
+    /// The unmerged branch of `repo` was deleted; its last commit is kept under `ref`.
+    case branchSaved(repo: String, branch: String, ref: String)
 }
 
 /// What a finished dismantle leaves: the archived record (`nil` once closed) and what went wrong on the way.
