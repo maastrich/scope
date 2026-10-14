@@ -48,6 +48,13 @@ import ScopeDrivers
         let prompt = Level1Generator.prompt(seed: seed, otherRepos: ["web", "docs"])
         #expect(prompt.contains("\"purpose\"") && prompt.contains("depends_on"))
         #expect(prompt.contains("docs, web") && prompt.contains("\"Seed.\""))
+        // The purpose is asked as one skill-like sentence drawn from the code, with the README excerpt flagged.
+        #expect(prompt.contains("exactly one plain sentence") && prompt.contains("never the answer to copy"))
+    }
+
+    @Test func aPurposeSpreadOverLinesIsKeptOnOne() throws {
+        let card = try Level1Generator.parse(output: #"{"purpose":"Resolves imports.\n  Work here for hashing."}"#, seed: seed, otherRepos: [])
+        #expect(card.purpose == "Resolves imports. Work here for hashing.")
     }
 
     @Test func generateExpandsHeadlessArgvAndRunsInRepo() async throws {

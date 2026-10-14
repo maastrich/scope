@@ -91,6 +91,11 @@ struct GraphView: View {
                     Button("Re-analyze Everything") {
                         Task { await model.analyzeGraph(scope: scope, withAI: false, force: true) }
                     }
+                    Button("Re-analyze Everything with AI") {
+                        Task { await model.analyzeGraph(scope: scope, withAI: true, force: true) }
+                    }
+                    .disabled(model.level1Unavailability != nil)
+                    .help("Runs the driver again on every repository, the ones it already described included")
                 }
             }
             .disabled(graph.isGenerating || scope.repos.isEmpty)

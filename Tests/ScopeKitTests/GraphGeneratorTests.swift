@@ -97,6 +97,10 @@ import ScopeTasks
         try await generator.generate(scope: scope.declaration, repos: repos)
         #expect(good.calls.withLock { $0 } == 2)
 
+        // Asked for again on unchanged repos whose cards it already wrote: nothing to redo.
+        try await generator.generate(scope: scope.declaration, repos: repos, useLevel1: true)
+        #expect(good.calls.withLock { $0 } == 2)
+
         // Invalid JSON from the driver: L0 card kept, failure reported, generation still succeeds.
         let bad = FakeRunner(output: "I cannot help with that.")
         let failing = GraphGenerator(
@@ -109,6 +113,11 @@ import ScopeTasks
         let phases = failures.all.map(\.phase)
         #expect(phases.count == 4 && phases[0] == .level0 && phases[1] == .level1 && phases[3] == .done)
         if case .level1Failed(let message) = phases[2] { #expect(message.contains("not JSON")) } else { Issue.record("expected level1Failed, got \(phases[2])") }
+
+        // That card is still the quick pass's: an unchanged repo does not keep the driver away from it.
+        let retried = Events()
+        try await failing.generate(scope: scope.declaration, repos: [repos[1]], useLevel1: true) { retried.append($0) }
+        #expect(retried.all.first?.phase == .level0 && bad.calls.withLock { $0 } == 2)
 
         // A manually edited card is neither overwritten nor sent to the driver.
         var manual = kept.repos["web"]!

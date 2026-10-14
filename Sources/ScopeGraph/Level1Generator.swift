@@ -90,7 +90,7 @@ public struct Level1Generator: Sendable {
     /// The JSON schema the driver must follow, as shown in the prompt.
     public static let schema = """
     {
-      "purpose": "string, 1 to 3 sentences: what this repository is for",
+      "purpose": "string, one sentence: what this repository does and when to work in it",
       "stack": ["string: languages, frameworks, notable tools, lowercase"],
       "entrypoints": ["string: relative paths of the main entry points"],
       "related": [{"kind": "depends_on" | "consumed_by", "repo": "string: one of the other repositories"}],
@@ -106,21 +106,28 @@ public struct Level1Generator: Sendable {
         let seedJSON = (try? encoder.encode(Level1Payload(seed: seed))).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         let others = otherRepos.isEmpty ? "(none)" : otherRepos.sorted().joined(separator: ", ")
         return """
-        You are describing the repository in the current directory for a developer who has never seen it. \
-        Read its README, manifests and main source files, then answer with a single JSON object and nothing \
-        else: no prose, no markdown fences, no comments.
+        You are describing the repository in the current directory for a coding agent that has never seen it \
+        and must decide, from one line, whether its task belongs here. Look at what the repository is made of \
+        before what it says about itself: its manifests, its directory layout, its entry points and the main \
+        source files, then the README. Answer with a single JSON object and nothing else: no prose, no \
+        markdown fences, no comments.
 
         Required JSON shape:
         \(schema)
 
         Rules:
-        - "purpose" is required: 1 to 3 plain sentences.
+        - "purpose" is required: exactly one plain sentence, at most 200 characters, written like the \
+        description of a skill — what the repository does, then when to work in it ("Renders the marketing \
+        site from MDX; work here for landing pages, pricing and the blog."). Start with a verb. Say what the \
+        code does, not what the README announces: no tagline, no install instruction, no "This repository", \
+        no project name, no marketing adjective.
         - "related" may only reference these other repositories of the same workspace: \(others). \
         Use an empty array when unsure.
         - "setup" and "test" are shell commands run from the repository root; use null when unknown.
         - Keep every array short (at most 10 items).
 
-        Facts already known (refine or correct them):
+        Facts already known (refine or correct them). The "purpose" below is only the first paragraph of \
+        the README: a starting point to check against the code, never the answer to copy.
         \(seedJSON)
         """
     }
@@ -135,7 +142,9 @@ public struct Level1Generator: Sendable {
             throw Level1Error.invalidSchema("\"purpose\" is required")
         }
         var card = seed
-        card.purpose = purpose
+        // One line whatever came back: the purpose is a list item in every task's context file.
+        card.purpose = purpose.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
         card.stack = clean(payload.stack ?? seed.stack)
         card.entrypoints = clean(payload.entrypoints ?? seed.entrypoints)
         card.tags = clean(payload.tags ?? seed.tags)
