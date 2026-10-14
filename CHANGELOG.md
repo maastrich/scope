@@ -11,6 +11,43 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.14.0](https://github.com/maastrich/scope/releases/tag/v0.14.0) - 2026-10-14
+
+### Added
+
+- **base:** decide which repository the Base panel shows in one tested rule by @maastrich
+- **scopes:** switching scope returns to where you were in it by @maastrich
+- **settings:** choose whether threads opened by agents come to the front by @maastrich
+- **scopes:** switch scope from the keyboard by @maastrich
+- **sidebar:** say what each row is doing, and choose how the list is arranged by @maastrich
+- **scopes:** show every scope as a tile in the sidebar header by @maastrich
+- **base:** follow an agent to the repository it is working in by @maastrich
+- **scopes:** swipe between scopes, reorder them, and name the path on screen by @maastrich
+- **ui:** flat columns, neutral colours and a quiet selection by @maastrich
+- **delta:** leave committing and pushing to the agent by default by @maastrich
+- **ui:** take the chrome's colours from the Mobsuccess charter by @maastrich
+
+### Fixed
+
+- **inspector:** keep Base on the repository you are working in by @maastrich
+- **inspector:** a tab asked for without a task does not become the next task's tab by @maastrich
+- **threads:** a thread or task opened by an agent no longer takes the selection by @maastrich
+- **inspector:** dim the tabs that have nothing to show by @maastrich
+- **ui:** keep the terminal through a colour change and the selection through a scope switch by @maastrich
+
+### Documentation
+
+- **design:** research the information architecture and Arc-style scope switching by @maastrich
+- **design:** record that agent-opened threads and tasks take the selection by @maastrich
+- **design:** record the prototype review decisions by @maastrich
+- **design:** default the sidebar to detailed rows arranged as a tree by @maastrich
+- **design:** add scope logos, tile state precedence and tile overflow by @maastrich
+- **design:** size the tile row to the sidebar and mark working scopes by @maastrich
+- **design:** order scope tiles by importance, keep the chords on declared order by @maastrich
+- **spec:** describe the scope tiles, the Base rule and the flat three-column window by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.13.0...v0.14.0
+
 ## [0.13.0](https://github.com/maastrich/scope/releases/tag/v0.13.0) - 2026-10-13
 
 ### Added
