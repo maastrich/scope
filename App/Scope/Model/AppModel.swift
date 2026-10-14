@@ -19,11 +19,8 @@ final class AppModel {
     private(set) var config: ScopeConfig = .empty {
         didSet {
             // The colour tokens read the theme as they are drawn, so it is set here, before any view that
-            // observes the preferences redraws. The terminals paint their own ground and are told directly.
-            let theme = config.preferences.chromeTheme
-            guard theme != ChromePalette.theme else { return }
-            ChromePalette.theme = theme
-            for session in threads { TerminalAppearance.apply(to: session.terminalView) }
+            // observes the preferences redraws. The terminal keeps its own ground whatever the chrome.
+            ChromePalette.theme = config.preferences.chromeTheme
         }
     }
     /// Sidebar order == `config.scopes` order.

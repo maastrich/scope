@@ -44,15 +44,17 @@ public enum AttentionCounterPlacement: String, Codable, Sendable, CaseIterable {
 
 /// The colours of the app's own chrome — grounds, hairlines, fills and text. The state colours are the same in both.
 public enum ChromeTheme: String, Codable, Sendable, CaseIterable {
+    /// The Mobsuccess 2026 charter, as written in its design system: an Ivory ground with pure-white cards and
+    /// Ink text in light, Onyx with two raised navy surfaces and Ivory text in dark; borders and fills are the
+    /// text colour at the charter's opacities.
+    case brand
     /// Neutral greys: a white or near-black ground, grey chrome one step off it.
     case neutral
-    /// The brand's Ink and Ivory: navy chrome in dark, a blue-grey sidebar on an ivory ground in light.
-    case ink
 
     public var title: String {
         switch self {
+        case .brand: "Brand"
         case .neutral: "Neutral"
-        case .ink: "Ink"
         }
     }
 }
@@ -393,7 +395,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var scopeTileOrder: ScopeTileOrder
     /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
     public var swipeBetweenScopes: Bool
-    /// Neutral by default.
+    /// The brand's by default.
     public var chromeTheme: ChromeTheme
     /// Commit…, Push, Create PR and Merge under the Delta panel. Off by default: committing and shipping is the
     /// agent's work in its thread, and the panel is for reading what it did. Pulling a base checkout, opening a
@@ -431,7 +433,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarArrangement: SidebarArrangement = .tree,
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
-        chromeTheme: ChromeTheme = .neutral,
+        chromeTheme: ChromeTheme = .brand,
         showGitActions: Bool = false,
         automation: AutomationSettings? = nil
     ) {
