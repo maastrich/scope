@@ -62,7 +62,7 @@ enum SidebarMetrics {
     /// this, so its icon sits under its parent's glyph and its title under its parent's name.
     static let indent: CGFloat = 19
     /// Room the hover controls take over the trailing edge of a row.
-    static let hoverControlsWidth: CGFloat = 44
+    static let hoverControlsWidth: CGFloat = 62
     /// Height of a row that carries a second line (Settings ▸ Sidebar ▸ Rows ▸ Detailed); 28 otherwise.
     static let detailedRowHeight: CGFloat = 42
 }

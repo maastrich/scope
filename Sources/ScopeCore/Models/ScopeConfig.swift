@@ -196,7 +196,11 @@ public struct EditorTemplate: Codable, Sendable, Equatable {
                 mentionedPath = true
             }
             if value.contains("{file}") || value.contains("{line}") {
-                guard let target else { continue }
+                guard let target else {
+                    // `--line {line}` on a folder: the flag goes with its value, or it would swallow the path.
+                    if element == "{line}", let last = result.last, last.hasPrefix("-") { result.removeLast() }
+                    continue
+                }
                 value = value.replacingOccurrences(of: "{file}", with: target)
                 if let line {
                     value = value.replacingOccurrences(of: "{line}", with: String(line))

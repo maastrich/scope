@@ -107,6 +107,19 @@ struct TaskRow: View {
     private var hoverControls: some View {
         HStack(spacing: 2) {
             Button {
+                model.openTaskInEditor(task)
+            } label: {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.iconTight)
+            .help("Open Task in Editor (⇧⌘E)")
+            .accessibilityLabel("Open \(task.name) in Editor")
+
+            Button {
                 Task { await model.archiveTask(task.id) }
             } label: {
                 Image(systemName: "archivebox")

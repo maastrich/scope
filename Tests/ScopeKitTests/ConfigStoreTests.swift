@@ -261,6 +261,11 @@ private func sampleConfig(home: URL) -> ScopeConfig {
         #expect(EditorTemplate(argv: ["subl"]).expand(path: "/repo") == ["subl", "/repo"])
     }
 
+    @Test func folderOnlyDropsTheLineFlag() {
+        #expect(EditorTemplate(argv: ["idea", "--line", "{line}", "{file}"]).expand(path: "/repo") == ["idea", "/repo"])
+        #expect(EditorTemplate(argv: ["nova", "-l", "{line}", "{file}"]).expand(path: "/repo") == ["nova", "/repo"])
+    }
+
     @Test func fileAppendedWhenTemplateOnlyMentionsPath() {
         #expect(EditorTemplate(argv: ["subl", "{path}"]).expand(path: "/repo", file: "a.swift") == ["subl", "/repo", "/repo/a.swift"])
     }

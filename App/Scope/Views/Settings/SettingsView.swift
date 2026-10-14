@@ -334,9 +334,9 @@ private struct EditorPicker: View {
     var body: some View {
         SettingsRow("Editor") {
             ScopePicker("Editor", selection: selection, title: selectionTitle) {
-                Text("None").tag(Self.noneTag)
+                Text(automaticTitle).tag(Self.noneTag)
                 ForEach(installedEditors, id: \.rawValue) { editor in
-                    Text(displayName(editor)).tag(editor.rawValue)
+                    Text(editor.displayName).tag(editor.rawValue)
                 }
                 Text("Custom command").tag(Self.customTag)
             }
@@ -355,26 +355,28 @@ private struct EditorPicker: View {
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
         }
-        if let editor = model.config.preferences.editor {
-            SettingsRow("Command") {
-                Text(editor.argv.joined(separator: " "))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Ink.secondary)
-            }
+        if let editor = model.config.preferences.editor, let known = KnownEditor(template: editor) {
+            Text("\(known.displayName) opens each checkout in a window of its own and comes back to it the next time; a file opens inside its checkout. A whole task shows every sandbox side by side.")
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
         }
     }
 
+    /// In the order of `KnownEditor`, not of what is running: a menu that reshuffles is hard to read.
     private var installedEditors: [KnownEditor] {
-        KnownEditor.allCases.filter {
-            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
-        }
+        KnownEditor.allCases.filter(model.installedEditors.contains)
+    }
+
+    /// No editor chosen: the first "Open in Editor" picks one of the installed editors and saves it.
+    private var automaticTitle: String {
+        model.installedEditors.first.map { "Automatic (\($0.displayName))" } ?? "None"
     }
 
     private var selectionTitle: String {
         switch selection.wrappedValue {
-        case Self.noneTag: "None"
+        case Self.noneTag: automaticTitle
         case Self.customTag: "Custom command"
-        case let tag: KnownEditor(rawValue: tag).map(displayName) ?? tag
+        case let tag: KnownEditor(rawValue: tag)?.displayName ?? tag
         }
     }
 
@@ -382,9 +384,7 @@ private struct EditorPicker: View {
         Binding(
             get: {
                 guard let editor = model.config.preferences.editor else { return Self.noneTag }
-                if let known = KnownEditor.allCases.first(where: { $0.template == editor }) {
-                    return known.rawValue
-                }
+                if let known = KnownEditor(template: editor) { return known.rawValue }
                 return Self.customTag
             },
             set: { tag in
@@ -406,17 +406,6 @@ private struct EditorPicker: View {
     private func commitCustomCommand() {
         let argv = customCommand.split(whereSeparator: \.isWhitespace).map(String.init)
         model.updatePreferences { $0.editor = argv.isEmpty ? nil : EditorTemplate(argv: argv) }
-    }
-
-    private func displayName(_ editor: KnownEditor) -> String {
-        switch editor {
-        case .cursor: "Cursor"
-        case .vscode: "Visual Studio Code"
-        case .zed: "Zed"
-        case .sublime: "Sublime Text"
-        case .jetbrains: "JetBrains IDE"
-        case .nova: "Nova"
-        }
     }
 }
 
