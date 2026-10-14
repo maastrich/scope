@@ -89,11 +89,11 @@ extension AppModel {
 
     // MARK: Launch
 
-    /// The known editors installed on this Mac, one that is running first: the editor already open is the one
-    /// the user works in.
+    /// The known editors installed on this Mac, running ones first (the editor already open is the one the user
+    /// works in), each group in `KnownEditor.detectionOrder`.
     var installedEditors: [KnownEditor] {
         let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        let installed = KnownEditor.allCases.filter {
+        let installed = KnownEditor.detectionOrder.filter {
             NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
         }
         return installed.filter { running.contains($0.bundleID) } + installed.filter { !running.contains($0.bundleID) }

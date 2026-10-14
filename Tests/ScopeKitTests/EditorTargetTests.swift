@@ -16,6 +16,12 @@ import ScopeCore
         #expect(KnownEditor(template: EditorTemplate(argv: ["zed", "-n", "{path}"])) == nil)
     }
 
+    @Test func detectionTriesZedFirstAndKnowsEveryEditor() {
+        #expect(KnownEditor.detectionOrder.first == .zed)
+        #expect(Set(KnownEditor.detectionOrder) == Set(KnownEditor.allCases))
+        #expect(KnownEditor.detectionOrder.count == KnownEditor.allCases.count)
+    }
+
     @Test func zedReusesItsWindowAndNeverGetsTheWorkspaceFile() {
         let zed = KnownEditor.zed.template
         #expect(zed.argv(for: folder) == ["zed", "-e", "/s/api"])

@@ -44,6 +44,9 @@ public enum KnownEditor: String, CaseIterable, Sendable {
         }
     }
 
+    /// The order "Open in Editor" tries installed editors in when none was chosen (after the running ones).
+    public static let detectionOrder: [KnownEditor] = [.zed, .cursor, .vscode, .sublime, .jetbrains, .nova]
+
     /// The known editor a stored template stands for; nil for a custom command.
     public init?(template: EditorTemplate) {
         guard let known = Self.allCases.first(where: { $0.template == template }) else { return nil }
