@@ -227,6 +227,18 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         return rootURL
     }
 
+    /// The active sandbox `path` is in (or is), so a thread that wandered into a subfolder still names its
+    /// checkout. nil at the task root of a task of several repositories, and outside the task.
+    public func sandbox(containing path: String) -> TaskRepo? {
+        let path = URL(fileURLWithPath: path).standardizedFileURL.path
+        return activeRepos
+            .filter { repo in
+                let sandbox = repo.sandboxURL.standardizedFileURL.path
+                return path == sandbox || path.hasPrefix(sandbox + "/")
+            }
+            .max { $0.sandboxPath.count < $1.sandboxPath.count }
+    }
+
     /// Variables injected into the task's threads: `SCOPE_TASK` (slug), `SCOPE_TASK_ROOT` (task root path) and,
     /// once allocated, `SCOPE_PORT` (the first of the task's ports).
     public var environment: [String: String] {
