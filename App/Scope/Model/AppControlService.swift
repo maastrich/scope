@@ -89,9 +89,23 @@ final class AppControlService: ControlService {
                 let transcript = TerminalBridge.transcript(of: session)
                 let page = ThreadTranscript.page(transcript.lines, firstLineNumber: transcript.firstLineNumber,
                                                  count: params.lines, cursor: params.cursor)
-                return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title,
-                                                       state: session.displayState.name, page: page)))
+                let state = session.displayState.name
+                guard params.view == .reply else {
+                    return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title,
+                                                           state: state, page: page)))
+                }
+                guard let reply = session.lastReply else {
+                    let why = session.deliversEvents
+                        ? "no turn has ended since Scope started this thread"
+                        : "\(session.profile.name) does not report its answers"
+                    return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
+                                                           page: page, note: "no reply to show (\(why)); its terminal instead:")))
+                }
+                return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
+                                                       reply: reply, terminalEnd: page.toLine)))
             }
+        case .threadWait(let params):
+            return await wait(params, from: origin)
         case .taskClose(let params):
             return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
                                    done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
@@ -104,6 +118,31 @@ final class AppControlService: ControlService {
             }
             return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
         }
+    }
+
+    /// Polls rather than observes: twice a second on a handful of threads costs nothing, and a wait cannot miss a
+    /// state that came and went between two observations — the expectation is cleared only by the driver's report.
+    private func wait(_ params: ThreadWaitParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
+        var sessions: [ThreadSession] = []
+        for raw in params.threads where !sessions.contains(where: { $0.id.rawValue == raw }) {
+            switch target(raw, from: origin) {
+            case .failure(let error): return .failure(error)
+            case .success(let session): sessions.append(session)
+            }
+        }
+        let started = Date.now
+        let deadline = started.addingTimeInterval(TimeInterval(params.effectiveTimeout))
+        var settled = sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now) }
+        while !ThreadWait.isOver(settled, until: params.until), Date.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(500))
+            settled = sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now) }
+        }
+        let entries = zip(sessions, settled).map { session, settled in
+            ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
+                                   settled: settled, reply: session.lastReply)
+        }
+        return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
+                                               waited: Int(Date.now.timeIntervalSince(started).rounded()))))
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.

@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAdapters
 import ScopeCore
 import Testing
 @testable import ScopeControl
@@ -89,5 +90,48 @@ import Testing
         }
         #expect(AutomationPolicy(settings: off).decide(read, from: .user) == .allow)
         #expect(!ControlMethod.threadRead.isMutating && ControlMethod.threadRead.isGated)
+    }
+
+    /// The emulator hands back NUL for cells nothing was drawn in, and TUIs leave tall blank gaps.
+    @Test func theTerminalTextIsCleanedOfWhatOnlyTheEmulatorSaw() {
+        let page = ThreadTranscript.page(["Baked\u{0}\u{0}for 10m", "", "", "", "done\u{7}\u{1b}", "\u{0}\u{0}"],
+                                         firstLineNumber: 0, count: nil, cursor: nil)
+        #expect(page.text == "Baked  for 10m\n\ndone")
+        #expect(page.toLine == 5, "line numbers still count every row, collapsed or not")
+    }
+
+    @Test func theReplyViewIsTheSameCallOnBothSides() throws {
+        let expected = ControlCall.threadRead(ThreadReadParams(thread: "3f9a2c17be04", view: .reply))
+        guard case .call(let call, _) = try ScopeCLI.parse(["thread", "read", "3f9a2c17be04", "--reply"]) else {
+            Issue.record("not a call")
+            return
+        }
+        #expect(call == expected)
+        #expect(MCPBridge.call(tool: "scope_thread_read", arguments: Data(#"{"thread":"3f9a2c17be04","view":"reply"}"#.utf8))
+                == .success(expected))
+        // An older client sends no view: the terminal, as before.
+        let old = try ControlRequest.decode(Data(#"{"rpc":1,"id":"1","method":"thread.read","params":{"thread":"3f9a2c17be04"}}"#.utf8)).get()
+        #expect(old.call == .threadRead(ThreadReadParams(thread: "3f9a2c17be04")))
+    }
+
+    @Test func aReplyIsQuotedAndSaysWhenItWasGiven() throws {
+        let reply = AgentReply(text: "Done: the tests pass.\n" + ThreadTranscript.closeMarker, at: Date(timeIntervalSince1970: 0))
+        let result = ThreadReadResult(thread: "3f9a2c17be04", title: "acme", state: "done", reply: reply, terminalEnd: 42)
+        #expect(result.source == "reply" && result.untrusted && result.fromLine == 42 && result.olderCursor == nil)
+        let rendered = CLIRenderer.text(.read(result))
+        #expect(rendered.hasPrefix("thread 3f9a2c17be04 — acme · last reply at 1970-01-01T00:00:00Z (done)\n"))
+        #expect(rendered.contains(ThreadTranscript.untrustedNotice))
+        #expect(rendered.components(separatedBy: ThreadTranscript.closeMarker).count == 2)
+        let response = ControlResponse.result(id: "1", .read(result))
+        #expect(try ControlResponse.decode(response.encoded(), method: .threadRead).payload == response.payload)
+    }
+
+    @Test func aMissingReplySaysWhyBeforeTheTerminal() {
+        let page = ThreadTranscript.page(["$ ls"], firstLineNumber: 0, count: nil, cursor: nil)
+        let result = ThreadReadResult(thread: "3f9a2c17be04", title: "sh", state: "running", page: page,
+                                      note: "no reply to show (Shell does not report its answers); its terminal instead:")
+        let lines = CLIRenderer.text(.read(result)).components(separatedBy: "\n")
+        #expect(lines[1].hasPrefix("no reply to show"))
+        #expect(lines.contains("$ ls"))
     }
 }

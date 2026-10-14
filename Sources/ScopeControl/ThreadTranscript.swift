@@ -47,14 +47,44 @@ public enum ThreadTranscript {
             total -= slice.removeFirst().count + 1
             start += 1
         }
-        var text = slice.joined(separator: "\n")
+        var text = collapsingBlankRuns(slice).joined(separator: "\n")
         if text.count > maxCharacters { text = String(text.suffix(maxCharacters)) }
-        // Output that prints the closing marker must not be able to end the quote early.
-        text = text.replacingOccurrences(of: closeMarker, with: ">>>>>>>>·end of thread output")
-        return Page(text: text, fromLine: start, toLine: end, olderCursor: start > first ? start : nil)
+        return Page(text: defused(text), fromLine: start, toLine: end, olderCursor: start > first ? start : nil)
+    }
+
+    /// `text` safe to put between the markers: output that prints the closing marker must not be able to end the
+    /// quote early.
+    public static func defused(_ text: String) -> String {
+        text.replacingOccurrences(of: closeMarker, with: ">>>>>>>>·end of thread output")
+    }
+
+    /// A row as a reader wants it: the emulator hands back NUL for cells nothing was drawn in (between words a
+    /// TUI positioned with the cursor, not with spaces) and keeps stray control bytes; both read as noise, and NUL
+    /// cuts some readers' strings short.
+    static func cleaned(_ line: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in line.unicodeScalars {
+            switch scalar.value {
+            case 0: scalars.append(" ")
+            case 0x09: scalars.append(scalar)
+            case 0x01...0x1F, 0x7F: continue
+            default: scalars.append(scalar)
+            }
+        }
+        return String(scalars)
+    }
+
+    /// One blank row where a TUI left several: its redraws leave tall gaps that cost a reader lines, not meaning.
+    static func collapsingBlankRuns(_ lines: [String]) -> [String] {
+        var result: [String] = []
+        result.reserveCapacity(lines.count)
+        for line in lines where !(line.isEmpty && result.last?.isEmpty == true) {
+            result.append(line)
+        }
+        return result
     }
 
     private static func trimmed(_ line: String) -> String {
-        line.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+        cleaned(line).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
     }
 }

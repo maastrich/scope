@@ -46,6 +46,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskArchive(let params): try encoder.encode(wire(params))
         case .gc(let params): try encoder.encode(wire(params))
         case .threadRead(let params): try encoder.encode(wire(params))
+        case .threadWait(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -87,6 +88,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskArchive: .taskArchive(try required(TaskArchiveParams.self))
             case .gc: .gc(try decoder.decode(Params<GCParams>.self, from: data).params ?? GCParams())
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
+            case .threadWait: .threadWait(try required(ThreadWaitParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -172,6 +174,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .task(let result): try encoder.encode(wire(result))
         case .action(let result, _): try encoder.encode(wire(result))
         case .read(let result): try encoder.encode(wire(result))
+        case .wait(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -194,6 +197,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .gc:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
+            case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)
             }
         }
         return ControlResponse(rpc: line.rpc, id: line.id, kind: kind, message: line.message,

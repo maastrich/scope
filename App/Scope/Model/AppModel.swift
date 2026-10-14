@@ -1034,6 +1034,7 @@ final class AppModel {
         guard !session.isAlive else { return }
         autoRelaunchBlocks[session.id] = nil
         guard let scope = scope(session.record.scopeID) else { return }
+        if let initialPrompt, !initialPrompt.isEmpty { session.expectTurn() }
         if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
             // An agent started before `pnpm install` finished works in a sandbox without its dependencies. The
             // thread exists (callers get its id at once) and starts when the setup is over, whatever its outcome.

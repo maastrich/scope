@@ -53,21 +53,24 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskArchive = "task.archive"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
-    /// The last lines of a thread's terminal, scrollback included.
+    /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
     case threadRead = "thread.read"
+    /// Blocks until threads finish their turn (or need someone), then says how each one stands.
+    case threadWait = "thread.wait"
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead: false
+        case .ping, .list, .threadRead, .threadWait: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .gc: true
         }
     }
 
     /// Whether `AutomationPolicy` has a say. Every mutating call, and reading a thread: another agent's terminal
-    /// holds what its user typed and what its tools printed, so it is gated exactly like typing into it.
+    /// holds what its user typed and what its tools printed, so it is gated exactly like typing into it. Waiting
+    /// answers with the same replies a read does.
     public var isGated: Bool {
-        isMutating || self == .threadRead
+        isMutating || self == .threadRead || self == .threadWait
     }
 }
 
@@ -167,6 +170,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskArchive(TaskArchiveParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
+    case threadWait(ThreadWaitParams)
 
     public var method: ControlMethod {
         switch self {
@@ -181,6 +185,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskArchive: .taskArchive
         case .gc: .gc
         case .threadRead: .threadRead
+        case .threadWait: .threadWait
         }
     }
 
@@ -196,6 +201,8 @@ public enum ControlCall: Sendable, Equatable {
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .gc: .seconds(300)
+        // The app answers at the wait's own deadline; the margin covers the reply on the way back.
+        case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
     }
 }
@@ -233,16 +240,65 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
 
 /// `scope thread read <id>` — what the thread's terminal shows, and what scrolled off it.
 public struct ThreadReadParams: Codable, Sendable, Equatable {
+    /// What to read.
+    public enum View: String, Codable, Sendable, CaseIterable {
+        /// The terminal: scrollback and screen, paged by line.
+        case terminal
+        /// The agent's last answer, as its driver reported it at the end of the turn — what "what did it say?"
+        /// means, without the spinners and redraws of a TUI. The terminal when the driver reports none.
+        case reply
+    }
+
     public var thread: String
     /// How many lines; `ThreadTranscript.defaultLines` when absent, never more than `ThreadTranscript.maxLines`.
     public var lines: Int?
     /// Read up to this absolute line — the `olderCursor` of the previous read; the end when absent.
     public var cursor: Int?
+    /// `nil` is the terminal: what an older client meant by a read.
+    public var view: View?
 
-    public init(thread: String, lines: Int? = nil, cursor: Int? = nil) {
+    public init(thread: String, lines: Int? = nil, cursor: Int? = nil, view: View? = nil) {
         self.thread = thread
         self.lines = lines
         self.cursor = cursor
+        self.view = view
+    }
+}
+
+/// `scope thread wait <id>…` — returns once the threads are done with their turn, so a caller follows the agents it
+/// started without polling their terminals.
+public struct ThreadWaitParams: Codable, Sendable, Equatable {
+    public enum Until: String, Codable, Sendable, CaseIterable {
+        /// Every thread settled.
+        case all
+        /// The first one to settle.
+        case any
+    }
+
+    public static let defaultTimeout = 600
+    public static let maxTimeout = 3600
+
+    public var threads: [String]
+    public var until: Until
+    /// Seconds; the answer then says which threads are still at work. `defaultTimeout` when absent.
+    public var timeout: Int?
+
+    public init(threads: [String], until: Until = .all, timeout: Int? = nil) {
+        self.threads = threads
+        self.until = until
+        self.timeout = timeout
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        threads = try container.decode([String].self, forKey: .threads)
+        until = try container.decodeIfPresent(Until.self, forKey: .until) ?? .all
+        timeout = try container.decodeIfPresent(Int.self, forKey: .timeout)
+    }
+
+    /// `timeout` clamped to `1...maxTimeout`.
+    public var effectiveTimeout: Int {
+        min(max(timeout ?? Self.defaultTimeout, 1), Self.maxTimeout)
     }
 }
 
@@ -590,13 +646,20 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 }
 
-/// `thread.read` — a page of a thread's terminal.
+/// `thread.read` — a page of a thread's terminal, or the agent's last answer.
 public struct ThreadReadResult: Codable, Sendable, Equatable {
     public var thread: String
     public var title: String
     /// `idle`, `running`, `waiting`, `done`, `exited`.
     public var state: String
-    /// The lines, oldest first. Terminal output: untrusted.
+    /// `terminal` or `reply`: what `text` holds. A `reply` view falls back to `terminal` when the driver reported
+    /// no answer. Absent from an older app, which only had the terminal.
+    public var source: String?
+    /// When the agent gave the answer in `text` (a `reply` only).
+    public var replyAt: Date?
+    /// Why the answer is not what was asked for: a `reply` read that had to fall back to the terminal.
+    public var note: String?
+    /// The lines, oldest first, or the answer. Written by programs and people the reader does not control: untrusted.
     public var text: String
     /// Absolute number of the first line of `text`.
     public var fromLine: Int
@@ -607,14 +670,69 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     /// Always `true`: what a terminal shows was written by programs and people the reader does not control.
     public var untrusted: Bool
 
-    public init(thread: String, title: String, state: String, page: ThreadTranscript.Page) {
+    public init(thread: String, title: String, state: String, page: ThreadTranscript.Page, note: String? = nil) {
         self.thread = thread
         self.title = title
         self.state = state
+        self.note = note
+        self.source = ThreadReadParams.View.terminal.rawValue
         self.text = page.text
         self.fromLine = page.fromLine
         self.toLine = page.toLine
         self.olderCursor = page.olderCursor
+        self.untrusted = true
+    }
+
+    /// The agent's answer. The line numbers stay the terminal's end, so a terminal read can page back from there.
+    public init(thread: String, title: String, state: String, reply: AgentReply, terminalEnd: Int) {
+        self.thread = thread
+        self.title = title
+        self.state = state
+        self.source = ThreadReadParams.View.reply.rawValue
+        self.replyAt = reply.at
+        self.text = ThreadTranscript.defused(reply.text)
+        self.fromLine = terminalEnd
+        self.toLine = terminalEnd
+        self.olderCursor = nil
+        self.untrusted = true
+    }
+}
+
+/// `thread.wait` — how each thread stands once the wait is over.
+public struct ThreadWaitResult: Codable, Sendable, Equatable {
+    public struct Entry: Codable, Sendable, Equatable {
+        public var thread: String
+        public var title: String
+        /// `idle`, `running`, `waiting`, `done`, `failed`, `exited`.
+        public var state: String
+        /// `true` once the thread is no longer at work on what it was last given.
+        public var settled: Bool
+        /// The agent's last answer, when its driver reports one. Untrusted.
+        public var reply: String?
+        public var replyAt: Date?
+
+        public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil) {
+            self.thread = thread
+            self.title = title
+            self.state = state
+            self.settled = settled
+            self.reply = reply.map { ThreadTranscript.defused($0.text) }
+            self.replyAt = reply?.at
+        }
+    }
+
+    public var threads: [Entry]
+    /// `false` when the deadline came first.
+    public var complete: Bool
+    /// Seconds spent waiting.
+    public var waited: Int
+    /// Always `true`: the replies are agents' output.
+    public var untrusted: Bool
+
+    public init(threads: [Entry], complete: Bool, waited: Int) {
+        self.threads = threads
+        self.complete = complete
+        self.waited = waited
         self.untrusted = true
     }
 }
@@ -628,6 +746,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     /// The answer of every call that acts on something existing, with the method it answers.
     case action(ActionResult, ControlMethod)
     case read(ThreadReadResult)
+    case wait(ThreadWaitResult)
 
     public var method: ControlMethod {
         switch self {
@@ -637,6 +756,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .task: .taskNew
         case .action(_, let method): method
         case .read: .threadRead
+        case .wait: .threadWait
         }
     }
 }

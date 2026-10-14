@@ -110,7 +110,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             switch call.method {
             case .ping, .list:
                 return .allow
-            case .threadStop, .threadClose, .threadSend, .threadRead:
+            case .threadStop, .threadClose, .threadSend, .threadRead, .threadWait:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
                 return .allow
@@ -203,6 +203,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .threadClose(let params): "close the thread \(params.thread)"
         case .threadSend(let params): "type into the thread \(params.thread)"
         case .threadRead(let params): "read the thread \(params.thread)"
+        case .threadWait(let params): "wait for " + params.threads.joined(separator: ", ")
         }
     }
 }

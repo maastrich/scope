@@ -106,17 +106,20 @@ enum HookCLI {
 
         var raw: String?
         var parsedStdin = HookStdin()
+        var truncated = false
         if command.readStdin {
             var data = stdin.readDataToEndOfFile()
             parsedStdin = HookStdin.parse(data)
             if data.count > maxRawBytes {
                 data = data.prefix(maxRawBytes)
                 note("stdin truncated to \(maxRawBytes) bytes")
+                truncated = true
             }
             raw = String(decoding: data, as: UTF8.self)
         }
 
-        guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw) else {
+        guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw,
+                                          rawTruncated: truncated) else {
             note("notification '\(parsedStdin.notificationType ?? "?")' needs nobody; nothing sent")
             return 0
         }
@@ -132,7 +135,8 @@ enum HookCLI {
 
     /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.
     /// An explicit `session_id=` (or `error=`) argument wins over the one lifted from stdin.
-    static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?) -> HookEvent? {
+    static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?,
+                           rawTruncated: Bool = false) -> HookEvent? {
         guard let kind = command.event.resolve(stdin: stdin) else { return nil }
         var payload = command.payload
         if payload[HookEvent.sessionIDKey] == nil, let sessionID = stdin.sessionID {
@@ -146,6 +150,10 @@ enum HookCLI {
         }
         if payload[HookEvent.directoryKey] == nil, let directory = stdin.directory {
             payload[HookEvent.directoryKey] = directory
+        }
+        // A cut `raw` no longer parses, and a long answer is what gets it cut: the answer travels on its own then.
+        if rawTruncated, kind == .turnEnded, let reply = stdin.lastAssistantMessage {
+            payload[HookEvent.replyKey] = String(reply.prefix(maxRawBytes / 2))
         }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }
