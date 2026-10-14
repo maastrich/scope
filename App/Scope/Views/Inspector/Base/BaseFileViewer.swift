@@ -5,7 +5,7 @@ import SwiftUI
 /// jump tinted and centred, the search term highlighted wherever it occurs. No syntax colouring in this pass.
 struct BaseFileViewer: View {
     @Environment(AppModel.self) private var model
-    /// Controls the host puts at the ends of the header (the inspector's viewer: back, maximize, close).
+    /// Controls the host puts at the ends of the header (the viewer column: back, close).
     var leading: AnyView?
     var trailing: AnyView?
 

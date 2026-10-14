@@ -108,9 +108,4 @@ import Testing
         #expect(abs((after[.delta] ?? 0) - ((start[.delta] ?? 0) + 40)) < 0.001)
     }
 
-    @Test func viewerShareStaysUsable() {
-        #expect(Layout.clampViewerShare(0.05) == 0.2)
-        #expect(Layout.clampViewerShare(0.95) == 0.8)
-        #expect(Layout.clampViewerShare(0.5) == 0.5)
-    }
 }

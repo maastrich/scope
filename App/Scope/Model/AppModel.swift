@@ -642,7 +642,8 @@ final class AppModel {
         }
         inspectorShown = state.inspectorVisible
         inspector.weights = state.inspectorWeights
-        inspector.viewerShare = InspectorSectionLayout.clampViewerShare(state.inspectorViewerShare)
+        inspector.viewerShare = min(max(state.viewerShare, InspectorModel.viewerShareRange.lowerBound),
+                                    InspectorModel.viewerShareRange.upperBound)
         places = state.places.filter { scope($0.key) != nil }
         base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
         inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
@@ -692,7 +693,7 @@ final class AppModel {
         state.looseThreadsCollapsed = Set(scopes.filter { !$0.looseThreadsShown }.map(\.id))
         state.inspectorVisible = inspectorShown
         state.inspectorWeights = inspector.weights
-        state.inspectorViewerShare = inspector.viewerShare
+        state.viewerShare = inspector.viewerShare
         state.basePins = base.pins
         state.places = places
         state.inspectorWidth = inspectorWidth

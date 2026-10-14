@@ -41,4 +41,22 @@ extension AppModel {
         delta.focusedHunk = nil
         if ref != nil { inspector.show(.diff) }
     }
+
+    /// The viewer asked for, if it still has something to show: a diff needs the selected file of the selected task in
+    /// a mode that has files, a file needs the base viewer to hold one. `nil` keeps the viewer column off screen.
+    var shownViewer: InspectorViewer? {
+        guard let viewer = inspector.viewer, isShowable(viewer) else { return nil }
+        return viewer
+    }
+
+    func isShowable(_ viewer: InspectorViewer) -> Bool {
+        switch viewer {
+        case .diff:
+            guard let task = currentTask, delta.taskID == task.id, delta.mode != .baseVsOrigin,
+                  let ref = delta.selectedFile else { return false }
+            return delta.file(ref) != nil && delta.taskRepo(ref.repo) != nil
+        case .file:
+            return base.content != nil
+        }
+    }
 }

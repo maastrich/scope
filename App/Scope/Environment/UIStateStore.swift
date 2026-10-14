@@ -26,8 +26,8 @@ struct UIState: Codable, Sendable, Equatable {
     var inspectorVisible = false
     /// Relative heights of the inspector's open lists (`InspectorModel.weights`).
     var inspectorWeights: [InspectorSection: Double] = [:]
-    /// The share of the inspector column its viewer takes (`InspectorModel.viewerShare`).
-    var inspectorViewerShare: Double = 0.55
+    /// The viewer column's share of the width beside the inspector (`InspectorModel.viewerShare`).
+    var viewerShare: Double = InspectorModel.defaultViewerShare
     /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
     var basePins: [String: String] = [:]
     /// Points; clamped to `sidebarWidthRange` on restore.
@@ -48,7 +48,7 @@ struct UIState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorWeights, inspectorViewerShare, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
+        case inspectorVisible, inspectorWeights, viewerShare, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
     }
 
     init() {}
@@ -63,7 +63,7 @@ struct UIState: Codable, Sendable, Equatable {
         looseThreadsCollapsed = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .looseThreadsCollapsed)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorWeights = (try? container.decodeIfPresent([InspectorSection: Double].self, forKey: .inspectorWeights)) ?? [:]
-        inspectorViewerShare = (try? container.decodeIfPresent(Double.self, forKey: .inspectorViewerShare)) ?? 0.55
+        viewerShare = (try? container.decodeIfPresent(Double.self, forKey: .viewerShare)) ?? InspectorModel.defaultViewerShare
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]

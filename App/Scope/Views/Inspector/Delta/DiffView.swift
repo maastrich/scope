@@ -16,7 +16,7 @@ struct DiffView: View {
     let repo: TaskRepo
     let ref: DeltaFileRef
     let file: DiffFile
-    /// Controls the host puts at the ends of the header (the inspector's viewer: back, maximize, close), so the
+    /// Controls the host puts at the ends of the header (the viewer column: back, close), so the
     /// viewer has one header rather than its own bar over this one.
     var leading: AnyView?
     var trailing: AnyView?

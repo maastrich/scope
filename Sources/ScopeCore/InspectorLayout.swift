@@ -177,10 +177,6 @@ public enum InspectorSectionLayout {
         return result
     }
 
-    /// The share of the column the viewer under the sections takes, clamped so both it and the sections stay usable.
-    public static func clampViewerShare(_ share: Double) -> Double {
-        min(max(share, 0.2), 0.8)
-    }
 }
 
 /// Which folders of a file tree are open, by path. Empty — the root alone — whenever a tree is shown anew: an outline

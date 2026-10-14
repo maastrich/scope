@@ -11,6 +11,8 @@ import ScopeCore
 /// are drag handles (widths persisted in `UIStateStore`).
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    /// The window's width, for the viewer column's share of what the sidebar and the inspector leave.
+    @State private var windowWidth: Double = 0
 
     var body: some View {
         @Bindable var model = model
@@ -27,6 +29,15 @@ struct RootView: View {
                 ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, label: "Sidebar width")
             }
             SceneView()
+            // The diff or base file opened from the inspector reads beside it, the height of the window, rather than
+            // under its sections (`InspectorViewerColumn`).
+            if inspectorPresented.wrappedValue, model.shownViewer != nil {
+                ColumnResizeHandle(width: viewerWidth, growsWithDrag: false, label: "Viewer width")
+                InspectorViewerColumn()
+                    .id(theme)
+                    .frame(width: viewerWidth.wrappedValue)
+                    .transition(.move(edge: .trailing))
+            }
             if inspectorPresented.wrappedValue {
                 ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, label: "Inspector width")
                 InspectorView()
@@ -35,6 +46,7 @@ struct RootView: View {
                     .transition(.move(edge: .trailing))
             }
         }
+        .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { windowWidth = $0 }
         .background(Surface.ground)
         .toolbarBackground(Surface.surface, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
@@ -87,6 +99,18 @@ struct RootView: View {
         Binding(
             get: { model.inspectorWidth },
             set: { model.inspectorWidth = min(max($0, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound) }
+        )
+    }
+
+    /// The viewer column in points, read from and written to its share of the width the terminal and it divide.
+    private var viewerWidth: Binding<Double> {
+        let range = InspectorModel.viewerShareRange
+        let shared = max(1, windowWidth
+            - (sidebarPresented ? model.sidebarWidth + 1 : 0)
+            - (inspectorPresented.wrappedValue ? model.inspectorWidth + 1 : 0) - 1)
+        return Binding(
+            get: { (model.inspector.viewerShare * shared).rounded() },
+            set: { model.inspector.viewerShare = min(max($0 / shared, range.lowerBound), range.upperBound) }
         )
     }
 

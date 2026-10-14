@@ -1,7 +1,7 @@
 import Foundation
 import ScopeCore
 
-/// What the viewer under the inspector's sections shows: the diff of the file selected in Delta, or the base file
+/// What the viewer column beside the inspector shows: the diff of the file selected in Delta, or the base file
 /// opened from Files or Search.
 enum InspectorViewer: Hashable, Sendable {
     case diff, file
@@ -22,14 +22,12 @@ final class InspectorModel {
     var sections = InspectorSections.defaults
     /// Relative heights of the open lists, as left by the last drag. Global: a habit of the eye, not of a scope.
     var weights: [InspectorSection: Double] = [:]
-    /// The share of the column the viewer takes while it is open and a list sits above it.
-    var viewerShare = 0.55
+    /// The viewer column's share of the width the sidebar and the inspector leave, the terminal taking the rest. A share
+    /// rather than points, so half stays half when the window or the other columns change; dragged, remembered.
+    var viewerShare: Double = InspectorModel.defaultViewerShare
     /// What the viewer shows, `nil` when closed. Only a gesture opens it — a click on a file, `j` / `k`, a search
     /// jump — so a task comes up with its list, not with a diff nobody asked for.
     var viewer: InspectorViewer?
-    /// The viewer fills the column, the sections out of the way, for a diff that needs the width of every line and
-    /// the height of the panel. Not saved: a look, not a layout.
-    var viewerMaximized = false
     /// What the viewer showed before, for its back button.
     private(set) var previousViewer: InspectorViewer?
     /// A section that should take the keyboard (⌘D, opening Search), with a counter so asking twice asks again.
@@ -37,7 +35,9 @@ final class InspectorModel {
     /// The list heights when a sash drag started; the drag is measured from there, not accumulated.
     @ObservationIgnored private var focusToken = 0
     @ObservationIgnored var dragStart: [InspectorSection: Double]?
-    @ObservationIgnored var viewerDragStart: Double?
+
+    nonisolated static let defaultViewerShare: Double = 0.5
+    nonisolated static let viewerShareRange: ClosedRange<Double> = 0.2...0.8
 
     func show(_ viewer: InspectorViewer) {
         if self.viewer != viewer { previousViewer = self.viewer }
@@ -45,7 +45,6 @@ final class InspectorModel {
     }
 
     func closeViewer() {
-        viewerMaximized = false
         previousViewer = nil
         viewer = nil
     }
