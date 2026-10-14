@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.17.0](https://github.com/maastrich/scope/releases/tag/v0.17.0) - 2026-10-14
+
+### Added
+
+- **inspector:** collapsible sections, a reading column, and file links from the terminal ([#31](https://github.com/maastrich/scope/pull/31)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.16.1...v0.17.0
+
 ## [0.16.1](https://github.com/maastrich/scope/releases/tag/v0.16.1) - 2026-10-14
 
 ### Fixed
