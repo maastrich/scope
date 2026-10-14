@@ -105,6 +105,10 @@ extension AppModel {
         if let editor = config.preferences.editor { return editor }
         guard let detected = installedEditors.first else { return nil }
         updatePreferences { $0.editor = detected.template }
+        // Said once, at the moment it is decided: with several editors installed the guess can be the wrong one.
+        problems.report(Problem(severity: .info, title: "Opening in \(detected.displayName)",
+                                detail: "No editor was chosen, so Scope picked one that is installed. Change it in Settings.",
+                                scopeID: nil, actions: [ProblemAction(title: "Open Settings", kind: .openSettings)]))
         return detected.template
     }
 

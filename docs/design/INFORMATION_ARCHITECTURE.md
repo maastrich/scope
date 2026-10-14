@@ -619,6 +619,14 @@ count was already one (⌘E); it was the landing that was wrong.
 - **Palette**: the current task's entry and sandboxes come before the base checkouts, and each row says which
   checkout it is ("sandbox · branch", "base checkout · branch").
 
+**Checked by running** the new arguments against Zed 1.23.3 and Cursor 3.10.20, through the tool in each app
+bundle with launchd's bare `PATH`: a folder, a file of an unopened sandbox, a `.code-workspace`, each twice — one
+window, found again. With several folders Zed's `-e` adds the missing ones to a window that already holds one of
+them, so ⇧⌘E after ⌘E turns the sandbox's window into the task's.
+**Not tried:** Sublime Text, JetBrains and Nova, not installed here — their arguments and the path of their
+bundled tool are from their documentation. The hover button, the *Automatic* label and the palette rows were
+built but not looked at: nothing here can press a key in the app.
+
 ## 8. Open questions
 
 - **Should Base browse the sandbox too?** In a task, "the files" most often means the worktree the agent is
