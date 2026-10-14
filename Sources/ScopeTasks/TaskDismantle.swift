@@ -29,15 +29,20 @@ public struct PendingCleanup: Codable, Sendable, Equatable {
 public enum DismantleNotice: Sendable, Equatable {
     /// The teardown command of `repo` failed; the sandbox was removed anyway.
     case teardownFailed(repo: String, summary: String, log: String)
+    /// Processes of the task still alive after SIGKILL (`name (pid)`).
+    case processesSurvived([String])
 }
 
 /// What a finished dismantle leaves: the archived record (`nil` once closed) and what went wrong on the way.
 public struct DismantleOutcome: Sendable, Equatable {
     public var record: TaskRecord?
     public var notices: [DismantleNotice]
+    /// Processes the sweep stopped (`name (pid)`): what the threads left running.
+    public var stoppedProcesses: [String]
 
-    public init(record: TaskRecord?, notices: [DismantleNotice] = []) {
+    public init(record: TaskRecord?, notices: [DismantleNotice] = [], stoppedProcesses: [String] = []) {
         self.record = record
         self.notices = notices
+        self.stoppedProcesses = stoppedProcesses
     }
 }

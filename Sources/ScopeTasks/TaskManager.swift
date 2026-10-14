@@ -13,6 +13,8 @@ public actor TaskManager {
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
     private let ports: Range<Int>
+    /// Stops the processes left under a task's folders (`ProcessSweep.stop`); a stub in tests that must not kill.
+    private let sweep: @Sendable ([URL]) async -> ProcessSweep.Result
     private var records: [TaskID: TaskRecord] = [:]
     /// The dismantle running for a task, so a second request joins it instead of racing it (`dismantle`).
     private var dismantling: [TaskID: (token: UUID, mode: DismantleMode, run: Task<DismantleOutcome, any Error>)] = [:]
@@ -20,8 +22,10 @@ public actor TaskManager {
 
     /// - Parameter ports: where `SCOPE_PORT` blocks come from (`PortAllocator.range(debugBuild:)` in the app).
     public init(home: URL, registry: GitClientRegistry, store: TaskRecordStore,
-                ports: Range<Int> = PortAllocator.range) {
+                ports: Range<Int> = PortAllocator.range,
+                sweep: @escaping @Sendable ([URL]) async -> ProcessSweep.Result = { await ProcessSweep.stop(under: $0) }) {
         self.ports = ports
+        self.sweep = sweep
         self.home = home
         self.registry = registry
         self.store = store
@@ -404,24 +408,27 @@ public actor TaskManager {
         try await save(record)
         do {
             await prepare?()
-            let notices = await runTeardown(record, teardown)
+            var notices = await runTeardown(record, teardown)
+            let swept = await sweep([record.rootURL])
+            if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
             for index in record.repos.indices where record.repos[index].state == .active {
-                try await removeSandbox(record.repos[index], task: record, force: force)
+                try await removeSandbox(record.repos[index], task: record)
                 record.repos[index].state = .archived
                 try await save(record)
             }
             try removeRoot(record)
+            emptyTrashInBackground()
 
             if case .close(let deleteBranch) = mode {
                 if deleteBranch { try await deleteBranches(&record, force: force) }
                 do { try await store.delete(id) } catch { throw TaskError.persistence(String(describing: error)) }
                 records[id] = nil
-                return DismantleOutcome(record: nil, notices: notices)
+                return DismantleOutcome(record: nil, notices: notices, stoppedProcesses: swept.stopped.map(\.description))
             }
             record.archivedAt = record.archivedAt ?? TaskRecord.roundedToMilliseconds(.now)
             record.cleanup = nil
             try await save(record)
-            return DismantleOutcome(record: record, notices: notices)
+            return DismantleOutcome(record: record, notices: notices, stoppedProcesses: swept.stopped.map(\.description))
         } catch {
             // Whatever was removed is already on the record; the failure goes on it too, for the next attempt.
             record.cleanup?.error = String(describing: error)
@@ -569,15 +576,52 @@ public actor TaskManager {
         }
     }
 
-    private func removeSandbox(_ repo: TaskRepo, task: TaskRecord, force: Bool) async throws {
+    /// Moves the worktree into the trash and drops git's record of it. A rename never trips on what git
+    /// refuses to remove (submodules, a lock, files a process wrote a moment ago) and never times out on a
+    /// sandbox of several gigabytes; the uncommitted-changes guardrail has already run.
+    private func removeSandbox(_ repo: TaskRepo, task: TaskRecord) async throws {
         let client = try await baseClient(for: repo.repoRelativePath, task: task)
-        do {
-            try await client.removeWorktree(at: repo.sandboxURL, force: force)
-        } catch let error as WorktreeError {
-            throw TaskError.worktree(repo: repo.repoRelativePath, error)
-        } catch let error as GitError {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: repo.sandboxPath) {
+            let admin = Self.worktreeAdminDirectory(of: repo.sandboxURL)
+            let trash = ScopeHome.trashURL(home: home)
+            let destination = trash.appending(path: "\(UUID().uuidString)-\(repo.sandboxURL.lastPathComponent)")
+            do {
+                try fileManager.createDirectory(at: trash, withIntermediateDirectories: true)
+                try fileManager.moveItem(at: repo.sandboxURL, to: destination)
+            } catch {
+                throw TaskError.persistence("could not remove \(repo.sandboxPath): \(error.localizedDescription)")
+            }
+            // `prune` skips a locked worktree even when its folder is gone.
+            if let admin { try? fileManager.removeItem(at: admin.appending(path: "locked")) }
+        }
+        do { try await client.prune() } catch let error as GitError {
             throw TaskError.git(repo: repo.repoRelativePath, error)
         }
+    }
+
+    /// `<base>/.git/worktrees/<name>`, read from the worktree's `.git` file (`gitdir: …`).
+    static func worktreeAdminDirectory(of sandbox: URL) -> URL? {
+        guard let text = try? String(contentsOf: sandbox.appending(path: ".git"), encoding: .utf8),
+              let line = text.split(separator: "\n").first(where: { $0.hasPrefix("gitdir:") }) else { return nil }
+        let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
+        return path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+            : sandbox.appending(path: path, directoryHint: .isDirectory).standardizedFileURL
+    }
+
+    /// Deletes everything in the trash. The launch GC calls it too, for what a quit interrupted.
+    public nonisolated func emptyTrash() {
+        let trash = ScopeHome.trashURL(home: home)
+        let fileManager = FileManager.default
+        for item in (try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil)) ?? [] {
+            do { try fileManager.removeItem(at: item) } catch {
+                Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
+            }
+        }
+    }
+
+    private nonisolated func emptyTrashInBackground() {
+        Task.detached(priority: .background) { [self] in emptyTrash() }
     }
 
     /// Deletes the task root (projection files, empty folders) — for a one-repository scope the root is the

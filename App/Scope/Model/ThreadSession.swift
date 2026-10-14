@@ -202,16 +202,21 @@ final class ThreadSession: Identifiable {
 
     /// SIGHUP now (what Terminal.app does when its window closes), SIGKILL if the same pid is still alive
     /// after `seconds`. The exit path then runs normally through `processTerminated`.
+    ///
+    /// The shell leads its own process group (the PTY made it a session leader): the group gets the signal too,
+    /// so what it started without job control goes with it. Detached processes are the task sweep's job.
     func stop(escalateAfter seconds: Double = 3) {
         guard let view = _terminalView, view.process.running else { return }
         let pid = view.process.shellPid
         guard pid > 0 else { return }
         kill(pid, SIGHUP)
+        if getpgid(pid) == pid { kill(-pid, SIGHUP) }
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard let self, let view = self._terminalView, view.process.running, view.process.shellPid == pid else { return }
             Log.threads.warning("thread \(self.id.rawValue, privacy: .public): pid \(pid) ignored SIGHUP, sending SIGKILL")
             kill(pid, SIGKILL)
+            if getpgid(pid) == pid { kill(-pid, SIGKILL) }
         }
     }
 

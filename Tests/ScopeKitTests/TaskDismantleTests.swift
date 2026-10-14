@@ -84,4 +84,40 @@ import ScopeGit
         #expect(archived.isArchived && archived.cleanup == nil && archived.repos.allSatisfy { $0.state == .archived })
         #expect(!scope.exists(task.rootURL))
     }
+
+    @Test func aLockedWorktreeGoesToTheTrashAndOutOfGitsList() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "locked", branch: "feat/locked", in: scope.declaration, repos: ["api"])
+        let base = await scope.client(for: api)
+        _ = try await base.output(["worktree", "lock", task.repos[0].sandboxPath])
+
+        let archived = try await manager.archive(task.id)
+        #expect(archived.isArchived && !scope.exists(task.rootURL))
+        let worktrees = try await base.output(["worktree", "list", "--porcelain"])
+        #expect(!worktrees.contains(task.slug))
+
+        manager.emptyTrash()
+        let trash = ScopeHome.trashURL(home: scope.home)
+        #expect(((try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []).isEmpty)
+    }
+
+    @Test func whatTheThreadsLeftRunningIsStopped() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "server", branch: "feat/server", in: scope.declaration, repos: ["api"])
+        let server = Process()
+        server.executableURL = URL(fileURLWithPath: "/bin/sh")
+        server.arguments = ["-c", "trap '' TERM HUP; sleep 60 & wait"]
+        server.currentDirectoryURL = task.repos[0].sandboxURL
+        try server.run()
+        try await Task.sleep(for: .milliseconds(200))
+
+        let outcome = try await manager.dismantle(task.id, .archive)
+        #expect(!outcome.stoppedProcesses.isEmpty && !outcome.notices.contains { if case .processesSurvived = $0 { true } else { false } })
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!server.isRunning)
+    }
 }

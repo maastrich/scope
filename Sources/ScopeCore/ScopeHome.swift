@@ -113,4 +113,10 @@ public enum ScopeHome {
     public static func sandboxesURL(home: URL) -> URL {
         home.appending(path: "sandboxes", directoryHint: .isDirectory)
     }
+
+    /// `<home>/sandboxes/.trash/`: removed sandboxes wait here to be deleted. A rename into it is instant
+    /// (same volume) and keeps the Spotlight marker's protection; the deletion happens in the background.
+    public static func trashURL(home: URL) -> URL {
+        sandboxesURL(home: home).appending(path: ".trash", directoryHint: .isDirectory)
+    }
 }
