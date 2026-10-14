@@ -63,7 +63,9 @@ enum ScopeSwipe {
             let outcome = phase.contains(.cancelled) ? .stay : current.end(at: event.timestamp)
             keepsMomentum = true
             handlers?.onEnd(outcome, current.velocity(at: event.timestamp), current.width)
-            return true
+            // The list still gets the end of the gesture it saw begin: its scroll view settles an overscroll and
+            // hides its scrollers on it. The momentum after it stays with the sidebar.
+            return false
         }
         let sign: CGFloat = event.isDirectionInvertedFromDevice ? 1 : -1
         let axis = current.move(dx: event.scrollingDeltaX * sign, dy: event.scrollingDeltaY, at: event.timestamp)
