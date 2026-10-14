@@ -28,6 +28,9 @@ extension AppModel {
     /// ⌘D, ⇧⌘B, a task's menu, a notification: open the section — never close it — and give it the keyboard.
     func revealSection(_ section: InspectorSection) {
         inspectorShown = true
+        // A request nothing can take now must not wait: it would take the keyboard from the terminal whenever the
+        // section next appears.
+        guard isSectionAvailable(section) else { return }
         setSection(section, open: true)
         inspector.requestFocus(section)
     }

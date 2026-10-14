@@ -57,6 +57,32 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
 
     private func header(open: Bool, available: Bool) -> some View {
         HStack(spacing: 6) {
+            toggleArea(open: open, available: available)
+            if available {
+                accessories
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 8)
+        .frame(height: InspectorSectionLayout.headerHeight)
+        .frame(maxWidth: .infinity)
+        .background(Surface.panel)
+        .opacity(available ? 1 : 0.55)
+        .onHover { hovering = $0 }
+        .overlay(alignment: .top) {
+            if let sash { SashHandle(sash: sash) }
+        }
+        .help(available ? help : "")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(section.title)
+        .accessibilityValue(open ? "expanded" : "collapsed")
+        .accessibilityAction(named: open ? "Collapse" : "Expand") { model.toggleSection(section) }
+    }
+
+    /// Chevron, title and summary: the part of the header a click folds. The accessories sit outside it, so opening
+    /// the mode or repository menu does not fold the section under the pointer.
+    private func toggleArea(open: Bool, available: Bool) -> some View {
+        HStack(spacing: 6) {
             Image(systemName: open ? "chevron.down" : "chevron.right")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Ink.tertiary)
@@ -95,27 +121,10 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
                         .allowsHitTesting(hovering)
                 }
             }
-            if available {
-                accessories
-            }
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 8)
-        .frame(height: InspectorSectionLayout.headerHeight)
-        .frame(maxWidth: .infinity)
-        .background(Surface.panel)
-        .opacity(available ? 1 : 0.55)
+        .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { if available { model.toggleSection(section) } }
-        .onHover { hovering = $0 }
-        .overlay(alignment: .top) {
-            if let sash { SashHandle(sash: sash) }
-        }
-        .help(available ? help : "")
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(section.title)
-        .accessibilityValue(open ? "expanded" : "collapsed")
-        .accessibilityAction(named: open ? "Collapse" : "Expand") { model.toggleSection(section) }
     }
 }
 
