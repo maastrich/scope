@@ -16,7 +16,16 @@ final class AppModel {
     let notifier = ThreadNotifier()
     /// ⌘K.
     var paletteShown = false
-    private(set) var config: ScopeConfig = .empty
+    private(set) var config: ScopeConfig = .empty {
+        didSet {
+            // The colour tokens read the theme as they are drawn, so it is set here, before any view that
+            // observes the preferences redraws. The terminals paint their own ground and are told directly.
+            let theme = config.preferences.chromeTheme
+            guard theme != ChromePalette.theme else { return }
+            ChromePalette.theme = theme
+            for session in threads { TerminalAppearance.apply(to: session.terminalView) }
+        }
+    }
     /// Sidebar order == `config.scopes` order.
     private(set) var scopes: [ScopeState] = []
     /// Creation order; tabs filter by scope.
@@ -230,7 +239,10 @@ final class AppModel {
             return
         }
         let place = places[id]
-        if let item = place?.selection, isSelectable(item, in: id) {
+        // The scope's own row is where a scope with no thread leaves you, not somewhere you chose to be: once the
+        // scope has threads it is treated as a first visit, or an agent's work would hide behind an empty view.
+        let wasNowhere = place?.selection == .scope(id) && !threadOrder(in: id).isEmpty
+        if let item = place?.selection, isSelectable(item, in: id), !wasNowhere {
             selection = item
             // A task row stands for one of its threads: the one that was being read, not the first.
             if case .task(let taskID) = item, let thread = place?.thread, session(thread)?.record.taskID == taskID.rawValue {

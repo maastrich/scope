@@ -15,7 +15,11 @@ enum ThreadTitle {
     /// `@acme › auth-refresh › claude`: where the thread sits, the same path the inspector's Base header starts
     /// with, so the two sides of the window name their subject the same way.
     static func path(scope: String?, task: String?, thread: String) -> String {
-        [scope, task, thread].compactMap { $0 }.joined(separator: " › ")
+        // A thread is named after where it runs — its task, or its scope — so the last step often repeats the one
+        // before it; said once is enough.
+        var steps: [String] = []
+        for step in [scope, task, thread].compactMap({ $0 }) where step != steps.last { steps.append(step) }
+        return steps.joined(separator: " › ")
     }
 
     /// `Claude Code · …/api/auth-refresh`: what runs, and where — the line under the path.
