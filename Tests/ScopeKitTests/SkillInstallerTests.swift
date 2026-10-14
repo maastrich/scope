@@ -83,4 +83,17 @@ import Testing
         #expect(installer.name == "scope-debug-tasks")
         #expect(installer.skillText.contains("`scope-debug` MCP tools"))
     }
+
+    /// The skill teaches both façades: a session outside Scope has only the MCP tools, one inside reaches for the CLI.
+    @Test func theSkillNamesEveryToolAndItsCommand() {
+        let text = SkillInstaller(userHome: URL(fileURLWithPath: "/tmp"), debug: false).skillText
+        for tool in MCPBridge.tools {
+            #expect(text.contains("`\(tool.name)`"), "\(tool.name) is not taught")
+        }
+        for command in ["scope thread wait", "--reply", "scope task new", "scope thread send", "scope ping"] {
+            #expect(text.contains(command), "\(command) is not taught")
+        }
+        #expect(text.contains("untrusted"))
+        #expect(SkillInstaller.installedVersion(text) == SkillInstaller.version)
+    }
 }
