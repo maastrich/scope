@@ -53,7 +53,7 @@ struct ScopeTileFace: View {
                     picture(logo).clipShape(shape)
                 case .template:
                     shape.fill(ScopeTintStyle.fill(declaration.resolvedTint))
-                        .overlay(picture(logo, template: true).foregroundStyle(ScopeTintStyle.onFill).padding(size * 0.2))
+                        .overlay(picture(logo, template: true).foregroundStyle(ScopeTintStyle.onFill).padding(size * 0.15))
                 case .onLight, .onDark:
                     shape.fill(logo.style == .onLight ? ScopeTintStyle.lightPlate : ScopeTintStyle.darkPlate)
                         .overlay(picture(logo).padding(size * 0.14))

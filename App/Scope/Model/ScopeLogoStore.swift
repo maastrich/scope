@@ -65,8 +65,10 @@ final class ScopeLogoStore {
 
     /// Imports `source` and returns the name of the new file. A fresh name per import: the cache and SwiftUI both
     /// key on it, so a replaced image shows at once.
-    func save(_ source: ScopeLogoSource, slug: String) throws -> String {
-        let png = try Self.normalized(source)
+    ///
+    /// `enforcingShape: false` is for the copies an older build made: see `ScopeLogo.normalized`.
+    func save(_ source: ScopeLogoSource, slug: String, enforcingShape: Bool = true) throws -> String {
+        let png = try Self.normalized(source, enforcingShape: enforcingShape)
         let name = "\(slug)-\(UUID().uuidString.prefix(8).lowercased()).png"
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try png.write(to: url(name), options: .atomic)
@@ -92,7 +94,7 @@ final class ScopeLogoStore {
         }
     }
 
-    private static func normalized(_ source: ScopeLogoSource) throws -> Data {
+    private static func normalized(_ source: ScopeLogoSource, enforcingShape: Bool) throws -> Data {
         let data: Data
         switch source {
         case .file(let url):
@@ -104,8 +106,8 @@ final class ScopeLogoStore {
         case .data(let bytes):
             data = bytes
         }
-        if let vector = rasterizedVector(data) { return try ScopeLogo.normalized(vector) }
-        return try ScopeLogo.normalized(data)
+        if let vector = rasterizedVector(data) { return try ScopeLogo.normalized(vector, enforcingShape: enforcingShape) }
+        return try ScopeLogo.normalized(data, enforcingShape: enforcingShape)
     }
 
     /// An SVG or a PDF drawn large enough to be reduced cleanly. ImageIO, which the package reads with, knows

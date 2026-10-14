@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import ScopeCore
+import ScopeTasks
 import UniformTypeIdentifiers
 
 /// Everything the owner decides about one scope, in one place: its name, what its tile shows in each
@@ -19,7 +20,8 @@ struct ScopeSettingsSheet: View {
     @State private var context = ""
     /// Why the last image was refused, said under the wells.
     @State private var imageProblem: String?
-    @State private var described: Int?
+    /// What the graph says of each repository, for the list under the Graph row.
+    @State private var summaries: [RepoContextSummary]?
     private enum Field { case name, icon, context }
     @FocusState private var focus: Field?
 
@@ -69,7 +71,7 @@ struct ScopeSettingsSheet: View {
         }
         .onDisappear(perform: save)
         .task(id: model.graph.isGenerating) {
-            described = await model.graphSummaries(for: scope).count { $0.purpose != nil }
+            summaries = await model.graphSummaries(for: scope)
         }
     }
 
@@ -179,13 +181,25 @@ struct ScopeSettingsSheet: View {
                     }
                     Button("Open") {
                         model.selectScope(scope.id)
+                        // Shown once this sheet is gone (`RootView`): a sheet asked for while another closes is dropped.
+                        model.graphFollowsScopeSettings = true
                         dismiss()
-                        // After the dismissal: a sheet asked for while another closes is dropped.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { model.presentGraph() }
                     }
                     .buttonStyle(.scopeSecondary)
                 }
                 .disabled(scope.repos.isEmpty)
+            }
+            // Each repository in one sentence, as agents read it in a task's context file.
+            ForEach(described, id: \.path) { summary in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(summary.path == "." ? scope.name : summary.path)
+                        .font(.scopeValue)
+                        .foregroundStyle(Ink.primary)
+                    Text(summary.purpose ?? "")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -197,8 +211,12 @@ struct ScopeSettingsSheet: View {
     private var graphStatus: String {
         let count = scope.repos.count
         guard count > 0 else { return "no repository" }
-        guard let described else { return "\(count) \(count == 1 ? "repository" : "repositories")" }
-        return "\(described) of \(count) described"
+        guard summaries != nil else { return "\(count) \(count == 1 ? "repository" : "repositories")" }
+        return "\(described.count) of \(count) described"
+    }
+
+    private var described: [RepoContextSummary] {
+        (summaries ?? []).filter { $0.purpose != nil }.sorted { $0.path < $1.path }
     }
 
     private func depthLabel(_ depth: Int) -> String {

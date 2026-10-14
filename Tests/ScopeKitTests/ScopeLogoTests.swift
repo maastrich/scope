@@ -120,7 +120,7 @@ import UniformTypeIdentifiers
         #expect(ScopeLogo.style(of: twoTones) != .template)
     }
 
-    @Test func whatCannotMakeATileIsRefusedWithItsReason() {
+    @Test func whatCannotMakeATileIsRefusedWithItsReason() throws {
         #expect(throws: ScopeLogo.Failure.notAnImage) { try ScopeLogo.normalized(Data("not an image".utf8)) }
         #expect(throws: ScopeLogo.Failure.tooHeavy(bytes: ScopeLogo.maximumSourceBytes + 1)) {
             try ScopeLogo.normalized(Data(count: ScopeLogo.maximumSourceBytes + 1))
@@ -136,6 +136,12 @@ import UniformTypeIdentifiers
         #expect(throws: ScopeLogo.Failure.tooElongated) {
             try ScopeLogo.normalized(image(400, 400) { fill($0, Self.black, CGRect(x: 0, y: 190, width: 400, height: 20)) })
         }
+        // An image the tile already shows is taken as it is, whatever its shape.
+        let strip = try ScopeLogo.normalized(image(1000, 100) { fill($0, Self.red, CGRect(x: 0, y: 0, width: 1000, height: 100)) },
+                                             enforcingShape: false)
+        let dot = try ScopeLogo.normalized(png(image(1, 1) { fill($0, Self.black, CGRect(x: 0, y: 0, width: 1, height: 1)) }),
+                                           enforcingShape: false)
+        #expect(ScopeLogo.isNormalized(strip) && ScopeLogo.isNormalized(dot))
         let failures: [ScopeLogo.Failure] = [.notAnImage, .tooHeavy(bytes: 1 << 30), .tooSmall(width: 1, height: 1),
                                              .tooLarge(width: 20_000, height: 10), .tooElongated, .empty, .unwritable]
         #expect(failures.allSatisfy { !$0.reason.isEmpty })
