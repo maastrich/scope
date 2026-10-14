@@ -45,6 +45,8 @@ final class AppModel {
     var newTaskScopeID: ScopeID?
     /// The scope whose settings sheet is up (its name, tile, context, repositories).
     var scopeSettingsID: ScopeID?
+    /// The settings sheet was left through its *Open* graph button: the Graph sheet comes up once it is gone.
+    @ObservationIgnored var graphFollowsScopeSettings = false
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
@@ -533,7 +535,7 @@ final class AppModel {
             scope.startWatching()
             Task { await scope.rescan() }
         }
-        tidyScopeLogos()
+        tidyScopeLogos(sweeping: configProblem == nil)
 
         let taskProblems = await env.tasks.loadAll()
         if !taskProblems.isEmpty {
@@ -866,9 +868,10 @@ final class AppModel {
     /// Imports `source` under the home as one of the scope's images. The copy is what the app reads from then
     /// on: nothing is written in the scope's folder and the original may move. Throws what makes the image
     /// unusable (`ScopeLogo.Failure`), for the caller to say where the user is looking.
-    func setScopeLogo(_ id: ScopeID, _ slot: ScopeLogoSlot = .standard, from source: ScopeLogoSource) throws {
+    func setScopeLogo(_ id: ScopeID, _ slot: ScopeLogoSlot = .standard, from source: ScopeLogoSource,
+                      enforcingShape: Bool = true) throws {
         guard let scope = scope(id) else { return }
-        let name = try logos.save(source, slug: scope.declaration.slug)
+        let name = try logos.save(source, slug: scope.declaration.slug, enforcingShape: enforcingShape)
         if let old = scope.declaration[keyPath: slot.keyPath] { logos.remove(named: old) }
         updateScopeIdentity(id) { $0[keyPath: slot.keyPath] = name }
     }
@@ -880,21 +883,22 @@ final class AppModel {
     }
 
     /// At launch: brings the copies v0.14.0 made (the file as it was picked, at full size) to the stored form, and
-    /// deletes the files no scope names.
-    private func tidyScopeLogos() {
+    /// deletes the files no scope names. An image is never taken away here: one that cannot be converted stays
+    /// as it is and is still shown, and nothing is swept when the config did not load — every file would look
+    /// orphaned, and the backup that names them could no longer be restored.
+    private func tidyScopeLogos(sweeping: Bool) {
         for scope in scopes {
             for slot in [ScopeLogoSlot.standard, .dark] {
                 guard let name = scope.declaration[keyPath: slot.keyPath], let data = logos.data(named: name),
                       !ScopeLogo.isNormalized(data) else { continue }
                 do {
-                    try setScopeLogo(scope.id, slot, from: .data(data))
+                    try setScopeLogo(scope.id, slot, from: .data(data), enforcingShape: false)
                 } catch {
-                    removeScopeLogo(scope.id, slot)
-                    problems.warn("The image of \(scope.name) could not be kept",
-                                  detail: (error as? ScopeLogo.Failure)?.reason ?? String(describing: error), scope: scope.id)
+                    Log.app.warning("scope image \(name, privacy: .public) left as it is: \(String(describing: error), privacy: .public)")
                 }
             }
         }
+        guard sweeping else { return }
         logos.sweep(keeping: Set(config.scopes.flatMap { [$0.logo, $0.logoDark].compactMap(\.self) }))
     }
 

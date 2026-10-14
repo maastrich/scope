@@ -13,7 +13,7 @@ public enum ScopeLogo {
     public static let maximumSourceSide = 16_384
     public static let maximumSourceBytes = 64 << 20
     /// Past this, an image fitted in a square is a strip a few points high: unreadable on a tile.
-    public static let maximumAspectRatio = 3.0
+    public static let maximumAspectRatio = 4.0
 
     /// The analysis runs on a copy this large at most; the source is never decoded at full size.
     private static let workingSide = 512
@@ -65,27 +65,30 @@ public enum ScopeLogo {
 
     /// The stored form of the image file `data`. Reads its size before decoding anything, and decodes a reduced
     /// copy only.
-    public static func normalized(_ data: Data) throws(Failure) -> Data {
+    ///
+    /// `enforcingShape: false` takes an image too small or too elongated as it is: for one the tile already shows,
+    /// which a new rule must not take away.
+    public static func normalized(_ data: Data, enforcingShape: Bool = true) throws(Failure) -> Data {
         guard data.count <= maximumSourceBytes else { throw .tooHeavy(bytes: data.count) }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int
         else { throw .notAnImage }
-        try checkSize(width: width, height: height)
+        try checkSize(width: width, height: height, enforcingShape: enforcingShape)
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: workingSide,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .notAnImage }
-        return try compose(image)
+        return try compose(image, enforcingShape: enforcingShape)
     }
 
     /// The stored form of a decoded image (what the app rasterises from a vector file, or reads off the clipboard).
-    public static func normalized(_ image: CGImage) throws(Failure) -> Data {
-        try checkSize(width: image.width, height: image.height)
-        return try compose(image)
+    public static func normalized(_ image: CGImage, enforcingShape: Bool = true) throws(Failure) -> Data {
+        try checkSize(width: image.width, height: image.height, enforcingShape: enforcingShape)
+        return try compose(image, enforcingShape: enforcingShape)
     }
 
     /// Whether `data` is already in the stored form — what tells a v0.14.0 copy (the file as it was picked) apart.
@@ -133,12 +136,12 @@ public enum ScopeLogo {
 
     // MARK: Composition
 
-    private static func checkSize(width: Int, height: Int) throws(Failure) {
-        guard min(width, height) >= minimumSourceSide else { throw .tooSmall(width: width, height: height) }
+    private static func checkSize(width: Int, height: Int, enforcingShape: Bool) throws(Failure) {
+        guard min(width, height) >= (enforcingShape ? minimumSourceSide : 1) else { throw .tooSmall(width: width, height: height) }
         guard max(width, height) <= maximumSourceSide else { throw .tooLarge(width: width, height: height) }
     }
 
-    private static func compose(_ image: CGImage) throws(Failure) -> Data {
+    private static func compose(_ image: CGImage, enforcingShape: Bool) throws(Failure) -> Data {
         let scale = min(1, Double(workingSide) / Double(max(image.width, image.height)))
         let width = max(1, Int((Double(image.width) * scale).rounded()))
         let height = max(1, Int((Double(image.height) * scale).rounded()))
@@ -161,7 +164,7 @@ public enum ScopeLogo {
             fills = true
         }
         let long = max(content.width, content.height), short = min(content.width, content.height)
-        guard long / short <= maximumAspectRatio else { throw .tooElongated }
+        guard !enforcingShape || long / short <= maximumAspectRatio else { throw .tooElongated }
 
         let canvasSide = min(side, Int(long))
         guard let cropped = reduced.cropping(to: content),

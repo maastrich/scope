@@ -57,7 +57,11 @@ struct RootView: View {
             NewTaskSheet(scope: scope, defaultDriverID: model.preferredDriverID ?? "")
                 .environment(model)
         }
-        .sheet(item: scopeSettings) { scope in
+        .sheet(item: scopeSettings, onDismiss: {
+            guard model.graphFollowsScopeSettings else { return }
+            model.graphFollowsScopeSettings = false
+            model.presentGraph()
+        }) { scope in
             ScopeSettingsSheet(scope: scope)
                 .environment(model)
         }
