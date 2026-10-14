@@ -102,6 +102,7 @@ public enum MCPBridge {
             "repos":{"type":"array","items":{"type":"string"},"description":"Repositories relative to the scope root; omitted lets Scope work them out from the prompt."},\
             "branch":{"type":"string","description":"Branch to create; omitted lets the driver propose one."},\
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
+            "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\

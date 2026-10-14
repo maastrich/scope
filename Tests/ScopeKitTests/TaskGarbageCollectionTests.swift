@@ -55,9 +55,26 @@ import ScopeGit
         #expect(!scope.exists(gone.rootURL) && scope.exists(live.rootURL))
         let worktrees = try await scope.client(for: api).output(["worktree", "list", "--porcelain"])
         #expect(!worktrees.contains(gone.slug) && worktrees.contains(live.slug))
+        reloaded.emptyTrash()
         #expect(((try? FileManager.default.contentsOfDirectory(atPath: ScopeHome.trashURL(home: scope.home).path)) ?? []).isEmpty)
         let saved = try #require(done.savedChanges.first?.split(separator: " ").last.map(String.init))
         #expect(try await scope.client(for: api).output(["show", "\(saved):lost.txt"]) == "work")
+    }
+
+    /// Prune would drop any unreachable worktree; the collector drops only those that lived under `sandboxes/`.
+    @Test func theUsersOwnStaleWorktreesAreLeftAlone() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        _ = try await manager.create(name: "live", branch: "feat/live", in: scope.declaration, repos: ["api"])
+        let base = await scope.client(for: api)
+        let mine = api.deletingLastPathComponent().appending(path: "my-own-worktree")
+        _ = try await base.output(["worktree", "add", "-q", "-b", "mine", mine.path])
+        try FileManager.default.removeItem(at: mine)   // as if on a volume that is not mounted
+
+        let report = await manager.collectGarbage(now: .now.addingTimeInterval(3_600))
+        #expect(report.prunedWorktrees.isEmpty)
+        #expect(try await base.output(["worktree", "list", "--porcelain"]).contains("my-own-worktree"))
     }
 
     @Test func anUnreadableRecordKeepsEveryFolder() async throws {
@@ -96,11 +113,19 @@ import ScopeGit
     @Test func listsTasksWhoseCleanupNeverFinished() async throws {
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
-        let web = try await scope.makeRepo("web")
+        try await scope.makeRepo("web")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "stuck", branch: "feat/stuck", in: scope.declaration, repos: ["api", "web"])
-        let parked = web.deletingLastPathComponent().appending(path: "web-parked")
-        _ = try? await manager.dismantle(task.id, .archive) { try? FileManager.default.moveItem(at: web, to: parked) }
+        let chflags = { (flag: String) throws in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/chflags")
+            process.arguments = [flag, task.repos[1].sandboxPath]
+            try process.run()
+            process.waitUntilExit()
+        }
+        try chflags("uchg")
+        defer { try? chflags("nouchg") }
+        _ = try? await manager.dismantle(task.id, .archive)
 
         let report = await manager.collectGarbage(now: .now.addingTimeInterval(3_600))
         #expect(report.pendingTasks == [task.id])

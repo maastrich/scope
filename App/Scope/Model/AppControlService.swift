@@ -125,7 +125,9 @@ final class AppControlService: ControlService {
         }
         for notice in outcome.notices {
             switch notice {
-            case .changesSaved(let repo, let ref): lines.append("\(repo): uncommitted changes saved as \(ref)")
+            case .changesSaved(let repo, let ref, let skipped):
+                lines.append("\(repo): uncommitted changes saved as \(ref)"
+                             + (skipped.isEmpty ? "" : " — too big to keep: " + skipped.joined(separator: ", ")))
             case .branchSaved(let repo, let branch, let ref): lines.append("\(repo): unmerged \(branch) saved as \(ref)")
             case .teardownFailed(let repo, let summary, _): lines.append("\(repo): teardown failed (\(summary))")
             case .processesSurvived(let names): lines.append("would not stop: " + names.joined(separator: ", "))
@@ -135,6 +137,7 @@ final class AppControlService: ControlService {
     }
 
     static func describe(_ report: GarbageReport, dryRun: Bool) -> String {
+        if report.skipped { return "a cleanup is already running; try again in a moment" }
         guard !report.isEmpty else { return "nothing to clean" }
         var lines: [String] = []
         func section(_ title: String, _ items: [String]) {
@@ -146,6 +149,7 @@ final class AppControlService: ControlService {
         section("saved their uncommitted work:", report.savedChanges)
         section(dryRun ? "would stop:" : "stopped:", report.stoppedProcesses)
         section("would not stop:", report.survivors)
+        section("kept, their work could not be saved:", report.keptFolders)
         section(dryRun ? "would prune stale worktrees in:" : "pruned stale worktrees in:", report.prunedWorktrees)
         section(dryRun ? "would delete expired saved changes:" : "deleted expired saved changes:", report.deletedRefs)
         if report.emptiedTrash > 0 { lines.append((dryRun ? "would empty " : "emptied ") + "\(report.emptiedTrash) items from the trash") }

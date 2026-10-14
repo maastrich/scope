@@ -31,8 +31,9 @@ public enum DismantleNotice: Sendable, Equatable {
     case teardownFailed(repo: String, summary: String, log: String)
     /// Processes of the task still alive after SIGKILL (`name (pid)`).
     case processesSurvived([String])
-    /// The uncommitted changes of `repo` were saved under `ref` before its sandbox went.
-    case changesSaved(repo: String, ref: String)
+    /// The uncommitted changes of `repo` were saved under `ref` before its sandbox went, except the untracked
+    /// files too big to keep in the repository (`skipped`).
+    case changesSaved(repo: String, ref: String, skipped: [String])
     /// The unmerged branch of `repo` was deleted; its last commit is kept under `ref`.
     case branchSaved(repo: String, branch: String, ref: String)
 }
@@ -69,12 +70,16 @@ public struct GarbageReport: Sendable, Equatable {
     public var emptiedTrash = 0
     /// Tasks whose archive or close never finished; the app resumes them (it hangs up their threads).
     public var pendingTasks: [TaskID] = []
+    /// Folders no task owns that were kept because their uncommitted work could not be saved (`path: why`).
+    public var keptFolders: [String] = []
+    /// Another pass was already running; this one did nothing.
+    public var skipped = false
 
     public init() {}
 
     /// Nothing was found to clean.
     public var isEmpty: Bool {
         removedFolders.isEmpty && stoppedProcesses.isEmpty && survivors.isEmpty && prunedWorktrees.isEmpty
-            && deletedRefs.isEmpty && emptiedTrash == 0
+            && deletedRefs.isEmpty && emptiedTrash == 0 && keptFolders.isEmpty
     }
 }

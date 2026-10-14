@@ -547,9 +547,10 @@ next launch finishes the job.</p>
 <h2 id="cleanup">Automatic cleanup</h2>
 <p>Scope tidies up after tasks on its own: when it opens, every 30 minutes, and after each archive or close. It
 stops the processes left by archived or closed tasks, moves to the trash the sandbox folders no task owns (their
-uncommitted work saved first), prunes stale worktree records in your repositories, and drops expired saved
-changes. A folder younger than ten minutes is left alone — a task being created — and nothing outside Scope's
-own home is touched. One quiet line in the Problem Center says what was cleaned. <b>Settings ▸ General ▸
+uncommitted work saved first), drops git's records of sandboxes that no longer exist, and deletes expired saved
+changes. A folder younger than ten minutes is left alone — a task being created. Only what lives under Scope's
+own home is cleaned: a worktree of yours that git calls stale is not Scope's to prune. Large untracked files
+(over 50 MB) are not saved into your repository; the notice names them. One quiet line in the Problem Center says what was cleaned. <b>Settings ▸ General ▸
 Tasks</b> turns it off; <code>scope gc --dry-run</code> shows what it would do.</p>
 
 <h2 id="from-pr">Starting from a pull request</h2>

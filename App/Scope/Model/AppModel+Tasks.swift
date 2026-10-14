@@ -420,6 +420,10 @@ extension AppModel {
         if resumingPending {
             for id in report.pendingTasks { await retryCleanup(id) }
         }
+        if !report.keptFolders.isEmpty {
+            problems.warn("\(report.keptFolders.count) leftover sandbox \(report.keptFolders.count == 1 ? "folder was" : "folders were") kept",
+                          detail: report.keptFolders.joined(separator: "\n"))
+        }
         if !report.survivors.isEmpty {
             problems.error("\(report.survivors.count) leftover \(report.survivors.count == 1 ? "process" : "processes") would not stop",
                            detail: report.survivors.joined(separator: "\n"))
@@ -466,8 +470,9 @@ extension AppModel {
             case .processesSurvived(let names):
                 problems.error("\(names.count) \(names.count == 1 ? "process" : "processes") of \(task.name) would not stop",
                                detail: names.joined(separator: "\n"), scope: task.scopeID)
-            case .changesSaved(let repo, let ref):
-                saved.append("\(repo): uncommitted changes → \(ref)")
+            case .changesSaved(let repo, let ref, let skipped):
+                saved.append("\(repo): uncommitted changes → \(ref)"
+                             + (skipped.isEmpty ? "" : " (too big to keep, deleted: \(skipped.joined(separator: ", ")))"))
             case .branchSaved(let repo, let branch, let ref):
                 saved.append("\(repo): unmerged branch \(branch) → \(ref)")
             }

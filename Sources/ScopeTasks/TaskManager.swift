@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import ScopeCore
 import ScopeGit
 
@@ -422,10 +423,10 @@ public actor TaskManager {
             if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
             for index in record.repos.indices where record.repos[index].state == .active {
                 // Saved and written down before the folder goes, so a failure in between never loses it.
-                if let ref = try await salvage(record.repos[index], task: record) {
-                    record.repos[index].salvageRef = ref
+                if let saved = try await salvage(record.repos[index], task: record) {
+                    record.repos[index].salvageRef = saved.ref
                     try await save(record)
-                    notices.append(.changesSaved(repo: record.repos[index].repoRelativePath, ref: ref))
+                    notices.append(.changesSaved(repo: record.repos[index].repoRelativePath, ref: saved.ref, skipped: saved.skipped))
                 }
                 try await removeSandbox(record.repos[index], task: record)
                 record.repos[index].state = .archived
@@ -497,16 +498,21 @@ public actor TaskManager {
     /// Commits the sandbox's tracked and untracked changes (ignored files excluded) through a private index — the
     /// sandbox's own index and the shared stash stay untouched — and points a salvage ref at the commit.
     /// `nil` when the sandbox is clean or already gone.
-    private func salvage(_ repo: TaskRepo, task: TaskRecord) async throws -> String? {
+    private func salvage(_ repo: TaskRepo, task: TaskRecord) async throws -> (ref: String, skipped: [String])? {
         do {
             return try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: task, kind: "changes"),
                                      message: "Scope: uncommitted changes of \(task.name) (\(repo.repoRelativePath)) when its sandbox was removed")
+                .map { ($0.ref, $0.skipped) }
         } catch let error as GitError {
             throw TaskError.git(repo: repo.repoRelativePath, error)
         }
     }
 
-    private func salvage(sandbox: URL, ref: String, message: String) async throws -> String? {
+    /// Untracked files bigger than this stay out of a salvage commit: a dump or a build output an agent left behind
+    /// would otherwise sit in the user's repository for as long as the ref lives.
+    static let salvageFileLimit = 50 * 1024 * 1024
+
+    private func salvage(sandbox: URL, ref: String, message: String) async throws -> (ref: String, skipped: [String])? {
         guard FileManager.default.fileExists(atPath: sandbox.path) else { return nil }
         let client = await registry.client(for: sandbox)
         let path = sandbox.filesystemPath
@@ -517,13 +523,22 @@ public actor TaskManager {
                            "GIT_AUTHOR_NAME": "Scope", "GIT_AUTHOR_EMAIL": "scope@localhost",
                            "GIT_COMMITTER_NAME": "Scope", "GIT_COMMITTER_EMAIL": "scope@localhost"]
         try await client.run(["-C", path, "read-tree", "HEAD"], environment: environment)
+        let untracked = try await client.run(["-C", path, "ls-files", "-o", "--exclude-standard", "-z"])
+            .stdoutText.split(separator: "\0").map(String.init)
+        let tooBig = untracked.filter { name in
+            let size = (try? FileManager.default.attributesOfItem(atPath: sandbox.appending(path: name).path)[.size] as? Int) ?? 0
+            return size > Self.salvageFileLimit
+        }
         try await client.run(["-C", path, "add", "-A"], environment: environment, timeout: .seconds(600))
+        if !tooBig.isEmpty {
+            try await client.run(["-C", path, "rm", "--cached", "-q", "--"] + tooBig, environment: environment)
+        }
         let tree = try await client.run(["-C", path, "write-tree"], environment: environment)
             .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
         let commit = try await client.run(["-C", path, "commit-tree", tree, "-p", "HEAD", "-m", message], environment: environment)
             .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
         try await client.run(["-C", path, "update-ref", ref, commit])
-        return ref
+        return (ref, tooBig)
     }
 
     /// The worktrees in a folder no record owns: the folder itself, or its direct subfolders (one per repository).
@@ -585,7 +600,10 @@ public actor TaskManager {
     public func collectGarbage(extraBases: [URL] = [], dryRun: Bool = false, now: Date = .now,
                                grace: TimeInterval = 600, retention: TimeInterval = 30 * 86_400) async -> GarbageReport {
         var report = GarbageReport()
-        guard !collecting else { return report }
+        guard !collecting else {
+            report.skipped = true
+            return report
+        }
         collecting = true
         defer { collecting = false }
         let fileManager = FileManager.default
@@ -625,12 +643,14 @@ public actor TaskManager {
             for worktree in Self.worktrees(in: folder) {
                 let ref = "\(Self.salvageNamespace)/orphan-\(folder.lastPathComponent)/changes-\(Int(now.timeIntervalSince1970))"
                 do {
-                    if let ref = try await salvage(sandbox: worktree, ref: ref,
-                                                   message: "Scope: uncommitted changes of \(worktree.path), removed by the cleanup") {
-                        report.savedChanges.append("\(worktree.lastPathComponent): \(ref)")
+                    if let saved = try await salvage(sandbox: worktree, ref: ref,
+                                                     message: "Scope: uncommitted changes of \(worktree.path), removed by the cleanup") {
+                        let skipped = saved.skipped.isEmpty ? "" : " (too big to keep: \(saved.skipped.joined(separator: ", ")))"
+                        report.savedChanges.append("\(worktree.lastPathComponent): \(saved.ref)\(skipped)")
                     }
                 } catch {
                     Log.tasks.error("could not save \(worktree.path): \(String(describing: error)); keeping it")
+                    report.keptFolders.append("\(folder.path): its uncommitted work could not be saved (\(error))")
                     saved = false
                 }
             }
@@ -644,17 +664,15 @@ public actor TaskManager {
             }
         }
         report.emptiedTrash = ((try? fileManager.contentsOfDirectory(atPath: trash.path)) ?? []).count
-        if !dryRun { emptyTrash() }
+        if !dryRun { emptyTrashInBackground() }
 
         let referenced = Set(records.values.flatMap { $0.repos.compactMap(\.salvageRef) })
         for base in baseCheckouts(extra: extraBases) {
             let client = await registry.client(for: base)
-            if let list = try? await client.output(["worktree", "list", "--porcelain"]) {
-                let stale = list.components(separatedBy: "\nprunable").count - 1
-                if stale > 0 || !orphans.isEmpty {
-                    if stale > 0 { report.prunedWorktrees.append("\(base.path): \(stale)") }
-                    if !dryRun { try? await client.prune() }
-                }
+            let stale = await staleSandboxWorktrees(in: client)
+            if !stale.isEmpty {
+                report.prunedWorktrees.append("\(base.path): \(stale.count)")
+                if !dryRun { for admin in stale { try? fileManager.removeItem(at: admin) } }
             }
             let refs = (try? await client.output(["for-each-ref", "--format=%(refname)", Self.salvageNamespace])) ?? ""
             for ref in refs.split(separator: "\n").map(String.init) where !referenced.contains(ref) {
@@ -785,9 +803,8 @@ public actor TaskManager {
 
     /// Moves the worktree into the trash and drops git's record of it. A rename never trips on what git
     /// refuses to remove (submodules, a lock, files a process wrote a moment ago) and never times out on a
-    /// sandbox of several gigabytes; the uncommitted-changes guardrail has already run.
+    /// sandbox of several gigabytes; its uncommitted work has been saved just before.
     private func removeSandbox(_ repo: TaskRepo, task: TaskRecord) async throws {
-        let client = try await baseClient(for: repo.repoRelativePath, task: task)
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: repo.sandboxPath) {
             let admin = Self.worktreeAdminDirectory(of: repo.sandboxURL)
@@ -799,33 +816,69 @@ public actor TaskManager {
             } catch {
                 throw TaskError.persistence("could not remove \(repo.sandboxPath): \(error.localizedDescription)")
             }
-            // `prune` skips a locked worktree even when its folder is gone.
-            if let admin { try? fileManager.removeItem(at: admin.appending(path: "locked")) }
-        }
-        do { try await client.prune() } catch let error as GitError {
-            throw TaskError.git(repo: repo.repoRelativePath, error)
+            // Git's record of this worktree and nothing else: `git worktree prune` would also drop the user's own
+            // worktrees that happen to be unreachable (an unmounted volume, a moved folder).
+            if let admin { try? fileManager.removeItem(at: admin) }
         }
     }
 
-    /// `<base>/.git/worktrees/<name>`, read from the worktree's `.git` file (`gitdir: …`).
+    /// The admin folders (`<common dir>/worktrees/<name>`) of worktrees git lists as prunable *and* that lived
+    /// under `sandboxes/` — Scope's own, never the user's.
+    private func staleSandboxWorktrees(in client: GitClient) async -> [URL] {
+        guard let list = try? await client.output(["worktree", "list", "--porcelain"]),
+              let common = try? await client.output(["rev-parse", "--path-format=absolute", "--git-common-dir"]) else { return [] }
+        let sandboxes = ProcessSweep.spellings(ScopeHome.sandboxesURL(home: home))
+        let stale = list.components(separatedBy: "\n\n").compactMap { entry -> String? in
+            let lines = entry.split(separator: "\n").map(String.init)
+            guard lines.contains(where: { $0.hasPrefix("prunable") }),
+                  let path = lines.first(where: { $0.hasPrefix("worktree ") })?.dropFirst("worktree ".count) else { return nil }
+            return ProcessSweep.isInside(String(path), sandboxes) ? String(path) : nil
+        }
+        guard !stale.isEmpty else { return [] }
+        let admins = URL(fileURLWithPath: common, isDirectory: true).appending(path: "worktrees", directoryHint: .isDirectory)
+        return Self.visibleFolders(in: admins).filter { admin in
+            guard let gitdir = try? String(contentsOf: admin.appending(path: "gitdir"), encoding: .utf8) else { return false }
+            let checkout = (gitdir.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).deletingLastPathComponent
+            return stale.contains(checkout)
+        }
+    }
+
+    /// `<base>/.git/worktrees/<name>`, read from the worktree's `.git` file (`gitdir: …`) — only when that folder
+    /// points back at this worktree, so a hand-edited `.git` file can never send a deletion elsewhere.
     static func worktreeAdminDirectory(of sandbox: URL) -> URL? {
         guard let text = try? String(contentsOf: sandbox.appending(path: ".git"), encoding: .utf8),
               let line = text.split(separator: "\n").first(where: { $0.hasPrefix("gitdir:") }) else { return nil }
         let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
-        return path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+        let admin = path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
             : sandbox.appending(path: path, directoryHint: .isDirectory).standardizedFileURL
+        guard admin.deletingLastPathComponent().lastPathComponent == "worktrees",
+              let back = try? String(contentsOf: admin.appending(path: "gitdir"), encoding: .utf8),
+              URL(fileURLWithPath: back.trimmingCharacters(in: .whitespacesAndNewlines)).deletingLastPathComponent()
+                .resolvingSymlinksInPath().path == sandbox.resolvingSymlinksInPath().path else { return nil }
+        return admin
     }
 
-    /// Deletes everything in the trash. The launch GC calls it too, for what a quit interrupted.
+    /// Deletes everything in the trash, until it stays empty. One deleter at a time per home: a second call while
+    /// one runs returns at once, the running one picks up what was added meanwhile. Never on the actor — deleting
+    /// gigabytes there would hold every archive and create behind it.
     public nonisolated func emptyTrash() {
         let trash = ScopeHome.trashURL(home: home)
+        guard Self.emptying.withLock({ $0.insert(trash.path).inserted }) else { return }
+        defer { _ = Self.emptying.withLock { $0.remove(trash.path) } }
         let fileManager = FileManager.default
-        for item in (try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil)) ?? [] {
-            do { try fileManager.removeItem(at: item) } catch {
-                Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
+        while let items = try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil), !items.isEmpty {
+            var removed = 0
+            for item in items {
+                do { try fileManager.removeItem(at: item); removed += 1 } catch {
+                    Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
+                }
             }
+            if removed == 0 { return }
         }
     }
+
+    /// The trash folders being emptied right now.
+    private static let emptying = Mutex<Set<String>>([])
 
     private nonisolated func emptyTrashInBackground() {
         Task.detached(priority: .background) { [self] in emptyTrash() }

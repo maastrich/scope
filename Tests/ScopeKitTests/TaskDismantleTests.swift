@@ -61,25 +61,33 @@ import ScopeGit
         try await manager.close(task.id, deleteBranch: false)
     }
 
+    /// `chflags uchg`: a folder nothing can rename, as a stuck mount or a permission problem would leave it.
+    private func setImmutable(_ url: URL, _ on: Bool) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/chflags")
+        process.arguments = [on ? "uchg" : "nouchg", url.path]
+        try process.run()
+        process.waitUntilExit()
+    }
+
     @Test func aFailedStepIsPersistedAndTheNextRunResumes() async throws {
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
-        let web = try await scope.makeRepo("web")
+        try await scope.makeRepo("web")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "half", branch: "feat/half", in: scope.declaration, repos: ["api", "web"])
 
-        // The web base checkout disappears mid-run: its sandbox cannot be removed through it.
-        let parked = web.deletingLastPathComponent().appending(path: "web-parked")
-        await #expect(throws: TaskError.self) {
-            try await manager.dismantle(task.id, .archive) { try? FileManager.default.moveItem(at: web, to: parked) }
-        }
+        // The web sandbox cannot be moved: the run stops there, with api already gone.
+        let web = task.repos[1].sandboxURL
+        try setImmutable(web, true)
+        await #expect(throws: TaskError.self) { try await manager.archive(task.id) }
+        try setImmutable(web, false)
 
         let stored = try #require(await TaskRecordStore(home: scope.home).loadAll().records.first)
         #expect(stored.repos.map(\.state) == [.archived, .active])
         #expect(stored.cleanup?.mode == .archive && stored.cleanup?.error != nil && !stored.isArchived)
-        #expect(!scope.exists(task.repos[0].sandboxURL) && scope.exists(task.repos[1].sandboxURL))
+        #expect(!scope.exists(task.repos[0].sandboxURL) && scope.exists(web))
 
-        try FileManager.default.moveItem(at: parked, to: web)
         let archived = try await manager.archive(task.id)
         #expect(archived.isArchived && archived.cleanup == nil && archived.repos.allSatisfy { $0.state == .archived })
         #expect(!scope.exists(task.rootURL))
@@ -136,7 +144,7 @@ import ScopeGit
 
         let outcome = try await manager.dismantle(task.id, .archive)
         let ref = try #require(outcome.record?.repos[0].salvageRef)
-        #expect(outcome.notices.contains(.changesSaved(repo: "api", ref: ref)))
+        #expect(outcome.notices.contains(.changesSaved(repo: "api", ref: ref, skipped: [])))
         #expect(!scope.exists(sandbox))
         let base = await scope.client(for: api)
         #expect(try await base.output(["show", "\(ref):new.txt"]) == "untracked")
@@ -167,5 +175,25 @@ import ScopeGit
         #expect(!(await base.branchExists("feat/gone")))
         #expect(try await base.output(["rev-parse", ref]) == tip)
         #expect(await manager.task(task.id) == nil)
+    }
+
+    @Test func aHugeUntrackedFileIsNotCopiedIntoTheRepository() async throws {
+        let scope = try await TestScope.make()
+        let api = try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "dump", branch: "feat/dump", in: scope.declaration, repos: ["api"])
+        let sandbox = task.repos[0].sandboxURL
+        try scope.write(sandbox, "notes.txt", "keep\n")
+        let dump = sandbox.appending(path: "dump.sql")
+        FileManager.default.createFile(atPath: dump.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: dump)
+        try handle.truncate(atOffset: UInt64(TaskManager.salvageFileLimit + 1))   // sparse: big on paper only
+        try handle.close()
+
+        let outcome = try await manager.dismantle(task.id, .archive)
+        let ref = try #require(outcome.record?.repos[0].salvageRef)
+        #expect(outcome.notices.contains(.changesSaved(repo: "api", ref: ref, skipped: ["dump.sql"])))
+        let files = try await scope.client(for: api).output(["ls-tree", "-r", "--name-only", ref])
+        #expect(files.contains("notes.txt") && !files.contains("dump.sql"))
     }
 }

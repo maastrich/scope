@@ -180,7 +180,7 @@ import ScopeGit
         try scope.write(task.repos[1].sandboxURL, "wip.txt", "dirty\n")
 
         let outcome = try await manager.dismantle(task.id, .close(deleteBranch: true))
-        #expect(outcome.notices.contains { if case .changesSaved(let repo, _) = $0 { repo == "web" } else { false } })
+        #expect(outcome.notices.contains { if case .changesSaved(let repo, _, _) = $0 { repo == "web" } else { false } })
         #expect(await manager.task(task.id) == nil)
         let webClient = await scope.client(for: scope.scopeRoot.appending(path: "web"))
         #expect(!(await webClient.branchExists("feat/close-me")))
