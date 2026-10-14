@@ -57,8 +57,19 @@ struct RootView: View {
             NewTaskSheet(scope: scope, defaultDriverID: model.preferredDriverID ?? "")
                 .environment(model)
         }
+        .sheet(item: scopeSettings) { scope in
+            ScopeSettingsSheet(scope: scope)
+                .environment(model)
+        }
         .focusedSceneValue(\.appModel, model)
         .environment(model)
+    }
+
+    private var scopeSettings: Binding<ScopeState?> {
+        Binding(
+            get: { model.scopeSettingsID.flatMap { model.scope($0) } },
+            set: { model.scopeSettingsID = $0?.id }
+        )
     }
 
     private var newTaskScope: Binding<ScopeState?> {

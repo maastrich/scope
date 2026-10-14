@@ -43,6 +43,8 @@ final class AppModel {
     var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
     var newTaskScopeID: ScopeID?
+    /// The scope whose settings sheet is up (its name, tile, context, repositories).
+    var scopeSettingsID: ScopeID?
     private(set) var drivers = LoadedDrivers(profiles: [])
     private(set) var shellStatus: ShellStatus = .probing
     private(set) var isBootstrapped = false
@@ -177,7 +179,7 @@ final class AppModel {
         config.preferences.autoCloseExitedThreads
     }
 
-    @ObservationIgnored private let logoCache = NSCache<NSURL, NSImage>()
+    @ObservationIgnored private lazy var logos = ScopeLogoStore(folder: ScopeHome.scopeLogosURL(home: env.home))
     @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
@@ -531,6 +533,7 @@ final class AppModel {
             scope.startWatching()
             Task { await scope.rescan() }
         }
+        tidyScopeLogos()
 
         let taskProblems = await env.tasks.loadAll()
         if !taskProblems.isEmpty {
@@ -799,6 +802,8 @@ final class AppModel {
         scopes.remove(at: index)
         config.scopes.removeAll { $0.id == id }
         saveConfig()
+        for name in [scope.declaration.logo, scope.declaration.logoDark].compactMap(\.self) { logos.remove(named: name) }
+        if scopeSettingsID == id { scopeSettingsID = nil }
         for repo in scope.repos {
             let url = repo.url
             Task { await env.git.forget(url) }
@@ -845,7 +850,7 @@ final class AppModel {
         return ids.compactMap(scope)
     }
 
-    /// Changes what a scope's tile shows (icon, tint, logo) and saves it.
+    /// Changes what the owner chose for a scope (icon, tint, images, context) and saves it.
     func updateScopeIdentity(_ id: ScopeID, _ change: (inout ScopeDeclaration) -> Void) {
         guard let scope = scope(id), let index = config.scopes.firstIndex(where: { $0.id == id }) else { return }
         change(&config.scopes[index])
@@ -853,46 +858,54 @@ final class AppModel {
         saveConfig()
     }
 
-    /// The scope's logo, read from the copy under the home; `nil` without one or when the file is gone.
-    func scopeLogo(_ scope: ScopeState) -> NSImage? {
-        guard let name = scope.declaration.logo else { return nil }
-        let url = ScopeHome.scopeLogosURL(home: env.home).appending(path: name, directoryHint: .notDirectory)
-        if let cached = logoCache.object(forKey: url as NSURL) { return cached }
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        logoCache.setObject(image, forKey: url as NSURL)
-        return image
+    /// The image of the scope's tile in an appearance; `nil` without one or when the file is gone.
+    func scopeLogo(_ scope: ScopeState, dark: Bool) -> ScopeLogoStore.Logo? {
+        scope.declaration.logo(dark: dark).flatMap(logos.logo(named:))
     }
 
-    /// Copies `source` under the home as the scope's logo. The copy is what the app reads from then on: nothing
-    /// is written in the scope's folder and the original may move.
-    func setScopeLogo(_ id: ScopeID, from source: URL) {
-        guard let scope = scope(id), NSImage(contentsOf: source) != nil else {
-            problems.warn("That file is not an image Scope can show", detail: source.path)
-            return
-        }
-        let folder = ScopeHome.scopeLogosURL(home: env.home)
-        // A fresh name per import: the cache and SwiftUI both key on it, so a replaced logo shows at once.
-        let name = "\(scope.declaration.slug)-\(UUID().uuidString.prefix(8)).\(source.pathExtension.isEmpty ? "png" : source.pathExtension.lowercased())"
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: source, to: folder.appending(path: name, directoryHint: .notDirectory))
-        } catch {
-            problems.error("Could not save the logo of \(scope.name)", detail: String(describing: error), scope: id)
-            return
-        }
-        removeLogoFile(of: scope)
-        updateScopeIdentity(id) { $0.logo = name }
-    }
-
-    func removeScopeLogo(_ id: ScopeID) {
+    /// Imports `source` under the home as one of the scope's images. The copy is what the app reads from then
+    /// on: nothing is written in the scope's folder and the original may move. Throws what makes the image
+    /// unusable (`ScopeLogo.Failure`), for the caller to say where the user is looking.
+    func setScopeLogo(_ id: ScopeID, _ slot: ScopeLogoSlot = .standard, from source: ScopeLogoSource) throws {
         guard let scope = scope(id) else { return }
-        removeLogoFile(of: scope)
-        updateScopeIdentity(id) { $0.logo = nil }
+        let name = try logos.save(source, slug: scope.declaration.slug)
+        if let old = scope.declaration[keyPath: slot.keyPath] { logos.remove(named: old) }
+        updateScopeIdentity(id) { $0[keyPath: slot.keyPath] = name }
     }
 
-    private func removeLogoFile(of scope: ScopeState) {
-        guard let name = scope.declaration.logo else { return }
-        try? FileManager.default.removeItem(at: ScopeHome.scopeLogosURL(home: env.home).appending(path: name, directoryHint: .notDirectory))
+    func removeScopeLogo(_ id: ScopeID, _ slot: ScopeLogoSlot = .standard) {
+        guard let scope = scope(id), let name = scope.declaration[keyPath: slot.keyPath] else { return }
+        logos.remove(named: name)
+        updateScopeIdentity(id) { $0[keyPath: slot.keyPath] = nil }
+    }
+
+    /// At launch: brings the copies v0.14.0 made (the file as it was picked, at full size) to the stored form, and
+    /// deletes the files no scope names.
+    private func tidyScopeLogos() {
+        for scope in scopes {
+            for slot in [ScopeLogoSlot.standard, .dark] {
+                guard let name = scope.declaration[keyPath: slot.keyPath], let data = logos.data(named: name),
+                      !ScopeLogo.isNormalized(data) else { continue }
+                do {
+                    try setScopeLogo(scope.id, slot, from: .data(data))
+                } catch {
+                    removeScopeLogo(scope.id, slot)
+                    problems.warn("The image of \(scope.name) could not be kept",
+                                  detail: (error as? ScopeLogo.Failure)?.reason ?? String(describing: error), scope: scope.id)
+                }
+            }
+        }
+        logos.sweep(keeping: Set(config.scopes.flatMap { [$0.logo, $0.logoDark].compactMap(\.self) }))
+    }
+
+    /// Saves what the owner wrote about a scope and rewrites the context file of its tasks, so agents already at
+    /// work read it on their next turn.
+    func setScopeContext(_ id: ScopeID, _ text: String) {
+        guard let scope = scope(id) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (scope.declaration.context ?? "") != trimmed else { return }
+        updateScopeIdentity(id) { $0.context = trimmed.isEmpty ? nil : trimmed }
+        Task { await refreshContextFiles(of: scope) }
     }
 
     /// Drops the scope `id` at the place of `target` in the declared order (a tile dragged onto another).
