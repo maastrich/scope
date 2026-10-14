@@ -11,6 +11,19 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.16.0](https://github.com/maastrich/scope/releases/tag/v0.16.0) - 2026-10-14
+
+### Added
+
+- **tasks:** reliable archive and automatic cleanup of sandboxes and processes ([#27](https://github.com/maastrich/scope/pull/27)) by @maastrich
+
+### Fixed
+
+- **editor:** open a task in its own editor window, and find it again ([#26](https://github.com/maastrich/scope/pull/26)) by @maastrich
+- **sidebar:** make the scope swipe follow the fingers and settle like a page ([#28](https://github.com/maastrich/scope/pull/28)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.15.0...v0.16.0
+
 ## [0.15.0](https://github.com/maastrich/scope/releases/tag/v0.15.0) - 2026-10-14
 
 ### Added
