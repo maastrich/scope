@@ -13,24 +13,19 @@ struct LooseThreadsRow: View {
     let count: Int
 
     var body: some View {
-        HStack(spacing: 7) {
-            Button {
+        HStack(spacing: SidebarMetrics.spacing) {
+            SidebarDisclosure(
+                isExpanded: scope.looseThreadsShown,
+                accessibilityLabel: scope.looseThreadsShown ? "Collapse loose threads" : "Expand loose threads"
+            ) {
                 scope.looseThreadsShown.toggle()
                 model.expansionChanged()
-            } label: {
-                Image(systemName: scope.looseThreadsShown ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Ink.tertiary)
-                    .frame(width: 12, height: 12)
             }
-            .buttonStyle(.iconTight)
-            .help(scope.looseThreadsShown ? "Collapse" : "Expand")
-            .accessibilityLabel(scope.looseThreadsShown ? "Collapse loose threads" : "Expand loose threads")
 
             Image(systemName: "text.line.first.and.arrowtriangle.forward")
                 .font(.scopeBody)
                 .foregroundStyle(Ink.secondary)
-                .frame(width: 16)
+                .frame(width: SidebarMetrics.glyphSlot)
 
             Text("Loose threads")
                 .font(.scopeBody)
@@ -44,14 +39,10 @@ struct LooseThreadsRow: View {
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.tertiary)
 
-            if let state = aggregateState {
-                StateDot(state: state, pulses: aggregateIsWorking)
-            } else {
-                Color.clear.frame(width: 8, height: 1)
-            }
+            SidebarStateDot(state: aggregateState, pulses: aggregateIsWorking)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 28)
+        .frame(height: SidebarMetrics.rowHeight(detailed: false))
         .contentShape(Rectangle())
         .help("Threads of \(scope.name) that belong to no task: the scope root and the repository base checkouts")
         .accessibilityLabel("Loose threads, \(count)")

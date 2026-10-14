@@ -14,23 +14,24 @@ import ScopeCore
 /// *needs you* caption that used to come with it made three signals for one fact.
 ///
 /// The trailing group lays out from the right: the state dot at a fixed inset, then the caption, which takes what
-/// is left and truncates. The close button appears on hover over the end of the caption, which fades out under it,
-/// so no width is held open for it. Nothing here has a fixed width, so a narrow sidebar shortens the caption and
+/// is left and truncates. The close button appears on hover over the end of the caption, left of the dot, and the
+/// text fades out under it, so no width is held open for it. Nothing here has a fixed width, so a narrow sidebar shortens the caption and
 /// then the title, and never pushes the dot off the edge.
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: ThreadSession
-    /// 0 for a thread at the top level, 1 under a task or the loose-threads group.
+    /// 1 under a task or the loose-threads group, and among the tasks of a state group: a thread row has no
+    /// disclosure slot, so one level of indent is what puts its icon in the column of a task's glyph.
     var depth = 0
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: SidebarMetrics.spacing) {
             Image(systemName: session.profile.icon ?? "terminal")
                 .font(.scopeBody)
                 .foregroundStyle(glyphInk)
-                .frame(width: 16)
+                .frame(width: SidebarMetrics.glyphSlot)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.displayTitle(for: session))
@@ -69,20 +70,12 @@ struct ThreadRow: View {
                     .truncationMode(.tail)
             }
 
-            StateDot(state: session.displayState, pulses: session.isWorking)
+            SidebarStateDot(state: session.displayState, pulses: session.isWorking)
         }
-        // The dot stays visible under the pointer: only the caption gives way to the close button.
-        .trailingFade(isHovered, width: 16 + 7, keeping: 8)
-        .overlay(alignment: .trailing) {
-            if isHovered {
-                closeButton
-                    .padding(.trailing, 8 + 7)
-                    .transition(.opacity)
-            }
-        }
+        .sidebarHoverControls(isHovered) { closeButton }
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: detailed ? SidebarMetrics.detailedRowHeight : 28)
+        .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
         .contentShape(Rectangle())
         .help(helpText)
         .onHover { hovering in
