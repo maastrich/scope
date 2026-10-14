@@ -14,12 +14,14 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var model = model
-        // Before any child is built: the tokens read it as they are drawn.
+        // The chrome is rebuilt when the colours change (Settings ▸ Appearance): the tokens are plain values read
+        // while a view is drawn, so nothing else would tell the sidebar and the inspector to draw again. The scene
+        // is left alone — rebuilding it would take the terminal off screen — and handles its own empty views.
         let theme = model.config.preferences.chromeTheme
-        let _ = (ChromePalette.theme = theme)
         HStack(spacing: 0) {
             if sidebarPresented {
                 SidebarView()
+                    .id(theme)
                     .frame(width: model.sidebarWidth)
                     .transition(.move(edge: .leading))
                 ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, label: "Sidebar width")
@@ -28,6 +30,7 @@ struct RootView: View {
             if inspectorPresented.wrappedValue {
                 ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, label: "Inspector width")
                 InspectorView()
+                    .id(theme)
                     .frame(width: model.inspectorWidth)
                     .transition(.move(edge: .trailing))
             }
@@ -35,7 +38,6 @@ struct RootView: View {
         .background(Surface.ground)
         .toolbarBackground(Surface.surface, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
-        .id(theme)
         // Nothing left to maximize: a window without sidebar and without thread would be a dead end.
         .onChange(of: model.currentThread?.id) { _, id in
             if id == nil { model.restoreLayout() }

@@ -561,6 +561,18 @@ in particular; daily references are GitHub, Slack, Linear, Sentry, Zed, Arc, Cla
 - **One ground.** The inspector panels were painted with `textBackgroundColor`, a system grey off the palette in
   dark; they use `Surface.ground`.
 
+Found by looking at the captures and fixed in the same pass:
+
+- A scope left on its own row — the empty view of a scope with no thread — came back to that empty view even after
+  an agent had opened threads in it. A remembered scope row now counts as a first visit once the scope has threads.
+- Switching scope rebuilt the list and brought the system's selection bar back; the remover now looks for the
+  table again each time the list is rebuilt.
+- Changing the colours rebuilt the whole window and left the terminal blank. Only the sidebar, the inspector and
+  the empty views are rebuilt; the terminals are repainted in place.
+- The window title read `@acme › refresh-token › refresh-token`: a thread is named after its task, so a step equal
+  to the one before it is said once.
+- Delta and Pull Request stay dimmed, with a tooltip, while no task is selected.
+
 This reverses two calls of [`OPAQUE_AQUA.md`](OPAQUE_AQUA.md): the accent-filled selection, and "keep every macOS
 convention". The state colours and their shapes are untouched.
 
@@ -572,7 +584,10 @@ overflow at 220, 264 and 330 pt, detailed and compact rows, the by-state groups,
 sentence, the Settings rows. Driven through the model and read back: Base following an agent's file into the
 second repository of a task, a pin kept by its task and not seen by another, Delta surviving a detour through a
 loose thread, a scope restored to its task and thread.
-**Not tried:** anything that needs a hand — the swipe, the tile drag, the pickers' menus, the slide.
+Also captured: both colour sets in both appearances, a live switch between them with a thread on screen, the
+selection after a scope switch.
+**Not tried:** anything that needs a hand — the swipe, the tile drag, the pickers' menus, the slide. Git facts took
+most of a minute to appear after a launch that restarts six shell threads; not investigated, and not new.
 
 ---
 

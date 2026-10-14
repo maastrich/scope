@@ -15,11 +15,14 @@ struct SceneView: View {
                     ThreadPane(session: session)
                 } else if let task = model.currentTask {
                     TaskEmptyView(task: task)
+                        .id(model.config.preferences.chromeTheme)
                 } else {
                     ScopeEmptyView(scope: scope)
+                        .id(model.config.preferences.chromeTheme)
                 }
             } else {
                 SceneEmptyView()
+                    .id(model.config.preferences.chromeTheme)
             }
         }
         .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)

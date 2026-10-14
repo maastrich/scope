@@ -187,27 +187,44 @@ extension EnvironmentValues {
 /// is an `NSTableView` underneath, whose highlight is the system accent, full width — the one thing a `List`
 /// offers no modifier for.
 struct ListSelectionHighlightRemover: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { NSView() }
+    func makeNSView(context: Context) -> NSView { Probe() }
 
     func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async {
-            var ancestor = view.superview
-            while let current = ancestor {
-                if let table = Self.table(in: current) {
-                    table.selectionHighlightStyle = .none
-                    return
-                }
-                ancestor = current.superview
-            }
-        }
+        (view as? Probe)?.apply()
     }
 
-    private static func table(in view: NSView) -> NSTableView? {
-        if let table = view as? NSTableView { return table }
-        for subview in view.subviews {
-            if let table = table(in: subview) { return table }
+    /// Looks for the table from its own place in the hierarchy. The list may not have built its table yet when
+    /// this view lands in the window — and is rebuilt whenever the list is, on a scope switch — so it looks again
+    /// a few times rather than once.
+    private final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
         }
-        return nil
+
+        func apply() {
+            for delay in [0, 0.05, 0.25, 0.8] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self else { return }
+                    var ancestor = self.superview
+                    while let current = ancestor {
+                        if let table = Self.table(in: current) {
+                            table.selectionHighlightStyle = .none
+                            return
+                        }
+                        ancestor = current.superview
+                    }
+                }
+            }
+        }
+
+        private static func table(in view: NSView) -> NSTableView? {
+            if let table = view as? NSTableView { return table }
+            for subview in view.subviews {
+                if let table = table(in: subview) { return table }
+            }
+            return nil
+        }
     }
 }
 
