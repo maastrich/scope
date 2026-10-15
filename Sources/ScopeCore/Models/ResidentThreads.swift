@@ -70,6 +70,8 @@ public struct ResidentReconciliation: Sendable, Equatable {
 public enum ResidentHold: Sendable, Equatable {
     /// Stop (⌘.), or an agent's `thread stop`: the user wants it stopped, so it stays stopped until Relaunch.
     case stopped
+    /// ⇧ was held while the app opened: the way out of a driver that dies as soon as it starts.
+    case skippedOnce
     /// The command could not be executed (exit 127): restarting would fail the same way.
     case cannotStart
     /// It died too soon after starting this many times in a row.
@@ -79,6 +81,7 @@ public enum ResidentHold: Sendable, Equatable {
     public var reason: String {
         switch self {
         case .stopped: "it was stopped"
+        case .skippedOnce: "⇧ was held while Scope opened"
         case .cannotStart: "its command could not be started"
         case .keepsExiting(let count): "it exited \(count) times in a row within seconds of starting"
         }

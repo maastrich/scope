@@ -86,7 +86,8 @@ struct ScopeCommands: Commands {
                 }
             }
             .keyboardShortcut("w", modifiers: .command)
-            .disabled(model?.selectedThreadID == nil)
+            // The scope's orchestrator and terminal stay: Stop (⌘.) is what they offer.
+            .disabled(model?.selectedThreadID == nil || currentThread?.record.resident != nil)
 
             Button("Undo Close Thread") {
                 model?.undoCloseThread()

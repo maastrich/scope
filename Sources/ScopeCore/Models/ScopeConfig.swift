@@ -400,8 +400,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// resuming the driver session when they can. On by default; holding ⇧ while the app opens skips it once.
     public var autoRelaunchThreads: Bool
     /// Driver of the orchestrator every scope keeps at its root (`ResidentRole.orchestrator`). Empty — the default —
-    /// means *automatic*: the first agent profile installed, as for `defaultDriverID`. A running orchestrator keeps
-    /// its driver until it next starts.
+    /// means *automatic*: `defaultDriverID` unless that is the shell, else the first agent profile installed. A running
+    /// orchestrator keeps its driver until it next starts.
     public var orchestratorDriverID: String
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement

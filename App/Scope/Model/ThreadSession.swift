@@ -105,6 +105,13 @@ final class ThreadSession: Identifiable {
         onRecordChanged?(record)
     }
 
+    /// Makes an ordinary thread of a resident one (a second claim on its role) or the reverse.
+    func setResident(_ role: ResidentRole?) {
+        guard role != record.resident else { return }
+        record.resident = role
+        onRecordChanged?(record)
+    }
+
     /// The thread was running when the app went down and stays stopped this time (auto-relaunch off, skipped or
     /// blocked): it must not come back at a later launch either.
     func forgetProcessAlive() {

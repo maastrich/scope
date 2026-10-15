@@ -6,7 +6,7 @@ import ScopeTasks
 /// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
 /// the two scope-wide views as buttons (`GlobalViewsRow`: Pull Requests and Graph, each a sheet over the window),
 /// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
-/// of `SidebarItem`s as **one tree** — a **Loose threads** group holding the threads that belong to no task, then
+/// of `SidebarItem`s as **one tree** — the scope's orchestrator and terminal, a **Loose threads** group holding the threads that belong to no task, then
 /// the tasks with their own threads nested — followed by **Repositories** (collapsed by default,
 /// `ScopeState.reposShown`), which is a launcher rather than work. The New Thread / New Task footer closes it. Other scopes are reached through the switcher, ⌘K or ⌘O.
 /// It is the only thread switcher: picking a thread hands the keyboard straight back to its terminal.
@@ -318,6 +318,7 @@ struct SidebarView: View {
     private func workSection(_ scope: ScopeState) -> some View {
         Section {
             let tasks = visibleTasks(in: scope)
+            residentRows(scope)
             if model.config.preferences.sidebarArrangement == .byState {
                 stateGroups(scope, tasks: tasks)
             } else {
@@ -362,6 +363,18 @@ struct SidebarView: View {
                         .tag(SidebarItem.thread(session.id))
                 }
             }
+        }
+    }
+
+    /// The scope's orchestrator and terminal, first, in both arrangements. They are furniture rather than work: always
+    /// in the same two places, so the hand finds them without reading — ⌘1 and ⌘2 — and never moved between state
+    /// groups. Their state dot still says when the orchestrator waits for you. Not in **Loose threads**, which holds
+    /// what someone opened and can close.
+    @ViewBuilder
+    private func residentRows(_ scope: ScopeState) -> some View {
+        ForEach(model.residents(in: scope.id).filter { matches($0.title) }) { session in
+            ThreadRow(session: session, depth: 1)
+                .tag(SidebarItem.thread(session.id))
         }
     }
 

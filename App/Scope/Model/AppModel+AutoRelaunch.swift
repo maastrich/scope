@@ -17,6 +17,7 @@ extension AppModel {
             enabled: config.preferences.autoRelaunchThreads,
             skippedOnce: skippedOnce,
             focus: selectedThreadID,
+            residentScope: currentScopeID,
             pathExists: { ScopeState.rootExists(URL(fileURLWithPath: $0, isDirectory: true)) }
         )
 
@@ -30,6 +31,7 @@ extension AppModel {
             }
         }
         reportSkippedRelaunches(plan, orphans: orphans)
+        holdResidentsSkippedAtLaunch(plan.skipped.filter { $0.skip == .skippedOnce }.map(\.id))
 
         guard !plan.launches.isEmpty else { return }
         Log.app.info("auto-relaunching \(plan.launches.count) threads")
