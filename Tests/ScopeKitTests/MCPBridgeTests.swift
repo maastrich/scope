@@ -82,7 +82,8 @@ import Testing
         let text = MCPBridge.instructions.lowercased()
         #expect(!text.contains("dry_run"))
         #expect(text.contains("without asking"))
-        #expect(text.contains("depth"))
+        #expect(text.contains("a task may create tasks"))
+        #expect(text.contains("caps how many"))
         #expect(text.contains("a refusal is an answer"))
     }
 }

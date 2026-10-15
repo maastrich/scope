@@ -138,16 +138,41 @@ struct AutomationSettingsView: View {
                 Text("Requests from a thread Scope is running. Your own terminal is always allowed.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
-                SettingsRow("Depth ceiling") {
+                SettingsRow("Open tasks") {
+                    HStack(spacing: 8) {
+                        Text("\(settings.maxAgentTasks)")
+                            .foregroundStyle(Ink.primary)
+                        ScopeStepper(value: settings.maxAgentTasks, range: AutomationSettings.budgetRange) {
+                            automation(\.maxAgentTasks).wrappedValue = $0
+                        }
+                    }
+                }
+                SettingsRow("Running threads") {
+                    HStack(spacing: 8) {
+                        Text("\(settings.maxAgentThreads)")
+                            .foregroundStyle(Ink.primary)
+                        ScopeStepper(value: settings.maxAgentThreads, range: AutomationSettings.budgetRange) {
+                            automation(\.maxAgentThreads).wrappedValue = $0
+                        }
+                    }
+                }
+                Text("How much agents may keep open at once, every scope together: tasks until they are archived, "
+                     + "threads while they run. Any task may create tasks, so this is what stops a loop of agents "
+                     + "starting agents. What you open yourself never counts.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Depth") {
                     HStack(spacing: 8) {
                         Text(depthCaption)
                             .foregroundStyle(Ink.primary)
-                        ScopeStepper(value: model.config.preferences.automationSettings.maxDepth,
-                                     range: 0...5) { automation(\.maxDepth).wrappedValue = $0 }
+                        ScopeStepper(value: settings.depthLimit ?? Self.noDepthLimit, range: 0...Self.noDepthLimit) { value in
+                            automation(\.depthLimit).wrappedValue = value >= Self.noDepthLimit ? nil : value
+                        }
                     }
                 }
-                Text("A thread you opened is at depth 0. The ceiling is how far a chain of agents opening "
-                     + "agents may go.")
+                Text("A thread you opened is at depth 0; what an agent opens from it is one deeper. Leave it without "
+                     + "a limit unless you want agents fenced to a few generations.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -158,7 +183,7 @@ struct AutomationSettingsView: View {
                     }
                 }
                 Text("Which threads an agent may read, type into, stop or close — in any task or scope, or only "
-                     + "the ones it opened. A message from an agent always says which thread sent it.")
+                     + "the ones it opened and those they opened in turn. A message from an agent always says which thread sent it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -174,7 +199,8 @@ struct AutomationSettingsView: View {
                         ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                 }
-                Text("A task writes a branch and one worktree per repository, which is why it asks by default.")
+                Text("A task writes a branch and one worktree per repository. After asking shows one question at "
+                     + "a time; one left unanswered past the timeout is refused.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -212,12 +238,17 @@ struct AutomationSettingsView: View {
         )
     }
 
+    private var settings: AutomationSettings { model.config.preferences.automationSettings }
+
+    /// The stepper's top step, which reads as no limit.
+    private static let noDepthLimit = 10
+
     private var depthCaption: String {
-        let depth = model.config.preferences.automationSettings.maxDepth
-        return switch depth {
-        case 0: "0 — agents may not open threads"
-        case 1: "1 — an agent may open a thread, that thread may not"
-        default: "\(depth) generations"
+        switch settings.depthLimit {
+        case nil: "no limit"
+        case 0: "0 — agents may not open threads or tasks"
+        case 1: "1 — what an agent opens may not open more"
+        case let depth?: "\(depth) generations"
         }
     }
 

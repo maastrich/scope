@@ -112,7 +112,8 @@ public actor TaskManager {
         name: String, branch: String, slug requestedSlug: String? = nil, initialPrompt: String? = nil,
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
-        contextFiles: [String] = [], createdBy: String? = nil
+        contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
+        origin: ThreadOrigin? = nil
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -139,7 +140,7 @@ public actor TaskManager {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
-            portBase: allocatePort()
+            portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -221,6 +222,22 @@ public actor TaskManager {
         try await persist(record)
         records[id] = record
         return record
+    }
+
+    /// Files the tasks `ids` under `topic` (`nil` takes them out of any). Unknown ids are skipped; the records
+    /// that changed are returned.
+    @discardableResult
+    public func setTopic(_ topic: String?, for ids: [TaskID]) async throws -> [TaskRecord] {
+        let topic = TaskTopic.normalize(topic)
+        var changed: [TaskRecord] = []
+        for id in ids {
+            guard var record = records[id], record.topic != topic else { continue }
+            record.topic = topic
+            try await persist(record)
+            records[id] = record
+            changed.append(record)
+        }
+        return changed
     }
 
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.

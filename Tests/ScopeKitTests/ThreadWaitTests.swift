@@ -93,7 +93,7 @@ import Testing
     @Test func waitingIsGatedLikeReading() {
         let wait = ControlCall.threadWait(ThreadWaitParams(threads: ["3f9a2c17be04"]))
         let agent = ControlOrigin.thread(ThreadID(rawValue: "8c1d0e5a7f22")!, depth: 1)
-        #expect(AutomationPolicy(settings: AutomationSettings(maxDepth: 1)).decide(wait, from: agent) == .allow)
+        #expect(AutomationPolicy(settings: AutomationSettings(depthLimit: 1)).decide(wait, from: agent) == .allow)
         guard case .refuse = AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false)).decide(wait, from: agent) else {
             Issue.record("an agent waited on a thread with agents turned off")
             return

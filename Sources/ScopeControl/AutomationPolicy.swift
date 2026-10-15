@@ -18,24 +18,65 @@ public enum ControlOrigin: Sendable, Equatable {
     case externalAgent(client: String)
 }
 
+extension ControlOrigin {
+    /// A caller the automation settings govern: a Scope thread or an agent outside Scope.
+    public var isAgent: Bool {
+        switch self {
+        case .thread, .externalAgent: true
+        case .user, .strangerThread: false
+        }
+    }
+}
+
+/// What agents keep open right now, every scope together — or what one request would add to it.
+///
+/// The budgets count this rather than how deep a chain goes: a loop of tasks creating tasks costs a worktree and a
+/// process per turn whatever its shape, and one agent fanning out wide fills the disk as surely as a deep chain.
+public struct AutomationLoad: Sendable, Equatable {
+    /// Tasks an agent created and nobody archived or closed yet.
+    public var tasks: Int
+    /// Threads an agent opened (a task's first thread included) that are still running.
+    public var threads: Int
+
+    public init(tasks: Int = 0, threads: Int = 0) {
+        self.tasks = tasks
+        self.threads = threads
+    }
+
+    public static let zero = AutomationLoad()
+
+    public var isZero: Bool { tasks == 0 && threads == 0 }
+
+    public static func + (lhs: AutomationLoad, rhs: AutomationLoad) -> AutomationLoad {
+        AutomationLoad(tasks: lhs.tasks + rhs.tasks, threads: lhs.threads + rhs.threads)
+    }
+
+    public static func - (lhs: AutomationLoad, rhs: AutomationLoad) -> AutomationLoad {
+        AutomationLoad(tasks: max(0, lhs.tasks - rhs.tasks), threads: max(0, lhs.threads - rhs.threads))
+    }
+}
+
+/// The share of the budgets held by requests that were allowed and are still being carried out.
+///
+/// Creating a task awaits a proposal and a worktree for seconds; five calls sent together would otherwise all be
+/// measured against a count none of them has raised yet. `ControlDispatch` reserves before the work starts and
+/// releases once the work is over, when the app's own count has taken over.
+@MainActor
+public final class AutomationReservations {
+    public private(set) var pending = AutomationLoad.zero
+
+    public init() {}
+
+    public func reserve(_ load: AutomationLoad) { pending = pending + load }
+    public func release(_ load: AutomationLoad) { pending = pending - load }
+}
+
 /// The names clients give themselves in `ControlCaller.client`, before the `/version`.
 public enum ControlClientName {
     /// The `scope` command line — the user typing.
     public static let cli = "scope-cli"
     /// `scope mcp` — an agent speaking MCP.
     public static let mcp = "scope-mcp"
-}
-
-extension ThreadOrigin {
-    /// Whether an agent asked for this thread — the question the sidebar's origin marker answers.
-    ///
-    /// Not `author == .control` alone: that is also you typing `scope thread new` in a terminal of your own,
-    /// which `AutomationPolicy.origin` already counts as the user. An agent is a thread of this app (it has a
-    /// `parent`) or `scope mcp` reached from a session outside it.
-    public var openedByAgent: Bool {
-        guard author == .control else { return false }
-        return parent != nil || (client ?? "").hasPrefix(ControlClientName.mcp + "/")
-    }
 }
 
 /// What to do with a request, before anything happens.
@@ -50,9 +91,10 @@ public enum PolicyDecision: Sendable, Equatable {
 
 /// The rules between a control request and the app doing anything.
 ///
-/// Pure and testable on its own: the app hands it the settings and the resolved origin, it answers what to
-/// do. The two things it exists for are the recursion ceiling — an agent opening agents opening agents — and
-/// the fact that creating a task writes branches and worktrees into the user's repositories.
+/// Pure and testable on its own: the app hands it the settings, the resolved origin and what agents keep open, it
+/// answers what to do. What it exists for is agents opening agents without anyone watching — any task may create
+/// tasks, so the guard is a budget of live agent work (`maxAgentTasks`, `maxAgentThreads`) rather than a depth —
+/// and the fact that creating a task writes branches and worktrees into the user's repositories.
 public struct AutomationPolicy: Sendable, Equatable {
     public var settings: AutomationSettings
 
@@ -85,8 +127,42 @@ public struct AutomationPolicy: Sendable, Equatable {
         return caller.client.hasPrefix(ControlClientName.mcp + "/") ? .externalAgent(client: caller.client) : .user
     }
 
-    /// What should happen to `call` coming from `origin`.
-    public func decide(_ call: ControlCall, from origin: ControlOrigin) -> PolicyDecision {
+    /// What `call` would add to the agents' load if it went ahead. A dry run creates nothing.
+    public static func cost(of call: ControlCall) -> AutomationLoad {
+        switch call {
+        case .threadNew: AutomationLoad(threads: 1)
+        case .taskNew(let params) where !params.dryRun: AutomationLoad(tasks: 1, threads: params.openThread ? 1 : 0)
+        default: .zero
+        }
+    }
+
+    /// The refusal for `call` when agents already hold `load` and it would take them past a budget, else `nil`.
+    /// Only agents have budgets: what you open yourself is never counted and never refused.
+    public func budgetRefusal(_ call: ControlCall, from origin: ControlOrigin, load: AutomationLoad) -> ControlError? {
+        guard origin.isAgent else { return nil }
+        let cost = AutomationPolicy.cost(of: call)
+        if cost.tasks > 0, load.tasks + cost.tasks > settings.maxAgentTasks {
+            return .denied(
+                "agents already keep \(load.tasks) tasks open, the most Scope allows them",
+                detail: "Archive the tasks you created that are done (`scope task archive <slug>`, their branches are "
+                    + "kept) and ask "
+                    + "again, or have the user raise Settings ▸ Automation ▸ Open tasks "
+                    + "(preferences.automation.maxAgentTasks, now \(settings.maxAgentTasks))."
+            )
+        }
+        if cost.threads > 0, load.threads + cost.threads > settings.maxAgentThreads {
+            return .denied(
+                "agents already keep \(load.threads) threads running, the most Scope allows them",
+                detail: "Wait for the threads you opened (`scope thread wait`) and close those that are done "
+                    + "(`scope thread close <id>`), or have the user raise Settings ▸ Automation ▸ Running threads "
+                    + "(preferences.automation.maxAgentThreads, now \(settings.maxAgentThreads))."
+            )
+        }
+        return nil
+    }
+
+    /// What should happen to `call` coming from `origin`, with `load` already held by agents.
+    public func decide(_ call: ControlCall, from origin: ControlOrigin, load: AutomationLoad = .zero) -> PolicyDecision {
         guard call.method.isGated else { return .allow }
 
         switch origin {
@@ -123,13 +199,14 @@ public struct AutomationPolicy: Sendable, Equatable {
                 approval = settings.tasks
             case .threadNew, .taskNew:
                 let childDepth = depth + 1
-                guard childDepth <= settings.maxDepth else {
+                if let limit = settings.depthLimit, childDepth > limit {
                     return .refuse(.denied(
                         "\(AutomationPolicy.describe(origin, depth: depth)) may not open another",
-                        detail: "The chain would reach depth \(childDepth), past the ceiling of \(settings.maxDepth). "
-                            + "Raise preferences.automation.maxDepth if that is what you want."
+                        detail: "The chain would reach depth \(childDepth), past the limit of \(limit) the user set in "
+                            + "Settings ▸ Automation ▸ Depth (preferences.automation.depthLimit)."
                     ))
                 }
+                if let refusal = budgetRefusal(call, from: origin, load: load) { return .refuse(refusal) }
                 approval = call.method == .threadNew ? settings.threads : settings.tasks
             }
             return switch approval {
@@ -144,9 +221,10 @@ public struct AutomationPolicy: Sendable, Equatable {
     /// Whether `origin` may stop, close, type into or read the thread `id`, which `target` says was opened by whom.
     ///
     /// You may touch any thread. With `reach` at `any`, so may an agent — bar itself: a thread typing into its
-    /// own terminal is a prompt loop with no one at the keyboard. With `own`, an agent may touch only the threads
-    /// it opened itself, and an agent outside Scope, which has no thread of its own to be the parent of anything,
-    /// only the threads agents outside Scope opened.
+    /// own terminal is a prompt loop with no one at the keyboard. With `own`, an agent may touch only what it set in
+    /// motion: the threads it opened, the threads those opened, and so on down — an orchestrator must be able to
+    /// wait for the grandchild its task started. Not a sibling's, not its parent's. An agent outside Scope, which has
+    /// no thread of its own to be the ancestor of anything, only the threads agents outside Scope opened.
     public static func mayTouch(_ target: ThreadOrigin, id: ThreadID? = nil, from origin: ControlOrigin,
                                 reach: AutomationSettings.ThreadReach = .own) -> ControlError? {
         switch origin {
@@ -160,8 +238,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                                    detail: "The message would land in your own terminal. Pick another thread from `scope list threads`.")
             }
             guard reach == .own else { return nil }
-            guard target.parent == own.rawValue else {
-                return .denied("an agent may only act on the threads it opened",
+            guard target.lineage.contains(own.rawValue) else {
+                return .denied("an agent may only act on the threads it opened and the ones those opened",
                                detail: "Ask the user, or use `scope list threads` to find the ones you opened. "
                                    + "Settings ▸ Automation ▸ Talking to threads opens every thread.")
             }

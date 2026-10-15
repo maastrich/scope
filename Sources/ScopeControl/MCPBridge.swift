@@ -39,9 +39,10 @@ public enum MCPBridge {
     in a sandbox rather than in the user's checkout.
 
     The user runs Scope so agents can work unattended: open threads and create tasks when the work calls for \
-    it, without asking them first. Scope refuses recursion past its configured depth and applies whatever \
-    approval the user set in its settings — a refusal is an answer, not an error to work around; scope_ping \
-    says what is allowed right now. Hand work to a thread with everything it needs to finish alone, then \
+    it, without asking them first, from inside a task as well: a task may create tasks. Scope caps how many \
+    tasks and threads agents keep open at once and applies whatever approval the user set in its settings — \
+    a refusal is an answer, not an error to work around; scope_ping says what is allowed right now. Archive \
+    the tasks you created once they are done: they hold that budget until then. Hand work to a thread with everything it needs to finish alone, then \
     follow it with scope_thread_wait (blocks until it is done, answers with its last reply) rather than by \
     polling scope_thread_read. Threads talk to each other: scope_list shows every thread, in any task or scope, \
     and scope_thread_send hands one a message that names you as its sender (the setting Talking to threads can \
@@ -75,8 +76,7 @@ public enum MCPBridge {
             a task's sandbox, and the answer is the new thread's id. Give `prompt` to hand the driver its \
             opening request: make it complete — goal, constraints, what done looks like — so the agent works \
             alone instead of coming back with questions. Follow it with scope_thread_wait. Scope refuses this \
-            when the chain of agents opening agents would go past the depth the user allowed (by default a \
-            thread you open cannot open threads of its own).
+            when agents already keep as many threads running as the user allows; close the ones that are done.
             """,
             schema: """
             {"type":"object","properties":{\
@@ -99,7 +99,10 @@ public enum MCPBridge {
             repositories are proposed from the prompt unless you give them. dry_run answers with what would be \
             created and writes nothing — worth it only when you cannot tell which repositories the work needs. \
             The real call may wait for the user to approve it; a refusal is an answer, not an error to work \
-            around. The answer names the task and its first thread: follow that with scope_thread_wait.
+            around. The answer names the task and its first thread: follow that with scope_thread_wait. Works \
+            from inside a task too. Tasks sharing a topic sit together in the user's sidebar: when you start \
+            several for one piece of work, give them the same topic; from inside a task, yours is passed on \
+            unless you name another.
             """,
             schema: """
             {"type":"object","properties":{\
@@ -112,7 +115,8 @@ public enum MCPBridge {
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
-            "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."}\
+            "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."},\
+            "topic":{"type":"string","description":"Short name of the piece of work this task belongs to, shared by its sibling tasks; omitted inherits the topic of the task you are in."}\
             },"required":["prompt"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -244,7 +248,7 @@ public enum MCPBridge {
         MCPTool(
             name: "scope_ping",
             title: "Check Scope",
-            description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, the depth ceiling, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying.",
+            description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying.",
             schema: #"{"type":"object","properties":{},"additionalProperties":false}"#,
             readOnly: true
         ),
@@ -469,9 +473,10 @@ public enum MCPBridge {
         var dryRun: Bool?
         var openThread: Bool?
         var runSetup: Bool?
+        var topic: String?
 
         private enum CodingKeys: String, CodingKey {
-            case prompt, scope, repos, branch, title, slug, driver
+            case prompt, scope, repos, branch, title, slug, driver, topic
             case dryRun = "dry_run"
             case openThread = "open_thread"
             case runSetup = "run_setup"
@@ -480,7 +485,7 @@ public enum MCPBridge {
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
-                          runSetup: runSetup ?? true)
+                          runSetup: runSetup ?? true, topic: topic)
         }
     }
 }

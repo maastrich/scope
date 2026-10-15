@@ -20,13 +20,49 @@ final class AppControlService: ControlService {
 
     var automation: AutomationSettings { model.config.preferences.automationSettings }
 
+    let reservations = AutomationReservations()
+
+    /// Every scope together: the budgets guard the machine, and a loop does not stay in one scope.
+    var agentLoad: AutomationLoad {
+        AutomationLoad(
+            tasks: model.tasks.filter { !$0.isArchived && $0.record.createdByAgent }.count,
+            threads: model.threads.filter { $0.isAlive && $0.record.resolvedOrigin.openedByAgent }.count
+        )
+    }
+
+    /// The confirmation on screen, then the ones waiting behind it.
+    private var confirmations: Task<Bool, Never>?
+    private var waitingConfirmations = 0
+    /// Past this many questions waiting their turn, a request is refused outright: a burst of approvals from one
+    /// loop is a sign to stop it, not a queue to work through.
+    private static let maxWaitingConfirmations = 3
+
     /// A `SCOPE_THREAD` is only worth something when it names a thread this app is running: the variable
     /// lives in a process the user owns and anything under that account can write it.
     func origin(for caller: ControlCaller) -> ControlOrigin {
         AutomationPolicy.origin(of: caller) { [model] id in model.session(id)?.record.resolvedOrigin.depth }
     }
 
+    /// One question at a time: a burst of agents asking at once used to stack sheets whose deadlines all ran from
+    /// the moment they were asked. Each still answers within the approval timeout of its own request — the caller
+    /// is waiting — so one that never reached the screen in time is refused.
     func confirm(_ subject: String, from origin: ControlOrigin, caller: ControlCaller) async -> Bool {
+        guard waitingConfirmations < Self.maxWaitingConfirmations else { return false }
+        let deadline = Date.now.addingTimeInterval(TimeInterval(automation.approvalTimeout))
+        let previous = confirmations
+        waitingConfirmations += 1
+        let turn = Task { @MainActor [weak self] () -> Bool in
+            _ = await previous?.value
+            self?.waitingConfirmations -= 1
+            let remaining = Int(deadline.timeIntervalSinceNow.rounded(.down))
+            guard let self, remaining >= 5 else { return false }
+            return await self.present(subject, from: origin, caller: caller, timeout: remaining)
+        }
+        confirmations = turn
+        return await turn.value
+    }
+
+    private func present(_ subject: String, from origin: ControlOrigin, caller: ControlCaller, timeout: Int) async -> Bool {
         let who: String = switch origin {
         case .user: "Something on your machine"
         case .thread(let id, let depth): "The agent in thread \(id.rawValue)\(depth == 0 ? "" : " (depth \(depth))")"
@@ -40,7 +76,7 @@ final class AppControlService: ControlService {
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Refuse")
         NSApp.requestUserAttention(.informationalRequest)
-        return await AppControlService.ask(alert, timeout: automation.approvalTimeout)
+        return await AppControlService.ask(alert, timeout: timeout)
     }
 
     func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
@@ -292,7 +328,8 @@ final class AppControlService: ControlService {
             id: task.record.id.rawValue, name: task.name, slug: task.record.slug, branch: task.branch,
             scope: scope?.name ?? task.record.scopeName, scopeSlug: task.record.scopeSlug,
             root: task.record.root, repos: task.activeRepos.map(\.repoRelativePath),
-            threads: model.threads(in: task.record.id).map(\.id.rawValue)
+            threads: model.threads(in: task.record.id).map(\.id.rawValue),
+            topic: task.record.topic, parentTask: task.record.parentTask?.rawValue
         )
     }
 
@@ -333,9 +370,7 @@ final class AppControlService: ControlService {
             }
         }
 
-        let parent: String? = if case .thread(let id, _) = origin { id.rawValue } else { nil }
-        let threadOrigin = ThreadOrigin(author: .control, parent: parent,
-                                        depth: AutomationPolicy.childDepth(of: origin), client: caller.client)
+        let threadOrigin = childOrigin(of: origin, caller: caller)
         guard let session = await model.newThread(in: scopeID, driverID: params.driver, cwdKind: cwdKind,
                                                   taskID: taskID, title: params.title, initialPrompt: params.prompt,
                                                   origin: threadOrigin) else {
@@ -453,16 +488,24 @@ final class AppControlService: ControlService {
             )))
         }
 
-        let parent: String? = if case .thread(let id, _) = origin { id.rawValue } else { nil }
-        let threadOrigin = ThreadOrigin(author: .control, parent: parent,
-                                        depth: AutomationPolicy.childDepth(of: origin), client: caller.client)
+        let threadOrigin = childOrigin(of: origin, caller: caller)
+        // The task the caller sits in, if any: the new one is filed with it.
+        let parentTask: TaskState? = if case .thread(let id, _) = origin {
+            model.session(id)?.record.taskID.flatMap { raw in model.tasks.first { $0.record.id.rawValue == raw } }
+        } else { nil }
+        let topic = TaskTopic.inherit(requested: params.topic, parentTopic: parentTask?.record.topic,
+                                      parentName: parentTask?.name)
         let state: TaskState
         do {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
-                                               runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client)
+                                               runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
+                                               topic: topic.child, parentTask: parentTask?.id)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
+        }
+        if let parentTopic = topic.parent, let parentTask {
+            await model.setTopic(parentTopic, for: [parentTask.id])
         }
         NSApp.requestUserAttention(.informationalRequest)
         let record = state.record
@@ -471,8 +514,18 @@ final class AppControlService: ControlService {
             scope: summary.name, scopeSlug: summary.slug, root: record.root,
             repos: record.repos.map { TaskRepoResult(repo: $0.repoRelativePath, worktree: $0.sandboxPath,
                                                      branch: $0.branch, branchCreated: $0.branchCreated ?? false) },
-            thread: model.threads(in: record.id).first?.id.rawValue
+            thread: model.threads(in: record.id).first?.id.rawValue, topic: record.topic
         )))
+    }
+
+    /// The origin of what `origin` opens: one generation down, with the line of threads above it, so `.own` reaches
+    /// grandchildren and `scope list` can show the depth.
+    private func childOrigin(of origin: ControlOrigin, caller: ControlCaller) -> ThreadOrigin {
+        let depth = AutomationPolicy.childDepth(of: origin)
+        guard case .thread(let id, _) = origin else {
+            return ThreadOrigin(author: .control, depth: depth, client: caller.client)
+        }
+        return .child(of: id.rawValue, origin: model.session(id)?.record.resolvedOrigin, depth: depth, client: caller.client)
     }
 
     /// Runs an alert and answers `false` if nobody touched it before `timeout` seconds.

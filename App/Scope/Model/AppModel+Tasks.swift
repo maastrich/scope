@@ -169,7 +169,7 @@ extension AppModel {
     func createTask(
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
         startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
-        threadOrigin: ThreadOrigin = .user, createdBy: String? = nil
+        threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
@@ -181,7 +181,8 @@ extension AppModel {
                 in: scope.declaration, repos: repos, startPoint: startPoint,
                 pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
                 scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
-                createdBy: createdBy
+                createdBy: createdBy, topic: topic, parentTask: parentTask,
+                origin: threadOrigin.author == .control ? threadOrigin : nil
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
@@ -200,6 +201,61 @@ extension AppModel {
         await newThread(in: scopeID, driverID: driverID, taskID: record.id,
                         initialPrompt: trimmed.isEmpty ? nil : trimmed, origin: threadOrigin)
         return state
+    }
+
+    // MARK: Topics
+
+    /// Files `ids` under `topic`, or out of any with `nil` (the task menu's Topic submenu, an agent's inherited topic).
+    func setTopic(_ topic: String?, for ids: [TaskID]) async {
+        do {
+            for record in try await env.tasks.setTopic(topic, for: ids) {
+                task(record.id)?.update(record: record)
+            }
+        } catch {
+            problems.error("Could not change the topic", detail: String(describing: error))
+        }
+    }
+
+    /// The open tasks of `scope` filed under `topic`, whatever its spelling.
+    func tasks(inTopic topic: String, scope: ScopeID) -> [TaskState] {
+        let key = TaskTopic.key(topic)
+        return tasks(in: scope).filter { $0.record.topic.map(TaskTopic.key) == key }
+    }
+
+    /// The topics in use among the open tasks of `scope`, for the Topic submenu.
+    func topics(in scope: ScopeID) -> [String] {
+        TaskTopic.distinct(tasks(in: scope).map(\.record.topic))
+    }
+
+    /// Renames a topic on every open task of `scope` filed under it.
+    func renameTopic(_ topic: String, to newName: String, in scope: ScopeID) async {
+        guard let newName = TaskTopic.normalize(newName) else { return }
+        await setTopic(newName, for: tasks(inTopic: topic, scope: scope).map(\.id))
+    }
+
+    /// "New Topic…" / "Rename Topic…": an alert with a text field. `nil` when cancelled or left empty.
+    func promptTopicName(title: String, current: String?, action: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = "Tasks sharing a topic sit together in the sidebar. Agents file the tasks they create "
+            + "under the topic of the task they work in."
+        alert.addButton(withTitle: action)
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(string: current ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+        field.placeholderString = "Topic"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return TaskTopic.normalize(field.stringValue)
+    }
+
+    /// Archives every open task filed under `topic`: one piece of work, put away together. One after the other, so
+    /// a failure is reported against the task it happened to and the rest still go.
+    func archiveTopic(_ topic: String, in scope: ScopeID) async {
+        for task in tasks(inTopic: topic, scope: scope) {
+            await archiveTask(task.id)
+        }
     }
 
     /// Adds a base repo of the scope to a running task (context menu *Add repo…*).

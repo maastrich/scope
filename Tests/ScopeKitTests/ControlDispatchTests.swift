@@ -13,6 +13,12 @@ import Testing
         var performed: [ControlCall] = []
         var confirmations: [String] = []
         var answer: Result<ControlResultPayload, ControlError>
+        var agentLoad = AutomationLoad.zero
+        let reservations = AutomationReservations()
+        /// How long `perform` takes, standing in for a proposal and a worktree.
+        var workTime: Duration = .zero
+        /// What agents hold while the work is being done, seen from inside `perform`.
+        var heldDuringWork: [AutomationLoad] = []
 
         init(automation: AutomationSettings = AutomationSettings(), resolved: ControlOrigin = .user,
              approval: Bool = true,
@@ -34,6 +40,8 @@ import Testing
         func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
                      progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
             performed.append(call)
+            heldDuringWork.append(reservations.pending)
+            if workTime > .zero { try? await Task.sleep(for: workTime) }
             return answer
         }
     }
@@ -85,6 +93,72 @@ import Testing
         let response = await ControlDispatch.run(ControlRequest.decode(try Self.body(call)), service: service, progress: { _ in })
         #expect(response.error?.code == .denied)
         #expect(service.performed.isEmpty)
+    }
+
+    static let agent = ControlOrigin.thread(ThreadID(rawValue: "3f9a2c17be04")!, depth: 3)
+
+    @Test func theAppsCountOfAgentWorkIsTheBudget() async throws {
+        let service = ServiceDouble(automation: AutomationSettings(maxAgentTasks: 2), resolved: Self.agent)
+        service.agentLoad = AutomationLoad(tasks: 2)
+        let response = await ControlDispatch.run(ControlRequest.decode(try Self.body(.taskNew(TaskNewParams(prompt: "x")))),
+                                                 service: service, progress: { _ in })
+        #expect(response.error?.code == .denied)
+        #expect(service.performed.isEmpty)
+    }
+
+    /// Creating a task takes seconds: two sent together must not both take the last slot.
+    @Test func requestsInFlightHoldTheirShare() async throws {
+        let service = ServiceDouble(automation: AutomationSettings(maxAgentTasks: 1), resolved: Self.agent)
+        service.workTime = .milliseconds(300)
+        let call = ControlCall.taskNew(TaskNewParams(prompt: "x"))
+        let body = try Self.body(call)
+        let first = Task { await ControlDispatch.run(ControlRequest.decode(body), service: service, progress: { _ in }) }
+        try await Task.sleep(for: .milliseconds(50))
+        let second = await ControlDispatch.run(ControlRequest.decode(body), service: service, progress: { _ in })
+        #expect(second.error?.code == .denied)
+        #expect(await first.value.ok)
+        #expect(service.performed.count == 1)
+        #expect(service.heldDuringWork == [AutomationLoad(tasks: 1, threads: 1)])
+        #expect(service.reservations.pending.isZero)
+    }
+
+    /// The user is not an agent: nothing reserved, nothing refused.
+    @Test func yourOwnRequestsHoldNothing() async throws {
+        let service = ServiceDouble(automation: AutomationSettings(maxAgentTasks: 1))
+        service.agentLoad = AutomationLoad(tasks: 40)
+        let response = await ControlDispatch.run(ControlRequest.decode(try Self.body(.taskNew(TaskNewParams(prompt: "x")))),
+                                                 service: service, progress: { _ in })
+        #expect(response.ok)
+        #expect(service.heldDuringWork == [.zero])
+    }
+
+    /// The user may take a while to answer; what was created meanwhile counts when they do.
+    @Test func theBudgetIsCheckedAgainAfterTheUserApproves() async throws {
+        let service = ServiceDouble(automation: AutomationSettings(maxAgentTasks: 1, tasks: .ask), resolved: Self.agent)
+        let gate = ApprovalThatFillsTheBudget(service: service)
+        let response = await ControlDispatch.run(ControlRequest.decode(try Self.body(.taskNew(TaskNewParams(prompt: "x")))),
+                                                 service: gate, progress: { _ in })
+        #expect(response.error?.code == .denied)
+        #expect(response.error?.message.contains("tasks open") == true)
+        #expect(service.performed.isEmpty)
+    }
+
+    /// Approves, and by the time it does another task exists.
+    final class ApprovalThatFillsTheBudget: ControlService {
+        let service: ServiceDouble
+        init(service: ServiceDouble) { self.service = service }
+        var automation: AutomationSettings { service.automation }
+        var agentLoad: AutomationLoad { service.agentLoad }
+        var reservations: AutomationReservations { service.reservations }
+        func origin(for caller: ControlCaller) -> ControlOrigin { service.resolved }
+        func confirm(_ subject: String, from origin: ControlOrigin, caller: ControlCaller) async -> Bool {
+            service.agentLoad = AutomationLoad(tasks: 1)
+            return true
+        }
+        func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
+                     progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
+            await service.perform(call, from: origin, caller: caller, progress: progress)
+        }
     }
 
     @Test func aBrokenRequestIsAnsweredNotDropped() async {
