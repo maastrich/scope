@@ -105,19 +105,66 @@ import Testing
         #expect(Self.call("scope_gc", #"{"dry_run":true}"#) == .success(.gc(GCParams(dryRun: true))))
     }
 
-    /// `dryRun` for `dry_run` once created the task it was meant to preview: an argument the schema does not
-    /// declare is refused before anything is decoded, with the spelling that was meant.
+    /// `dryRun` for `dry_run` once created the task it was meant to preview, because the decoder dropped it: an
+    /// argument is now either understood as meant or refused before anything is decoded — never dropped.
     @Test func anUnknownArgumentIsRefusedNotDropped() throws {
-        guard case .failure(let error) = Self.call("scope_task_new", #"{"prompt":"x","dryRun":true}"#) else {
-            Issue.record("dryRun was accepted"); return
+        guard case .taskNew(let params) = try Self.call("scope_task_new", #"{"prompt":"x","dryRun":true}"#).get() else {
+            Issue.record("that is a task"); return
         }
-        #expect(error.code == .badRequest && error.message.contains("dryRun"))
-        #expect(error.detail?.contains("did you mean “dry_run”") == true)
-        guard case .failure = Self.call("scope_task_close", #"{"task":"t","force":true}"#) else {
+        #expect(params.dryRun, "another spelling of a declared name is that name")
+        guard case .failure(let error) = Self.call("scope_task_close", #"{"task":"t","force":true}"#) else {
             Issue.record("force was accepted"); return
         }
+        #expect(error.code == .badRequest && error.message.contains("force"))
+        #expect(error.detail?.contains("It takes: delete_branch, task") == true)
         guard case .failure = Self.call("scope_list", #"{"kind":"threads","verbose":true}"#) else {
             Issue.record("verbose was accepted"); return
+        }
+    }
+
+    /// The spellings agents guessed in real sessions, each of which used to cost a refused call.
+    @Test func theCommandLineSpellingsAreUnderstood() throws {
+        #expect(Self.call("scope_thread_send", #"{"thread":"3f9a2c17be04","message":"go"}"#)
+            == .success(.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go"))))
+        #expect(Self.call("scope_thread_send", #"{"thread_id":"3f9a2c17be04","text":"go","no_enter":true}"#)
+            == .success(.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go", submit: false))))
+        guard case .taskNew(let params) = try Self.call("scope_task_new",
+            #"{"prompt":"x","noThread":true,"no-setup":true,"repo":"api"}"#).get() else {
+            Issue.record("that is a task"); return
+        }
+        #expect(!params.openThread && !params.runSetup && params.repos == ["api"])
+        #expect(Self.call("scope_task_archive", #"{"slug":"rate-limiting"}"#)
+            == .success(.taskArchive(TaskArchiveParams(task: "rate-limiting"))))
+        #expect(Self.call("scope_thread_read", #"{"id":"3f9a2c17be04","n":20}"#)
+            == .success(.threadRead(ThreadReadParams(thread: "3f9a2c17be04", lines: 20))))
+    }
+
+    @Test func twoSpellingsOfOneArgumentAreRefused() {
+        guard case .failure(let error) = Self.call("scope_thread_send", #"{"thread":"3f9a2c17be04","text":"a","message":"b"}"#) else {
+            Issue.record("which text?"); return
+        }
+        #expect(error.code == .badRequest && error.message.contains("both set “text”"))
+        guard case .failure = Self.call("scope_task_new", #"{"prompt":"x","open_thread":true,"no_thread":true}"#) else {
+            Issue.record("open or not?"); return
+        }
+        guard case .failure = Self.call("scope_task_new", #"{"prompt":"x","no_thread":"yes"}"#) else {
+            Issue.record("a negated flag takes a boolean"); return
+        }
+    }
+
+    /// Every alias lands on an argument its tool declares: a typo in the table would turn a guess into a refusal.
+    @Test func everyAliasNamesADeclaredArgument() throws {
+        for (name, aliases) in MCPBridge.aliases {
+            let tool = try #require(MCPBridge.tools.first { $0.name == name }, "\(name) is not a tool")
+            let schema = try JSONSerialization.jsonObject(with: Data(tool.schema.utf8)) as? [String: Any]
+            let declared = Set(((schema?["properties"] as? [String: Any]) ?? [:]).keys)
+            for (alias, target) in aliases {
+                let canonical: String = switch target {
+                case .rename(let name), .negate(let name), .wrap(let name): name
+                }
+                #expect(declared.contains(canonical), "\(name): \(alias) → \(canonical)")
+                #expect(!declared.contains(alias), "\(name): \(alias) is already declared")
+            }
         }
     }
 

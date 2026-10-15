@@ -792,7 +792,8 @@ app.</p>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
 scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
-scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor)</span>
+scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor), or --reply</span>
+scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
@@ -819,7 +820,14 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
 before. It is how an agent finds out what another thread said, without typing into it — its own child, or a
-thread in another task or scope.</p>
+thread in another task or scope. <code>--reply</code> prints only the agent's last answer, as Claude Code and
+Codex report it at the end of a turn: what it concluded, without the spinners and redraws of its terminal.</p>
+<p><code>scope thread wait</code> takes one thread id or more and returns once each has finished its turn, needs an
+answer or a permission, or exited — then prints every thread's state and last reply. <code>--any</code> returns at
+the first one, <code>--timeout</code> (600 s by default) answers anyway and names those still at work. A thread
+just handed a prompt counts as at work until its driver reports on it, so a wait right after
+<code>thread send</code> or <code>task new</code> does not return before the work starts. A shell reports no turns
+and never settles.</p>
 <p><code>scope thread send</code> from a thread is a message: it lands in the other terminal under a line
 naming its sender (thread id, title, task), so the receiving agent knows whom to answer and that the request
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
@@ -839,10 +847,12 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_gc</code>, <code>scope_ping</code>. An argument a tool does not
-declare is refused rather than ignored — <code>dryRun</code> for <code>dry_run</code> creates nothing. They are the same
+<code>scope_task_close</code>, <code>scope_gc</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
+<code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
+<code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same
 commands: the server holds no logic of its own, so the terminal and the agent can never drift apart.</p>
 <p><b>Settings ▸ Automation ▸ MCP server</b> registers it with Claude Code, Codex and Cursor for your user, so
 every session you start — in Scope or in any other terminal — has it: Claude Code through its own
@@ -850,16 +860,19 @@ every session you start — in Scope or in any other terminal — has it: Claude
 <code>~/.cursor/mcp.json</code>, touching only the <code>scope</code> entry. The command is the helper inside the app
 bundle, so an update keeps it working. By hand, the same thing:</p>
 <pre><code>{"mcpServers": {"scope": {"command": "/Applications/Scope.app/Contents/Helpers/scope", "args": ["mcp"]}}}</code></pre>
-<p><code>scope_task_new</code> is marked destructive and its description tells the agent to call it with
-<code>dry_run</code> first: the answer is then the title, branch, sandbox and worktrees it would create,
-with nothing written.</p>
+<p><code>scope_task_new</code> is marked destructive. With <code>dry_run</code> the answer is the title, branch,
+sandbox and worktrees it would create, with nothing written; the description keeps it for when the agent cannot
+tell which repositories the work needs, so a task the agent can describe costs one call.</p>
 
-<h3 id="skill">The Scope tasks skill</h3>
-<p><b>Settings ▸ Automation ▸ Skills</b> installs a <code>scope-tasks</code> skill for your user — one
+<h3 id="skill">The Scope skill</h3>
+<p><b>Settings ▸ Automation ▸ Skills</b> installs a <code>scope</code> skill for your user — one
 <code>SKILL.md</code> under <code>~/.claude/skills</code>, <code>~/.codex/skills</code> or
 <code>~/.cursor/skills</code> — so every session of those agents knows when to put work in a task, how to
-refer to one by name or slug, how to open a thread in it, read it, hand it a prompt, and close it. An app
-update that changes the text shows <i>Update</i> next to the agent; a folder of the same name that Scope did
+refer to one by name or slug, how to brief a thread so it finishes alone, wait for it and read its answer, and
+close the task — with both spellings of every command, since a session Scope did not launch has the MCP tools
+and no <code>scope</code> on its PATH. When an
+update changes the text, Scope rewrites the copies it installed at its next launch, and only those — a copy under the skill's
+former name, <code>scope-tasks</code>, moves to the new one; a folder of the same name that Scope did
 not write is never touched. A task's name and slug are one right-click away in the sidebar (<i>Copy Task
 Name</i>, <i>Copy Task Slug</i>) and a click on the copy button next to the name in the inspector.</p>
 

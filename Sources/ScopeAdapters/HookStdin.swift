@@ -22,16 +22,31 @@ public struct HookStdin: Sendable, Equatable {
     /// `notebook_path` or `path`, when absolute), else the hook's own `cwd`. A driver never reports a directory
     /// the way a shell does, so this is the only thing that says which repository of a task it is in.
     public var directory: String?
+    /// The agent's answer at the end of its turn: Claude Code's `Stop` hook (`last_assistant_message`), Codex
+    /// `notify` (`last-assistant-message`). What another agent wants when it asks what this one said — the
+    /// terminal holds the same words, wrapped, redrawn and buried under spinners.
+    public var lastAssistantMessage: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
-                toolName: String? = nil, error: String? = nil, directory: String? = nil) {
+                toolName: String? = nil, error: String? = nil, directory: String? = nil,
+                lastAssistantMessage: String? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
         self.toolName = toolName
         self.error = error
         self.directory = directory
+        self.lastAssistantMessage = lastAssistantMessage
     }
+
+    /// `true` for a command-line argument that is the driver's hook JSON itself: Codex `notify` runs the
+    /// configured program with the notification as its last argument, not on stdin.
+    public static func isInlinePayload(_ argument: String) -> Bool {
+        argument.drop(while: \.isWhitespace).first == "{"
+    }
+
+    /// Keys tried, in order, for the agent's last answer.
+    public static let lastAssistantMessageKeys = ["last_assistant_message", "last-assistant-message"]
 
     /// Keys of `tool_input` that name the file a tool works on, in the order tried.
     public static let filePathKeys = ["file_path", "notebook_path", "path"]
@@ -55,6 +70,8 @@ public struct HookStdin: Sendable, Equatable {
         result.hookEventName = (object["hook_event_name"] as? String) ?? (object["type"] as? String)
         result.toolName = object["tool_name"] as? String
         result.error = object["error"] as? String
+        result.lastAssistantMessage = lastAssistantMessageKeys.lazy.compactMap { object[$0] as? String }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let input = object["tool_input"] as? [String: Any]
         let file = filePathKeys.lazy.compactMap { input?[$0] as? String }.first { $0.hasPrefix("/") }
         if let file {
@@ -145,5 +162,24 @@ public enum HookCommandEvent: Sendable, Equatable {
     /// Every accepted word, for the usage text.
     public static var allWords: [String] {
         HookEvent.Kind.allCases.map(\.rawValue) + [notificationWord]
+    }
+}
+
+/// What an agent last answered, and when its turn ended.
+public struct AgentReply: Codable, Sendable, Equatable {
+    public var text: String
+    public var at: Date
+
+    public init(text: String, at: Date) {
+        self.text = text
+        self.at = at
+    }
+
+    /// The answer carried by a `turn.ended` event, `nil` for any other event or a driver that reports none.
+    public static func from(_ event: AdapterEvent) -> AgentReply? {
+        guard event.kind == .turnEnded else { return nil }
+        let text = event.payload[HookEvent.replyKey]
+            ?? event.raw.flatMap { HookStdin.parse(Data($0.utf8)).lastAssistantMessage }
+        return text.map { AgentReply(text: $0, at: event.receivedAt) }
     }
 }

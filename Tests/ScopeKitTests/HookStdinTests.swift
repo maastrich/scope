@@ -1,4 +1,5 @@
 import Foundation
+import ScopeCore
 import Testing
 @testable import ScopeAdapters
 
@@ -100,5 +101,36 @@ struct HookStdinTests {
         let relative = HookStdin.parse(Data(#"{"cwd":"/sandbox/task","tool_input":{"file_path":"web/a.ts"}}"#.utf8))
         #expect(relative.directory == "/sandbox/task")
         #expect(HookStdin.parse(Data(#"{"session_id":"s"}"#.utf8)).directory == nil)
+    }
+
+    @Test("the agent's last answer is lifted from Claude Code's Stop and Codex notify")
+    func lastAssistantMessage() {
+        let claude = HookStdin.parse(Data(#"{"hook_event_name":"Stop","last_assistant_message":"All green."}"#.utf8))
+        #expect(claude.lastAssistantMessage == "All green.")
+        let codex = HookStdin.parse(Data(#"{"type":"agent-turn-complete","last-assistant-message":"Done."}"#.utf8))
+        #expect(codex.lastAssistantMessage == "Done.")
+        #expect(HookStdin.parse(Data(#"{"last_assistant_message":"  "}"#.utf8)).lastAssistantMessage == nil)
+    }
+
+    @Test("only the end of a turn carries a reply; a truncated stdin carries it in the payload")
+    func agentReplyFromEvents() throws {
+        let thread = try #require(ThreadID(rawValue: "3f9a2c17be04"))
+        let at = Date(timeIntervalSince1970: 5)
+        let raw = #"{"last_assistant_message":"All green."}"#
+        #expect(AgentReply.from(AdapterEvent(threadID: thread, kind: .turnEnded, raw: raw, receivedAt: at))
+                == AgentReply(text: "All green.", at: at))
+        #expect(AgentReply.from(AdapterEvent(threadID: thread, kind: .turnStarted, raw: raw)) == nil)
+        let cut = AdapterEvent(threadID: thread, kind: .turnEnded, payload: [HookEvent.replyKey: "Long answer."],
+                               raw: #"{"last_assistant_message":"Long ans"#, receivedAt: at)
+        #expect(AgentReply.from(cut)?.text == "Long answer.")
+        #expect(AgentReply.from(AdapterEvent(threadID: thread, kind: .turnEnded)) == nil)
+    }
+
+    @Test("Codex notify hands its JSON as an argument, which is told apart from key=value")
+    func inlinePayload() {
+        #expect(HookStdin.isInlinePayload(#"{"type":"agent-turn-complete"}"#))
+        #expect(HookStdin.isInlinePayload("  {}"))
+        #expect(!HookStdin.isInlinePayload("session_id={x}"))
+        #expect(!HookStdin.isInlinePayload("turn.ended"))
     }
 }

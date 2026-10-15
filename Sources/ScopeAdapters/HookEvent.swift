@@ -71,6 +71,8 @@ extension HookEvent {
     /// Payload key under which `scope-hook` forwards the driver's own session id (lifted from the hook's
     /// stdin JSON, or given as `session_id=`). `ThreadSession` stores it as `ThreadRecord.resumeID`.
     public static let sessionIDKey = "session_id"
+    /// The agent's last answer, lifted out of stdin only when `raw` had to be truncated and would no longer parse.
+    public static let replyKey = "reply"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

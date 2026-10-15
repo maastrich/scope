@@ -22,6 +22,8 @@ struct HookCommand: Equatable {
     var event: HookCommandEvent
     var payload: [String: String]
     var readStdin: Bool
+    /// The driver's hook JSON given as an argument rather than on stdin: Codex `notify` appends it to the argv.
+    var inlineJSON: String? = nil
 
     enum ParseError: Error, Equatable {
         case missingEvent
@@ -34,6 +36,7 @@ struct HookCommand: Equatable {
         var event: HookCommandEvent?
         var payload: [String: String] = [:]
         var readStdin = false
+        var inlineJSON: String?
         for argument in arguments {
             switch argument {
             case "--stdin":
@@ -41,7 +44,9 @@ struct HookCommand: Equatable {
             case "--help", "-h":
                 throw .help
             default:
-                if event == nil {
+                if event != nil, HookStdin.isInlinePayload(argument) {
+                    inlineJSON = argument
+                } else if event == nil {
                     guard let parsed = HookCommandEvent(word: argument) else { throw .unknownEvent(argument) }
                     event = parsed
                 } else if let separator = argument.firstIndex(of: "="), separator != argument.startIndex {
@@ -53,7 +58,7 @@ struct HookCommand: Equatable {
             }
         }
         guard let event else { throw .missingEvent }
-        return HookCommand(event: event, payload: payload, readStdin: readStdin || event.needsStdin)
+        return HookCommand(event: event, payload: payload, readStdin: readStdin || event.needsStdin, inlineJSON: inlineJSON)
     }
 }
 
@@ -106,17 +111,21 @@ enum HookCLI {
 
         var raw: String?
         var parsedStdin = HookStdin()
-        if command.readStdin {
-            var data = stdin.readDataToEndOfFile()
+        var truncated = false
+        // An argument JSON wins over stdin, which the driver may have left attached to something that never ends.
+        if command.inlineJSON != nil || command.readStdin {
+            var data = command.inlineJSON.map { Data($0.utf8) } ?? stdin.readDataToEndOfFile()
             parsedStdin = HookStdin.parse(data)
             if data.count > maxRawBytes {
                 data = data.prefix(maxRawBytes)
                 note("stdin truncated to \(maxRawBytes) bytes")
+                truncated = true
             }
             raw = String(decoding: data, as: UTF8.self)
         }
 
-        guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw) else {
+        guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw,
+                                          rawTruncated: truncated) else {
             note("notification '\(parsedStdin.notificationType ?? "?")' needs nobody; nothing sent")
             return 0
         }
@@ -132,7 +141,8 @@ enum HookCLI {
 
     /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.
     /// An explicit `session_id=` (or `error=`) argument wins over the one lifted from stdin.
-    static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?) -> HookEvent? {
+    static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?,
+                           rawTruncated: Bool = false) -> HookEvent? {
         guard let kind = command.event.resolve(stdin: stdin) else { return nil }
         var payload = command.payload
         if payload[HookEvent.sessionIDKey] == nil, let sessionID = stdin.sessionID {
@@ -146,6 +156,10 @@ enum HookCLI {
         }
         if payload[HookEvent.directoryKey] == nil, let directory = stdin.directory {
             payload[HookEvent.directoryKey] = directory
+        }
+        // A cut `raw` no longer parses, and a long answer is what gets it cut: the answer travels on its own then.
+        if rawTruncated, kind == .turnEnded, let reply = stdin.lastAssistantMessage {
+            payload[HookEvent.replyKey] = String(reply.prefix(maxRawBytes / 2))
         }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }

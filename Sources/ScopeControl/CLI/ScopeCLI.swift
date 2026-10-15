@@ -44,7 +44,10 @@ public enum ScopeCLI {
       scope thread close <id>             hang it up and remove it
       scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line);
                                           from a thread, the message says which thread sent it
-      scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>)
+      scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>);
+                                          --reply for the agent's last answer alone
+      scope thread wait <id>...           block until the threads finish their turn or need someone, then print
+                                          their state and last answer (--any for the first one, --timeout <s>)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
                                           uncommitted work saved, worktrees removed; branch kept
@@ -153,6 +156,7 @@ public enum ScopeCLI {
                     switch flag {
                     case "-n", "--lines": parameters.lines = try count(try value(), flag: flag)
                     case "--cursor": parameters.cursor = try count(try value(), flag: flag)
+                    case "--reply": parameters.view = .reply
                     default: return false
                     }
                     return true
@@ -160,10 +164,22 @@ public enum ScopeCLI {
                 guard words.count == 1 else { throw UsageError(message: "thread read takes one thread id", usage: usage) }
                 parameters.thread = words[0]
                 return .call(.threadRead(parameters), shared)
+            case "wait":
+                var parameters = ThreadWaitParams(threads: [])
+                let shared = try options(&rest, command: "thread wait", positional: { parameters.threads.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--any": parameters.until = .any
+                    case "--timeout": parameters.timeout = try count(try value(), flag: flag)
+                    default: return false
+                    }
+                    return true
+                })
+                guard !parameters.threads.isEmpty else { throw UsageError(message: "thread wait takes one thread id or more", usage: usage) }
+                return .call(.threadWait(parameters), shared)
             case "new":
                 break
             default:
-                throw UsageError(message: "thread commands: new, stop, close, send, read", usage: usage)
+                throw UsageError(message: "thread commands: new, stop, close, send, read, wait", usage: usage)
             }
             var parameters = ThreadNewParams()
             let shared = try options(&rest, command: "thread new", specific: { flag, value in

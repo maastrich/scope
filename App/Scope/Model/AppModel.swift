@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ScopeAdapters
+import ScopeControl
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
@@ -495,6 +496,11 @@ final class AppModel {
         guard !isBootstrapped else { return }
         let skipAutoRelaunch = AppServices.shiftHeldAtLaunch || NSEvent.modifierFlags.contains(.shift)
         startActivationTracking()
+        let refreshed = SkillInstaller(userHome: FileManager.default.homeDirectoryForCurrentUser,
+                                       debug: BuildFlavor.isDebug).refreshOutdated()
+        if !refreshed.isEmpty {
+            Log.app.info("rewrote the outdated Scope skill for \(refreshed.map(\.rawValue).joined(separator: ", "), privacy: .public)")
+        }
 
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
         startShellProbe()
@@ -1034,6 +1040,7 @@ final class AppModel {
         guard !session.isAlive else { return }
         autoRelaunchBlocks[session.id] = nil
         guard let scope = scope(session.record.scopeID) else { return }
+        if let initialPrompt, !initialPrompt.isEmpty { session.expectTurn() }
         if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
             // An agent started before `pnpm install` finished works in a sandbox without its dependencies. The
             // thread exists (callers get its id at once) and starts when the setup is over, whatever its outcome.

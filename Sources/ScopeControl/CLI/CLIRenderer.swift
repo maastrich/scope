@@ -16,6 +16,7 @@ public enum CLIRenderer {
         case .task(let result): try encoder.encode(result)
         case .action(let result, _): try encoder.encode(result)
         case .read(let result): try encoder.encode(result)
+        case .wait(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -76,16 +77,48 @@ public enum CLIRenderer {
         case .action(let result, _):
             return result.message
         case .read(let result):
-            let range = result.toLine > result.fromLine ? "lines \(result.fromLine)–\(result.toLine - 1)" : "no lines"
-            var lines = ["thread \(result.thread) — \(result.title) · \(range) (\(result.state))",
-                         ThreadTranscript.untrustedNotice, ThreadTranscript.openMarker]
-            if !result.text.isEmpty { lines.append(result.text) }
-            lines.append(ThreadTranscript.closeMarker)
+            var lines: [String]
+            if result.source == ThreadReadParams.View.reply.rawValue {
+                let at = result.replyAt.map { " at " + time($0) } ?? ""
+                lines = ["thread \(result.thread) — \(result.title) · last reply\(at) (\(result.state))"]
+                if result.staleReply == true { lines.append(staleNotice) }
+            } else {
+                let range = result.toLine > result.fromLine ? "lines \(result.fromLine)–\(result.toLine - 1)" : "no lines"
+                lines = ["thread \(result.thread) — \(result.title) · \(range) (\(result.state))"]
+            }
+            if let note = result.note { lines.append(note) }
+            lines += quoted(result.text)
             if let older = result.olderCursor {
-                lines.append("older lines: scope thread read \(result.thread) --cursor \(older)")
+                lines.append("older lines: cursor \(older) (scope thread read \(result.thread) --cursor \(older))")
+            }
+            return lines.joined(separator: "\n")
+        case .wait(let result):
+            var lines = [result.complete
+                ? "done waiting after \(result.waited)s"
+                : "still at work after \(result.waited)s: " + result.threads.filter { !$0.settled }.map(\.thread).joined(separator: ", ")]
+            for entry in result.threads {
+                lines.append("")
+                lines.append("thread \(entry.thread) — \(entry.title) (\(entry.state)\(entry.settled ? "" : ", still at work"))")
+                if let reply = entry.reply {
+                    lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
+                    if entry.staleReply == true { lines.append(staleNotice) }
+                    lines += quoted(reply)
+                }
             }
             return lines.joined(separator: "\n")
         }
+    }
+
+    /// Untrusted text between the markers, the warning first: tool descriptions get skimmed, this does not.
+    static func quoted(_ text: String) -> [String] {
+        [ThreadTranscript.untrustedNotice, ThreadTranscript.openMarker] + (text.isEmpty ? [] : [text])
+            + [ThreadTranscript.closeMarker]
+    }
+
+    static let staleNotice = "(from before its latest prompt: that one has not been answered yet)"
+
+    static func time(_ date: Date) -> String {
+        date.formatted(.iso8601)
     }
 
     /// What a failure prints on stderr.

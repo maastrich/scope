@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ScopeAdapters
+import ScopeControl
 import ScopeCore
 import ScopeDrivers
 import ScopeTasks
@@ -43,6 +44,13 @@ final class ThreadSession: Identifiable {
     private(set) var adapterState: ThreadState?
     /// Error code of the turn that ended as `failed` (`rate_limit`, …); `nil` otherwise.
     private(set) var lastFailure: String?
+    /// What the agent answered at the end of its last turn, when its driver says (`thread.read` with `reply`).
+    /// Not drawn anywhere, so not observed: a reply per turn must not redraw the sidebar.
+    @ObservationIgnored private(set) var lastReply: AgentReply?
+    /// When the thread was handed a prompt its driver has not reported on yet (`ThreadWait`).
+    @ObservationIgnored private(set) var expectingTurnSince: Date?
+    /// When the thread was last handed a prompt, reported on or not: a reply older than this answers something else.
+    @ObservationIgnored private(set) var lastPromptAt: Date?
     /// OSC 0/2 title.
     private(set) var terminalTitle: String?
     /// OSC 7 directory, decoded from its `file://` form.
@@ -193,6 +201,8 @@ final class ThreadSession: Identifiable {
         }
         adapterState = nil
         lastFailure = nil
+        // The grace for a turn to start runs from the driver's start, not from a setup it waited behind.
+        if expectingTurnSince != nil { expectingTurnSince = .now }
         inputTracker = TerminalInputTracker()
         phase = .alive(pid: view.process.shellPid, since: .now)
         record.lastLaunchedAt = .now
@@ -239,6 +249,7 @@ final class ThreadSession: Identifiable {
     ///
     /// Submissions go out one after the other: a second message typed before the first one's ↩ would join it.
     func submit(_ text: String) {
+        expectTurn()
         let previous = pendingSubmit
         pendingSubmit = Task { @MainActor [weak self] in
             await previous?.value
@@ -268,9 +279,24 @@ final class ThreadSession: Identifiable {
         adapterState = nil
     }
 
+    /// The thread was just handed a prompt: until its driver reports something, it counts as at work.
+    func expectTurn() {
+        expectingTurnSince = .now
+        lastPromptAt = .now
+    }
+
+    /// What `thread.wait` looks at.
+    var waitSnapshot: ThreadWait.Snapshot {
+        let starting = if case .launching = phase { true } else { false }
+        return ThreadWait.Snapshot(state: displayState.name, expectingSince: expectingTurnSince,
+                                   reportsTurnStart: AdapterInstaller.reportsTurnStart(profile), starting: starting)
+    }
+
     func apply(_ event: AdapterEvent) {
         guard phase.isAlive else { return }
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event)
+        if event.kind.changesState { expectingTurnSince = nil }
+        if let reply = AgentReply.from(event) { lastReply = reply }
         // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
         // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
         // state that had not moved.

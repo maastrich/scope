@@ -44,7 +44,8 @@ public final class ControlSocketServer: Sendable {
                 // The id is lifted before anything else so a timeout or a progress line still correlates.
                 let decoded = ControlRequest.decode(body)
                 let id = ControlDispatch.id(of: decoded)
-                deadlineQueue.asyncAfter(deadline: .now() + timeout.seconds) {
+                let deadline = (try? decoded.get()).map { $0.call.serverDeadline(floor: timeout) } ?? timeout
+                deadlineQueue.asyncAfter(deadline: .now() + deadline.seconds) {
                     let late = ControlResponse.failure(id: id, .init(.timeout, "Scope did not answer in time"))
                     responder.finish(try? late.encoded())
                 }
