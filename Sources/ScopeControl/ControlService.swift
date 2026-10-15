@@ -54,7 +54,12 @@ public enum ControlDispatch {
         case .ask(let subject):
             progress("waiting for you to approve: \(subject)")
             guard await service.confirm(subject, from: origin, caller: request.caller) else {
-                return .failure(id: request.id, .denied("you did not approve \(subject)"))
+                // A refusal, no answer before the timeout, or too many questions already waiting: the caller
+                // cannot tell which, so the answer must not claim the user said no.
+                return .failure(id: request.id, .denied(
+                    "the user did not approve this request to \(subject)",
+                    detail: "Refused, left unanswered past the approval timeout, or turned away because several "
+                        + "questions were already waiting. Do not ask again right away."))
             }
             // Other requests may have been carried out while the user read the question.
             if let refusal = policy.budgetRefusal(request.call, from: origin, load: load()) {

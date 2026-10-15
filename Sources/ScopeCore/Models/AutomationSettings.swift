@@ -30,7 +30,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public enum ThreadReach: String, Codable, Sendable, CaseIterable {
         /// Every thread Scope runs — another task's, another scope's, the user's own.
         case any
-        /// Only the threads the agent opened itself.
+        /// Only what the agent set in motion: the threads it opened, the ones those opened, and so on down.
         case own
 
         /// What Settings shows.
@@ -46,7 +46,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public var agentsMayDrive: Bool
     /// Which threads an agent may act on. `any` by default: threads are how agents hand work to each other
     /// across tasks, and every message says who sent it. `own` is the old rule, for whoever wants each agent
-    /// fenced into the threads it opened.
+    /// fenced into the threads it opened and their descendants.
     public var threadReach: ThreadReach
     /// How deep the chain of agents opening agents may go, or `nil` for no limit (the default). A thread the user
     /// opened is at depth 0, its task's thread too; a task an agent creates from inside a task is one deeper. It is

@@ -144,7 +144,8 @@ public struct AutomationPolicy: Sendable, Equatable {
         if cost.tasks > 0, load.tasks + cost.tasks > settings.maxAgentTasks {
             return .denied(
                 "agents already keep \(load.tasks) tasks open, the most Scope allows them",
-                detail: "Archive the tasks that are done (`scope task archive <slug>`, their branches are kept) and ask "
+                detail: "Archive the tasks you created that are done (`scope task archive <slug>`, their branches are "
+                    + "kept) and ask "
                     + "again, or have the user raise Settings ▸ Automation ▸ Open tasks "
                     + "(preferences.automation.maxAgentTasks, now \(settings.maxAgentTasks))."
             )
@@ -152,7 +153,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         if cost.threads > 0, load.threads + cost.threads > settings.maxAgentThreads {
             return .denied(
                 "agents already keep \(load.threads) threads running, the most Scope allows them",
-                detail: "Wait for the ones you opened (`scope thread wait`) and close those that are done "
+                detail: "Wait for the threads you opened (`scope thread wait`) and close those that are done "
                     + "(`scope thread close <id>`), or have the user raise Settings ▸ Automation ▸ Running threads "
                     + "(preferences.automation.maxAgentThreads, now \(settings.maxAgentThreads))."
             )

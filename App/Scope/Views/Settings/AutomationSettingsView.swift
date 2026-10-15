@@ -183,7 +183,7 @@ struct AutomationSettingsView: View {
                     }
                 }
                 Text("Which threads an agent may read, type into, stop or close — in any task or scope, or only "
-                     + "the ones it opened. A message from an agent always says which thread sent it.")
+                     + "the ones it opened and those they opened in turn. A message from an agent always says which thread sent it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
