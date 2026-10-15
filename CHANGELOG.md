@@ -11,6 +11,15 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.18.0](https://github.com/maastrich/scope/releases/tag/v0.18.0) - 2026-10-15
+
+### Added
+
+- **agents:** wait for threads, read their last reply, and rename the skill to scope ([#32](https://github.com/maastrich/scope/pull/32)) by @maastrich
+- **threads:** keep an orchestrator and a terminal in every scope ([#33](https://github.com/maastrich/scope/pull/33)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.17.0...v0.18.0
+
 ## [0.17.0](https://github.com/maastrich/scope/releases/tag/v0.17.0) - 2026-10-14
 
 ### Added
