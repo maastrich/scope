@@ -173,6 +173,8 @@ import Testing
         #expect(brief.count <= ActivitySummary.briefLimit + 1)
         #expect(brief.hasSuffix("…"))
         #expect(!brief.hasSuffix(" …"), "cut at a word")
+        let twoParagraphs = "# Goal\n\nShip the importer.\nStreaming only.\n\n## Context\n\nLong background."
+        #expect(ActivitySummary.excerpt(twoParagraphs) == "Ship the importer. Streaming only.", "the first paragraph only")
         #expect(ActivitySummary.excerpt("# only a heading") == nil)
         #expect(ActivitySummary.excerpt("Short.") == "Short.")
     }

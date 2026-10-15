@@ -122,7 +122,8 @@ public enum CLIRenderer {
             date.formatted(Date.ISO8601FormatStyle(timeZone: zone).year().month().day())
         }
         let lastDay = result.period.until.addingTimeInterval(-1)
-        var lines = ["\(result.period.label): \(day(result.period.since)) → \(day(lastDay)) (\(result.period.timeZone))"]
+        let span = day(result.period.since) == day(lastDay) ? day(lastDay) : "\(day(result.period.since)) → \(day(lastDay))"
+        var lines = ["\(result.period.label): \(span) (\(result.period.timeZone))"]
 
         func taskLines(_ task: SummaryResult.Task, indent: String) -> [String] {
             var parts = ["\(task.name) [\(task.slug)]"]

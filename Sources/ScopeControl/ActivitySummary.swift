@@ -255,13 +255,20 @@ public enum ActivitySummary {
         return (lhs.createdAt, lhs.id) < (rhs.createdAt, rhs.id)
     }
 
-    /// The opening of a brief: headings and blank lines skipped, whitespace collapsed, cut at a word before `limit`.
+    /// The first paragraph of a brief — headings and rules before it skipped, whitespace collapsed — cut at a word
+    /// before `limit`. What follows it is context the agent needed, not what the task was.
     public static func excerpt(_ prompt: String?, limit: Int = briefLimit) -> String? {
         guard let prompt else { return nil }
-        let lines = prompt.split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("#") && !$0.allSatisfy { "-=*_`".contains($0) } }
-        let text = lines.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        var paragraph: [String] = []
+        for raw in prompt.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            let filler = line.isEmpty || line.hasPrefix("#") || line.allSatisfy { "-=*_`".contains($0) }
+            if filler {
+                if paragraph.isEmpty { continue } else { break }
+            }
+            paragraph.append(line)
+        }
+        let text = paragraph.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !text.isEmpty else { return nil }
         guard text.count > limit else { return text }
         let cut = text.prefix(limit)
