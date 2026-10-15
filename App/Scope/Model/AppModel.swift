@@ -1125,8 +1125,8 @@ final class AppModel {
         await launch(conformResident(found), mode: .launch)
     }
 
-    /// Stop (⌘.), from the user or an agent. A resident thread stays stopped afterwards, until Relaunch: a thread that
-    /// cannot be stopped when it misbehaves would be worse than one that can be closed.
+    /// Stop (⌘.), from the user or an agent. A resident thread stays stopped afterwards, until Relaunch or the next app
+    /// launch: a thread that cannot be stopped when it misbehaves would be worse than one that can be closed.
     func stop(_ id: ThreadID) {
         guard let session = session(id) else { return }
         if session.isAlive { stopRequests.insert(id) }

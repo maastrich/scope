@@ -69,9 +69,10 @@ drive the scope from, open tasks and talk to the other threads — and a <b>Term
 something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>⌘2</kbd>), outside
 <b>Loose threads</b>, in both arrangements.</p>
 <ul>
-  <li>They cannot be closed — no close button, <kbd>⌘W</kbd> does nothing, <code>scope thread close</code> refuses.
+  <li>They cannot be closed — no close button, <kbd>⌘W</kbd> only beeps, <code>scope thread close</code> refuses.
   They go only when their scope is removed.</li>
-  <li><kbd>⌘.</kbd> stops one, and it stays stopped until <b>Relaunch</b>.</li>
+  <li><kbd>⌘.</kbd> stops one, and it stays stopped until <b>Relaunch</b> or until Scope opens again; hold
+  <kbd>⇧</kbd> while Scope opens to keep it stopped then too.</li>
   <li>A process that ends on its own starts again within a second: a crash resumes the driver session, an
   <code>exit</code> gets a new one. Three exits in a row within ten seconds of starting, or a command that cannot
   run, and Scope stops trying and says so.</li>

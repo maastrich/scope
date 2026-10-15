@@ -69,7 +69,7 @@ final class AppControlService: ControlService {
                 if let role = session.record.resident {
                     return .failure(.failed("thread \(session.id.rawValue) is the \(role.rawValue) of its scope: Scope keeps it "
                                             + "while the scope is declared. Stop it instead (`scope thread stop`); it stays "
-                                            + "stopped until someone relaunches it."))
+                                            + "stopped until someone relaunches it or Scope opens again."))
                 }
                 // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on.
                 _ = await model.close(session.id, force: true)
