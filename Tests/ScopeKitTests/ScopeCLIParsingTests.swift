@@ -174,4 +174,17 @@ import Testing
         // Asking the Debug socket itself gets no hint about itself.
         #expect(ControlEndpoint.hint(for: debugSocket, environment: [:], fileManager: Exists()) == nil)
     }
+
+    @Test func summaryTakesThePeriodInPlainWords() throws {
+        #expect(try Self.call(["summary"]) == .summary(SummaryParams()))
+        #expect(try Self.call(["summary", "last", "week"]) == .summary(SummaryParams(period: "last week")))
+        #expect(try Self.call(["summary", "2026-10-01..2026-10-14", "--scope", "acme"])
+            == .summary(SummaryParams(period: "2026-10-01..2026-10-14", scope: "acme")))
+        #expect(try Self.call(["summary", "--task", "auth-refresh"]) == .summary(SummaryParams(task: "auth-refresh")))
+        #expect(try Self.options(["summary", "yesterday", "--json"]).json)
+    }
+
+    @Test func summaryRefusesAPeriodItCannotRead() {
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["summary", "someday"]) }
+    }
 }

@@ -32,7 +32,10 @@ extension AppModel {
         do {
             let pr = try await target.gh.prView(number: target.number, in: target.checkout, repo: target.repo)
             pullRequests.setTaskPullRequest(pr, for: task.id)
-            if task.record.pullRequest?.number == pr.number, task.record.pullRequest?.title != pr.title {
+            // The state too: once the task is archived nobody asks GitHub again, and the record is what a summary
+            // of past work reads to tell a merged pull request from a dropped one.
+            if let linked = task.record.pullRequest, linked.number == pr.number,
+               linked.title != pr.title || linked.state != pr.state.rawValue {
                 await link(pr, to: task)
             }
         } catch {
@@ -59,6 +62,8 @@ extension AppModel {
             let record = try await env.tasks.linkPullRequest(LinkedPullRequest(pr), to: task.id)
             task.update(record: record)
         } catch {
+            // A refresh that outlived a close (`settlePullRequest`) finds no record left: nothing to report.
+            guard await env.tasks.task(task.id) != nil else { return }
             problems.warn("Could not bind #\(pr.number) to the task", detail: String(describing: error), scope: task.scopeID)
         }
     }

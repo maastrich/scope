@@ -96,13 +96,18 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
     public var headOwner: String?
     /// The head lives in a fork: the sandbox branch tracks `pull/<n>/head`, not a branch of `origin`.
     public var isCrossRepository: Bool
+    /// `open`, `merged` or `closed`, as GitHub last answered while the task was open: what tells a delivered task
+    /// from a dropped one once it is archived and nobody asks GitHub any more. `nil` on links never refreshed.
+    public var state: String?
 
-    public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false) {
+    public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false,
+                state: String? = nil) {
         self.number = number
         self.url = url
         self.title = title
         self.headOwner = headOwner
         self.isCrossRepository = isCrossRepository
+        self.state = state
     }
 
     /// `#123`
@@ -110,7 +115,8 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
 
     /// The link that binds a task to `pr`.
     public init(_ pr: PullRequest) {
-        self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository)
+        self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository,
+                  state: pr.state.rawValue)
     }
 }
 
@@ -273,6 +279,17 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var createdByAgent: Bool {
         if let origin { return origin.openedByAgent }
         return (createdBy ?? "").hasPrefix(ThreadOrigin.mcpClientPrefix)
+    }
+
+    /// What a summary of past work needs from the task, and what the history keeps of it once it is closed.
+    public var snapshot: TaskSnapshot {
+        TaskSnapshot(
+            id: id.rawValue, name: name, slug: slug, scopeID: scopeID.rawValue, scopeSlug: scopeSlug, scopeName: scopeName,
+            branch: branch, topic: topic, repos: repos.map(\.repoRelativePath), createdAt: createdAt, archivedAt: archivedAt,
+            prompt: prompt,
+            pullRequest: pullRequest.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
+            createdByAgent: createdByAgent, parentTask: parentTask?.rawValue
+        )
     }
 
     /// `notRun` for a record that never ran a setup.

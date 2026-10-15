@@ -7,10 +7,13 @@ import ScopeCore
 public actor TaskRecordStore {
     /// `<home>/tasks/`
     public nonisolated let directory: URL
+    /// Where `delete` leaves the closed task's line (`ActivityHistory`).
+    private let home: URL
     private var refused: Set<TaskID> = []
 
     public init(home: URL) {
         directory = TaskRecordStore.directoryURL(home: home)
+        self.home = home
     }
 
     /// `<home>/tasks/`
@@ -79,10 +82,15 @@ public actor TaskRecordStore {
         try JSONStore.save(record, to: url(for: record.id), fractionalSeconds: true)
     }
 
-    /// Removes `<id>.json`. A missing file is not an error.
+    /// Removes `<id>.json`, after writing what it held to the history: a closed task leaves nothing else behind, and
+    /// a summary of past work still has to name it. A missing file is not an error.
     public func delete(_ id: TaskID) async throws {
         let file = url(for: id)
         guard FileManager.default.fileExists(atPath: file.path) else { return }
+        if let data = try? Data(contentsOf: file),
+           let record = try? JSONStore.makeDecoder(fractionalSeconds: true).decode(TaskRecord.self, from: data) {
+            ActivityHistory.append(.taskClosed(record.snapshot), home: home)
+        }
         try FileManager.default.removeItem(at: file)
     }
 

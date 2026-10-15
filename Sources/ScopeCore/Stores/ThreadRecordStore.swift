@@ -24,11 +24,14 @@ public struct StoreProblem: Sendable, Equatable {
 public actor ThreadRecordStore {
     /// `<home>/threads/`
     public nonisolated let directory: URL
+    /// Where `delete` leaves the closed thread's line (`ActivityHistory`).
+    private let home: URL
 
     private var refused: Set<ThreadID> = []
 
     public init(home: URL) {
         directory = ScopeHome.threadsURL(home: home)
+        self.home = home
     }
 
     /// `<home>/threads/<id>.json`
@@ -108,10 +111,15 @@ public actor ThreadRecordStore {
         }
     }
 
-    /// Removes `<id>.json`. A missing file is not an error.
+    /// Removes `<id>.json`, after writing what it held to the history: once it is gone, nothing else says the
+    /// thread existed. A missing file is not an error.
     public func delete(_ id: ThreadID) async {
         let file = url(for: id)
         guard FileManager.default.fileExists(atPath: file.path) else { return }
+        if let data = try? Data(contentsOf: file),
+           let record = try? JSONStore.makeDecoder(fractionalSeconds: true).decode(ThreadRecord.self, from: data) {
+            ActivityHistory.append(.threadClosed(record.snapshot), home: home)
+        }
         do {
             try FileManager.default.removeItem(at: file)
         } catch {

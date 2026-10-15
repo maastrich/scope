@@ -53,6 +53,8 @@ public enum ScopeCLI {
                                           uncommitted work saved, worktrees removed; branch kept
       scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
+                                          their pull requests and briefs (default: last 7 days)
       scope mcp                           speak MCP on stdio, same commands
       scope ping                          check that Scope is listening
 
@@ -78,6 +80,13 @@ public enum ScopeCLI {
 
     list:
       --scope <slug|name|id|path>   only that scope
+
+    summary:
+      [period]                      today, yesterday, this week, last week, this month, last month,
+                                    last 14 days, 2w, 2026-10-01, 2026-10, 2026-10-01..2026-10-14,
+                                    since 2026-10-01 (weeks start on Monday)
+      --scope <slug|name|id>        only that scope
+      --task <id|slug>              one task: its whole brief and every thread, whatever the period
 
     options:
       --json                        machine-readable output
@@ -110,6 +119,26 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.gc(parameters), shared)
+        case "summary":
+            var words: [String] = []
+            var parameters = SummaryParams()
+            let shared = try options(&rest, command: "summary", positional: { words.append($0) }, specific: { flag, value in
+                switch flag {
+                case "--scope": parameters.scope = try value()
+                case "--task": parameters.task = try value()
+                default: return false
+                }
+                return true
+            })
+            if !words.isEmpty {
+                let period = words.joined(separator: " ")
+                // Checked here for the usage error; the app parses it again against its own clock.
+                guard ActivityPeriod.parse(period) != nil else {
+                    throw UsageError(message: "summary: no period called “\(period)”. Try: \(ActivityPeriod.grammar)", usage: usage)
+                }
+                parameters.period = period
+            }
+            return .call(.summary(parameters), shared)
         case "list":
             var kind = ListParams.Kind.all
             if let word = rest.first, !word.hasPrefix("-") {

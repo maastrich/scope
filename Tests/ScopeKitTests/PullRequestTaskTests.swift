@@ -86,7 +86,7 @@ import ScopeGit
         #expect(task.slug == "pr-42-fix-refresh-token")
         #expect(task.branch == "feature/x")
         #expect(task.repos.map(\.repoRelativePath) == ["api"])
-        #expect(task.pullRequest == LinkedPullRequest(number: 42, url: pr.url, title: "Fix refresh token!", headOwner: nil, isCrossRepository: false))
+        #expect(task.pullRequest == LinkedPullRequest(number: 42, url: pr.url, title: "Fix refresh token!", headOwner: nil, isCrossRepository: false, state: "open"))
 
         let sandbox = await scope.client(for: task.repos[0].sandboxURL)
         #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feature/x")
