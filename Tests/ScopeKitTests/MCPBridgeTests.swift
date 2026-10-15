@@ -175,4 +175,12 @@ import Testing
         #expect(byName["scope_task_close"]?.destructive == true)
         #expect(byName["scope_thread_send"]?.readOnly == false)
     }
+
+    @Test func theSummaryToolReadsAndMapsOntoTheSameCall() {
+        #expect(MCPBridge.tools.first { $0.name == "scope_summary" }?.readOnly == true)
+        #expect(Self.call("scope_summary", "{}") == .success(.summary(SummaryParams())))
+        #expect(Self.call("scope_summary", #"{"period":"last week","scope":"acme"}"#)
+            == .success(.summary(SummaryParams(period: "last week", scope: "acme"))))
+        #expect(Self.call("scope_summary", #"{"task":"auth-refresh"}"#) == .success(.summary(SummaryParams(task: "auth-refresh"))))
+    }
 }

@@ -148,7 +148,8 @@ public struct HistoryEntry: Codable, Sendable, Equatable {
 /// `<home>/history.jsonl`, append-only, one `HistoryEntry` per line.
 ///
 /// Appends go through `O_APPEND`, so the task store and the thread store (two actors) never interleave inside a
-/// line. A line that does not decode — cut by a crash, written by a newer build — is skipped, never repaired.
+/// line. A line that does not decode — cut by a crash, written by a newer build — is skipped, never repaired, and the
+/// next append starts after it rather than on it.
 public enum ActivityHistory {
     public static func url(home: URL) -> URL {
         home.appending(path: "history.jsonl", directoryHint: .notDirectory)
@@ -163,9 +164,15 @@ public enum ActivityHistory {
             var line = try encoder.encode(entry)
             line.append(UInt8(ascii: "\n"))
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-            let descriptor = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+            let descriptor = open(file.path, O_RDWR | O_APPEND | O_CREAT, 0o600)
             guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
             defer { close(descriptor) }
+            // A line cut by a crash would swallow this one: start on a line of its own.
+            let size = lseek(descriptor, 0, SEEK_END)
+            var last: UInt8 = 0
+            if size > 0, pread(descriptor, &last, 1, size - 1) == 1, last != UInt8(ascii: "\n") {
+                line.insert(UInt8(ascii: "\n"), at: 0)
+            }
             let written = line.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
             guard written == line.count else { throw CocoaError(.fileWriteUnknown) }
         } catch {

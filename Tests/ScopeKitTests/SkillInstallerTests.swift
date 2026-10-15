@@ -148,4 +148,52 @@ import Testing
         #expect(installer.state(of: .claudeCode) == .absent)
         #expect(!FileManager.default.fileExists(atPath: installer.legacyDirectory(.claudeCode).path))
     }
+
+    /// `/scope-summary` is invoked by its folder name, so it is a skill of its own, installed and removed with the main one.
+    @Test func theSummarySkillTravelsWithTheMainOne() throws {
+        let home = try Self.temporaryHome(clients: [.claudeCode])
+        defer { try? FileManager.default.removeItem(at: home) }
+        let installer = SkillInstaller(userHome: home, debug: false)
+        try installer.install(.claudeCode)
+        #expect(installer.summaryFile(.claudeCode).path == home.appending(path: ".claude/skills/scope-summary/SKILL.md").path)
+        let text = try String(contentsOf: installer.summaryFile(.claudeCode), encoding: .utf8)
+        #expect(text.hasPrefix("---\nname: scope-summary\n"))
+        #expect(text.contains("scope summary") && text.contains("scope_summary"))
+        #expect(SkillInstaller.installedVersion(text) == SkillInstaller.version)
+        try installer.remove(.claudeCode)
+        #expect(!FileManager.default.fileExists(atPath: installer.summaryDirectory(.claudeCode).path))
+    }
+
+    /// A copy of the current main skill from before the companion existed is one update behind: the launch refresh
+    /// adds the companion.
+    @Test func aMissingSummarySkillMakesTheCopyOutdated() throws {
+        let home = try Self.temporaryHome(clients: [.claudeCode])
+        defer { try? FileManager.default.removeItem(at: home) }
+        let installer = SkillInstaller(userHome: home, debug: false)
+        try installer.install(.claudeCode)
+        try FileManager.default.removeItem(at: installer.summaryDirectory(.claudeCode))
+        #expect(installer.state(of: .claudeCode) == .outdated)
+        #expect(installer.refreshOutdated() == [.claudeCode])
+        #expect(installer.state(of: .claudeCode) == .installed)
+    }
+
+    @Test func aForeignSummarySkillIsLeftAlone() throws {
+        let home = try Self.temporaryHome(clients: [.claudeCode])
+        defer { try? FileManager.default.removeItem(at: home) }
+        let installer = SkillInstaller(userHome: home, debug: false)
+        try FileManager.default.createDirectory(at: installer.summaryDirectory(.claudeCode), withIntermediateDirectories: true)
+        try "someone else's summary\n".write(to: installer.summaryFile(.claudeCode), atomically: true, encoding: .utf8)
+        try installer.install(.claudeCode)
+        #expect(installer.state(of: .claudeCode) == .installed)
+        #expect(try String(contentsOf: installer.summaryFile(.claudeCode), encoding: .utf8) == "someone else's summary\n")
+        try installer.remove(.claudeCode)
+        #expect(FileManager.default.fileExists(atPath: installer.summaryFile(.claudeCode).path))
+    }
+
+    @Test func theDebugSummarySkillKeepsItsOwnName() {
+        let installer = SkillInstaller(userHome: URL(fileURLWithPath: "/tmp"), debug: true)
+        #expect(installer.summaryName == "scope-debug-summary")
+        #expect(installer.summarySkillText.contains("name: scope-debug-summary"))
+        #expect(installer.skillText.contains("`scope-debug-summary` skill"))
+    }
 }
