@@ -53,6 +53,25 @@ public enum MCPBridge {
 
     public static let tools: [MCPTool] = [
         MCPTool(
+            name: "scope_summary",
+            title: "Summarize past work",
+            description: """
+            What the user did over a period, scope by scope: every task created, archived or closed in it, or whose \
+            threads ran in it — finished or dropped alike — with its outcome (merged, delivered, abandoned, archived, \
+            active), its pull request, its topic, the opening of its brief and its threads; plus the threads opened \
+            outside any task. Facts, not prose: write the summary yourself from them, and say what they cannot tell \
+            (the `limits` of the answer). Give `task` for one task's whole brief.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "period":{"type":"string","description":"today, yesterday, this week, last week, this month, last month, last 7 days, 2w, 2026-10-01, 2026-10, 2026-10-01..2026-10-14, since 2026-10-01. Weeks start on Monday; last week is the previous calendar week. Defaults to last 7 days."},\
+            "scope":{"type":"string","description":"Slug, name or id of one scope, declared or removed since; omit for every scope."},\
+            "task":{"type":"string","description":"Id or slug of one task: answers with its whole brief and every thread, whatever the period."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
             name: "scope_list",
             title: "List scopes, threads and tasks",
             description: """
@@ -291,6 +310,8 @@ public enum MCPBridge {
                 return .success(.taskArchive(try decoder.decode(TaskArchiveParams.self, from: arguments)))
             case "scope_gc":
                 return .success(.gc(try decoder.decode(GCArguments.self, from: arguments).call))
+            case "scope_summary":
+                return .success(.summary(try decoder.decode(SummaryParams.self, from: arguments)))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -316,6 +337,7 @@ public enum MCPBridge {
         case .action(let result, _): try encoder.encode(result)
         case .read(let result): try encoder.encode(result)
         case .wait(let result): try encoder.encode(result)
+        case .summary(let result): try encoder.encode(result)
         }
     }
 

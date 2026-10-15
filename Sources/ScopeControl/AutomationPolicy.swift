@@ -184,7 +184,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list:
+            case .ping, .list, .summary:
                 return .allow
             case .threadStop, .threadClose, .threadSend, .threadRead, .threadWait:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
@@ -268,7 +268,7 @@ public struct AutomationPolicy: Sendable, Equatable {
     /// One line saying what is being asked for, shown in the confirmation.
     static func subject(of call: ControlCall) -> String {
         switch call {
-        case .ping, .list: ""
+        case .ping, .list, .summary: ""
         case .threadNew(let params):
             "open a thread" + (params.scope.map { " in \($0)" } ?? "")
         case .taskNew(let params):

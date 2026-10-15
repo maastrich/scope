@@ -57,11 +57,13 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case threadRead = "thread.read"
     /// Blocks until threads finish their turn (or need someone), then says how each one stands.
     case threadWait = "thread.wait"
+    /// What was done over a period, scope by scope, from the records and the history of closed ones.
+    case summary
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait: false
+        case .ping, .list, .threadRead, .threadWait, .summary: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .gc: true
         }
     }
@@ -171,6 +173,7 @@ public enum ControlCall: Sendable, Equatable {
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
+    case summary(SummaryParams)
 
     public var method: ControlMethod {
         switch self {
@@ -186,6 +189,7 @@ public enum ControlCall: Sendable, Equatable {
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
+        case .summary: .summary
         }
     }
 
@@ -197,7 +201,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead: .seconds(15)
+        case .list, .threadRead, .summary: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .gc: .seconds(300)
@@ -787,6 +791,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case action(ActionResult, ControlMethod)
     case read(ThreadReadResult)
     case wait(ThreadWaitResult)
+    case summary(SummaryResult)
 
     public var method: ControlMethod {
         switch self {
@@ -797,6 +802,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .action(_, let method): method
         case .read: .threadRead
         case .wait: .threadWait
+        case .summary: .summary
         }
     }
 }

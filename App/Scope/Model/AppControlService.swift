@@ -156,6 +156,8 @@ final class AppControlService: ControlService {
             }
         case .threadWait(let params):
             return await wait(params, from: origin)
+        case .summary(let params):
+            return await summary(params)
         case .taskClose(let params):
             return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
                                    done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
@@ -307,6 +309,29 @@ final class AppControlService: ControlService {
         let threads = wants(.threads) ? model.threads.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
         let tasks = wants(.tasks) ? model.tasks.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
         return .success(.list(ListResult(scopes: wants(.scopes) ? scopes : [], threads: threads, tasks: tasks)))
+    }
+
+    /// Live records and the history of closed ones, handed to `ActivitySummary`. Only reads: a pull request whose state
+    /// Scope never saw is reported as unknown rather than looked up here, which would cost a `gh` call per task.
+    private func summary(_ params: SummaryParams) async -> Result<ControlResultPayload, ControlError> {
+        let timeZone = TimeZone.current
+        guard let period = ActivityPeriod.parse(params.period, calendar: ActivityPeriod.calendar(timeZone)) else {
+            return .failure(.badRequest("no period called “\(params.period ?? "")”", detail: ActivityPeriod.grammar))
+        }
+        let scopes = scopeSummaries.map { ActivitySummary.ScopeRef(id: $0.id, slug: $0.slug, name: $0.name, root: $0.path) }
+        let tasks = await model.env.tasks.allTasks.map(\.snapshot)
+        let threads = model.threads.map(\.record.snapshot)
+        let home = model.env.home
+        let history = await Task.detached { ActivityHistory.load(home: home) }.value
+        if let name = params.task {
+            guard let result = ActivitySummary.detail(of: name, timeZone: timeZone, period: period, scopes: scopes,
+                                                      tasks: tasks, threads: threads, history: history) else {
+                return .failure(.notFound("no task “\(name)”, open, archived or closed since the history began"))
+            }
+            return .success(.summary(result))
+        }
+        return .success(.summary(ActivitySummary.build(period: period, timeZone: timeZone, scopes: scopes, tasks: tasks,
+                                                       threads: threads, history: history, scopeFilter: params.scope)))
     }
 
     private func summary(_ session: ThreadSession) -> ThreadSummary {

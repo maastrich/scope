@@ -17,6 +17,7 @@ public enum CLIRenderer {
         case .action(let result, _): try encoder.encode(result)
         case .read(let result): try encoder.encode(result)
         case .wait(let result): try encoder.encode(result)
+        case .summary(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -108,7 +109,89 @@ public enum CLIRenderer {
                 }
             }
             return lines.joined(separator: "\n")
+        case .summary(let result):
+            return summary(result)
         }
+    }
+
+    /// One block per scope, a line per task with the start of its brief under it, the threads outside tasks, then what
+    /// the summary cannot know. Dates are days in the period's time zone.
+    static func summary(_ result: SummaryResult) -> String {
+        let zone = TimeZone(identifier: result.period.timeZone) ?? .current
+        func day(_ date: Date) -> String {
+            date.formatted(Date.ISO8601FormatStyle(timeZone: zone).year().month().day())
+        }
+        let lastDay = result.period.until.addingTimeInterval(-1)
+        var lines = ["\(result.period.label): \(day(result.period.since)) → \(day(lastDay)) (\(result.period.timeZone))"]
+
+        func taskLines(_ task: SummaryResult.Task, indent: String) -> [String] {
+            var parts = ["\(task.name) [\(task.slug)]"]
+            if let pr = task.pullRequest { parts.append("#\(pr.number)" + (pr.state.map { " \($0)" } ?? " (state unknown)")) }
+            var when = "created \(day(task.createdAt))"
+            if let closed = task.closedAt { when += ", closed \(day(closed))" }
+            else if let archived = task.archivedAt { when += ", archived \(day(archived))" }
+            else { when += ", last active \(day(task.lastActivity))" }
+            parts.append(when)
+            if !task.threads.isEmpty { parts.append("\(task.threads.count) thread\(task.threads.count == 1 ? "" : "s")") }
+            if task.createdByAgent { parts.append("by an agent") }
+            var out = [indent + task.outcome.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0) + parts.joined(separator: " · ")]
+            if let brief = task.brief { out.append(indent + String(repeating: " ", count: 10) + brief) }
+            return out
+        }
+        func threadLine(_ thread: SummaryResult.Thread) -> String {
+            var line = "\(thread.id)  \(thread.title) [\(thread.driver)] · opened \(day(thread.createdAt))"
+            if let closed = thread.closedAt { line += ", closed \(day(closed))" }
+            else if let launched = thread.lastLaunchedAt { line += ", last launched \(day(launched))" }
+            return line
+        }
+
+        if let detail = result.detail {
+            let task = detail.task
+            lines = ["task \(task.slug) — \(task.name) (\(detail.scope))"]
+            lines.append("outcome     \(task.outcome.rawValue)")
+            lines.append("branch      \(task.branch)" + (task.repos.isEmpty ? "" : " in " + task.repos.joined(separator: ", ")))
+            if let topic = task.topic { lines.append("topic       \(topic)") }
+            if let pr = task.pullRequest { lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)") }
+            lines.append("created     \(day(task.createdAt))" + (task.createdByAgent ? " by an agent" : ""))
+            if let archived = task.archivedAt { lines.append("archived    \(day(archived))") }
+            if let closed = task.closedAt { lines.append("closed      \(day(closed))") }
+            for thread in task.threads { lines.append("thread      " + threadLine(thread)) }
+            if let prompt = detail.prompt { lines += ["", "brief:", prompt] }
+            return lines.joined(separator: "\n")
+        }
+
+        if result.scopes.isEmpty { lines += ["", "nothing in this period"] }
+        for scope in result.scopes {
+            let counts = TaskOutcome.allCases.compactMap { outcome -> String? in
+                let count = switch outcome {
+                case .merged: scope.counts.merged
+                case .delivered: scope.counts.delivered
+                case .abandoned: scope.counts.abandoned
+                case .archived: scope.counts.archived
+                case .active: scope.counts.active
+                }
+                return count == 0 ? nil : "\(count) \(outcome.rawValue)"
+            }
+            var header = "\(scope.slug)\(scope.declared ? "" : " (no longer declared)") — \(scope.counts.total) task\(scope.counts.total == 1 ? "" : "s")"
+            if !counts.isEmpty { header += ": " + counts.joined(separator: ", ") }
+            if !scope.threads.isEmpty { header += " · \(scope.threads.count) thread\(scope.threads.count == 1 ? "" : "s") outside tasks" }
+            lines += ["", header]
+            var topic: String??
+            for task in scope.tasks {
+                if topic == nil || topic! != task.topic {
+                    topic = .some(task.topic)
+                    if let name = task.topic { lines.append("  topic: \(name)") }
+                    else if scope.tasks.contains(where: { $0.topic != nil }) { lines.append("  no topic") }
+                }
+                lines += taskLines(task, indent: "    ")
+            }
+            if !scope.threads.isEmpty {
+                lines.append("  outside tasks")
+                lines += scope.threads.map { "    " + threadLine($0) }
+            }
+        }
+        lines += [""] + result.limits.map { "note: \($0)" }
+        return lines.joined(separator: "\n")
     }
 
     /// Untrusted text between the markers, the warning first: tool descriptions get skimmed, this does not.
