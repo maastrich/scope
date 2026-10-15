@@ -94,7 +94,7 @@ struct AutomationSettingsView: View {
 
             SettingsSection("Skills") {
                 Text("""
-                    Installs the **Scope tasks** skill for your user, so every session of these agents knows how to \
+                    Installs the **Scope** skill for your user, so every session of these agents knows how to \
                     put work in a task, open threads in it and close it — by name or slug, through `scope` or the \
                     MCP tools. One folder per agent, next to your other skills.
                     """)

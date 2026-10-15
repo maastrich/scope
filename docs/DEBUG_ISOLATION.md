@@ -35,7 +35,7 @@ target has none, so a row whose mechanism lives in `App/Scope/` or `project.yml`
 | 13 | Shared logs and links | yes | yes | Both builds tail Vibe Island's one log; a jump is matched on the driver's session id or pid against the app's *own* threads, so only the build that owns the session reacts. The app parses `scope://` and `scope-debug://` but never writes either: LaunchServices decides who receives a link (5). | `Sources/ScopeAdapters/VibeIslandJumps.swift:42`, `Sources/ScopeCore/Models/ThreadLink.swift:13` | `VibeIslandJumpsTests`, `ThreadLinkTests` (existing) |
 
 Also separated, and found that way: the MCP server entry (`scope` / `scope-debug`) and the agent skill
-(`scope-tasks` / `scope-debug-tasks`) are named per build (`MCPRegistration.swift:53`, `SkillInstaller.swift:40`);
+(`scope` / `scope-debug`, formerly `scope-tasks` / `scope-debug-tasks`) are named per build (`MCPRegistration.swift:53`, `SkillInstaller.swift:43`);
 driver hook settings are written per thread under `<home>/threads/`; git hooks live in `<home>/githooks` and
 reach git through the thread's environment, not through a repository's config.
 

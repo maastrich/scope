@@ -1,7 +1,7 @@
 import Foundation
 import ScopeCore
 
-/// Installs the **Scope tasks** skill for the agents a user runs — Claude Code, Codex, Cursor — at user level,
+/// Installs the **Scope** skill for the agents a user runs — Claude Code, Codex, Cursor — at user level,
 /// so every session they start knows how to work with Scope's tasks and threads: when to sandbox work into a
 /// task, how to name one, how to open a thread in it, read it, hand it a prompt, and close it.
 ///
@@ -26,18 +26,22 @@ public struct SkillInstaller: Sendable {
     /// Folder name of the skill, the name agents see. Per build: a Debug app talks to its own `scope-debug`
     /// server, and its skill must not shadow the installed app's.
     public let name: String
+    /// The name older apps installed it under (`scope-tasks`), from when it only covered tasks. A copy left there
+    /// would sit next to the new one and both would trigger on the same requests, so installing moves it.
+    public let legacyName: String
     /// The user's home, where every client keeps its skills (a temporary folder in tests).
     public let userHome: URL
     /// The MCP server entry the skill's tool names hang off (`scope`, or `scope-debug`).
     public let serverName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 4
+    public static let version = 5
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
         self.userHome = userHome
-        self.name = debug ? "scope-debug-tasks" : "scope-tasks"
+        self.name = debug ? "scope-debug" : "scope"
+        self.legacyName = debug ? "scope-debug-tasks" : "scope-tasks"
         self.serverName = debug ? "scope-debug" : "scope"
     }
 
@@ -55,6 +59,18 @@ public struct SkillInstaller: Sendable {
         clientHome(client).appending(path: "skills", directoryHint: .isDirectory).appending(path: name, directoryHint: .isDirectory)
     }
 
+    /// `<client home>/skills/<legacyName>`
+    public func legacyDirectory(_ client: Client) -> URL {
+        clientHome(client).appending(path: "skills", directoryHint: .isDirectory).appending(path: legacyName, directoryHint: .isDirectory)
+    }
+
+    /// Whether the old folder holds a copy we wrote; one without our marker is someone else's and stays.
+    func hasLegacyCopy(_ client: Client) -> Bool {
+        let file = legacyDirectory(client).appending(path: "SKILL.md", directoryHint: .notDirectory)
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return false }
+        return Self.installedVersion(text) != nil
+    }
+
     /// `<client home>/skills/<name>/SKILL.md`
     public func skillFile(_ client: Client) -> URL {
         skillDirectory(client).appending(path: "SKILL.md", directoryHint: .notDirectory)
@@ -63,7 +79,10 @@ public struct SkillInstaller: Sendable {
     public func state(of client: Client, fileManager: FileManager = .default) -> State {
         guard MCPRegistration.isDirectory(clientHome(client)) else { return .unavailable }
         let file = skillFile(client)
-        guard fileManager.fileExists(atPath: skillDirectory(client).path) else { return .absent }
+        guard fileManager.fileExists(atPath: skillDirectory(client).path) else {
+            // Installed under the old name: an update away, which the launch refresh and Settings both perform.
+            return hasLegacyCopy(client) ? .outdated : .absent
+        }
         guard let text = try? String(contentsOf: file, encoding: .utf8), let version = Self.installedVersion(text) else {
             return .foreign
         }
@@ -78,6 +97,12 @@ public struct SkillInstaller: Sendable {
         }
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         try MCPRegistration.write(Data(skillText.utf8), to: skillFile(client))
+        try removeLegacyCopy(client, fileManager: fileManager)
+    }
+
+    private func removeLegacyCopy(_ client: Client, fileManager: FileManager) throws {
+        guard hasLegacyCopy(client) else { return }
+        try fileManager.removeItem(at: legacyDirectory(client))
     }
 
     /// Rewrites every copy of our skill an older app wrote, and nothing else: a client that never had it, or
@@ -91,10 +116,14 @@ public struct SkillInstaller: Sendable {
         }
     }
 
-    /// Removes our skill folder; a foreign one or a missing one is left as it is.
+    /// Removes our skill folder, under either name; a foreign one or a missing one is left as it is.
     public func remove(_ client: Client, fileManager: FileManager = .default) throws {
         switch state(of: client, fileManager: fileManager) {
-        case .installed, .outdated: try fileManager.removeItem(at: skillDirectory(client))
+        case .installed, .outdated:
+            if fileManager.fileExists(atPath: skillDirectory(client).path) {
+                try fileManager.removeItem(at: skillDirectory(client))
+            }
+            try removeLegacyCopy(client, fileManager: fileManager)
         case .absent, .foreign, .unavailable: return
         }
     }
@@ -118,7 +147,7 @@ public struct SkillInstaller: Sendable {
         ---
         <!-- \(Self.marker) \(Self.version) — written by Scope, which rewrites it at launch when an update changes it. -->
 
-        # Scope tasks
+        # Scope
 
         Scope is the macOS app running these agents. A **scope** is a folder of repositories. A **task** is a
         named unit of work: one branch and one git worktree per repository it touches, so agents work in a sandbox
