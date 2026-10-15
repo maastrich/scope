@@ -62,6 +62,8 @@ extension AppModel {
             let record = try await env.tasks.linkPullRequest(LinkedPullRequest(pr), to: task.id)
             task.update(record: record)
         } catch {
+            // A refresh that outlived a close (`settlePullRequest`) finds no record left: nothing to report.
+            guard await env.tasks.task(task.id) != nil else { return }
             problems.warn("Could not bind #\(pr.number) to the task", detail: String(describing: error), scope: task.scopeID)
         }
     }

@@ -418,6 +418,7 @@ extension AppModel {
     private func dismantle(_ task: TaskState, _ mode: DismantleMode) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
+        await settlePullRequest(of: task)
         let outcome: DismantleOutcome
         do {
             outcome = try await env.tasks.dismantle(task.id, mode, teardown: await teardown(for: task), prepare: hangUp(task.id))
@@ -439,6 +440,28 @@ extension AppModel {
         Task { await collectGarbage() }
         return outcome
     }
+
+    /// What GitHub says of the task's pull request now, written on the record before the task is taken apart: the
+    /// inspector only refreshes the task on screen, and an agent archives right after a merge it saw on GitHub.
+    /// Without this the record would keep `open`, and a summary would call shipped work merely delivered. Binds the
+    /// pull request a thread opened, too. Never holds the archive up past `pullRequestSettleTimeout`; a refresh that
+    /// finishes later still lands on an archived record.
+    private func settlePullRequest(of task: TaskState) async {
+        guard pullRequests.gh != nil, !["merged", "closed"].contains(task.record.pullRequest?.state ?? "") else { return }
+        let race = SettleRace()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            Task {
+                await refreshTaskPullRequest(task)
+                race.finish(continuation)
+            }
+            Task {
+                try? await Task.sleep(for: AppModel.pullRequestSettleTimeout)
+                race.finish(continuation)
+            }
+        }
+    }
+
+    static let pullRequestSettleTimeout: Duration = .seconds(5)
 
     // MARK: Garbage collection
 
@@ -567,5 +590,17 @@ extension AppModel {
             response = alert.runModal()
         }
         return response == .alertFirstButtonReturn
+    }
+}
+
+/// Whichever of the refresh and the deadline comes first resumes the archive; the other finds it done.
+@MainActor
+private final class SettleRace {
+    private var done = false
+
+    func finish(_ continuation: CheckedContinuation<Void, Never>) {
+        guard !done else { return }
+        done = true
+        continuation.resume()
     }
 }
