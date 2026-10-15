@@ -35,7 +35,7 @@ public struct SkillInstaller: Sendable {
     public let serverName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 5
+    public static let version = 6
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -243,6 +243,21 @@ public struct SkillInstaller: Sendable {
         Settings ▸ Automation ▸ Talking to threads may fence you into the threads you opened; `scope list threads`
         shows who opened each one. Another agent's thread is its work: stop or close it only when the user or
         that agent asked.
+
+        ## The orchestrator and the terminal
+
+        Every scope has two threads Scope keeps at its root, whoever opened the rest: the **orchestrator**, an agent
+        that drives the scope, and the **terminal**, the user's shell for trying things by hand. `scope list threads`
+        shows them as `scope (orchestrator)` and `scope (terminal)` in the BY column (`resident` in JSON).
+
+        - **If your own row is the orchestrator**, you are the scope's driver: your cwd is the scope root, where the
+          user's checkouts are. Read there; to change code, open a task (`scope task new`) and hand it to a thread
+          rather than editing the bases yourself.
+        - **To reach a scope's driver from elsewhere**, send to its orchestrator. A resident that is not running yet
+          starts on your message, which is refused this once: `scope thread wait <id>`, then send again.
+        - **They cannot be closed**: `scope thread close` refuses them. `scope thread stop` works and leaves one
+          stopped until someone relaunches it or Scope opens again; a process that dies on its own is started
+          again. Stop one only when the user asks. Do not type into the terminal unless asked: it is the user's.
 
         ## Finishing
 
