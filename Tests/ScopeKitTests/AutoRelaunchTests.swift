@@ -146,3 +146,40 @@ private func everythingExists(_ path: String) -> Bool { true }
         #expect(!off.autoRelaunchThreads)
     }
 }
+
+@Suite struct AutoRelaunchResidentTests {
+    private func resident(_ id: String, scope: ScopeID = acme, alive: Bool = false) throws -> ThreadRecord {
+        var record = try record(id, scope: scope, alive: alive)
+        record.resident = .orchestrator
+        return record
+    }
+
+    @Test func theOpenScopesResidentsStartEvenStoppedOptedOutOrWithTheSettingOff() throws {
+        var optedOut = try resident("aaaaaaaaaaa2")
+        optedOut.relaunchesAtStartup = false
+        let plan = AutoRelaunchPlanner.plan([.init(record: try resident("aaaaaaaaaaa1")), .init(record: optedOut)],
+                                            enabled: false, skippedOnce: false, residentScope: acme,
+                                            pathExists: everythingExists)
+        #expect(plan.launches.map(\.rawValue) == ["aaaaaaaaaaa1", "aaaaaaaaaaa2"])
+    }
+
+    @Test func otherScopesResidentsWaitForAVisit() throws {
+        let plan = AutoRelaunchPlanner.plan([.init(record: try resident("aaaaaaaaaaa1", scope: other, alive: true)),
+                                             .init(record: try resident("aaaaaaaaaaa2", scope: other))],
+                                            enabled: true, skippedOnce: false, residentScope: acme,
+                                            pathExists: everythingExists)
+        #expect(plan.launches.isEmpty)
+        // The one that was running loses `processAlive`; the stopped one is not considered at all.
+        #expect(plan.skipped.map(\.skip) == [.waitsForVisit])
+        #expect(plan.blocked.isEmpty)
+    }
+
+    @Test func shiftAndAMissingFolderStillStopThem() throws {
+        let shift = AutoRelaunchPlanner.plan([.init(record: try resident("aaaaaaaaaaa1"))], enabled: true, skippedOnce: true,
+                                             residentScope: acme, pathExists: everythingExists)
+        #expect(shift.skipped.map(\.skip) == [.skippedOnce])
+        let missing = AutoRelaunchPlanner.plan([.init(record: try resident("aaaaaaaaaaa1"))], enabled: true, skippedOnce: false,
+                                               residentScope: acme, pathExists: { _ in false })
+        #expect(missing.skipped.map(\.skip) == [.scopeMissing("/scopes/acme")])
+    }
+}

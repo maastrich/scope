@@ -522,9 +522,13 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     public var depth: Int
     /// The thread whose agent opened this one, when one did: the one to answer.
     public var parent: String?
+    /// `orchestrator` or `terminal` for the two threads Scope keeps in every scope, which can be stopped but not
+    /// closed; absent for the others. The orchestrator is the agent that drives its scope.
+    public var resident: String?
 
     public init(id: String, title: String, driver: String, scope: String, scopeSlug: String, task: String?,
-                cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil) {
+                cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
+                resident: String? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -537,6 +541,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.openedBy = openedBy
         self.depth = depth
         self.parent = parent
+        self.resident = resident
     }
 }
 

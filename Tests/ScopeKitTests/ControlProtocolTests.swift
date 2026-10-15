@@ -157,3 +157,20 @@ import Testing
         #expect(decoded.payload?.method == .taskClose)
     }
 }
+
+@Suite struct ResidentListingTests {
+    private func thread(_ id: String, resident: String? = nil) -> ThreadSummary {
+        ThreadSummary(id: id, title: id, driver: "claude-code", scope: "acme", scopeSlug: "acme", task: nil,
+                      cwd: "/scopes/acme", state: "idle", alive: true, openedBy: "user", depth: 0, resident: resident)
+    }
+
+    @Test func theRoleSurvivesTheWireAndNamesScopeAsTheOpener() throws {
+        let result = ListResult(scopes: [], threads: [thread("aaaaaaaaaaa1", resident: "orchestrator"), thread("aaaaaaaaaaa2")],
+                                tasks: [])
+        let decoded = try JSONDecoder().decode(ListResult.self, from: JSONEncoder().encode(result))
+        #expect(decoded.threads.map(\.resident) == ["orchestrator", nil])
+        let text = CLIRenderer.text(.list(result))
+        #expect(text.contains("scope (orchestrator)"))
+        #expect(!text.contains("scope (terminal)"))
+    }
+}
