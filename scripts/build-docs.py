@@ -827,6 +827,7 @@ scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees +
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
+scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
 <p>Every command takes <code>--json</code>. <code>--scope</code> accepts a slug, a name, an id or a path;
@@ -865,6 +866,17 @@ the sidebar, under one row. A task created from inside a task gets that task's t
 when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
 orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
 <code>scope list tasks</code> shows each task's topic.</p>
+<p><code>scope summary last week</code> lists, scope by scope, every task created, archived, closed or worked on
+in the period — finished or dropped alike — with an outcome (<i>merged</i>, <i>delivered</i>, <i>abandoned</i>,
+<i>archived</i>, <i>active</i>), its pull request, its topic and the opening of its brief, then the threads opened
+outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
+week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
+<code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
+<code>--task &lt;slug&gt;</code> prints one task's whole brief. The installed <code>/scope-summary</code> skill has
+an agent turn it into an account.</p>
+<p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
+or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;
+work closed before this version left nothing. A pull request's state is the last one Scope saw while its task was open.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
