@@ -28,7 +28,7 @@ struct TopicRow: View {
                 }
             }
 
-            Image(systemName: "square.stack")
+            Image(systemName: "tag")
                 .font(.scopeBody)
                 .foregroundStyle(Ink.secondary)
                 .frame(width: SidebarMetrics.glyphSlot)
