@@ -156,6 +156,13 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var setup: TaskSetupRecord?
     /// An archive or close that started and has not finished (`TaskManager.dismantle`).
     public var cleanup: PendingCleanup?
+    /// The topic the task is filed under in the sidebar (`TaskTopic`), shared with the tasks of the same piece of work.
+    public var topic: String?
+    /// The task whose agent created this one, when one did.
+    public var parentTask: TaskID?
+    /// Who asked for the task, as recorded for its first thread: what tells an agent's task from the user's when the
+    /// budgets count them. `nil` on records from before it existed and on tasks the user made in the app.
+    public var origin: ThreadOrigin?
 
     public init(
         id: TaskID = .generate(),
@@ -175,7 +182,10 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         createdBy: String? = nil,
         portBase: Int? = nil,
         setup: TaskSetupRecord? = nil,
-        cleanup: PendingCleanup? = nil
+        cleanup: PendingCleanup? = nil,
+        topic: String? = nil,
+        parentTask: TaskID? = nil,
+        origin: ThreadOrigin? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -196,6 +206,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.portBase = portBase
         self.setup = setup
         self.cleanup = cleanup
+        self.topic = TaskTopic.normalize(topic)
+        self.parentTask = parentTask
+        self.origin = origin
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -255,6 +268,13 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         return variables
     }
 
+    /// Whether an agent asked for the task: what the agents' budget counts. A record from before origins were kept
+    /// says so through its client, which only `scope mcp` marks as an agent's for certain.
+    public var createdByAgent: Bool {
+        if let origin { return origin.openedByAgent }
+        return (createdBy ?? "").hasPrefix(ThreadOrigin.mcpClientPrefix)
+    }
+
     /// `notRun` for a record that never ran a setup.
     public var setupState: SetupState { setup?.state ?? .notRun }
 
@@ -265,7 +285,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy, portBase, setup, cleanup
+        case createdBy, portBase, setup, cleanup, topic, parentTask, origin
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -290,5 +310,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         portBase = try container.decodeIfPresent(Int.self, forKey: .portBase)
         setup = try container.decodeIfPresent(TaskSetupRecord.self, forKey: .setup)
         cleanup = try? container.decodeIfPresent(PendingCleanup.self, forKey: .cleanup)
+        topic = TaskTopic.normalize(try? container.decodeIfPresent(String.self, forKey: .topic))
+        parentTask = (try? container.decodeIfPresent(TaskID.self, forKey: .parentTask)) ?? nil
+        origin = (try? container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)) ?? nil
     }
 }

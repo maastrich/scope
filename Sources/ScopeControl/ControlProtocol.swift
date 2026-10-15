@@ -85,7 +85,7 @@ public struct ControlError: Codable, Sendable, Equatable, Error {
         case badRequest = "bad_request"
         /// Method or protocol version this app does not know.
         case unsupported
-        /// Refused on purpose: automation off, depth ceiling reached, human said no.
+        /// Refused on purpose: automation off, a budget or the depth limit reached, human said no.
         case denied
         /// Scope, driver, task or thread does not exist.
         case notFound = "not_found"
@@ -124,7 +124,7 @@ extension ControlError: CustomStringConvertible, LocalizedError {
 
 // MARK: - Caller
 
-/// What the client says about itself. Identity, not authority: the app derives the depth ceiling from its
+/// What the client says about itself. Identity, not authority: the app derives depth and lineage from its
 /// own records (see `AutomationPolicy`), because everything running under the user's account can write
 /// anything here.
 public struct ControlCaller: Codable, Sendable, Equatable {
@@ -429,10 +429,12 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     /// Run the repositories' setup commands in the new sandboxes before the first thread starts (the default).
     /// `false` still copies the `.env*` files.
     public var runSetup: Bool
+    /// The topic the task is filed under in the sidebar; `nil` = the topic of the caller's own task, if any.
+    public var topic: String?
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
-                dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true) {
+                dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil) {
         self.prompt = prompt
         self.scope = scope
         self.repos = repos
@@ -443,6 +445,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         self.dryRun = dryRun
         self.openThread = openThread
         self.runSetup = runSetup
+        self.topic = topic
     }
 
     // Lenient on everything but the prompt: a `scope` binary older than a field never sends it.
@@ -458,6 +461,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
         openThread = try container.decodeIfPresent(Bool.self, forKey: .openThread) ?? true
         runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
+        topic = try container.decodeIfPresent(String.self, forKey: .topic)
     }
 }
 
@@ -555,9 +559,13 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var root: String
     public var repos: [String]
     public var threads: [String]
+    /// The topic the task is filed under, if any.
+    public var topic: String?
+    /// The task whose agent created this one, if any.
+    public var parentTask: String?
 
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
-                root: String, repos: [String], threads: [String]) {
+                root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil) {
         self.id = id
         self.name = name
         self.slug = slug
@@ -567,6 +575,8 @@ public struct TaskSummary: Codable, Sendable, Equatable {
         self.root = root
         self.repos = repos
         self.threads = threads
+        self.topic = topic
+        self.parentTask = parentTask
     }
 }
 
@@ -634,10 +644,12 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
     public var repos: [TaskRepoResult]
     /// The thread opened in the new task, when one was.
     public var thread: String?
+    /// The topic the task is filed under: the one asked for, or the one it inherited from the caller's task.
+    public var topic: String?
 
     public init(created: Bool, task: String? = nil, name: String, slug: String, branch: String,
                 scope: String, scopeSlug: String, root: String? = nil, repos: [TaskRepoResult] = [],
-                thread: String? = nil) {
+                thread: String? = nil, topic: String? = nil) {
         self.created = created
         self.task = task
         self.name = name
@@ -648,6 +660,7 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
         self.root = root
         self.repos = repos
         self.thread = thread
+        self.topic = topic
     }
 }
 

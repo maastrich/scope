@@ -82,6 +82,14 @@ something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>
   driver, else the first agent installed.</li>
 </ul>
 
+<h3 id="topics">Topics</h3>
+<p>Tasks that belong to one piece of work can share a <b>topic</b>: in the tree arrangement they sit under one
+row named after it, where the first of them stands, with the count and the most urgent state of their threads.
+Agents set it — <code>scope task new --topic</code>, and a task created from inside a task inherits its topic —
+and so can you: <b>Topic</b> in a task's menu files it under a topic in use, a new one, or none. The topic's own
+menu renames it, ungroups its tasks or archives them all. By state, tasks sit with what they are doing and the
+topic shows in the hover card, with the task an agent created it from.</p>
+
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>
@@ -136,7 +144,7 @@ sections stay in place, dimmed, and Base follows the selected repository. Drag t
 <p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
 the window: <b>Pull Requests</b> (<kbd>⇧⌘P</kbd>) lists the open pull requests of a repository through
 <code>gh</code>; <b>Graph</b> (<kbd>⌥⌘G</kbd>) shows one card per repository.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Pull Requests and Graph</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Pull Requests and Graph</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

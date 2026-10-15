@@ -3,7 +3,7 @@ import ScopeCore
 import Testing
 @testable import ScopeControl
 
-/// The two rules that keep the socket from turning into a fork bomb with worktrees.
+/// The rules that keep the socket from turning into a fork bomb with worktrees.
 @Suite struct AutomationPolicyTests {
     static let thread = ThreadID(rawValue: "3f9a2c17be04")!
     static func policy(_ settings: AutomationSettings = AutomationSettings()) -> AutomationPolicy {
@@ -13,7 +13,7 @@ import Testing
     static let createTask = ControlCall.taskNew(TaskNewParams(prompt: "fix the login test"))
 
     @Test func readingIsAlwaysAllowed() {
-        let locked = AutomationSettings(agentsMayDrive: false, maxDepth: 0, threads: .deny, tasks: .deny)
+        let locked = AutomationSettings(agentsMayDrive: false, depthLimit: 0, threads: .deny, tasks: .deny)
         for call in [ControlCall.ping, .list(ListParams())] {
             #expect(Self.policy(locked).decide(call, from: .user) == .allow)
             #expect(Self.policy(locked).decide(call, from: .thread(Self.thread, depth: 9)) == .allow)
@@ -27,26 +27,98 @@ import Testing
         #expect(Self.policy(locked).decide(Self.createTask, from: .user) == .allow)
     }
 
-    /// The default: a thread you opened may open one; the thread it opened may not.
-    @Test func anAgentOpensOneGenerationAndNoMore() {
-        #expect(Self.policy().decide(Self.openThread, from: .thread(Self.thread, depth: 0)) == .allow)
-        guard case .refuse(let error) = Self.policy().decide(Self.openThread, from: .thread(Self.thread, depth: 1)) else {
-            Issue.record("depth 1 should not be able to open depth 2")
+    /// Any task may create tasks: the default has no depth limit, at any depth.
+    @Test func anAgentAtAnyDepthMayOpenWork() {
+        #expect(AutomationSettings().depthLimit == nil)
+        for depth in [0, 1, 2, 7, 40] {
+            #expect(Self.policy().decide(Self.openThread, from: .thread(Self.thread, depth: depth)) == .allow)
+            #expect(Self.policy().decide(Self.createTask, from: .thread(Self.thread, depth: depth)) == .allow)
+        }
+    }
+
+    @Test func aDepthLimitIsStillAPreference() {
+        let fenced = AutomationSettings(depthLimit: 3)
+        #expect(Self.policy(fenced).decide(Self.createTask, from: .thread(Self.thread, depth: 2)) == .allow)
+        guard case .refuse(let error) = Self.policy(fenced).decide(Self.createTask, from: .thread(Self.thread, depth: 3)) else {
+            Issue.record("a depth 4 task is past a limit of 3")
             return
         }
         #expect(error.code == .denied)
+        #expect(error.detail?.contains("depthLimit") == true)
     }
 
-    @Test func theCeilingIsAPreference() {
-        let deeper = AutomationSettings(maxDepth: 3)
-        #expect(Self.policy(deeper).decide(Self.openThread, from: .thread(Self.thread, depth: 2)) == .allow)
-        #expect(Self.policy(deeper).decide(Self.openThread, from: .thread(Self.thread, depth: 3)) != .allow)
-    }
-
-    @Test func aCeilingOfZeroStopsAgentsEntirely() {
-        let none = AutomationSettings(maxDepth: 0)
+    @Test func aLimitOfZeroStopsAgentsEntirely() {
+        let none = AutomationSettings(depthLimit: 0)
         #expect(Self.policy(none).decide(Self.openThread, from: .thread(Self.thread, depth: 0)) != .allow)
         #expect(Self.policy(none).decide(.list(ListParams()), from: .thread(Self.thread, depth: 0)) == .allow)
+    }
+
+    // MARK: Budgets
+
+    @Test func theBudgetStopsTasksPastTheLimit() {
+        let settings = AutomationSettings(maxAgentTasks: 3)
+        #expect(Self.policy(settings).decide(Self.createTask, from: .thread(Self.thread, depth: 5),
+                                             load: AutomationLoad(tasks: 2)) == .allow)
+        guard case .refuse(let error) = Self.policy(settings).decide(Self.createTask, from: .thread(Self.thread, depth: 5),
+                                                                     load: AutomationLoad(tasks: 3)) else {
+            Issue.record("a fourth task is past a budget of 3")
+            return
+        }
+        #expect(error.code == .denied)
+        #expect(error.message.contains("3 tasks"))
+        #expect(error.detail?.contains("scope task archive") == true)
+    }
+
+    @Test func theBudgetStopsThreadsPastTheLimit() {
+        let settings = AutomationSettings(maxAgentThreads: 2)
+        #expect(Self.policy(settings).decide(Self.openThread, from: .thread(Self.thread, depth: 1),
+                                             load: AutomationLoad(threads: 1)) == .allow)
+        guard case .refuse(let error) = Self.policy(settings).decide(Self.openThread, from: .thread(Self.thread, depth: 1),
+                                                                     load: AutomationLoad(threads: 2)) else {
+            Issue.record("a third thread is past a budget of 2")
+            return
+        }
+        #expect(error.detail?.contains("scope thread close") == true)
+        // A task opening its first thread needs a thread slot too; one left cold does not.
+        #expect(Self.policy(settings).decide(Self.createTask, from: .thread(Self.thread, depth: 1),
+                                             load: AutomationLoad(threads: 2)) != .allow)
+        let cold = ControlCall.taskNew(TaskNewParams(prompt: "x", openThread: false))
+        #expect(Self.policy(settings).decide(cold, from: .thread(Self.thread, depth: 1), load: AutomationLoad(threads: 2)) == .allow)
+    }
+
+    @Test func theBudgetNeverStopsYouOrADryRunOrAnAction() {
+        let tight = AutomationSettings(maxAgentTasks: 1, maxAgentThreads: 1)
+        let full = AutomationLoad(tasks: 50, threads: 50)
+        #expect(Self.policy(tight).decide(Self.createTask, from: .user, load: full) == .allow)
+        let dry = ControlCall.taskNew(TaskNewParams(prompt: "x", dryRun: true))
+        #expect(Self.policy(tight).decide(dry, from: .thread(Self.thread, depth: 0), load: full) == .allow)
+        let close = ControlCall.threadClose(ThreadTargetParams(thread: "x"))
+        #expect(Self.policy(tight).decide(close, from: .thread(Self.thread, depth: 0), load: full) == .allow)
+        let archive = ControlCall.taskArchive(TaskArchiveParams(task: "t"))
+        #expect(Self.policy(tight).decide(archive, from: .thread(Self.thread, depth: 0), load: full) == .allow)
+    }
+
+    @Test func anAgentOutsideScopeSharesTheBudget() {
+        let external = ControlOrigin.externalAgent(client: "scope-mcp/0.4.3")
+        guard case .refuse = Self.policy(AutomationSettings(maxAgentTasks: 1)).decide(Self.createTask, from: external,
+                                                                                    load: AutomationLoad(tasks: 1)) else {
+            Issue.record("an agent outside Scope counts against the same budget")
+            return
+        }
+    }
+
+    @Test func whatACallCosts() {
+        #expect(AutomationPolicy.cost(of: Self.openThread) == AutomationLoad(threads: 1))
+        #expect(AutomationPolicy.cost(of: Self.createTask) == AutomationLoad(tasks: 1, threads: 1))
+        #expect(AutomationPolicy.cost(of: .taskNew(TaskNewParams(prompt: "x", openThread: false))) == AutomationLoad(tasks: 1))
+        #expect(AutomationPolicy.cost(of: .taskNew(TaskNewParams(prompt: "x", dryRun: true))).isZero)
+        #expect(AutomationPolicy.cost(of: .list(ListParams())).isZero)
+    }
+
+    @Test func budgetsAreClampedAndDefaultSensibly() {
+        #expect(AutomationSettings().maxAgentTasks == AutomationSettings.defaultMaxAgentTasks)
+        #expect(AutomationSettings(maxAgentTasks: 0, maxAgentThreads: 9999).maxAgentTasks == 1)
+        #expect(AutomationSettings(maxAgentTasks: 0, maxAgentThreads: 9999).maxAgentThreads == AutomationSettings.budgetRange.upperBound)
     }
 
     @Test func creatingATaskGoesAheadByDefault() {
@@ -84,12 +156,31 @@ import Testing
     }
 
     @Test func settingsSurviveAHalfWrittenConfig() throws {
-        let json = Data(#"{"maxDepth":-4,"tasks":"whenever","approvalTimeout":1}"#.utf8)
+        let json = Data(#"{"depthLimit":-4,"maxAgentTasks":"many","tasks":"whenever","approvalTimeout":1}"#.utf8)
         let settings = try JSONDecoder().decode(AutomationSettings.self, from: json)
-        #expect(settings.maxDepth == 0)
+        #expect(settings.depthLimit == 0)
+        #expect(settings.maxAgentTasks == AutomationSettings.defaultMaxAgentTasks)
         #expect(settings.tasks == .allow)        // unknown word falls back to the default
         #expect(settings.approvalTimeout >= 5)   // a one-second window is not an opportunity to answer
         #expect(settings.agentsMayDrive)
+    }
+
+    /// Settings wrote the whole block on any change, so the old default ceiling of 1 sits in many configs: it must
+    /// not keep tasks from creating tasks. A 0 was a choice and stays.
+    @Test func theOldCeilingIsDroppedUnlessItWasZero() throws {
+        func decode(_ json: String) throws -> AutomationSettings {
+            try JSONDecoder().decode(AutomationSettings.self, from: Data(json.utf8))
+        }
+        #expect(try decode(#"{"maxDepth":1}"#).depthLimit == nil)
+        #expect(try decode(#"{"maxDepth":4}"#).depthLimit == nil)
+        #expect(try decode(#"{"maxDepth":0}"#).depthLimit == 0)
+        #expect(try decode(#"{"maxDepth":0,"depthLimit":2}"#).depthLimit == 2)
+        // Written back, the old key is gone and the new one says what was kept.
+        let reencoded = String(decoding: try JSONEncoder().encode(try decode(#"{"maxDepth":0}"#)), as: UTF8.self)
+        #expect(!reencoded.contains("maxDepth"))
+        #expect(try decode(reencoded).depthLimit == 0)
+        let unlimited = String(decoding: try JSONEncoder().encode(AutomationSettings()), as: UTF8.self)
+        #expect(try decode(unlimited).depthLimit == nil)
     }
 
     @Test func preferencesWithoutAnAutomationBlockUseTheDefaults() throws {
@@ -139,8 +230,8 @@ import Testing
             Issue.record("turning agents off turns this one off too")
             return
         }
-        guard case .refuse(let error) = AutomationPolicy(settings: AutomationSettings(maxDepth: 0)).decide(open, from: external) else {
-            Issue.record("a ceiling of 0 stops it")
+        guard case .refuse(let error) = AutomationPolicy(settings: AutomationSettings(depthLimit: 0)).decide(open, from: external) else {
+            Issue.record("a limit of 0 stops it")
             return
         }
         #expect(error.message.contains("outside Scope"))
@@ -190,6 +281,38 @@ import Testing
         #expect(AutomationPolicy.mayTouch(.user, from: .thread(Self.agent, depth: 0), reach: .own)?.code == .denied)
     }
 
+    /// An orchestrator waits for the thread its task's agent started: `own` is everything below it, not one level.
+    @Test func fencedAnAgentReachesItsDescendantsButNotItsKin() {
+        let child = ThreadOrigin.child(of: Self.agent.rawValue, origin: .user, depth: 1, client: "scope-cli/1")
+        let grandchild = ThreadOrigin.child(of: "bbbbbbbbbbbb", origin: child, depth: 2, client: "scope-cli/1")
+        let greatGrandchild = ThreadOrigin.child(of: "cccccccccccc", origin: grandchild, depth: 3, client: "scope-cli/1")
+        #expect(grandchild.lineage == ["bbbbbbbbbbbb", Self.agent.rawValue])
+        #expect(AutomationPolicy.mayTouch(grandchild, from: .thread(Self.agent, depth: 0), reach: .own) == nil)
+        #expect(AutomationPolicy.mayTouch(greatGrandchild, from: .thread(Self.agent, depth: 0), reach: .own) == nil)
+        // A sibling: opened by the same parent as the agent, not by the agent.
+        let sibling = ThreadOrigin.child(of: "dddddddddddd", origin: .user, depth: 1, client: "scope-cli/1")
+        let me = ThreadID(rawValue: "eeeeeeeeeeee")!
+        #expect(AutomationPolicy.mayTouch(sibling, from: .thread(me, depth: 1), reach: .own)?.code == .denied)
+        // Its parent: above it, not below.
+        #expect(AutomationPolicy.mayTouch(.user, id: Self.agent, from: .thread(ThreadID(rawValue: "bbbbbbbbbbbb")!, depth: 1),
+                                          reach: .own)?.code == .denied)
+    }
+
+    /// A record written before lineages were kept still knows its parent.
+    @Test func anOldRecordHasItsParentForLineage() throws {
+        let old = try JSONDecoder().decode(ThreadOrigin.self, from: Data(#"{"author":"control","parent":"3f9a2c17be04","depth":1}"#.utf8))
+        #expect(old.lineage == ["3f9a2c17be04"])
+        #expect(ThreadOrigin.user.lineage.isEmpty)
+    }
+
+    @Test func aLineageIsBounded() {
+        var origin = ThreadOrigin.user
+        for generation in 0..<100 {
+            origin = .child(of: String(format: "%012x", generation), origin: origin, depth: generation + 1, client: nil)
+        }
+        #expect(origin.lineage.count == ThreadOrigin.lineageLimit + 1)
+    }
+
     @Test func fencedAnAgentOutsideScopeTouchesOnlyWhatAgentsOutsideScopeOpened() {
         #expect(AutomationPolicy.mayTouch(Self.openedOutside, from: Self.external, reach: .own) == nil)
         #expect(AutomationPolicy.mayTouch(Self.openedByUserCLI, from: Self.external, reach: .own)?.code == .denied)
@@ -208,11 +331,11 @@ import Testing
         #expect(own.threadReach == .own)
     }
 
-    /// Nothing new is opened, so the depth ceiling does not stop an agent from stopping its own thread.
-    @Test func actingOnAThreadIgnoresTheDepthCeiling() {
-        let policy = AutomationPolicy(settings: AutomationSettings(maxDepth: 1))
+    /// Nothing new is opened, so neither the depth limit nor a full budget stops an agent from stopping its thread.
+    @Test func actingOnAThreadIgnoresTheLimits() {
+        let policy = AutomationPolicy(settings: AutomationSettings(depthLimit: 1, maxAgentThreads: 1))
         let stop = ControlCall.threadStop(ThreadTargetParams(thread: "x"))
-        #expect(policy.decide(stop, from: .thread(Self.agent, depth: 5)) == .allow)
+        #expect(policy.decide(stop, from: .thread(Self.agent, depth: 5), load: AutomationLoad(threads: 9)) == .allow)
         #expect(policy.decide(.threadSend(ThreadSendParams(thread: "x", text: "y")), from: Self.external) == .allow)
     }
 
@@ -266,6 +389,10 @@ import Testing
         #expect(!near.contains(", scope "))
         let far = ThreadMessage.header(for: .init(thread: .init(id: "a", title: "t", task: "x", scope: "acme"), client: "c"))
         #expect(far.contains("task x, scope acme"))
+    }
+
+    @Test func theTwoSpellingsOfTheMCPClientAgree() {
+        #expect(ThreadOrigin.mcpClientPrefix == ControlClientName.mcp + "/")
     }
 
     /// The marker is for agents: your own terminal goes through the socket too and must not wear it.

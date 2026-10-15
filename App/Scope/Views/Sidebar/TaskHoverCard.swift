@@ -64,6 +64,22 @@ struct TaskHoverCard: View {
                         .foregroundStyle(task.record.setupState == .failed ? AnyShapeStyle(PullRequestStyle.failing) : AnyShapeStyle(.secondary))
                 }
             }
+            if let topic = task.record.topic {
+                row("Topic") {
+                    Text(topic)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                }
+            }
+            if let parent = task.record.parentTask {
+                row("From") {
+                    Text(model.task(parent).map { "the task “\($0.name)”" } ?? "a task since closed")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                }
+            }
             row("Created") {
                 Text(task.record.createdAt.formatted(.relative(presentation: .named)))
                     .font(.scopeCaption)

@@ -23,6 +23,8 @@ struct TaskRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let task: TaskState
+    /// 1 under a topic's row, like a thread under **Loose threads**.
+    var depth = 0
     @State private var isHovered = false
     @State private var showsCard = false
     @State private var cardDelay: Task<Void, Never>?
@@ -69,6 +71,7 @@ struct TaskRow: View {
             )
         }
         .sidebarHoverControls(isHovered) { hoverControls }
+        .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
         .contentShape(Rectangle())
@@ -172,6 +175,7 @@ struct TaskContextMenu: View {
             }
         }
         Divider()
+        TopicMenu(tasks: [task])
         let candidates = model.candidateRepos(for: task)
         Menu("Add Repo…") {
             ForEach(candidates) { repo in
@@ -218,6 +222,36 @@ struct TaskContextMenu: View {
         }
         Button("Close Task and Delete Branch", role: .destructive) {
             Task { await model.closeTask(task.id, deleteBranch: true) }
+        }
+    }
+}
+
+/// The Topic submenu of a task: file it under a topic in use in its scope, a new one, or none.
+struct TopicMenu: View {
+    @Environment(AppModel.self) private var model
+    let tasks: [TaskState]
+
+    var body: some View {
+        if let first = tasks.first {
+            let current = first.record.topic.map(TaskTopic.key)
+            Menu("Topic") {
+                ForEach(model.topics(in: first.scopeID), id: \.self) { topic in
+                    Toggle(topic, isOn: Binding(
+                        get: { current == TaskTopic.key(topic) },
+                        set: { _ in Task { await model.setTopic(topic, for: tasks.map(\.id)) } }
+                    ))
+                }
+                if !model.topics(in: first.scopeID).isEmpty { Divider() }
+                Button("New Topic…") {
+                    guard let name = model.promptTopicName(title: "New Topic", current: nil, action: "File") else { return }
+                    Task { await model.setTopic(name, for: tasks.map(\.id)) }
+                }
+                if current != nil {
+                    Button("Remove from Topic") {
+                        Task { await model.setTopic(nil, for: tasks.map(\.id)) }
+                    }
+                }
+            }
         }
     }
 }

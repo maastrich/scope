@@ -35,7 +35,7 @@ public struct SkillInstaller: Sendable {
     public let serverName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 6
+    public static let version = 7
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -166,7 +166,7 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--title T] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, title, open_thread: false, run_setup: false, dry_run}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--title T] [--topic P] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, title, topic, open_thread: false, run_setup: false, dry_run}` |
         | `scope thread new [--task T] [--repo R] [--driver D] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
@@ -191,6 +191,16 @@ public struct SkillInstaller: Sendable {
         repositories are proposed from the prompt; pin any of them when you know better. `--dry-run` shows what
         would be created and writes nothing — use it only when you cannot tell which repositories the work needs.
 
+        This works from inside a task too: a task may create tasks, which may create theirs.
+
+        ## Topics
+
+        A **topic** files tasks together in the user's sidebar, under one collapsible row. When you start several
+        tasks for one piece of work — an orchestrator fanning a change out across repositories — give them the
+        same `--topic` (a few words: `auth rework`). A task created from inside a task gets that task's topic
+        unless you name another; if the task you are in has none, both are filed under its name, so a split never
+        scatters. `scope list tasks` shows each task's topic.
+
         `scope thread new --task <slug> -p "<prompt>"` opens another agent in an existing task. Its working
         directory is the sandbox, so it commits on the task branch. `--task` finds a task in any scope.
 
@@ -204,9 +214,8 @@ public struct SkillInstaller: Sendable {
           instead of stopping to ask;
         - what to hand back, in its final answer: that answer is what you will read (`--reply`).
 
-        A thread that sends every decision back to its parent costs more than doing the work yourself. By default
-        a thread you open cannot open threads of its own (the depth ceiling, `scope ping`); give it work it can
-        finish alone.
+        A thread that sends every decision back to its parent costs more than doing the work yourself. A thread
+        you open may open threads and tasks of its own; if it should not, say so in its brief.
 
         ## Following a thread
 
@@ -261,6 +270,9 @@ public struct SkillInstaller: Sendable {
 
         ## Finishing
 
+        Archive the tasks you created once their work is in (merged, or handed back): an open task holds a
+        worktree per repository and a share of the agents' budget (below) until then.
+
         `scope task archive <slug>` stops the task's threads and processes, removes the worktrees and keeps the
         branch. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:
         uncommitted changes and an unmerged branch's last commit are kept under `refs/scope/salvage/`, and the
@@ -269,9 +281,11 @@ public struct SkillInstaller: Sendable {
         ## What you may do
 
         The user runs Scope so agents work unattended: create tasks and open threads when the work calls for it,
-        without asking first. Scope applies the user's rules (Settings ▸ Automation): agents allowed at all, a
-        depth ceiling, *without asking* / *after asking* / *never* for threads and for tasks, which threads you
-        may reach. `scope ping` prints them. A refusal is an answer, not an error to work around: do not retry
+        without asking first. Scope applies the user's rules (Settings ▸ Automation): agents allowed at all, how
+        many tasks and running threads agents may keep open at once (every agent together, every scope), a depth
+        limit if the user set one, *without asking* / *after asking* / *never* for threads and for tasks, which
+        threads you may reach. `scope ping` prints them. Refused for the budget: archive or close what is done
+        first, then ask again. A refusal is an answer, not an error to work around: do not retry
         it another way; tell the user what was refused and which setting decides it.
 
         ## Rules

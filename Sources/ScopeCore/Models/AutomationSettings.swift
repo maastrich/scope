@@ -48,10 +48,17 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     /// across tasks, and every message says who sent it. `own` is the old rule, for whoever wants each agent
     /// fenced into the threads it opened.
     public var threadReach: ThreadReach
-    /// How deep the chain of agents opening agents may go. A thread the user opened is at depth 0, so the
-    /// default of 1 lets an agent open a thread and stops that thread from opening another: recursion is a
-    /// choice you make on purpose, not something a prompt discovers.
-    public var maxDepth: Int
+    /// How deep the chain of agents opening agents may go, or `nil` for no limit (the default). A thread the user
+    /// opened is at depth 0, its task's thread too; a task an agent creates from inside a task is one deeper. It is
+    /// no longer what stops a runaway — `maxAgentTasks` and `maxAgentThreads` are — so it stays only as a fence for
+    /// whoever wants one: 0 keeps agents from opening anything, 1 lets them open work that may not open more.
+    public var depthLimit: Int?
+    /// How many tasks agents may keep open at once, every scope together: what a loop of tasks creating tasks runs
+    /// into. Archived tasks and the ones you created yourself do not count.
+    public var maxAgentTasks: Int
+    /// How many threads agents may keep running at once, every scope together. A stopped thread and the ones you
+    /// opened yourself do not count; the threads of agents' tasks do.
+    public var maxAgentThreads: Int
     /// Opening a thread from an agent.
     public var threads: Approval
     /// Creating (and closing) a task from an agent — a branch and one worktree per repository. `allow` by
@@ -62,20 +69,41 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public var approvalTimeout: Int
 
     public static let defaultApprovalTimeout = 120
+    /// Generous for an orchestrator fanning work out and its tasks splitting theirs; low enough that a loop stops
+    /// before the disk or the machine notices.
+    public static let defaultMaxAgentTasks = 12
+    public static let defaultMaxAgentThreads = 24
+    /// What the Settings steppers allow for the two budgets.
+    public static let budgetRange = 1...100
 
-    public init(agentsMayDrive: Bool = true, threadReach: ThreadReach = .any, maxDepth: Int = 1,
+    public init(agentsMayDrive: Bool = true, threadReach: ThreadReach = .any, depthLimit: Int? = nil,
+                maxAgentTasks: Int = AutomationSettings.defaultMaxAgentTasks,
+                maxAgentThreads: Int = AutomationSettings.defaultMaxAgentThreads,
                 threads: Approval = .allow, tasks: Approval = .allow,
                 approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
         self.agentsMayDrive = agentsMayDrive
         self.threadReach = threadReach
-        self.maxDepth = max(0, maxDepth)
+        self.depthLimit = depthLimit.map { max(0, $0) }
+        self.maxAgentTasks = AutomationSettings.clampBudget(maxAgentTasks)
+        self.maxAgentThreads = AutomationSettings.clampBudget(maxAgentThreads)
         self.threads = threads
         self.tasks = tasks
         self.approvalTimeout = max(5, approvalTimeout)
     }
 
+    public static func clampBudget(_ value: Int) -> Int {
+        min(max(value, budgetRange.lowerBound), budgetRange.upperBound)
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case agentsMayDrive, threadReach, maxDepth, threads, tasks, approvalTimeout
+        case agentsMayDrive, threadReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, approvalTimeout
+    }
+
+    /// `maxDepth` was the ceiling when it was the only guard, 1 by default. Settings wrote the whole block on any
+    /// change, so a stored 1 cannot be told from the default and is dropped with the old meaning; a stored 0 was a
+    /// choice — no agent opens anything — and is kept.
+    private enum LegacyKeys: String, CodingKey {
+        case maxDepth
     }
 
     /// Lenient: every key is optional and an unknown approval word falls back to the default, so hand-editing
@@ -85,7 +113,16 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         let defaults = AutomationSettings()
         agentsMayDrive = try container.decodeIfPresent(Bool.self, forKey: .agentsMayDrive) ?? defaults.agentsMayDrive
         threadReach = (try? container.decodeIfPresent(ThreadReach.self, forKey: .threadReach)).flatMap { $0 } ?? defaults.threadReach
-        maxDepth = max(0, try container.decodeIfPresent(Int.self, forKey: .maxDepth) ?? defaults.maxDepth)
+        if container.contains(.depthLimit) {
+            depthLimit = (try? container.decodeIfPresent(Int.self, forKey: .depthLimit)).flatMap { $0 }.map { max(0, $0) }
+        } else {
+            let legacy = try? decoder.container(keyedBy: LegacyKeys.self).decodeIfPresent(Int.self, forKey: .maxDepth)
+            depthLimit = (legacy ?? nil).flatMap { $0 <= 0 ? 0 : nil }
+        }
+        maxAgentTasks = AutomationSettings.clampBudget(
+            (try? container.decodeIfPresent(Int.self, forKey: .maxAgentTasks)).flatMap { $0 } ?? defaults.maxAgentTasks)
+        maxAgentThreads = AutomationSettings.clampBudget(
+            (try? container.decodeIfPresent(Int.self, forKey: .maxAgentThreads)).flatMap { $0 } ?? defaults.maxAgentThreads)
         threads = (try? container.decodeIfPresent(Approval.self, forKey: .threads)).flatMap { $0 } ?? defaults.threads
         tasks = (try? container.decodeIfPresent(Approval.self, forKey: .tasks)).flatMap { $0 } ?? defaults.tasks
         approvalTimeout = max(5, try container.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? defaults.approvalTimeout)

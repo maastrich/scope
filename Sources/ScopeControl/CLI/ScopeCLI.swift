@@ -71,6 +71,7 @@ public enum ScopeCLI {
       --title <text>                task name (default: proposed)
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread
+      --topic <text>                file it under a topic (default: the topic of the caller's own task)
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
       --no-setup                    skip the repositories' setup commands (.env files are still copied)
@@ -233,6 +234,7 @@ public enum ScopeCLI {
                 case "--title": parameters.title = try value()
                 case "--slug": parameters.slug = try value()
                 case "--driver": parameters.driver = try value()
+                case "--topic": parameters.topic = try value()
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false

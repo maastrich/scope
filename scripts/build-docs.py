@@ -341,6 +341,14 @@ something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>
   driver, else the first agent installed.</li>
 </ul>
 
+<h3 id="topics">Topics</h3>
+<p>Tasks that belong to one piece of work can share a <b>topic</b>: in the tree arrangement they sit under one
+row named after it, where the first of them stands, with the count and the most urgent state of their threads.
+Agents set it — <code>scope task new --topic</code>, and a task created from inside a task inherits its topic —
+and so can you: <b>Topic</b> in a task's menu files it under a topic in use, a new one, or none. The topic's own
+menu renames it, ungroups its tasks or archives them all. By state, tasks sit with what they are doing and the
+topic shows in the hover card, with the task an agent created it from.</p>
+
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>
@@ -852,6 +860,11 @@ naming its sender (thread id, title, task), so the receiving agent knows whom to
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
 itself. <code>scope thread new --task</code> finds a task in any scope; <code>--scope</code> settles a slug two
 scopes share.</p>
+<p><code>scope task new --topic &lt;text&gt;</code> files the task under a topic: tasks sharing one sit together in
+the sidebar, under one row. A task created from inside a task gets that task's topic unless another is named — and
+when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
+orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
+<code>scope list tasks</code> shows each task's topic.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
@@ -902,7 +915,9 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
 <table>
   <tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
   <tr><td>Let agents drive Scope</td><td>on</td><td>Off refuses every write from a thread.</td></tr>
-  <tr><td>Depth ceiling</td><td>1</td><td>A thread you opened is at depth 0. At 1, it may open a thread and that thread may not open another.</td></tr>
+  <tr><td>Open tasks</td><td>12</td><td>How many tasks agents may keep open at once, every scope together. Archived tasks and yours do not count.</td></tr>
+  <tr><td>Running threads</td><td>24</td><td>How many threads agents may keep running at once, every scope together. Stopped threads and yours do not count.</td></tr>
+  <tr><td>Depth</td><td>no limit</td><td>A thread you opened is at depth 0; what an agent opens from it is one deeper. Set a limit to fence agents to a few generations; 0 keeps them from opening anything.</td></tr>
   <tr><td>Talking to threads</td><td>any thread</td><td>Which threads an agent may read, type into, stop or close: any, in every task and scope, or only the ones it opened.</td></tr>
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
   <tr><td>Creating a task</td><td>without asking</td><td>A task writes a branch and a worktree per repository, all of it undone by closing the task. Set it to after asking to confirm each one.</td></tr>
@@ -913,8 +928,17 @@ knows who is asking and can answer back. Only its own terminal is off limits. <i
 is the fence for whoever wants each agent confined to the threads it started; an agent outside Scope is then
 confined to the threads agents outside Scope opened. Closing a task — worktrees removed, branch deleted when
 asked — follows the same approval as creating one.</p>
-<p>Every thread records who opened it and at what depth, so the chain survives a restart —
-<code>scope list threads</code> shows it. A <code>SCOPE_THREAD</code> that names no thread the app is
+<p>Any task may create tasks: an orchestrator splits a change across tasks, and a task splits its own work
+further. What stops a loop of agents starting agents is not how deep the chain goes but how much it holds: each
+task is a worktree per repository, each thread a process. So the budgets count what agents keep open right now,
+across every scope, and refuse the request that would go past them — with the way out in the answer: archive the
+tasks that are done, close the threads that are. Requests still being carried out hold their share, so five
+sent at once cannot all take the last slot. A depth limit remains for whoever wants one. With approvals set to
+<i>after asking</i>, Scope shows one question at a time; a question left past the approval timeout is refused,
+and so is a request that finds three already waiting.</p>
+<p>Every thread records who opened it, the line of threads above it and its depth, so the chain survives a
+restart — <code>scope list threads</code> shows it. <i>Only the ones it opened</i> reaches everything an agent
+set in motion: the threads it opened, the ones those opened, and so on down. A <code>SCOPE_THREAD</code> that names no thread the app is
 running is refused outright.</p>
 
 <div class="note warn"><p><b>The socket is your account.</b> <code>~/.scope/scope.sock</code> is a unix socket
@@ -1147,7 +1171,7 @@ PAGES = [
      DRIVERS, False),
     ("cli.html", "Command line and MCP — Scope",
      "Drive Scope from your terminal with `scope`, or let an agent drive it over MCP: the same commands, "
-     "one socket, with a depth ceiling and an approval for anything that writes.", CLI, False),
+     "one socket, with a budget for agents and an approval for anything that writes.", CLI, False),
     ("adapters.html", "Hooks and thread states — Scope",
      "How agent hooks reach Scope through scope-hook and a unix socket, and become live thread states.",
      ADAPTERS, False),

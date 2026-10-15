@@ -31,8 +31,10 @@ public enum CLIRenderer {
             home        \(result.home)
             methods     \(result.methods.joined(separator: ", "))
             automation  agents \(automation.agentsMayDrive ? "may drive" : "may not drive"), \
-            depth ≤ \(automation.maxDepth), threads \(automation.threads.rawValue), tasks \(automation.tasks.rawValue), \
+            threads \(automation.threads.rawValue), tasks \(automation.tasks.rawValue), \
             reach \(automation.threadReach.rawValue)
+            budget      \(automation.maxAgentTasks) open tasks, \(automation.maxAgentThreads) running threads\
+            \(automation.depthLimit.map { ", depth ≤ \($0)" } ?? ", any depth")
             """
         case .list(let result):
             var blocks: [String] = []
@@ -42,8 +44,8 @@ public enum CLIRenderer {
                 }))
             }
             if !result.tasks.isEmpty {
-                blocks.append(table(["TASK", "NAME", "SCOPE", "BRANCH", "ROOT"], result.tasks.map {
-                    [$0.slug, $0.name, $0.scopeSlug, $0.branch, $0.root]
+                blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "ROOT"], result.tasks.map {
+                    [$0.slug, $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch, $0.root]
                 }))
             }
             if !result.threads.isEmpty {
@@ -63,6 +65,7 @@ public enum CLIRenderer {
                 : "would create the task “\(result.name)”")
             lines.append("branch      \(result.branch)")
             lines.append("slug        \(result.slug)")
+            if let topic = result.topic { lines.append("topic       \(topic)") }
             if let root = result.root { lines.append("sandbox     \(root)") }
             for repo in result.repos {
                 lines.append("repo        \(repo.repo) → \(repo.worktree)\(repo.branchCreated ? " (branch created)" : "")")

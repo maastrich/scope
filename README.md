@@ -103,9 +103,9 @@ driver. For your own terminal, Settings › Automation › Install links the too
 Settings › Automation › MCP server registers `scope mcp` with Claude Code, Codex and Cursor for your user, so
 sessions started outside Scope have it too. The `scope` command line in your own terminal is you and is never
 filtered. A request from inside a thread, or through `scope mcp` from anywhere, is an agent:
-Settings › Automation holds a depth ceiling (1 by default — an agent may open a thread, that thread may not
-open another), an approval for opening a thread and for creating a task, and how far an agent reaches into
-other threads. Everything goes ahead without asking by default — Scope is there to let agents work unattended;
+Settings › Automation holds a budget — how many tasks and running threads agents may keep open at once, which
+is what stops a loop now that any task may create tasks — an optional depth limit, an approval for opening a
+thread and for creating a task, and how far an agent reaches into other threads. Everything goes ahead without asking by default — Scope is there to let agents work unattended;
 set an approval to *after asking* to confirm each one. Threads talk to each other: an agent may read and type
 into any thread, in any task or scope, and a message it sends is signed with its thread id so the receiver
 knows whom to answer. *Only the ones it opened* fences each agent into the threads it started.

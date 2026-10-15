@@ -323,7 +323,7 @@ struct SidebarView: View {
                 stateGroups(scope, tasks: tasks)
             } else {
                 looseThreadsGroup(scope)
-                ForEach(tasks) { task in taskRows(task) }
+                taskTree(scope, tasks: tasks)
             }
             if tasks.isEmpty {
                 hintRow(isFiltering ? "No task matches “\(filter)”" : (scope.kind == .missing ? "Scope folder is missing" : "No task yet — ⇧⌘T"))
@@ -331,14 +331,35 @@ struct SidebarView: View {
         }
     }
 
+    /// The tasks in creation order, those sharing a topic gathered under its row where the first of them stands
+    /// (`TaskTopic.entries`). Only in the tree: by state, a task sits with what it is doing, not with its topic.
+    @ViewBuilder
+    private func taskTree(_ scope: ScopeState, tasks: [TaskState]) -> some View {
+        let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) })
+        ForEach(entries, id: \.self) { entry in
+            switch entry {
+            case .task(let id):
+                if let task = byID[id] { taskRows(task) }
+            case .topic(let topic, let ids):
+                let members = ids.compactMap { byID[$0] }
+                TopicRow(scope: scope, topic: topic, tasks: members)
+                    .selectionDisabled()
+                if !scope.collapsedTopics.contains(TaskTopic.key(topic)) || isFiltering {
+                    ForEach(members) { task in taskRows(task, depth: 1) }
+                }
+            }
+        }
+    }
+
     /// A task's row and, from its second thread on, its threads nested under it.
     @ViewBuilder
-    private func taskRows(_ task: TaskState) -> some View {
-        TaskRow(task: task)
+    private func taskRows(_ task: TaskState, depth: Int = 0) -> some View {
+        TaskRow(task: task, depth: depth)
             .tag(SidebarItem.task(task.id))
         if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
             ForEach(visibleThreads(in: task)) { session in
-                ThreadRow(session: session, depth: 1)
+                ThreadRow(session: session, depth: depth + 1)
                     .tag(SidebarItem.thread(session.id))
             }
         }
