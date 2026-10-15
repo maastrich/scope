@@ -66,6 +66,11 @@ final class AppControlService: ControlService {
             switch target(params.thread, from: origin) {
             case .failure(let error): return .failure(error)
             case .success(let session):
+                if let role = session.record.resident {
+                    return .failure(.failed("thread \(session.id.rawValue) is the \(role.rawValue) of its scope: Scope keeps it "
+                                            + "while the scope is declared. Stop it instead (`scope thread stop`); it stays "
+                                            + "stopped until someone relaunches it or Scope opens again."))
+                }
                 // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on.
                 _ = await model.close(session.id, force: true)
                 return .success(.action(ActionResult(message: "closed \(session.id.rawValue) — \(session.title)",
@@ -73,7 +78,15 @@ final class AppControlService: ControlService {
             }
         case .threadSend(let params):
             return act(on: params.thread, from: origin) { session in
-                guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
+                guard session.isAlive else {
+                    // A scope's residents start on its first visit; a message is a good reason to start one sooner.
+                    if session.record.resident != nil, model.residentHolds[session.id] == nil {
+                        model.startResidents(in: session.record.scopeID)
+                        return .failure(.failed("thread \(session.id.rawValue) was not running; Scope is starting it. "
+                                                + "Send again once `scope thread wait \(session.id.rawValue)` returns."))
+                    }
+                    return .failure(.failed("thread \(session.id.rawValue) is not running"))
+                }
                 // A message from an agent says who sent it; keystrokes (no ↩) and the user's own typing go as they are.
                 let sender = params.submit ? sender(of: origin, caller: caller, to: session) : nil
                 let text = sender.map { ThreadMessage.envelope(params.text, from: $0) } ?? params.text
@@ -268,7 +281,8 @@ final class AppControlService: ControlService {
             scope: scope?.name ?? session.record.scopeRoot, scopeSlug: scope?.declaration.slug ?? "",
             task: session.record.taskID, cwd: session.record.cwd,
             state: session.displayState.name, alive: session.isAlive,
-            openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent
+            openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent,
+            resident: session.record.resident?.rawValue
         )
     }
 

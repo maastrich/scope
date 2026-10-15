@@ -322,6 +322,25 @@ relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to 
 <kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
 when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section).</p>
 
+<h3 id="residents">Orchestrator and terminal</h3>
+<p>Every scope keeps two threads at its root that you never open yourself: an <b>Orchestrator</b> — an agent to
+drive the scope from, open tasks and talk to the other threads — and a <b>Terminal</b>, a shell to check or try
+something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>⌘2</kbd>), outside
+<b>Loose threads</b>, in both arrangements.</p>
+<ul>
+  <li>They cannot be closed — no close button, <kbd>⌘W</kbd> only beeps, <code>scope thread close</code> refuses.
+  They go only when their scope is removed.</li>
+  <li><kbd>⌘.</kbd> stops one, and it stays stopped until <b>Relaunch</b> or until Scope opens again; hold
+  <kbd>⇧</kbd> while Scope opens to keep it stopped then too.</li>
+  <li>A process that ends on its own starts again within a second: a crash resumes the driver session, an
+  <code>exit</code> gets a new one. Three exits in a row within ten seconds of starting, or a command that cannot
+  run, and Scope stops trying and says so.</li>
+  <li>They start when their scope is first shown, not all at launch; a message sent to one starts it too.
+  <kbd>⇧</kbd> held while Scope opens leaves them stopped.</li>
+  <li>The orchestrator's driver is <b>Settings ▸ General ▸ Threads ▸ Orchestrator driver</b>: automatic picks your default
+  driver, else the first agent installed.</li>
+</ul>
+
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>

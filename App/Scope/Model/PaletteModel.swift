@@ -84,10 +84,12 @@ enum PaletteModel {
                                      hint: scope.name, shortcut: "⌘R") { model.refreshScope(scope.id) })
         }
         if let thread {
-            items.append(PaletteItem(id: "close-thread", section: .actions, icon: "xmark.circle", label: "Close Thread",
-                                     hint: thread.title, shortcut: "⌘W") {
-                Task { _ = await model.close(thread.id, force: false) }
-            })
+            if thread.record.resident == nil {
+                items.append(PaletteItem(id: "close-thread", section: .actions, icon: "xmark.circle", label: "Close Thread",
+                                         hint: thread.title, shortcut: "⌘W") {
+                    Task { _ = await model.close(thread.id, force: false) }
+                })
+            }
             if thread.isAlive {
                 items.append(PaletteItem(id: "stop-thread", section: .actions, icon: "stop.circle", label: "Stop Thread",
                                          hint: thread.title, shortcut: "⌘.") { model.stop(thread.id) })

@@ -20,11 +20,13 @@ public enum AutoRelaunchSkip: Sendable, Equatable {
     case cwdMissing(String)
     /// The driver profile is not installed. The app would fall back on a shell, which is not what the thread was.
     case driverMissing(String)
+    /// A resident thread of a scope the window does not open on: it starts when its scope is first shown.
+    case waitsForVisit
 
-    /// The user asked for it (the setting, ⇧, the thread's opt-out): nothing to report.
+    /// The user asked for it (the setting, ⇧, the thread's opt-out), or it is only deferred: nothing to report.
     public var isChoice: Bool {
         switch self {
-        case .disabled, .skippedOnce, .optedOut: true
+        case .disabled, .skippedOnce, .optedOut, .waitsForVisit: true
         default: false
         }
     }
@@ -41,6 +43,7 @@ public enum AutoRelaunchSkip: Sendable, Equatable {
         case .taskArchived: "its task was archived, so its sandboxes are gone"
         case .cwdMissing(let path): "its directory \(path) is missing"
         case .driverMissing(let id): "the \(id) driver profile is not installed"
+        case .waitsForVisit: "it starts when its scope is shown"
         }
     }
 }
@@ -100,6 +103,12 @@ public struct AutoRelaunchPlan: Sendable, Equatable {
 public enum AutoRelaunchPlanner {
     /// Only records with `processAlive` are considered; the others were not running and are left alone.
     ///
+    /// Resident threads (`ThreadRecord.resident`) follow their own rule: those of `residentScope` — the scope the
+    /// window opens on — start whether they were running or not, and whatever the setting or an opt-out say, since
+    /// Scope promises they are there; those of the other scopes wait for their scope to be shown, so fifteen declared
+    /// scopes do not fork thirty processes at launch. ⇧ still skips them all: it is the way out of a driver that
+    /// crashes the moment it starts.
+    ///
     /// Order: `focus` (the thread the window opens on, the one the user sees start), then the other threads of its task
     /// — or of its scope, for a scope-level thread — which are the tabs next to it, then everything else in the order
     /// given (the sidebar order, oldest first).
@@ -110,12 +119,23 @@ public enum AutoRelaunchPlanner {
         enabled: Bool,
         skippedOnce: Bool,
         focus: ThreadID? = nil,
+        residentScope: ScopeID? = nil,
         pathExists: (String) -> Bool
     ) -> AutoRelaunchPlan {
         var plan = AutoRelaunchPlan()
         var launchable: [ThreadRecord] = []
-        for candidate in candidates where candidate.record.processAlive {
-            if let skip = skip(candidate, enabled: enabled, skippedOnce: skippedOnce, pathExists: pathExists) {
+        for candidate in candidates {
+            let record = candidate.record
+            let isResident = record.resident != nil && candidate.scopeDeclared
+            guard record.processAlive || (isResident && record.scopeID == residentScope) else { continue }
+            let found: AutoRelaunchSkip? = if isResident {
+                record.scopeID == residentScope
+                    ? skip(candidate, enabled: true, skippedOnce: skippedOnce, ignoringOptOut: true, pathExists: pathExists)
+                    : .waitsForVisit
+            } else {
+                skip(candidate, enabled: enabled, skippedOnce: skippedOnce, pathExists: pathExists)
+            }
+            if let skip = found {
                 plan.skipped.append(.init(id: candidate.record.id, skip: skip))
             } else {
                 launchable.append(candidate.record)
@@ -126,11 +146,11 @@ public enum AutoRelaunchPlanner {
     }
 
     private static func skip(_ candidate: AutoRelaunchCandidate, enabled: Bool, skippedOnce: Bool,
-                             pathExists: (String) -> Bool) -> AutoRelaunchSkip? {
+                             ignoringOptOut: Bool = false, pathExists: (String) -> Bool) -> AutoRelaunchSkip? {
         let record = candidate.record
         if !enabled { return .disabled }
         if skippedOnce { return .skippedOnce }
-        if !record.relaunchesAtStartup { return .optedOut }
+        if !ignoringOptOut, !record.relaunchesAtStartup { return .optedOut }
         if !candidate.scopeDeclared { return .scopeUndeclared }
         if !record.scopeRoot.isEmpty, !pathExists(record.scopeRoot) { return .scopeMissing(record.scopeRoot) }
         switch candidate.task {

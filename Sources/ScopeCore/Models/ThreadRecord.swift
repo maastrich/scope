@@ -56,6 +56,9 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// The per-thread opt-out of auto-relaunch: `false` leaves the thread stopped when the app starts again,
     /// whatever it was doing. `true` by default.
     public var relaunchesAtStartup: Bool
+    /// Set on the two threads Scope keeps in every scope (`ResidentRole`); `nil` for a thread someone opened.
+    /// An unknown value — a role a newer build added — decodes as `nil`, so the thread becomes an ordinary one.
+    public var resident: ResidentRole?
 
     public init(
         id: ThreadID = .generate(),
@@ -67,7 +70,8 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         cwdKind: ThreadCwdKind,
         taskID: String? = nil,
         createdAt: Date = .now,
-        origin: ThreadOrigin? = nil
+        origin: ThreadOrigin? = nil,
+        resident: ResidentRole? = nil
     ) {
         version = ThreadRecord.currentVersion
         self.id = id
@@ -88,6 +92,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         self.origin = origin
         processAlive = false
         relaunchesAtStartup = true
+        self.resident = resident
     }
 
     /// The origin to reason about, defaulting to the user for records that predate the field.
@@ -99,7 +104,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
-        case processAlive, relaunchesAtStartup
+        case processAlive, relaunchesAtStartup, resident
     }
 
     // Lenient decoding: only identity, driver and cwd are required.
@@ -124,5 +129,6 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         origin = try container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)
         processAlive = try container.decodeIfPresent(Bool.self, forKey: .processAlive) ?? (lastState.map(\.isAlive) ?? false)
         relaunchesAtStartup = try container.decodeIfPresent(Bool.self, forKey: .relaunchesAtStartup) ?? true
+        resident = (try? container.decodeIfPresent(ResidentRole.self, forKey: .resident)) ?? nil
     }
 }

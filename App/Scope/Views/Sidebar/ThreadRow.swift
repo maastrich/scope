@@ -72,7 +72,8 @@ struct ThreadRow: View {
 
             SidebarStateDot(state: session.displayState, pulses: session.isWorking)
         }
-        .sidebarHoverControls(isHovered) { closeButton }
+        // A resident thread has no close button: it cannot be closed.
+        .sidebarHoverControls(isHovered && session.record.resident == nil) { closeButton }
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
@@ -133,7 +134,15 @@ struct ThreadRow: View {
 
     private var helpText: String {
         "\(session.displayState.displayLabel)\(failureText.map { ": \($0)" } ?? "") — \(session.record.cwd)"
-            + (originText.map { "\n\($0)" } ?? "")
+            + (originText.map { "\n\($0)" } ?? "") + (residentText.map { "\n\($0)" } ?? "")
+    }
+
+    private var residentText: String? {
+        switch session.record.resident {
+        case .orchestrator: "The scope's orchestrator: always here while the scope is declared. Stop (⌘.) halts it; it cannot be closed."
+        case .terminal: "The scope's terminal: always here while the scope is declared. Stop (⌘.) halts it; it cannot be closed."
+        case nil: nil
+        }
     }
 
     /// Who opened it, when that was an agent: the parent thread by its title, or the client's own name.
@@ -176,11 +185,14 @@ struct ThreadMenuItems: View {
             Task { await model.startFresh(session.id) }
         }
         .disabled(session.isAlive || !session.canResume)
-        Toggle("Relaunch When Scope Opens", isOn: Binding(
-            get: { session.record.relaunchesAtStartup },
-            set: { session.setRelaunchesAtStartup($0) }
-        ))
-        .disabled(!model.config.preferences.autoRelaunchThreads)
+        // A resident thread starts with its scope whatever this says.
+        if session.record.resident == nil {
+            Toggle("Relaunch When Scope Opens", isOn: Binding(
+                get: { session.record.relaunchesAtStartup },
+                set: { session.setRelaunchesAtStartup($0) }
+            ))
+            .disabled(!model.config.preferences.autoRelaunchThreads)
+        }
         Button("Stop") {
             model.stop(session.id)
         }
@@ -206,10 +218,12 @@ struct ThreadMenuItems: View {
         Button("Copy SCOPE_THREAD") {
             Pasteboard.copy(session.id.rawValue)
         }
-        Divider()
-        Button("Close Thread", role: .destructive) {
-            Task { _ = await model.close(session.id, force: false) }
+        if session.record.resident == nil {
+            Divider()
+            Button("Close Thread", role: .destructive) {
+                Task { _ = await model.close(session.id, force: false) }
+            }
+            .keyboardShortcut("w", modifiers: .command)
         }
-        .keyboardShortcut("w", modifiers: .command)
     }
 }

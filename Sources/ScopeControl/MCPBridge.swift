@@ -180,14 +180,14 @@ public enum MCPBridge {
         MCPTool(
             name: "scope_thread_stop",
             title: "Stop a thread",
-            description: "Stops a thread's process. Its row stays, so it can be relaunched. Another agent's thread is its work: stop it only when asked to.",
+            description: "Stops a thread's process. Its row stays, so it can be relaunched; a scope's orchestrator or terminal stays stopped until someone does or Scope opens again. Another agent's thread is its work: stop it only when asked to.",
             schema: #"{"type":"object","properties":{"thread":{"type":"string","description":"Thread id."}},"required":["thread"],"additionalProperties":false}"#,
             readOnly: false
         ),
         MCPTool(
             name: "scope_thread_close",
             title: "Close a thread",
-            description: "Hangs up a thread and removes it from Scope. Another agent's thread is its work: close it only when asked to.",
+            description: "Hangs up a thread and removes it from Scope. Refused for a scope's orchestrator and terminal, which Scope keeps; stop those instead. Another agent's thread is its work: close it only when asked to.",
             schema: #"{"type":"object","properties":{"thread":{"type":"string","description":"Thread id."}},"required":["thread"],"additionalProperties":false}"#,
             readOnly: false,
             destructive: true

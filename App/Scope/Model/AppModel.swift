@@ -96,6 +96,8 @@ final class AppModel {
             searchUI.sidebarFilter = ""
             globalSheet = nil
             persistUIState()
+            // The residents of a scope start on its first visit (`AutoRelaunchPlanner` starts the first scope's).
+            if isBootstrapped, let id = currentScopeID { startResidents(in: id) }
         }
     }
 
@@ -202,6 +204,14 @@ final class AppModel {
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
     /// The 30-minute garbage collection loop (`startGarbageCollection`).
     @ObservationIgnored var garbageCollector: Task<Void, Never>?
+    /// Resident threads Scope will not start again on its own, and why (`ResidentHold`). Cleared by the next launch.
+    var residentHolds: [ThreadID: ResidentHold] = [:]
+    /// Resident threads whose process died and that are about to start again; the banner says so.
+    var residentRestarts: [ThreadID: Task<Void, Never>] = [:]
+    /// Quick exits in a row per resident thread (`ResidentRestart`).
+    @ObservationIgnored var residentQuickExits: [ThreadID: Int] = [:]
+    /// Threads the user or an agent asked to stop: their exit is not a crash, and a resident one stays stopped.
+    @ObservationIgnored var stopRequests: Set<ThreadID> = []
 
     init(env: AppEnvironment) {
         self.env = env
@@ -337,9 +347,18 @@ final class AppModel {
         threads.filter { $0.record.taskID == task.rawValue }
     }
 
-    /// Threads whose cwd is not a task sandbox (scope root or a base).
+    /// Threads whose cwd is not a task sandbox (scope root or a base), the resident ones aside: the loose threads.
     func scopeLevelThreads(in scope: ScopeID) -> [ThreadSession] {
-        threads.filter { $0.record.scopeID == scope && $0.record.taskID == nil }
+        threads.filter { $0.record.scopeID == scope && $0.record.taskID == nil && $0.record.resident == nil }
+    }
+
+    /// The orchestrator and the terminal Scope keeps in `scope`, in that order.
+    func residents(in scope: ScopeID) -> [ThreadSession] {
+        ResidentRole.allCases.compactMap { resident($0, in: scope) }
+    }
+
+    func resident(_ role: ResidentRole, in scope: ScopeID) -> ThreadSession? {
+        threads.first { $0.record.scopeID == scope && $0.record.resident == role }
     }
 
     func task(of session: ThreadSession) -> TaskState? {
@@ -578,7 +597,8 @@ final class AppModel {
         }
         for record in restore.restored {
             var profile = profile(id: record.driverID)
-            if profile?.id != record.driverID {
+            // A resident is given the driver its role calls for (`reconcileResidents`): nothing to warn about.
+            if profile?.id != record.driverID, record.resident == nil {
                 problems.warn("Driver \(record.driverID) not found for \(record.title)",
                               detail: "Relaunch will use \(profile?.name ?? "Shell").",
                               scope: record.scopeID, actions: [.reveal(ScopeHome.driversURL(home: env.home).path)])
@@ -589,6 +609,8 @@ final class AppModel {
             guard let profile else { continue }
             register(ThreadSession(record: record, profile: profile))
         }
+        // After the restore and before the relaunch: a scope declared before residents existed gets its two here.
+        await reconcileResidents()
         env.knownThreads.replaceAll(Set(threads.map(\.id)))
 
         restoreUIState()
@@ -796,11 +818,14 @@ final class AppModel {
         for scope in added {
             Task { await scope.rescan() }
         }
-        if let last = added.last {
+        await reconcileResidents()
+        if let last = added.last, let orchestrator = residents(in: last.id).first {
+            // A new scope opens on its orchestrator, running: the thing to talk to about it.
+            selection = .thread(orchestrator.id)
+            selectedThreadID = orchestrator.id
+            startResidents(in: last.id)
+        } else if let last = added.last {
             selection = .scope(last.id)
-            if threads.isEmpty {
-                await newThread(in: last.id)
-            }
         }
     }
 
@@ -808,8 +833,9 @@ final class AppModel {
         guard let index = scopes.firstIndex(where: { $0.id == id }) else { return }
         let scope = scopes[index]
         scope.stopWatching()
+        // The one way a resident thread goes: its scope goes with it.
         for session in threads(in: id) {
-            await close(session.id, force: true)
+            await close(session.id, force: true, evenResident: true)
         }
         for notice in exitNotices where notice.record.scopeID == id {
             await dismissExitNotice(notice.id)
@@ -953,12 +979,28 @@ final class AppModel {
             saveConfig()
             scope.restartWatching()
             await scope.rescan(full: true)
+            if currentScopeID == id { startResidents(in: id) }
         }
     }
 
     // MARK: Threads
 
-    private func register(_ session: ThreadSession) {
+    func register(_ session: ThreadSession) {
+        wire(session)
+        threads.append(session)
+        env.knownThreads.insert(session.id)
+    }
+
+    /// Puts `new` in the place of `old`, which has the same id and is not running: a resident thread changing driver.
+    func replace(_ old: ThreadSession, with new: ThreadSession) {
+        guard let index = threads.firstIndex(where: { $0 === old }), !old.isAlive else { return }
+        old.onRecordChanged = nil
+        old.onExit = nil
+        wire(new)
+        threads[index] = new
+    }
+
+    private func wire(_ session: ThreadSession) {
         session.onRecordChanged = { [weak self] record in
             // The exits a quit causes would clear `processAlive`; `terminateNow` wrote the records it needs already.
             guard let self, !self.isTerminating else { return }
@@ -970,8 +1012,6 @@ final class AppModel {
         session.onOpenLink = { [weak self] session, link in
             self?.openFileLink(link, from: session) ?? false
         }
-        threads.append(session)
-        env.knownThreads.insert(session.id)
     }
 
     /// Opens a thread. `initialPrompt` is handed to the driver on this first launch only (the profile's
@@ -1039,6 +1079,10 @@ final class AppModel {
     func launch(_ session: ThreadSession, mode: LaunchMode, initialPrompt: String? = nil) async {
         guard !session.isAlive else { return }
         autoRelaunchBlocks[session.id] = nil
+        // Any start, asked for or automatic, ends a resident's hold and replaces a restart still waiting.
+        residentHolds[session.id] = nil
+        residentRestarts.removeValue(forKey: session.id)?.cancel()
+        stopRequests.remove(session.id)
         guard let scope = scope(session.record.scopeID) else { return }
         if let initialPrompt, !initialPrompt.isEmpty { session.expectTurn() }
         if let taskID = task(of: session)?.id, let pending = setupRuns[taskID] {
@@ -1070,24 +1114,38 @@ final class AppModel {
     /// starts a fresh one otherwise. A session the driver no longer has ends in its own error, and the banner
     /// then offers Start Fresh.
     func relaunch(_ id: ThreadID) async {
-        guard let session = session(id), !session.isAlive else { return }
+        guard let found = session(id), !found.isAlive else { return }
+        let session = conformResident(found)
         await launch(session, mode: .relaunch(profile: session.profile, resumeID: session.record.resumeID))
     }
 
     /// Start Fresh: a new driver session, leaving the previous one behind on purpose.
     func startFresh(_ id: ThreadID) async {
-        guard let session = session(id), !session.isAlive else { return }
-        await launch(session, mode: .launch)
+        guard let found = session(id), !found.isAlive else { return }
+        await launch(conformResident(found), mode: .launch)
     }
 
+    /// Stop (⌘.), from the user or an agent. A resident thread stays stopped afterwards, until Relaunch or the next app
+    /// launch: a thread that cannot be stopped when it misbehaves would be worse than one that can be closed.
     func stop(_ id: ThreadID) {
-        session(id)?.stop()
+        guard let session = session(id) else { return }
+        if session.isAlive { stopRequests.insert(id) }
+        residentRestarts.removeValue(forKey: id)?.cancel()
+        session.stop()
     }
 
     /// Closes a thread. With a running process and the preference on, asks first; returns `false` when cancelled.
+    /// A resident thread is never closed — it is stopped at most — except when its scope is removed (`evenResident`).
     @discardableResult
-    func close(_ id: ThreadID, force: Bool) async -> Bool {
+    func close(_ id: ThreadID, force: Bool, evenResident: Bool = false) async -> Bool {
         guard let session = session(id) else { return true }
+        guard evenResident || session.record.resident == nil else {
+            NSSound.beep()
+            return false
+        }
+        residentRestarts.removeValue(forKey: id)?.cancel()
+        residentHolds[id] = nil
+        residentQuickExits[id] = nil
         if session.isAlive {
             if !force, config.preferences.confirmCloseRunningThread {
                 guard await confirmClose(session) else { return false }
@@ -1208,8 +1266,14 @@ final class AppModel {
                            actions: [.reveal(ScopeHome.driversURL(home: env.home).path)])
         }
         notifier.clear(threadID: session.id)
+        let requested = stopRequests.remove(session.id) != nil
         guard !isTerminating, !closingThreads.contains(session.id),
               threads.contains(where: { $0.id == session.id }) else { return }
+        // Never a toast or an auto-close: Scope starts it again, or says in its banner why not.
+        if session.record.resident != nil {
+            residentExited(session, status: status, requested: requested)
+            return
+        }
         let autoClose = autoCloseExitedThreads
         if autoClose { detach(session) }
         let notice = ThreadExitNotice(record: session.record, profile: session.profile,
@@ -1271,10 +1335,11 @@ final class AppModel {
 
     // MARK: Tab navigation
 
-    /// The sidebar's own order — each task's threads, in task order, then the scope-level threads. The
+    /// The sidebar's own order — the residents (⌘1 is the orchestrator, ⌘2 the terminal), each task's threads in task
+    /// order, then the loose threads. The
     /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
     func threadOrder(in scope: ScopeID) -> [ThreadSession] {
-        tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
+        residents(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
     }
 
     // MARK: Scope navigation

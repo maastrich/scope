@@ -399,6 +399,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Threads whose process was running when the app went down (quit, update, crash) start again when it opens,
     /// resuming the driver session when they can. On by default; holding ⇧ while the app opens skips it once.
     public var autoRelaunchThreads: Bool
+    /// Driver of the orchestrator every scope keeps at its root (`ResidentRole.orchestrator`). Empty — the default —
+    /// means *automatic*: `defaultDriverID` unless that is the shell, else the first agent profile installed. A running
+    /// orchestrator keeps its driver until it next starts.
+    public var orchestratorDriverID: String
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement
     /// Whether what an agent opens comes to the front. Only when nothing is being read, by default.
@@ -447,6 +451,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         claudeUsesTerminalPalette: Bool = true,
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
+        orchestratorDriverID: String = "",
         attentionCounter: AttentionCounterPlacement = .sidebar,
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
         sidebarRows: SidebarRows = .detailed,
@@ -472,6 +477,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.claudeUsesTerminalPalette = claudeUsesTerminalPalette
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
+        self.orchestratorDriverID = orchestratorDriverID
         self.attentionCounter = attentionCounter
         self.agentOpenedFocus = agentOpenedFocus
         self.sidebarRows = sidebarRows
@@ -490,7 +496,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID
     }
 
     public init(from decoder: any Decoder) throws {
@@ -519,6 +525,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.autoCloseExitedThreads
         autoRelaunchThreads = try container.decodeIfPresent(Bool.self, forKey: .autoRelaunchThreads)
             ?? defaults.autoRelaunchThreads
+        orchestratorDriverID = (try? container.decodeIfPresent(String.self, forKey: .orchestratorDriverID))
+            ?? defaults.orchestratorDriverID
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
             ?? defaults.attentionCounter
         agentOpenedFocus = (try? container.decodeIfPresent(AgentOpenedFocus.self, forKey: .agentOpenedFocus))

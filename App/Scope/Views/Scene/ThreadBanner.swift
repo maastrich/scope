@@ -98,6 +98,12 @@ struct ThreadBanner: View {
         if let skip = model.autoRelaunchBlocks[session.id] {
             return "Not relaunched when Scope opened: \(skip.reason)."
         }
+        if model.residentRestarts[session.id] != nil {
+            return "Scope starts it again in a moment."
+        }
+        if let hold = model.residentHolds[session.id] {
+            return "Not restarted: \(hold.reason). Relaunch starts it again."
+        }
         switch session.phase {
         case .notStarted:
             return session.canResume
@@ -158,10 +164,12 @@ struct ThreadBanner: View {
                         showsDetails.toggle()
                     }
                 }
-                Button("Close") {
-                    Task { _ = await model.close(session.id, force: false) }
+                if session.record.resident == nil {
+                    Button("Close") {
+                        Task { _ = await model.close(session.id, force: false) }
+                    }
+                    .help("Close Thread (⌘W)")
                 }
-                .help("Close Thread (⌘W)")
             }
         }
         .buttonStyle(.scopeSecondary)

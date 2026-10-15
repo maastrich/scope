@@ -140,6 +140,19 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Orchestrator driver") {
+                    ScopePicker("Orchestrator driver", selection: preference(\.orchestratorDriverID), title: orchestratorDriverTitle) {
+                        Text("Automatic").tag("")
+                        Divider()
+                        ForEach(model.drivers.profiles.filter { $0.id != ResidentRole.terminalDriverID }) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                }
+                Text("Every scope keeps an orchestrator and a terminal at its root. They start when the scope is first shown, start again if they die on their own, and can be stopped (⌘.) but not closed. A running orchestrator switches driver the next time it starts.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Tasks") {
                 Toggle("Clean up after tasks automatically", isOn: preference(\.cleanUpAutomatically))
@@ -268,7 +281,13 @@ private struct GeneralSettingsView: View {
             : "A scope keeps the driver you last opened in it; this is what a scope starts on."
     }
 
-    private var defaultDriverTitle: String {
+    private var orchestratorDriverTitle: String {
+        let id = model.config.preferences.orchestratorDriverID
+        return id.isEmpty ? "Automatic (\(model.residentProfile(for: .orchestrator)?.name ?? "none"))"
+            : (model.drivers.profile(id: id)?.name ?? id)
+    }
+
+        private var defaultDriverTitle: String {
         let id = model.config.preferences.defaultDriverID
         return id.isEmpty ? "Automatic" : (model.drivers.profile(id: id)?.name ?? id)
     }

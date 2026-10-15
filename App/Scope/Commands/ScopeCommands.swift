@@ -86,6 +86,8 @@ struct ScopeCommands: Commands {
                 }
             }
             .keyboardShortcut("w", modifiers: .command)
+            // Left enabled on the scope's orchestrator and terminal: `close` refuses them with a beep, which is surer than
+            // a disabled item whose ⌘W might fall through to the terminal.
             .disabled(model?.selectedThreadID == nil)
 
             Button("Undo Close Thread") {
