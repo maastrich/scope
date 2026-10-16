@@ -36,6 +36,30 @@ import Testing
         #expect(blocks("#hashtag") == [.paragraph("#hashtag")])
     }
 
+    @Test func htmlBlocksAndContainersAreKeptRawNotReadAsParagraphs() {
+        let parsed = blocks("""
+        Before.
+
+        <details><summary>Benchmarks</summary>
+        | run | ms |
+        </details>
+
+        :::callout{kind="tip"}
+        Inside the container.
+        :::
+        After, with a < b in a sentence.
+        """)
+        #expect(parsed == [
+            .paragraph("Before."),
+            .raw("<details><summary>Benchmarks</summary>\n| run | ms |\n</details>"),
+            .raw(":::callout{kind=\"tip\"}\nInside the container.\n:::"),
+            .paragraph("After, with a < b in a sentence."),
+        ])
+        // A tag in the middle of a paragraph is inline text, as before: only a line opening on one is raw.
+        #expect(blocks("A <b>bold</b> word.") == [.paragraph("A <b>bold</b> word.")])
+        #expect(MarkdownDocument.parse("<!-- note -->\nx").plainText == "<!-- note -->\nx")
+    }
+
     @Test func fencedCodeIsVerbatim() {
         let parsed = blocks("""
         Before:
@@ -194,7 +218,9 @@ import Testing
     }
 
     @Test func htmlIsText() {
-        #expect(blocks("<script>alert(1)</script>") == [.paragraph("<script>alert(1)</script>")])
+        // Raw, shown verbatim; never a paragraph that hides the tags in prose, never interpreted.
+        #expect(blocks("<script>alert(1)</script>") == [.raw("<script>alert(1)</script>")])
+        #expect(blocks("Run <script>alert(1)</script> here") == [.paragraph("Run <script>alert(1)</script> here")])
     }
 }
 

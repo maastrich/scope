@@ -80,6 +80,9 @@ extension HookEvent {
     /// call was about (`HookStdin.toolTarget`). On `turn.started` they say the agent just ran that tool.
     public static let toolKey = "tool"
     public static let targetKey = "target"
+    /// Payload key under which `scope-hook` forwards how long a tool call took, in milliseconds (`PostToolUse`'s
+    /// `duration_ms`; `HookStdin.toolDurationMs`).
+    public static let durationKey = "duration"
     /// Payload key under which `scope-hook` forwards the driver's transcript file (`HookStdin.transcriptPath`).
     public static let transcriptKey = "transcript"
 

@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAdapters
 import ScopeCore
 import ScopeTasks
 
@@ -22,6 +23,8 @@ struct ReadingContent: Equatable {
     var at: Date?
     /// A reply still being written: the text grows with the agent's `turn.said` events (`AppModel.refreshReading`).
     var isLive = false
+    /// For a reply: what the turn ran, what it changed, and the turns before it (`ReadingTurn`).
+    var turn: ReadingTurn?
     var markdown: String
     /// Where relative file links resolve from (`FileLinkResolver`): the thread's directory, or the task's root.
     var directory: String?
@@ -30,11 +33,49 @@ struct ReadingContent: Equatable {
     var scopeID: ScopeID
 
     var icon: String {
-        switch kind {
+        if turn?.historyIndex != nil { return "clock" }
+        return switch kind {
         case .reply: "text.bubble"
         case .deliverable: "doc.richtext"
         case .brief: "text.quote"
         case .checkpoint: "clock.arrow.circlepath"
         }
     }
+}
+
+/// Around a reply: the tool calls of its turn, the checkpoint the turn left, and the session's earlier turns.
+struct ReadingTurn: Equatable {
+    struct Call: Equatable, Identifiable {
+        var id: Int
+        var name: String
+        var target: String?
+        var durationMs: Int?
+    }
+
+    /// The checkpoint a turn left (`TaskCheckpoint`): what the column says the turn changed.
+    struct Changes: Equatable {
+        var taskID: TaskID
+        var number: Int
+        var additions: Int
+        var deletions: Int
+        /// The task's sandboxes that changed, by name.
+        var repos: [String]
+    }
+
+    struct HistoryTurn: Equatable, Identifiable {
+        var id: Int
+        var prompt: String
+        var reply: String
+        var tools: Int
+        var at: Date?
+    }
+
+    var calls: [Call] = []
+    var changes: Changes?
+    /// Earlier turns of the session, oldest first (`TranscriptReader`); empty while unread or unreadable.
+    var history: [HistoryTurn] = []
+    /// Which history turn the column shows; `nil` for the latest answer.
+    var historyIndex: Int?
+    /// The transcript could not be read: the history list says so instead of staying empty without a word.
+    var historyUnavailable = false
 }

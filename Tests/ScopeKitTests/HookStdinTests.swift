@@ -14,6 +14,13 @@ struct HookStdinTests {
         #expect(stdin.hookEventName == "Notification")
     }
 
+    @Test("PostToolUse gives how long the call took")
+    func parsesToolDuration() {
+        let json = #"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":""},"duration_ms":41}"#
+        #expect(HookStdin.parse(Data(json.utf8)).toolDurationMs == 41)
+        #expect(HookStdin.parse(Data(#"{"hook_event_name":"PostToolUse","tool_name":"Bash"}"#.utf8)).toolDurationMs == nil)
+    }
+
     @Test("MessageDisplay gives the lines just written, their message and whether it is complete")
     func parsesMessageDisplay() {
         let json = #"{"session_id":"abc","hook_event_name":"MessageDisplay","turn_id":"t1","message_id":"m7","index":2,"final":false,"delta":"Two lines\nso far\n"}"#

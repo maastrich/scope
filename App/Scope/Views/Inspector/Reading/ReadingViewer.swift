@@ -19,11 +19,21 @@ struct ReadingViewer: View {
                 Divider()
                 ScrollViewReader { proxy in
                     ScrollView {
-                        MarkdownReader(document: document)
-                            .frame(maxWidth: 720, alignment: .leading)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 20)
-                            .frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 16) {
+                            if let turn = content.turn, !turn.calls.isEmpty || turn.changes != nil {
+                                ReadingTurnBand(turn: turn) { changes in model.openChanges(changes) }
+                            }
+                            MarkdownReader(document: document)
+                            if let turn = content.turn, case .reply(let id) = content.kind {
+                                ReadingHistoryList(turn: turn) { index in
+                                    if let session = model.session(id) { model.readHistoryTurn(index, of: session) }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: 720, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity)
                         Color.clear.frame(height: 1).id(Self.endAnchor)
                     }
                     // An answer being written is read at its end, where the new lines land.

@@ -212,7 +212,7 @@ proche de ce que Scope a déjà commencé, jusqu'au `Stop` qui lit le JSONL pour
 
 Chaque étape est livrable seule et laisse le terminal intact.
 
-**S. Réponse en direct dans la colonne de lecture** (premier pas, ~1 jour)
+**S. Réponse en direct dans la colonne de lecture** (premier pas, ~1 jour) — *livré le 2026-10-16, avec M1, M2 et M3, sur cette branche*
 Installer le hook `MessageDisplay` dans `ClaudeHooksAdapter` (événement `turn.said`, payload `message_id`,
 `index`, `final`, texte) ; `ThreadActivity` accumule les deltas de la turn ouverte dans `lastReply` ;
 `ReadingViewer` sur `.reply` se met à jour pendant que l'agent écrit. Le `Stop` continue de poser la version

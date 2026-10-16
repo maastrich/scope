@@ -48,13 +48,19 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         /// `HookStdin.toolTarget`: the file, the command's first line, the pattern, …
         public var target: String?
         public var at: Date
+        /// How long the call took, when the driver says (`PostToolUse`'s `duration_ms`).
+        public var durationMs: Int?
 
-        public init(name: String, target: String? = nil, at: Date) {
+        public init(name: String, target: String? = nil, at: Date, durationMs: Int? = nil) {
             self.name = name
             self.target = target
             self.at = at
+            self.durationMs = durationMs
         }
     }
+
+    /// Tool calls kept per turn, the first ones: a turn that runs more is a turn whose count says enough.
+    public static let callLimit = 60
 
     public struct Turn: Codable, Sendable, Equatable {
         public enum Outcome: String, Codable, Sendable, CaseIterable {
@@ -82,14 +88,18 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         /// The first words of what the agent answered at the end of the turn, at most `saidLimit` characters, when
         /// its driver says. Optional so files written before it existed still decode under the same version.
         public var said: String?
+        /// The calls reported during the turn, the first `callLimit` of them, in order. Optional for the same reason.
+        public var calls: [Tool]?
 
-        public init(startedAt: Date?, endedAt: Date, outcome: Outcome, tools: Int = 0, error: String? = nil, said: String? = nil) {
+        public init(startedAt: Date?, endedAt: Date, outcome: Outcome, tools: Int = 0, error: String? = nil, said: String? = nil,
+                    calls: [Tool]? = nil) {
             self.startedAt = startedAt
             self.endedAt = endedAt
             self.outcome = outcome
             self.tools = tools
             self.error = error
             self.said = said
+            self.calls = calls
         }
 
         /// Seconds of work, `0` when the start is unknown.
@@ -105,6 +115,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public var turnStartedAt: Date?
     /// Tool calls so far in the turn in progress.
     public var turnTools: Int
+    /// The calls of the turn in progress, the first `callLimit`: what the reading column lists under the answer.
+    public var turnCalls: [Tool] = []
     /// Finished turns, oldest first, at most `turnLimit`.
     public var turns: [Turn]
     /// The agent's last answer, its end kept within `replyLimit`. `thread.read` keeps answering from the full one.
@@ -116,9 +128,15 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// The answer being written, while a turn is open and the driver reports it; `nil` otherwise.
     public var saying: Saying?
 
-    /// Everything but `saying`, which is not kept across restarts.
+    /// Everything but `saying` and `turnCalls`, which belong to the open turn: a restart closes it as `.exited`
+    /// (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
         case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
+    }
+
+    /// The calls of the last turn that ended or failed, or of the one in progress: what "this turn" means to a reader.
+    public var currentCalls: [Tool] {
+        inTurn || turns.isEmpty ? turnCalls : (turns.last?.calls ?? [])
     }
 
     public init(lastTool: Tool? = nil, pendingRequest: Tool? = nil, turnStartedAt: Date? = nil, turnTools: Int = 0, turns: [Turn] = [],
@@ -194,9 +212,12 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         case .turnStarted:
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 // `PostToolUse`: the tool has run. After a wait, this is the turn going on.
-                next.lastTool = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
+                let call = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at,
+                                durationMs: event.payload[HookEvent.durationKey].flatMap(Int.init))
+                next.lastTool = call
                 if next.turnStartedAt == nil { next.turnStartedAt = at }
                 next.turnTools += 1
+                if next.turnCalls.count < Self.callLimit { next.turnCalls.append(call) }
             } else {
                 // `UserPromptSubmit`: a new prompt. One still open was interrupted without the keystroke being
                 // seen (`closingOpenTurn`), at some point after the last thing it reported.
@@ -273,10 +294,11 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             reply.at >= (start ?? turns.last?.endedAt ?? .distantPast) && reply.at <= date ? Self.excerpt(reply.text) : nil
         }
         turns.append(Turn(startedAt: start, endedAt: date, outcome: outcome, tools: turnTools,
-                          error: error.flatMap { $0.isEmpty ? nil : $0 }, said: said))
+                          error: error.flatMap { $0.isEmpty ? nil : $0 }, said: said, calls: turnCalls.isEmpty ? nil : turnCalls))
         if turns.count > Self.turnLimit { turns.removeFirst(turns.count - Self.turnLimit) }
         turnStartedAt = nil
         turnTools = 0
+        turnCalls = []
     }
 
     /// The opening of `text` on one line, whitespace collapsed, cut at a word before `saidLimit`; `nil` when empty.

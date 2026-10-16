@@ -163,6 +163,9 @@ enum HookCLI {
         for case let (key, value?) in lifted where payload[key] == nil && !value.isEmpty {
             payload[key] = value
         }
+        if payload[HookEvent.durationKey] == nil, let ms = stdin.toolDurationMs, ms >= 0 {
+            payload[HookEvent.durationKey] = String(ms)
+        }
         // A cut `raw` no longer parses, and a long answer is what gets it cut: the answer travels on its own then.
         if rawTruncated, kind == .turnEnded, let reply = stdin.lastAssistantMessage {
             payload[HookEvent.replyKey] = String(reply.prefix(maxRawBytes / 2))

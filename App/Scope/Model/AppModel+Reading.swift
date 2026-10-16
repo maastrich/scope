@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ScopeAdapters
 import ScopeCore
 import ScopeTasks
 
@@ -10,28 +11,94 @@ extension AppModel {
     /// shortcut that does nothing is a shortcut the user thinks is broken.
     func readReply(of session: ThreadSession) {
         showReading(replyContent(of: session))
+        loadReplyHistory(of: session)
+    }
+
+    /// An earlier turn of the session, from the history under the answer; `nil` goes back to the latest answer.
+    func readHistoryTurn(_ index: Int?, of session: ThreadSession) {
+        guard inspector.reading?.kind == .reply(session.id) else { return }
+        inspector.reading = replyContent(of: session, historyIndex: index)
     }
 
     /// The reading column follows the thread it shows: a piece of the answer, its end, or a new prompt moves the
-    /// text. Nothing happens when the column shows something else, or another thread.
-    func refreshReading(for session: ThreadSession) {
-        guard inspector.reading?.kind == .reply(session.id) else { return }
-        let next = replyContent(of: session)
-        if next != inspector.reading { inspector.reading = next }
+    /// text. Nothing happens when the column shows something else, or another thread; a history turn being read
+    /// stays, its list refreshed. A turn that ended is a turn the transcript now has: read it again.
+    func refreshReading(for session: ThreadSession, turnEnded: Bool = false) {
+        guard let shown = inspector.reading, shown.kind == .reply(session.id) else { return }
+        let next = replyContent(of: session, historyIndex: shown.turn?.historyIndex)
+        if next != shown { inspector.reading = next }
+        if turnEnded { loadReplyHistory(of: session) }
     }
 
-    private func replyContent(of session: ThreadSession) -> ReadingContent {
+    private func replyContent(of session: ThreadSession, historyIndex: Int? = nil) -> ReadingContent {
         let taskState = task(of: session)
         let directory = session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd
         let title = "\(displayTitle(for: session)) · \(session.profile.name)"
-        if let saying = session.activity.saying, !saying.text.isEmpty {
-            return ReadingContent(kind: .reply(session.id), title: title, at: saying.at, isLive: true, markdown: saying.text,
+        var turn = ReadingTurn(history: historyTurns(of: session, historyIndex: historyIndex),
+                               historyUnavailable: replyHistoryUnavailable.contains(session.id))
+        if let index = historyIndex, let past = replyHistory[session.id], past.indices.contains(index) {
+            // An earlier turn, as the transcript has it: its prompt quoted over its answer, its tools from the same file.
+            let old = past[index]
+            turn.historyIndex = index
+            turn.calls = old.calls.enumerated().map { ReadingTurn.Call(id: $0.offset, name: $0.element.name, target: $0.element.target) }
+            let prompt = old.prompt.split(separator: "\n").map { "> \($0)" }.joined(separator: "\n")
+            let markdown = prompt + "\n\n" + (old.reply.isEmpty ? "_The agent only ran tools in this turn._" : old.reply)
+            return ReadingContent(kind: .reply(session.id), title: "\(title) · turn \(index + 1)", at: old.endedAt, turn: turn,
+                                  markdown: markdown, directory: directory, taskID: taskState?.id, scopeID: session.record.scopeID)
+        }
+        let activity = session.activity
+        turn.calls = activity.currentCalls.enumerated().map {
+            ReadingTurn.Call(id: $0.offset, name: $0.element.name, target: $0.element.target, durationMs: $0.element.durationMs)
+        }
+        if !activity.inTurn, let taskState, let last = activity.turns.last, last.outcome == .ended || last.outcome == .failed,
+           let checkpoint = taskState.checkpoints.last(where: { $0.threadID == session.id.rawValue && $0.turn == activity.turns.count }) {
+            turn.changes = ReadingTurn.Changes(taskID: taskState.id, number: checkpoint.number, additions: checkpoint.additions,
+                                               deletions: checkpoint.deletions,
+                                               repos: checkpoint.repos.filter { $0.additions + $0.deletions > 0 }.map(\.repoRelativePath))
+        }
+        if let saying = activity.saying, !saying.text.isEmpty {
+            return ReadingContent(kind: .reply(session.id), title: title, at: saying.at, isLive: true, turn: turn, markdown: saying.text,
                                   directory: directory, taskID: taskState?.id, scopeID: session.record.scopeID)
         }
-        let reply = session.activity.lastReply ?? session.lastReply
-        return ReadingContent(kind: .reply(session.id), title: title, at: reply?.at,
+        let reply = activity.lastReply ?? session.lastReply
+        return ReadingContent(kind: .reply(session.id), title: title, at: reply?.at, turn: turn,
                               markdown: reply?.text ?? Self.noReplyText(session), directory: directory,
                               taskID: taskState?.id, scopeID: session.record.scopeID)
+    }
+
+    /// The session's turns, one line each. Under the latest answer, the transcript's last turn *is* that answer
+    /// when it began after the thread's last turn did: it is left out, "earlier" meaning earlier.
+    private func historyTurns(of session: ThreadSession, historyIndex: Int?) -> [ReadingTurn.HistoryTurn] {
+        var past = replyHistory[session.id] ?? []
+        let activity = session.activity
+        if historyIndex == nil, !activity.inTurn, let last = past.last, let shown = activity.turns.last,
+           let ended = last.endedAt, ended >= (shown.startedAt ?? shown.endedAt) {
+            past.removeLast()
+        }
+        return past.enumerated().map { index, turn in
+            ReadingTurn.HistoryTurn(id: index, prompt: ThreadActivity.excerpt(turn.prompt, limit: 100) ?? "",
+                                    reply: ThreadActivity.excerpt(MarkdownDocument.parse(turn.reply).plainText, limit: 100) ?? "",
+                                    tools: turn.calls.count, at: turn.endedAt)
+        }
+    }
+
+    /// Reads the session's transcript off the main thread and refreshes the column once it is in. One read at a
+    /// time per thread; a thread without a transcript (no hook yet, another driver) is left alone.
+    func loadReplyHistory(of session: ThreadSession) {
+        guard replyHistoryJobs[session.id] == nil, let path = session.activity.transcriptPath else { return }
+        let id = session.id, url = URL(fileURLWithPath: path)
+        replyHistoryJobs[id] = Task { [weak self] in
+            let turns = await Task.detached(priority: .utility) { try? TranscriptReader.read(url) }.value
+            guard let self else { return }
+            replyHistoryJobs[id] = nil
+            if let turns {
+                replyHistory[id] = turns
+                replyHistoryUnavailable.remove(id)
+            } else {
+                replyHistoryUnavailable.insert(id)
+            }
+            if let session = self.session(id) { refreshReading(for: session) }
+        }
     }
 
     /// ⇧⌘R: the selected thread's answer, or the only thread of the selected task.

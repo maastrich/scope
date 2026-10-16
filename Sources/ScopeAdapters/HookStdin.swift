@@ -42,6 +42,8 @@ public struct HookStdin: Sendable, Equatable {
     public var displayDelta: String?
     public var displayMessageID: String?
     public var displayFinal: Bool?
+    /// `PostToolUse`: how long the call took (`duration_ms`).
+    public var toolDurationMs: Int?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
@@ -161,6 +163,7 @@ public struct HookStdin: Sendable, Equatable {
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let input = object["tool_input"] as? [String: Any]
         result.toolTarget = toolTarget(tool: result.toolName, input: input)
+        result.toolDurationMs = (object["duration_ms"] as? NSNumber).map(\.intValue)
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.question = question(tool: result.toolName, input: input, message: object["message"] as? String)
         if result.hookEventName == "MessageDisplay" {
