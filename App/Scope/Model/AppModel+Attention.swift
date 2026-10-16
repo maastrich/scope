@@ -60,7 +60,9 @@ extension AppModel {
               let scope = scope(session.record.scopeID),
               let content = ThreadNotificationContent.make(event: stateEvent, driver: session.profile.name,
                                                            scope: scope.name, task: task(of: session)?.name,
-                                                           failure: event.payload[HookEvent.errorKey])
+                                                           failure: event.payload[HookEvent.errorKey],
+                                                           said: config.preferences.notificationsQuoteAgent
+                                                               ? .from(event, activity: session.activity) : nil)
         else { return }
         notifier.post(content, threadID: session.id)
     }

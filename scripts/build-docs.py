@@ -1048,9 +1048,16 @@ only knows it is alive. A tool without an adapter still runs perfectly — its r
 state.</p>
 
 <h2 id="notifications">Notifications and the badge</h2>
-<p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Go to
-thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
+<p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Reply</b>,
+<b>Go to thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
 item lists them, so you can leave the window behind and come back exactly when an agent needs you.</p>
+<p>The notification quotes the agent: the question it asks (Claude Code's <code>AskUserQuestion</code>, the plan
+of <code>ExitPlanMode</code>, a dialog's message), else the end of the answer it just gave; for a finished turn,
+the start of its answer. Markdown is stripped and the quote cut to about 180 characters, so you can tell from the
+banner whether it is worth opening. A failed turn still says its error. <b>Reply</b> types your answer into the
+thread and presses <kbd>↩</kbd>, exactly as <code>scope thread send</code> does, without bringing Scope up; the
+notification goes once it is sent. <b>Settings › General › Notifications › Show what the agent said</b> (on by
+default) turns the quote off, for when your screen is shared.</p>
 
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too
@@ -1122,7 +1129,7 @@ FIG_SETTINGS
   (follow the system, or always dark, which is what agent TUIs assume) and cursor shape — underline, bar or
   block, steady or blinking; a blinking caret fades in and out rather than switching on and off, and a program
   can still ask for its own shape — whether <kbd>⌥</kbd> types the character your layout puts there (the
-  default, so a French keyboard still gets its braces) or acts as Meta, plus notification status.</li>
+  default, so a French keyboard still gets its braces) or acts as Meta, plus notification status and whether notifications quote the agent.</li>
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive

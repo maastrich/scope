@@ -33,10 +33,14 @@ public struct HookStdin: Sendable, Equatable {
     public var toolTarget: String?
     /// Claude Code: the session's JSONL transcript, where token usage lives. Only the path; nothing reads it here.
     public var transcriptPath: String?
+    /// What the driver is asking, in its own words: the questions of `AskUserQuestion`, the plan of `ExitPlanMode`,
+    /// the message of a `Notification` hook when it is more than Claude Code's stock line.
+    public var question: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
-                lastAssistantMessage: String? = nil, toolTarget: String? = nil, transcriptPath: String? = nil) {
+                lastAssistantMessage: String? = nil, toolTarget: String? = nil, transcriptPath: String? = nil,
+                question: String? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
@@ -46,6 +50,7 @@ public struct HookStdin: Sendable, Equatable {
         self.lastAssistantMessage = lastAssistantMessage
         self.toolTarget = toolTarget
         self.transcriptPath = transcriptPath
+        self.question = question
     }
 
     /// `true` for a command-line argument that is the driver's hook JSON itself: Codex `notify` runs the
@@ -94,6 +99,30 @@ public struct HookStdin: Sendable, Equatable {
         return nil
     }
 
+    /// `Notification` messages that only restate the event (`permission_prompt`, `idle_prompt`): a notification
+    /// built from them says less than the agent's own last words.
+    public static let stockMessagePrefixes = ["Claude needs your permission", "Claude is waiting for your input"]
+
+    /// The question in a hook payload: each `questions[].question` of `AskUserQuestion`, one per line; the `plan` of
+    /// `ExitPlanMode`; else a `Notification` message that is not a stock one.
+    public static func question(tool: String?, input: [String: Any]?, message: String?) -> String? {
+        func nonEmpty(_ text: String?) -> String? {
+            guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            return text
+        }
+        switch tool {
+        case "AskUserQuestion":
+            let questions = (input?["questions"] as? [[String: Any]])?.compactMap { nonEmpty($0["question"] as? String) }
+            if let questions, !questions.isEmpty { return questions.joined(separator: "\n") }
+        case "ExitPlanMode":
+            if let plan = nonEmpty(input?["plan"] as? String) { return plan }
+        default:
+            break
+        }
+        guard let message = nonEmpty(message), !stockMessagePrefixes.contains(where: message.hasPrefix) else { return nil }
+        return message
+    }
+
     /// Keys tried, in order, for the session id.
     public static let sessionIDKeys = ["session_id", "thread-id", "thread_id"]
 
@@ -118,6 +147,7 @@ public struct HookStdin: Sendable, Equatable {
         let input = object["tool_input"] as? [String: Any]
         result.toolTarget = toolTarget(tool: result.toolName, input: input)
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        result.question = question(tool: result.toolName, input: input, message: object["message"] as? String)
         let file = filePathKeys.lazy.compactMap { input?[$0] as? String }.first { $0.hasPrefix("/") }
         if let file {
             result.directory = URL(fileURLWithPath: file).deletingLastPathComponent().path

@@ -84,9 +84,16 @@ only knows it is alive. A tool without an adapter still runs perfectly — its r
 state.</p>
 
 <h2 id="notifications">Notifications and the badge</h2>
-<p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Go to
-thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
+<p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Reply</b>,
+<b>Go to thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
 item lists them, so you can leave the window behind and come back exactly when an agent needs you.</p>
+<p>The notification quotes the agent: the question it asks (Claude Code's <code>AskUserQuestion</code>, the plan
+of <code>ExitPlanMode</code>, a dialog's message), else the end of the answer it just gave; for a finished turn,
+the start of its answer. Markdown is stripped and the quote cut to about 180 characters, so you can tell from the
+banner whether it is worth opening. A failed turn still says its error. <b>Reply</b> types your answer into the
+thread and presses <kbd>↩</kbd>, exactly as <code>scope thread send</code> does, without bringing Scope up; the
+notification goes once it is sent. <b>Settings › General › Notifications › Show what the agent said</b> (on by
+default) turns the quote off, for when your screen is shared.</p>
 
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too

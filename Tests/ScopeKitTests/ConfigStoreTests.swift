@@ -29,6 +29,7 @@ private func sampleConfig(home: URL) -> ScopeConfig {
     var preferences = Preferences.default
     preferences.editor = EditorTemplate(argv: ["cursor", "-g", "{file}:{line}"])
     preferences.confirmQuitWithRunningThreads = false
+    preferences.notificationsQuoteAgent = false
     return ScopeConfig(scopes: [acme, scope], preferences: preferences)
 }
 
@@ -176,6 +177,7 @@ private func sampleConfig(home: URL) -> ScopeConfig {
         // No stored driver means automatic: the app picks the first agent profile rather than a shell.
         #expect(loaded.config.preferences.defaultDriverID.isEmpty)
         #expect(loaded.config.preferences.editor == nil)
+        #expect(loaded.config.preferences.notificationsQuoteAgent)
         // A config written before the caret was a preference keeps the steady default.
         #expect(loaded.config.preferences.terminalCursorStyle == .steadyUnderline)
     }

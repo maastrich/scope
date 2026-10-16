@@ -427,6 +427,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// sandbox folders, stale git worktrees, processes of tasks that are gone, salvage refs past their 30 days.
     /// On by default.
     public var cleanUpAutomatically: Bool
+    /// A notification quotes the agent — its question, the opening of its answer — rather than only saying what
+    /// happened. On by default; off keeps the words off screen while sharing it.
+    public var notificationsQuoteAgent: Bool
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -461,7 +464,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         chromeTheme: ChromeTheme = .brand,
         showGitActions: Bool = false,
         automation: AutomationSettings? = nil,
-        cleanUpAutomatically: Bool = true
+        cleanUpAutomatically: Bool = true,
+        notificationsQuoteAgent: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -488,6 +492,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.showGitActions = showGitActions
         self.automation = automation
         self.cleanUpAutomatically = cleanUpAutomatically
+        self.notificationsQuoteAgent = notificationsQuoteAgent
     }
 
     public static let `default` = Preferences()
@@ -496,7 +501,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent
     }
 
     public init(from decoder: any Decoder) throws {
@@ -541,6 +546,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
         cleanUpAutomatically = (try? container.decodeIfPresent(Bool.self, forKey: .cleanUpAutomatically))
             ?? defaults.cleanUpAutomatically
+        notificationsQuoteAgent = (try? container.decodeIfPresent(Bool.self, forKey: .notificationsQuoteAgent))
+            ?? defaults.notificationsQuoteAgent
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

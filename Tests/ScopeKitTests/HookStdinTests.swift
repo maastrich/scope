@@ -31,6 +31,20 @@ struct HookStdinTests {
         #expect(failure.error == "rate_limit")
     }
 
+    @Test("the question is lifted from AskUserQuestion, ExitPlanMode and non-stock notifications")
+    func parsesQuestion() {
+        let ask = #"{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Which DB?","header":"DB","options":[]},{"question":"Migrate now?"}]}}"#
+        #expect(HookStdin.parse(Data(ask.utf8)).question == "Which DB?\nMigrate now?")
+        let plan = ##"{"hook_event_name":"PermissionRequest","tool_name":"ExitPlanMode","tool_input":{"plan":"# Plan\n1. do it"}}"##
+        #expect(HookStdin.parse(Data(plan.utf8)).question == "# Plan\n1. do it")
+        let elicitation = #"{"hook_event_name":"Notification","notification_type":"elicitation_dialog","message":"Pick a Jira project"}"#
+        #expect(HookStdin.parse(Data(elicitation.utf8)).question == "Pick a Jira project")
+        let stock = #"{"hook_event_name":"Notification","notification_type":"permission_prompt","message":"Claude needs your permission to use Bash"}"#
+        #expect(HookStdin.parse(Data(stock.utf8)).question == nil)
+        let empty = #"{"tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"  "}]}}"#
+        #expect(HookStdin.parse(Data(empty.utf8)).question == nil)
+    }
+
     @Test("a permission request for a question tool is a question")
     func questionToolPermission() {
         let permission = HookCommandEvent.fixed(.permissionRequested)
