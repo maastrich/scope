@@ -314,6 +314,9 @@ struct ScopeCommands: Commands {
 
             Divider()
 
+            Button("Inbox…") { model?.showInbox() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(model == nil)
             Button("Pull Requests…") { model?.showPullRequests() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(model?.currentScope == nil)

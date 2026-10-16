@@ -9,6 +9,15 @@ struct GlobalSheetView: View {
     let sheet: GlobalSheet
 
     var body: some View {
+        // The Inbox spans every scope and has keys of its own, Esc among them: it draws its own chrome.
+        if sheet == .inbox {
+            InboxView()
+        } else {
+            panel
+        }
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Text(title)
@@ -33,6 +42,7 @@ struct GlobalSheetView: View {
                 switch sheet {
                 case .pullRequests: PullRequestsView()
                 case .graph: GraphView()
+                case .inbox: EmptyView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -44,6 +54,7 @@ struct GlobalSheetView: View {
         switch sheet {
         case .pullRequests: "Pull Requests"
         case .graph: "Graph"
+        case .inbox: "Inbox"
         }
     }
 
@@ -51,6 +62,7 @@ struct GlobalSheetView: View {
         switch sheet {
         case .pullRequests: 780
         case .graph: 900
+        case .inbox: 720
         }
     }
 }

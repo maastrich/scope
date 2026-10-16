@@ -35,7 +35,7 @@ struct ScopeApp: App {
         }
 
         MenuBarExtra(isInserted: menuBarExtraShown) {
-            MenuBarExtraMenu()
+            MenuBarInbox()
                 .environment(model)
         } label: {
             // The petal-ring template glyph; while threads wait, the count badge replaces it so the number stays legible.
@@ -46,6 +46,8 @@ struct ScopeApp: App {
                 Image("MenuBarIcon")
             }
         }
+        // A window rather than a menu: an item's Reply needs a text field.
+        .menuBarExtraStyle(.window)
     }
 
     private var menuBarExtraShown: Binding<Bool> {
