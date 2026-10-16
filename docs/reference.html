@@ -39,6 +39,7 @@
 ├── graph/&lt;scope&gt;.json    <span class="c"># the repository cards</span>
 ├── sandboxes/            <span class="c"># the task worktrees</span>
 ├── ui-state.json         <span class="c"># selection, expansion, panel widths</span>
+├── scope-visits.json     <span class="c"># when each scope was last looked at</span>
 └── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
