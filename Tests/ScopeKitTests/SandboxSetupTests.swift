@@ -167,6 +167,52 @@ final class RecordingRunner: SandboxCommandRunner {
         #expect(try String(contentsOf: sandbox.appending(path: ".env.inside"), encoding: .utf8) == "fine")
     }
 
+    @Test func ignoredSkillsCommandsAndAgentsAreCopiedWhole() throws {
+        let base = try tempDirectory()
+        let sandbox = try tempDirectory()
+        let outside = try tempDirectory()
+        defer { for url in [base, sandbox, outside] { try? FileManager.default.removeItem(at: url) } }
+        let manager = FileManager.default
+        try write(base, ".claude/skills/deploy/SKILL.md", "deploy")
+        try write(base, ".claude/skills/deploy/scripts/run.sh", "run")
+        try write(base, ".claude/skills/tracked/SKILL.md", "base copy")
+        try write(base, ".claude/commands/review.md", "review")
+        try write(base, ".claude/agents/tester.md", "tester")
+        try write(base, ".claude/settings.local.json", "{}")
+        try write(sandbox, ".claude/skills/tracked/SKILL.md", "committed")
+        // A link that would still reach into the checkout from the copy, and one that only leaves it.
+        try write(base, ".claude/skills/linked/SKILL.md")
+        try manager.createSymbolicLink(atPath: base.appending(path: ".claude/skills/linked/data").path,
+                                       withDestinationPath: base.appending(path: "README.md").path)
+        try write(outside, "skill/SKILL.md")
+        try manager.createSymbolicLink(at: base.appending(path: ".claude/skills/stolen"), withDestinationURL: outside.appending(path: "skill"))
+
+        let plan = SandboxFileCopy.planResources(base: base, sandbox: sandbox)
+        #expect(plan.copies.map(\.relativePath) == [".claude/skills/deploy", ".claude/commands/review.md", ".claude/agents/tester.md"])
+        #expect(Set(plan.refusals.map(\.path)) == [".claude/skills/linked", ".claude/skills/stolen"])
+        let result = SandboxFileCopy.apply(plan)
+        #expect(result.failed.isEmpty)
+        #expect(try String(contentsOf: sandbox.appending(path: ".claude/skills/deploy/scripts/run.sh"), encoding: .utf8) == "run")
+        #expect(try String(contentsOf: sandbox.appending(path: ".claude/skills/tracked/SKILL.md"), encoding: .utf8) == "committed")
+        #expect(!manager.fileExists(atPath: sandbox.appending(path: ".claude/settings.local.json").path))
+        // Done once, the copy is not planned again.
+        #expect(SandboxFileCopy.planResources(base: base, sandbox: sandbox).copies.isEmpty)
+    }
+
+    @Test func threadsAtTheTaskRootSeeEverySandbox() {
+        func task(_ paths: [String]) -> TaskRecord {
+            TaskRecord(scopeID: ScopeID(rawValue: "8d0c1f9e-4b6a-4c62-9c3f-2d1e7a5b9f10"), scopeRoot: "/s/acme",
+                       scopeSlug: "acme", name: "Auth", slug: "auth", branch: "feat/auth", root: "/h/auth",
+                       repos: paths.map { TaskRepo(repoRelativePath: $0, sandboxPath: "/h/auth/\($0)", branch: "feat/auth") })
+        }
+        let several = task(["api", "web"])
+        #expect(several.additionalDirectories(forCwd: several.threadCwd.path) == ["/h/auth/api", "/h/auth/web"])
+        // A thread opened inside one sandbox already has it as its project.
+        #expect(several.additionalDirectories(forCwd: "/h/auth/api/src") == ["/h/auth/web"])
+        let one = task(["api"])
+        #expect(one.additionalDirectories(forCwd: one.threadCwd.path).isEmpty)
+    }
+
     // MARK: TaskManager
 
     @Test func setupCopiesThenRunsInEachSandboxWithItsVariables() async throws {
