@@ -177,6 +177,40 @@ public enum InspectorSectionLayout {
         return result
     }
 
+    /// The weights after a double-click on the sash between `upper` and `lower`: the two share their height equally
+    /// again, as at first launch, and every other list keeps its height.
+    public static func equalize(heights: [InspectorSection: Double], upper: InspectorSection, lower: InspectorSection) -> [InspectorSection: Double] {
+        guard let top = heights[upper], let bottom = heights[lower] else { return heights }
+        var result = heights
+        result[upper] = (top + bottom) / 2
+        result[lower] = (top + bottom) / 2
+        return result
+    }
+}
+
+/// The three dragged dimensions of the window's columns: the sidebar and inspector widths in points, the reading
+/// column's share of the width the terminal and it divide. Each has the value a fresh install starts with and the
+/// range a drag is held to; a double-click on the sash goes back to the default. Here rather than in the app so the
+/// arithmetic is tested.
+public enum ColumnLayout {
+    public static let sidebarWidthRange: ClosedRange<Double> = 200...420
+    public static let defaultSidebarWidth: Double = 264
+    public static let inspectorWidthRange: ClosedRange<Double> = 320...520
+    public static let defaultInspectorWidth: Double = 380
+    /// Half: the diff and the terminal start even.
+    public static let defaultViewerShare: Double = 0.5
+    public static let viewerShareRange: ClosedRange<Double> = 0.2...0.8
+
+    public static func clampSidebarWidth(_ width: Double) -> Double { clamp(width, to: sidebarWidthRange) }
+    public static func clampInspectorWidth(_ width: Double) -> Double { clamp(width, to: inspectorWidthRange) }
+    public static func clampViewerShare(_ share: Double) -> Double { clamp(share, to: viewerShareRange) }
+
+    /// A value that is not a number (a corrupt file) goes to the range's lower bound rather than through `min`/`max`,
+    /// which would let `NaN` out.
+    static func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        guard value.isFinite else { return range.lowerBound }
+        return min(max(value, range.lowerBound), range.upperBound)
+    }
 }
 
 /// Which folders of a file tree are open, by path. Empty — the root alone — whenever a tree is shown anew: an outline

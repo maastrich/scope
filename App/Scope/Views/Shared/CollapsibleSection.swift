@@ -138,39 +138,23 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
     }
 }
 
-/// A drag that moves height between two parts of the column; the translation is measured from the drag's start.
+/// A drag that moves height between two parts of the column; the translation is measured from the drag's start. A
+/// double-click (`reset`) gives the two lists the same height again.
 struct SectionSash {
     var began: () -> Void
     var moved: (Double) -> Void
     var ended: () -> Void
+    var reset: () -> Void
 }
 
-/// The invisible grip on a boundary: a few points tall, the resize pointer over it.
+/// The grip on the top edge of a header under another open list: `Sash` across the width, centred on the rule the
+/// header draws, so the rule itself stays the 1 pt line it is.
 struct SashHandle: View {
     let sash: SectionSash
-    @State private var dragging = false
 
     var body: some View {
-        Color.clear
-            .frame(height: 6)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .offset(y: -3)
-            .cursor(.resizeUpDown)
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { value in
-                        if !dragging {
-                            dragging = true
-                            sash.began()
-                        }
-                        sash.moved(Double(value.translation.height))
-                    }
-                    .onEnded { _ in
-                        dragging = false
-                        sash.ended()
-                    }
-            )
+        Sash(axis: .horizontal, drawsLine: false, began: sash.began, moved: sash.moved, ended: sash.ended, reset: sash.reset)
+            .frame(height: 0)
             .accessibilityHidden(true)
     }
 }

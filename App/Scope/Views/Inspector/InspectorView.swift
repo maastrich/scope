@@ -133,6 +133,10 @@ struct InspectorView: View {
             ended: {
                 inspector.dragStart = nil
                 model.persistUIState()
+            },
+            reset: {
+                inspector.weights = Layout.equalize(heights: lists, upper: upper, lower: section)
+                model.persistUIState()
             }
         )
     }

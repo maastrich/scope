@@ -432,6 +432,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var scopeTileOrder: ScopeTileOrder
     /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
     public var swipeBetweenScopes: Bool
+    /// The New Thread / New Task buttons under the sidebar. Off by default: ⌘T, ⇧⌘T, the palette, the CLI and the
+    /// orchestrator open threads and tasks, and the list takes the height the footer gave up.
+    public var showSidebarFooter: Bool
     /// The brand's by default.
     public var chromeTheme: ChromeTheme
     /// Commit…, Push, Create PR and Merge under the Delta panel. Off by default: committing and shipping is the
@@ -504,6 +507,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         finishedThreadLine: FinishedThreadLine = .elapsed,
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
+        showSidebarFooter: Bool = false,
         chromeTheme: ChromeTheme = .brand,
         showGitActions: Bool = false,
         automation: AutomationSettings? = nil,
@@ -540,6 +544,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.finishedThreadLine = finishedThreadLine
         self.scopeTileOrder = scopeTileOrder
         self.swipeBetweenScopes = swipeBetweenScopes
+        self.showSidebarFooter = showSidebarFooter
         self.chromeTheme = chromeTheme
         self.showGitActions = showGitActions
         self.automation = automation
@@ -561,7 +566,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
     }
@@ -605,6 +610,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.finishedThreadLine
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
+        showSidebarFooter = (try? container.decodeIfPresent(Bool.self, forKey: .showSidebarFooter)) ?? defaults.showSidebarFooter
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
         showGitActions = (try? container.decodeIfPresent(Bool.self, forKey: .showGitActions)) ?? defaults.showGitActions
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)

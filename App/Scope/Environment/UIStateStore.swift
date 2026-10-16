@@ -27,24 +27,22 @@ struct UIState: Codable, Sendable, Equatable {
     /// Relative heights of the inspector's open lists (`InspectorModel.weights`).
     var inspectorWeights: [InspectorSection: Double] = [:]
     /// The viewer column's share of the width beside the inspector (`InspectorModel.viewerShare`).
-    var viewerShare: Double = InspectorModel.defaultViewerShare
+    var viewerShare: Double = ColumnLayout.defaultViewerShare
     /// Repositories pinned in the Base panel, keyed by `BaseContext.key`.
     var basePins: [String: String] = [:]
-    /// Points; clamped to `sidebarWidthRange` on restore.
+    /// Points; clamped to `ColumnLayout.sidebarWidthRange` on restore.
     var sidebarWidth: Double = UIState.defaultSidebarWidth
     /// The place left in each scope, the current one included.
     var places: [ScopeID: ScopePlace] = [:]
-    /// Points; clamped to `inspectorWidthRange` on restore.
+    /// Points; clamped to `ColumnLayout.inspectorWidthRange` on restore.
     var inspectorWidth: Double = UIState.defaultInspectorWidth
     /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
     /// scope you drive with Claude Code keeps giving you Claude Code.
     var lastDrivers: [ScopeID: String] = [:]
 
     static let empty = UIState()
-    static let inspectorWidthRange: ClosedRange<Double> = 320...520
-    static let defaultInspectorWidth: Double = 380
-    static let sidebarWidthRange: ClosedRange<Double> = 200...420
-    static let defaultSidebarWidth: Double = 264
+    static let defaultInspectorWidth = ColumnLayout.defaultInspectorWidth
+    static let defaultSidebarWidth = ColumnLayout.defaultSidebarWidth
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
@@ -63,7 +61,7 @@ struct UIState: Codable, Sendable, Equatable {
         looseThreadsCollapsed = (try? container.decodeIfPresent(Set<ScopeID>.self, forKey: .looseThreadsCollapsed)) ?? []
         inspectorVisible = (try? container.decodeIfPresent(Bool.self, forKey: .inspectorVisible)) ?? false
         inspectorWeights = (try? container.decodeIfPresent([InspectorSection: Double].self, forKey: .inspectorWeights)) ?? [:]
-        viewerShare = (try? container.decodeIfPresent(Double.self, forKey: .viewerShare)) ?? InspectorModel.defaultViewerShare
+        viewerShare = (try? container.decodeIfPresent(Double.self, forKey: .viewerShare)) ?? ColumnLayout.defaultViewerShare
         inspectorWidth = (try? container.decodeIfPresent(Double.self, forKey: .inspectorWidth)) ?? UIState.defaultInspectorWidth
         lastDrivers = (try? container.decodeIfPresent([ScopeID: String].self, forKey: .lastDrivers)) ?? [:]
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]
