@@ -133,4 +133,67 @@ struct HookStdinTests {
         #expect(!HookStdin.isInlinePayload("session_id={x}"))
         #expect(!HookStdin.isInlinePayload("turn.ended"))
     }
+    /// `PostToolUse` stdin as Claude Code sends it, for `tool` with `input` (and a response, which is what grows).
+    static func postToolUse(_ tool: String, _ input: String, response: String = #"{"success":true}"#) -> Data {
+        Data(#"""
+        {"session_id":"9b1d","transcript_path":"/Users/me/.claude/projects/-w/9b1d.jsonl","cwd":"/w",\#
+        "permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"\#(tool)",\#
+        "tool_input":\#(input),"tool_response":\#(response),"tool_use_id":"toolu_01"}
+        """#.utf8)
+    }
+
+    @Test("each tool kind gives the one thing it was about", arguments: [
+        ("Read", #"{"file_path":"/w/Sources/App.swift"}"#, "/w/Sources/App.swift"),
+        ("Edit", #"{"file_path":"/w/a.swift","old_string":"x","new_string":"y","replace_all":false}"#, "/w/a.swift"),
+        ("Write", #"{"file_path":"/w/new.md","content":"Title\nbody"}"#, "/w/new.md"),
+        ("MultiEdit", #"{"file_path":"/w/b.swift","edits":[{"old_string":"a","new_string":"b"}]}"#, "/w/b.swift"),
+        ("NotebookEdit", #"{"notebook_path":"/w/n.ipynb","new_source":"print(1)"}"#, "/w/n.ipynb"),
+        ("Bash", #"{"command":"\n  swift test --filter SlugTests\nswift build","description":"Run the suite"}"#,
+         "swift test --filter SlugTests"),
+        ("Grep", #"{"pattern":"ThreadActivity","path":"/w/Sources","output_mode":"files_with_matches"}"#, "ThreadActivity"),
+        ("Glob", #"{"pattern":"**/*.swift","path":"/w"}"#, "**/*.swift"),
+        ("WebFetch", #"{"url":"https://code.claude.com/docs/en/hooks","prompt":"List the events"}"#,
+         "https://code.claude.com/docs/en/hooks"),
+        ("WebSearch", #"{"query":"swift testing arguments"}"#, "swift testing arguments"),
+        ("Task", #"{"description":"Survey the hooks","prompt":"Read every file…","subagent_type":"Explore"}"#,
+         "Survey the hooks"),
+        ("Agent", #"{"description":"Review the diff","prompt":"…"}"#, "Review the diff"),
+        ("mcp__scope__scope_thread_wait", #"{"threads":["3f9a"],"thread":"3f9a"}"#, "3f9a"),
+    ])
+    func toolTargets(tool: String, input: String, target: String) {
+        let stdin = HookStdin.parse(Self.postToolUse(tool, input))
+        #expect(stdin.toolName == tool)
+        #expect(stdin.toolTarget == target)
+        #expect(stdin.transcriptPath == "/Users/me/.claude/projects/-w/9b1d.jsonl")
+    }
+
+    @Test("a long command is cut to its first line and to the limit")
+    func longCommand() {
+        let command = String(repeating: "x", count: 500)
+        let stdin = HookStdin.parse(Self.postToolUse("Bash", #"{"command":"\#(command)\necho done"}"#))
+        let target = stdin.toolTarget ?? ""
+        #expect(target.count == HookStdin.toolTargetLimit)
+        #expect(target.hasSuffix("…"))
+        #expect(!target.contains("echo"))
+    }
+
+    @Test("a missing, empty or odd tool_input gives no target and fails nothing")
+    func missingToolInput() {
+        #expect(HookStdin.parse(Data(#"{"hook_event_name":"PostToolUse","tool_name":"Read"}"#.utf8)).toolTarget == nil)
+        #expect(HookStdin.parse(Self.postToolUse("Read", "{}")).toolTarget == nil)
+        #expect(HookStdin.parse(Self.postToolUse("Read", #""not an object""#)).toolTarget == nil)
+        #expect(HookStdin.parse(Self.postToolUse("Bash", #"{"command":"  \n "}"#)).toolTarget == nil)
+        #expect(HookStdin.parse(Self.postToolUse("Read", #"{"file_path":42}"#)).toolTarget == nil)
+        #expect(HookStdin.parse(Data(#"{"transcript_path":""}"#.utf8)).transcriptPath == nil)
+    }
+
+    /// The stdin is parsed before `scope-hook` cuts it: a huge tool response still gives its target, while the cut
+    /// `raw` no longer parses at all — which is why the target travels in the payload.
+    @Test("the target survives a stdin too large to forward whole")
+    func truncatedPayload() {
+        let response = #"{"file":{"content":""# + String(repeating: "a", count: 300 * 1024) + #""}}"#
+        let data = Self.postToolUse("Read", #"{"file_path":"/w/huge.log"}"#, response: response)
+        #expect(HookStdin.parse(data).toolTarget == "/w/huge.log")
+        #expect(HookStdin.parse(data.prefix(256 * 1024)) == HookStdin())
+    }
 }

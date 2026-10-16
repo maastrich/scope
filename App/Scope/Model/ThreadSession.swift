@@ -47,6 +47,12 @@ final class ThreadSession: Identifiable {
     /// What the agent answered at the end of its last turn, when its driver says (`thread.read` with `reply`).
     /// Not drawn anywhere, so not observed: a reply per turn must not redraw the sidebar.
     @ObservationIgnored private(set) var lastReply: AgentReply?
+    /// What the driver has been doing, folded from its events (`ThreadActivity`). Changes on every tool call, so not
+    /// observed either; `AppModel+Activity` loads and saves it.
+    @ObservationIgnored private(set) var activity = ThreadActivity()
+    /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
+    /// transcript) — not on each tool call, which only moves `lastTool`.
+    @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
     /// When the thread was handed a prompt its driver has not reported on yet (`ThreadWait`).
     @ObservationIgnored private(set) var expectingTurnSince: Date?
     /// When the thread was last handed a prompt, reported on or not: a reply older than this answers something else.
@@ -304,6 +310,7 @@ final class ThreadSession: Identifiable {
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event)
         if event.kind.changesState { expectingTurnSince = nil }
         if let reply = AgentReply.from(event) { lastReply = reply }
+        setActivity(activity.apply(event))
         // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
         // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
         // state that had not moved.
@@ -319,6 +326,16 @@ final class ThreadSession: Identifiable {
             record.resumeID = session
         }
         onRecordChanged?(record)
+    }
+
+    /// Replaces the activity; `onActivityChanged` only when what is saved moved.
+    func setActivity(_ next: ThreadActivity) {
+        let previous = activity
+        activity = next
+        if next.turns != previous.turns || next.lastReply != previous.lastReply
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
+            onActivityChanged?(self)
+        }
     }
 
     /// Persists a driver session id captured elsewhere.
@@ -372,6 +389,7 @@ final class ThreadSession: Identifiable {
         let status = ExitStatus.decode(rawWaitStatus: rawWaitStatus)
         phase = .exited(status)
         adapterState = nil
+        setActivity(activity.closingOpenTurn(at: .now))
         record.lastExit = status
         record.lastState = .exited
         record.processAlive = false

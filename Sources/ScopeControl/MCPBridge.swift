@@ -77,7 +77,9 @@ public enum MCPBridge {
             description: """
             What Scope is holding right now: the declared scopes (folders), the running threads and the \
             tasks with their branches and sandboxes — archived ones too, marked so, which \
-            scope_task_restore brings back. Start here to find the scope slug or task id the other tools need.
+            scope_task_restore brings back — and for each thread its latest activity (the last tool its agent ran \
+            and on what, or how its turn ended, with how long ago). Start here to find the scope slug or task id the \
+            other tools need.
             """,
             schema: """
             {"type":"object","properties":{\

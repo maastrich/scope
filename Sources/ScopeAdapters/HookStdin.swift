@@ -5,8 +5,9 @@ import Foundation
 /// Read: the driver's session id, lifted into `payload["session_id"]` so the app never parses `raw`; for
 /// Claude Code's `Notification` hook the `notification_type`, which decides between `permission.requested` and
 /// `input.requested`; the `tool_name` of a tool hook, so a permission request for a question tool counts as a
-/// question; the `error` of `StopFailure`; and where the driver is working — the folder of the file a tool just
-/// touched, else the hook's `cwd`. Everything else stays verbatim in `raw`.
+/// question; the `error` of `StopFailure`; where the driver is working — the folder of the file a tool just
+/// touched, else the hook's `cwd`; what a tool call was about (`toolTarget`); and the session's `transcript_path`.
+/// Everything else stays verbatim in `raw`.
 public struct HookStdin: Sendable, Equatable {
     /// `session_id` (Claude Code, Cursor) or `thread-id` (Codex `notify`), whichever is present.
     public var sessionID: String?
@@ -26,10 +27,16 @@ public struct HookStdin: Sendable, Equatable {
     /// `notify` (`last-assistant-message`). What another agent wants when it asks what this one said — the
     /// terminal holds the same words, wrapped, redrawn and buried under spinners.
     public var lastAssistantMessage: String?
+    /// Tool hooks: what the call was about, in one bounded line — the file, the first line of the command, the
+    /// pattern, the URL, the sub-agent's description. Lifted here because `raw` is cut once a tool's response is
+    /// large, and a cut `raw` no longer parses.
+    public var toolTarget: String?
+    /// Claude Code: the session's JSONL transcript, where token usage lives. Only the path; nothing reads it here.
+    public var transcriptPath: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
-                lastAssistantMessage: String? = nil) {
+                lastAssistantMessage: String? = nil, toolTarget: String? = nil, transcriptPath: String? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
@@ -37,6 +44,8 @@ public struct HookStdin: Sendable, Equatable {
         self.error = error
         self.directory = directory
         self.lastAssistantMessage = lastAssistantMessage
+        self.toolTarget = toolTarget
+        self.transcriptPath = transcriptPath
     }
 
     /// `true` for a command-line argument that is the driver's hook JSON itself: Codex `notify` runs the
@@ -50,6 +59,40 @@ public struct HookStdin: Sendable, Equatable {
 
     /// Keys of `tool_input` that name the file a tool works on, in the order tried.
     public static let filePathKeys = ["file_path", "notebook_path", "path"]
+
+    /// Most characters a tool target keeps; the rest becomes `…`.
+    public static let toolTargetLimit = 120
+
+    /// `tool_input` keys that say what a call is about, per tool. Grep and Glob also carry a `path` (the folder
+    /// searched), so a single key order would name the folder instead of the pattern.
+    public static let toolTargetKeys: [String: [String]] = [
+        "Read": filePathKeys, "Edit": filePathKeys, "Write": filePathKeys, "MultiEdit": filePathKeys,
+        "NotebookEdit": filePathKeys, "NotebookRead": filePathKeys,
+        "Bash": ["command"], "BashOutput": ["bash_id"], "KillShell": ["shell_id"],
+        "Grep": ["pattern"], "Glob": ["pattern"],
+        "WebFetch": ["url"], "WebSearch": ["query"],
+        "Task": ["description", "subagent_type"], "Agent": ["description", "subagent_type"],
+        "Skill": ["skill", "command"], "SlashCommand": ["command"],
+    ]
+
+    /// Keys tried for a tool missing from `toolTargetKeys` (MCP tools, tools newer than this build).
+    public static let fallbackTargetKeys = ["file_path", "notebook_path", "command", "pattern", "url", "query",
+                                            "description", "path", "name", "thread", "prompt"]
+
+    /// The target of a call to `tool` with `input`: the first non-empty value among its keys, cut to its first
+    /// non-empty line and to `toolTargetLimit` characters.
+    public static func toolTarget(tool: String?, input: [String: Any]?) -> String? {
+        guard let input else { return nil }
+        let keys = tool.flatMap { toolTargetKeys[$0] } ?? fallbackTargetKeys
+        for key in keys {
+            guard let value = input[key] as? String else { continue }
+            let line = value.split(whereSeparator: \.isNewline)
+                .lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+            guard let line else { continue }
+            return line.count > toolTargetLimit ? line.prefix(toolTargetLimit - 1) + "…" : line
+        }
+        return nil
+    }
 
     /// Keys tried, in order, for the session id.
     public static let sessionIDKeys = ["session_id", "thread-id", "thread_id"]
@@ -73,6 +116,8 @@ public struct HookStdin: Sendable, Equatable {
         result.lastAssistantMessage = lastAssistantMessageKeys.lazy.compactMap { object[$0] as? String }
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let input = object["tool_input"] as? [String: Any]
+        result.toolTarget = toolTarget(tool: result.toolName, input: input)
+        result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         let file = filePathKeys.lazy.compactMap { input?[$0] as? String }.first { $0.hasPrefix("/") }
         if let file {
             result.directory = URL(fileURLWithPath: file).deletingLastPathComponent().path

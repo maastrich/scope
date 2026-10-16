@@ -50,8 +50,8 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "BY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", openedBy($0)]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "BY", "ACTIVITY"], result.threads.map {
+                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", openedBy($0), $0.activity ?? ""]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -214,13 +214,14 @@ public enum CLIRenderer {
         return text
     }
 
-    /// Space-padded columns; the last one is never padded so lines have no trailing blanks.
     /// The BY column: Scope itself for a resident thread, the parent thread or the client otherwise.
     static func openedBy(_ thread: ThreadSummary) -> String {
         if let resident = thread.resident { return "scope (\(resident))" }
         return (thread.parent.map { "thread \($0)" } ?? thread.openedBy) + (thread.depth == 0 ? "" : " (depth \(thread.depth))")
     }
 
+    /// Space-padded columns; the last one is never padded, and an empty one leaves no padding behind it, so lines
+    /// have no trailing blanks.
     static func table(_ headers: [String], _ rows: [[String]]) -> String {
         let all = [headers] + rows
         let widths = (0..<headers.count).map { column in
@@ -231,6 +232,6 @@ public enum CLIRenderer {
                 let cell = row[column]
                 return column == row.count - 1 ? cell : cell.padding(toLength: widths[column], withPad: " ", startingAt: 0)
             }.joined(separator: "  ")
-        }.joined(separator: "\n")
+        }.map { String($0.reversed().drop { $0 == " " }.reversed()) }.joined(separator: "\n")
     }
 }
