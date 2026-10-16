@@ -307,25 +307,6 @@ public actor TaskManager {
         return record
     }
 
-    /// Saves the uncommitted changes of every sandbox of `id` under a salvage ref, the way an archive does, and
-    /// answers the ref per repository (none for a clean one). What a file copy from another attempt overwrites
-    /// can be found again there.
-    public func salvageChanges(of id: TaskID, kind: String = "before-copy") async throws -> [String: String] {
-        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        var refs: [String: String] = [:]
-        for repo in record.activeRepos {
-            do {
-                if let saved = try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: record, kind: kind),
-                                                 message: "Scope: changes of \(record.name) (\(repo.repoRelativePath)) before a file was copied in") {
-                    refs[repo.repoRelativePath] = saved.ref
-                }
-            } catch let error as GitError {
-                throw TaskError.git(repo: repo.repoRelativePath, error)
-            }
-        }
-        return refs
-    }
-
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
     public func addRepo(_ id: TaskID, repo: String, scopeContext: String? = nil, scopeRepos: [String] = [],
                         repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = []) async throws -> TaskRecord {

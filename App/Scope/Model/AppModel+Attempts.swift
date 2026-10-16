@@ -200,15 +200,14 @@ extension AppModel {
 
     // MARK: Cherry-picking a file
 
-    /// Brings `path` of `repo` from `source` into `target`, file for file: the target's uncommitted changes are
-    /// saved under a salvage ref first (the checkpoint this build has), then the file is copied, or removed when the
-    /// source no longer has it. The target's delta refreshes on its own through its watcher.
+    /// Brings `path` of `repo` from `source` into `target`, file for file: the target is checkpointed first, so what
+    /// the copy overwrites is a restore away, then the file is copied, or removed when the source no longer has it. The target's delta refreshes on its own through its watcher.
     func copyAttemptFile(_ path: String, repo: TaskRepo, from source: TaskState, to target: TaskState) async {
         guard let from = source.record.repos.first(where: { $0.id == repo.id })?.sandboxURL,
               let to = target.record.activeRepos.first(where: { $0.id == repo.id })?.sandboxURL else { return }
         Usage.click("task.copy-attempt-file", label: "Copy a file from one attempt into another")
         do {
-            _ = try await env.tasks.salvageChanges(of: target.id)
+            try await env.tasks.checkpoints.snapshot(target.record, turn: nil, reason: .beforeCopy)
             _ = try AttemptFileCopy.copy(path, from: from, to: to)
             target.refresh()
         } catch {

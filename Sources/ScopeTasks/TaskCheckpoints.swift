@@ -13,6 +13,8 @@ public struct TaskCheckpoint: Codable, Sendable, Equatable, Identifiable {
         case turn
         /// Taken just before a restore, so the state being replaced is itself a checkpoint: the undo.
         case beforeRestore
+        /// Taken just before a file of another attempt is copied in (`AttemptFileCopy`), so the overwritten file is a restore away.
+        case beforeCopy
     }
 
     /// One sandbox's part of the checkpoint.
@@ -78,6 +80,7 @@ public struct TaskCheckpoint: Codable, Sendable, Equatable, Identifiable {
         switch reason {
         case .beforeRestore: return "Before restoring checkpoint \(restoring.map(String.init) ?? "")".trimmingCharacters(in: .whitespaces)
         case .turn: return turn.map { "Turn \($0)" } ?? "Checkpoint"
+        case .beforeCopy: return "Before a file was copied in"
         }
     }
 }
@@ -379,6 +382,8 @@ public actor TaskCheckpoints {
                 line += ": turn \(turn.turn) of \(turn.threadTitle)"
                 if let said = turn.said, !said.isEmpty { line += " — \(said)" }
             }
+        case .beforeCopy:
+            line += ": before a file was copied in from another attempt"
         }
         return line
     }

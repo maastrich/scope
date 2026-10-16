@@ -371,7 +371,7 @@ file, or the last answer. Under the columns, the diff of one attempt against ano
 committed) or against the base (the task delta, uncommitted work included), drawn by the same renderer as the Delta
 column. <kbd>1</kbd>…<kbd>N</kbd> put an attempt on the left, <kbd>⇧1</kbd>…<kbd>⇧N</kbd> on the right,
 <kbd>0</kbd> the base; a click or a ⇧click on a column does the same. The diff's file list can copy a file from one
-attempt into another (<b>Copy into…</b>): the target's uncommitted changes are saved under a salvage ref first, so
+attempt into another (<b>Copy into…</b>): the target is checkpointed first, so
 nothing is lost to the copy.</p>
 <p><b>Keep this one</b> is the end of it: the chosen task takes the brief's name and the plain branch back
 (<code>feat/refresh</code>, its upstream dropped so the next push names where it goes), leaves the topic, and the

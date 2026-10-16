@@ -4,7 +4,7 @@ import ScopeCore
 @testable import ScopeGit
 @testable import ScopeTasks
 
-/// The git side of best-of-N: attempt branches renamed back, two attempts diffed, a file carried across.
+/// The git side of best-of-N: attempt branches renamed back, two attempts diffed, a file carried across after a checkpoint.
 @Suite(.serialized) struct AttemptGitTests {
     private func makeManager(_ scope: TestScope) -> TaskManager {
         TaskManager(home: scope.home, registry: scope.registry, store: TaskRecordStore(home: scope.home))
@@ -110,19 +110,20 @@ import ScopeCore
         await #expect(throws: TaskError.self) { try await manager.keepAttempt(plain.id, otherBranches: []) }
     }
 
-    @Test func salvagingBeforeACopyKeepsTheTargetsChanges() async throws {
+    @Test func aCheckpointBeforeACopyKeepsTheTargetsChanges() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")
         let manager = makeManager(scope)
         let attempts = try await makeAttempts(scope, manager: manager)
         let target = attempts[0].repos[0].sandboxURL
-        #expect(try await manager.salvageChanges(of: attempts[0].id).isEmpty)
         try scope.write(target, "notes.md", "mine\n")
-        let refs = try await manager.salvageChanges(of: attempts[0].id)
-        let ref = try #require(refs["api"])
-        #expect(ref.hasPrefix("refs/scope/salvage/refresh-a1-"))
+        let checkpoint = try #require(try await manager.checkpoints.snapshot(attempts[0], turn: nil, reason: .beforeCopy))
+        #expect(checkpoint.reason == .beforeCopy)
+        #expect(checkpoint.headline == "Before a file was copied in")
         let client = await scope.client(for: api)
+        let ref = TaskCheckpoints.ref(task: attempts[0].id, number: checkpoint.number)
         #expect(try await client.output(["show", "\(ref):notes.md"]) == "mine")
+        #expect(try await client.output(["log", "-1", "--format=%s", ref]).contains("before a file was copied in"))
         // The working tree is untouched: the file is still there to be overwritten.
         #expect(scope.exists(target.appending(path: "notes.md")))
     }
