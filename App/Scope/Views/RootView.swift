@@ -66,7 +66,7 @@ struct RootView: View {
         }
         .sheet(item: $model.globalSheet) { sheet in
             GlobalSheetView(sheet: sheet)
-                .usageSurface(sheet == .graph ? "sheet.graph" : "sheet.pull-requests", label: sheet == .graph ? "Graph" : "Pull Requests")
+                .usageSurface(sheet.usageSurface.id, label: sheet.usageSurface.label)
                 .environment(model)
         }
         .sheet(item: newTaskScope) { scope in

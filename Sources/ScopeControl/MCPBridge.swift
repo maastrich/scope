@@ -183,7 +183,10 @@ public enum MCPBridge {
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
             "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."},\
             "topic":{"type":"string","description":"Short name of the piece of work this task belongs to, shared by its sibling tasks; omitted inherits the topic of the task you are in."},\
-            "deliverable":{"type":"string","description":"For a study whose result is a document: the file it ends in, relative to the task root or a sandbox (docs/study.md). Kept with the threads' last answers when the task is archived; REPORT.md is kept anyway."}\
+            "deliverable":{"type":"string","description":"For a study whose result is a document: the file it ends in, relative to the task root or a sandbox (docs/study.md). Kept with the threads' last answers when the task is archived; REPORT.md is kept anyway."},\
+            "attempts":{"type":"integer","minimum":1,"maximum":9,"description":"Run the brief this many ways: N sibling tasks under one topic named after the brief, branches <branch>-a1..N, same prompt, which the user compares in Scope and keeps one of (the others are archived, branches kept). Worth it for a brief whose best approach is uncertain; each attempt counts against the agents' task budget, and the call is refused with the number when N exceeds what is left. Default 1."},\
+            "models":{"type":"array","items":{"type":"string"},"description":"With attempts: the model of each attempt — one for all, or one per attempt."},\
+            "drivers":{"type":"array","items":{"type":"string"},"description":"With attempts: the driver of each attempt — one for all, or one per attempt."}\
             },"required":["prompt"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -740,9 +743,12 @@ public enum MCPBridge {
         var startPR: String?
         var deliverable: String?
         var issue: String?
+        var attempts: Int?
+        var models: [String]?
+        var drivers: [String]?
 
         private enum CodingKeys: String, CodingKey {
-            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable, issue
+            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable, issue, attempts, models, drivers
             case startPR = "start_pr"
             case dryRun = "dry_run"
             case openThread = "open_thread"
@@ -752,7 +758,8 @@ public enum MCPBridge {
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
-                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model, issue: issue)
+                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model, issue: issue,
+                          attempts: attempts ?? 1, models: models ?? [], drivers: drivers ?? [])
         }
     }
 }

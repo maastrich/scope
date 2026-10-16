@@ -43,11 +43,17 @@ struct GlobalSheetView: View {
                 case .pullRequests: PullRequestsView()
                 case .graph: GraphView()
                 case .inbox: EmptyView()
+                case .compareAttempts:
+                    if let group = model.attemptsCompared {
+                        CompareAttemptsView(group: group)
+                    } else {
+                        Text("No attempts to compare").foregroundStyle(Ink.secondary)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: width, height: 620)
+        .frame(width: width, height: sheet == .compareAttempts ? 780 : 620)
     }
 
     private var title: String {
@@ -55,6 +61,7 @@ struct GlobalSheetView: View {
         case .pullRequests: "Pull Requests"
         case .graph: "Graph"
         case .inbox: "Inbox"
+        case .compareAttempts: "Compare Attempts"
         }
     }
 
@@ -63,6 +70,7 @@ struct GlobalSheetView: View {
         case .pullRequests: 780
         case .graph: 900
         case .inbox: 720
+        case .compareAttempts: 1040
         }
     }
 }

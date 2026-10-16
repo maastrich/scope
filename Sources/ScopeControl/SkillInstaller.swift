@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 20
+    public static let version = 21
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -199,7 +199,7 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--issue I] [--title T] [--topic P] [--deliverable F] [--model M] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, issue, title, topic, deliverable, model, open_thread: false, run_setup: false, dry_run}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--issue I] [--title T] [--topic P] [--deliverable F] [--model M] [--attempts N] [--models A,B] [--drivers X,Y] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, issue, title, topic, deliverable, model, attempts, models: [A, B], drivers: [X, Y], open_thread: false, run_setup: false, dry_run}` |
         | `scope thread new [--task T] [--repo R] [--driver D] [--model M] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, model, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
@@ -279,6 +279,24 @@ public struct SkillInstaller: Sendable {
 
         `scope thread new --task <slug> -p "<prompt>"` opens another agent in an existing task. Its working
         directory is the sandbox, so it commits on the task branch. `--task` finds a task in any scope.
+
+        ## Several attempts at one brief
+
+        `scope task new "<prompt>" --attempts 3` (`attempts: 3`) runs the same brief three ways: three sibling tasks
+        under one topic named after the brief (`<name> · attempt 1..3`), the same prompt, a branch each
+        (`<branch>-a1..a3`), each with its own thread. `--models a,b,c` and `--drivers x,y,z` give each attempt a model
+        or a driver of its own (one value applies to all). The user compares them in Scope — status, tokens, agent
+        time, files changed, what each last reply says about tests, the opening of each deliverable, and the diff of
+        one against another or against the base — and keeps one: that task takes the brief's name and the plain
+        branch back, the others are archived (branches kept, answers kept). So an attempt works like any task: finish,
+        commit on your branch, end with a complete answer that names the tests you ran; do not open a pull request
+        unless the brief says so, since only the kept attempt's branch goes on.
+
+        Worth it when the best approach is genuinely uncertain — a design with two or three defensible shapes, a bug
+        whose cause is unknown, a brief where models are known to diverge — and not for routine work: every attempt
+        costs a worktree, a thread and a share of the agents' task budget, and the call is refused with the number
+        when N exceeds what is left (`3 attempts asked, but agents may open 2 more tasks`). Two or three is the usual
+        N; nine is the ceiling. A task that starts from a pull request or an existing branch is one attempt.
 
         ## Briefing a thread so it works alone
 

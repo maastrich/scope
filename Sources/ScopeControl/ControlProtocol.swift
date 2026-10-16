@@ -711,13 +711,24 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     /// The GitHub issue to work on (`123`, `#123`, `owner/repo#123`, its URL): read with `gh`, it opens the brief and
     /// the task records it. Given, it must resolve or the call fails; `nil` = only an issue the prompt asks to work on.
     public var issue: String?
+    /// Run the brief this many ways: N sibling tasks under one topic, branches `<branch>-a1..N`, to compare and keep
+    /// one (`TaskAttempts`). `1` is an ordinary task. Each attempt counts against the agents' task budget.
+    public var attempts: Int
+    /// The model of each attempt: one for all, or one per attempt. Empty = `model` (or the default) for every attempt.
+    public var models: [String]
+    /// The driver of each attempt, likewise. Empty = `driver` for every attempt.
+    public var drivers: [String]
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
                 dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
-                startPR: String? = nil, deliverable: String? = nil, model: String? = nil, issue: String? = nil) {
+                startPR: String? = nil, deliverable: String? = nil, model: String? = nil, issue: String? = nil,
+                attempts: Int = 1, models: [String] = [], drivers: [String] = []) {
         self.prompt = prompt
         self.issue = issue
+        self.attempts = attempts
+        self.models = models
+        self.drivers = drivers
         self.deliverable = deliverable
         self.scope = scope
         self.repos = repos
@@ -751,6 +762,9 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         startPR = try container.decodeIfPresent(String.self, forKey: .startPR)
         issue = try container.decodeIfPresent(String.self, forKey: .issue)
         deliverable = try container.decodeIfPresent(String.self, forKey: .deliverable)
+        attempts = try container.decodeIfPresent(Int.self, forKey: .attempts) ?? 1
+        models = try container.decodeIfPresent([String].self, forKey: .models) ?? []
+        drivers = try container.decodeIfPresent([String].self, forKey: .drivers) ?? []
     }
 }
 
@@ -947,6 +961,30 @@ public struct TaskRepoResult: Codable, Sendable, Equatable {
     }
 }
 
+/// One attempt of a `task new --attempts N` answer.
+public struct TaskAttemptResult: Codable, Sendable, Equatable {
+    public var index: Int
+    public var task: String?
+    public var name: String
+    public var slug: String
+    public var branch: String
+    public var model: String?
+    public var driver: String?
+    public var thread: String?
+
+    public init(index: Int, task: String? = nil, name: String, slug: String, branch: String, model: String? = nil,
+                driver: String? = nil, thread: String? = nil) {
+        self.index = index
+        self.task = task
+        self.name = name
+        self.slug = slug
+        self.branch = branch
+        self.model = model
+        self.driver = driver
+        self.thread = thread
+    }
+}
+
 public struct TaskNewResult: Codable, Sendable, Equatable {
     /// `false` for a `dryRun`: everything below is what *would* be created.
     public var created: Bool
@@ -966,12 +1004,17 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
     public var note: String?
     /// The issue the task was opened from (`#123`), when one was.
     public var issue: String?
+    /// With `attempts`: the sibling tasks, in order. The fields above then describe the first attempt, `topic` the
+    /// topic they share.
+    public var attempts: [TaskAttemptResult]?
 
     public init(created: Bool, task: String? = nil, name: String, slug: String, branch: String,
                 scope: String, scopeSlug: String, root: String? = nil, repos: [TaskRepoResult] = [],
-                thread: String? = nil, topic: String? = nil, note: String? = nil, issue: String? = nil) {
+                thread: String? = nil, topic: String? = nil, note: String? = nil, issue: String? = nil,
+                attempts: [TaskAttemptResult]? = nil) {
         self.created = created
         self.issue = issue
+        self.attempts = attempts
         self.task = task
         self.name = name
         self.slug = slug

@@ -358,6 +358,26 @@ share its old topic; one filed elsewhere stays. The topic's own menu renames it,
 all. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
 
+<h3 id="attempts">Several attempts at one brief</h3>
+<p>When the best approach is uncertain, run the brief more than once. The <b>Attempts</b> stepper of the New Task
+sheet, <code>scope task new … --attempts 3</code> or the MCP argument <code>attempts</code> create that many sibling
+tasks under one topic named after the title — <i>Refresh tokens · attempt 1</i>, <i>2</i>, <i>3</i> — with the same
+brief, a branch each (<code>feat/refresh-a1</code>…), a thread each, and a model or driver of their own when
+<code>--models</code> / <code>--drivers</code> say so (one value applies to all, or one per attempt). An agent's
+attempts all count against its task budget: the call is refused with the number when N exceeds what is left.</p>
+<p><b>Compare attempts…</b> in the topic's menu (or the palette) opens one column per attempt: status, tokens, agent
+time, files changed (+N −M), what the last reply says about tests, and the opening of its deliverable — the report
+file, or the last answer. Under the columns, the diff of one attempt against another (their branches, as
+committed) or against the base (the task delta, uncommitted work included), drawn by the same renderer as the Delta
+column. <kbd>1</kbd>…<kbd>N</kbd> put an attempt on the left, <kbd>⇧1</kbd>…<kbd>⇧N</kbd> on the right,
+<kbd>0</kbd> the base; a click or a ⇧click on a column does the same. The diff's file list can copy a file from one
+attempt into another (<b>Copy into…</b>): the target's uncommitted changes are saved under a salvage ref first, so
+nothing is lost to the copy.</p>
+<p><b>Keep this one</b> is the end of it: the chosen task takes the brief's name and the plain branch back
+(<code>feat/refresh</code>, its upstream dropped so the next push names where it goes), leaves the topic, and the
+other attempts are archived — branches kept, answers kept, a restore away. The Inbox says so once, naming the branches
+that were kept. Attempts are worth their cost for high-uncertainty briefs; the skill says as much to the orchestrators.</p>
+
 <h3 id="delegation">Tasks started from a task</h3>
 <p>A task an agent creates from inside another task is not nested under it — the two usually share a topic, which
 already keeps them together. In the tree, with detailed rows, a quiet child's second line starts with <b>from</b> and
@@ -1060,7 +1080,7 @@ scope thread read &lt;id&gt;              <span class="c"># the last lines of it
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
-scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread (--pr, --issue, --topic, --deliverable)</span>
+scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread (--pr, --issue, --topic, --deliverable, --attempts)</span>
 scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what was kept at archive: last answers, REPORT.md</span>
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
@@ -1138,6 +1158,12 @@ the sidebar, under one row. A task created from inside a task gets that task's t
 when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
 orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
 <code>scope list tasks</code> shows each task's topic.</p>
+<p><code>scope task new --attempts &lt;n&gt;</code> runs the brief <i>n</i> ways: <i>n</i> sibling tasks under a topic
+named after the title, on <code>&lt;branch&gt;-a1</code>…<code>-an</code>, each with its own thread;
+<code>--models a,b,c</code> and <code>--drivers x,y,z</code> give each attempt its model or driver (one value for all,
+or one per attempt). The answer lists every attempt with its task, branch and thread; <code>--dry-run</code> lists
+what would be created. An agent's attempts all count against its task budget, and the refusal says how many would
+fit. Comparing and keeping one happens in the app: <b>Compare attempts…</b> in the topic's menu.</p>
 <p><code>scope task topic &lt;id|slug&gt; &lt;topic&gt;</code> files a task that already runs, and <code>--clear</code>
 takes it out of its topic; without a task, it is the caller's own. Only the label changes. The tasks it started, and
 theirs, follow while they still share its old topic — they got it from it, so they are the same piece of work — and
@@ -1200,7 +1226,7 @@ every session you start — in Scope or in any other terminal — has it: Claude
 bundle, so an update keeps it working. By hand, the same thing:</p>
 <pre><code>{"mcpServers": {"scope": {"command": "/Applications/Scope.app/Contents/Helpers/scope", "args": ["mcp"]}}}</code></pre>
 <p><code>scope_task_new</code> is marked destructive. With <code>dry_run</code> the answer is the title, branch,
-sandbox and worktrees it would create, with nothing written; the description keeps it for when the agent cannot
+sandbox and worktrees it would create (and, with <code>attempts</code>, every attempt), with nothing written; the description keeps it for when the agent cannot
 tell which repositories the work needs, so a task the agent can describe costs one call.</p>
 
 <h3 id="skill">The Scope skill</h3>

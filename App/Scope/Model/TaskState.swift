@@ -12,6 +12,8 @@ struct RepoDeltaSummary: Equatable, Sendable {
 
     var additions = 0
     var deletions = 0
+    /// Files in the task delta (changed against the merge-base, untracked included).
+    var files = 0
     var sandbox: SandboxState = .clean
     /// `origin/main` (or the local `main`): the ref the task branch is measured against.
     var upstream: String?
@@ -206,6 +208,7 @@ final class TaskState: Identifiable {
         if let delta = try? await Delta.load(mode: .task, in: repo.sandboxURL, using: client) {
             summary.additions = delta.summary.additions
             summary.deletions = delta.summary.deletions
+            summary.files = delta.summary.files
             summary.upstream = delta.upstream
             summary.mergeBase = delta.base
             summary.ahead = delta.ahead

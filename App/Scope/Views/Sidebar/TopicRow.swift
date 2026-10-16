@@ -55,6 +55,10 @@ struct TopicRow: View {
         .accessibilityLabel("Topic \(topic), \(tasks.count) tasks")
         .sidebarRow(selected: false)
         .contextMenu {
+            if let group = model.attemptGroup(among: tasks) {
+                Button("Compare Attempts…") { model.presentCompare(group: group.id) }
+                Divider()
+            }
             Button("Rename Topic…") {
                 guard let name = model.promptTopicName(title: "Rename Topic", current: topic, action: "Rename") else { return }
                 Task { await model.renameTopic(topic, to: name, in: scope.id) }

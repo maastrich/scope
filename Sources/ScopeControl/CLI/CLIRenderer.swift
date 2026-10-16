@@ -80,6 +80,17 @@ public enum CLIRenderer {
             if let thread = result.thread { lines.append("thread      \(thread)") }
             if let issue = result.issue { lines.append("issue       \(issue)") }
             if let note = result.note { lines.append("note        \(note)") }
+            if let attempts = result.attempts {
+                lines.append("")
+                lines.append(result.created ? "\(attempts.count) attempts, one task each:" : "would create \(attempts.count) attempts:")
+                for attempt in attempts {
+                    var line = "  \(attempt.index)  \(attempt.task ?? attempt.slug) — \(attempt.branch)"
+                    if let driver = attempt.driver { line += " · \(driver)" }
+                    if let model = attempt.model { line += " · \(model)" }
+                    if let thread = attempt.thread { line += " · thread \(thread)" }
+                    lines.append(line)
+                }
+            }
             if !result.created {
                 lines.append("")
                 lines.append("Nothing was written. Run it again without --dry-run to create it.")

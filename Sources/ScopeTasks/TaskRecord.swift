@@ -234,6 +234,10 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// The base checkouts running this task's branch right now (`TrySession`), one per repository at most. Empty
     /// when none is: the normal state, where the base is never touched.
     public var trying: [TrySession] = []
+    /// One of N tasks run on the same brief (`task new --attempts`), until one is kept (`TaskAttempts`).
+    public var attempt: TaskAttempt?
+    /// Set on the task kept out of its attempts: the others were archived, this one took the brief's name back.
+    public var attemptsKept: TaskAttemptsKept?
 
     public init(
         id: TaskID = .generate(),
@@ -258,7 +262,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         parentTask: TaskID? = nil,
         origin: ThreadOrigin? = nil,
         deliverable: String? = nil,
-        issue: LinkedIssue? = nil
+        issue: LinkedIssue? = nil,
+        attempt: TaskAttempt? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -284,6 +289,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.origin = origin
         self.deliverable = deliverable
         self.issue = issue
+        self.attempt = attempt
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -417,7 +423,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
         case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
-        case holdBranch, followedMainHead, trying
+        case holdBranch, followedMainHead, trying, attempt, attemptsKept
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -451,5 +457,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         followedMainHead = (try? container.decodeIfPresent(String.self, forKey: .followedMainHead)) ?? nil
         issue = (try? container.decodeIfPresent(LinkedIssue.self, forKey: .issue)) ?? nil
         trying = (try? container.decodeIfPresent([TrySession].self, forKey: .trying)) ?? []
+        attempt = (try? container.decodeIfPresent(TaskAttempt.self, forKey: .attempt)) ?? nil
+        attemptsKept = (try? container.decodeIfPresent(TaskAttemptsKept.self, forKey: .attemptsKept)) ?? nil
     }
 }

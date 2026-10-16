@@ -153,6 +153,8 @@ final class AppModel {
 
     /// The scope-wide sheet over the window, if one is up. Never persisted: a sheet is a look, not a layout.
     var globalSheet: GlobalSheet?
+    /// The family of attempts the Compare sheet shows (`TaskAttempt.group`), while `globalSheet` is `.compareAttempts`.
+    var attemptsCompared: String?
 
     /// Shows a task's panel in the inspector (⌘D, ⇧⌘B, the task's menu, a notification).
     func showInspector(_ tab: InspectorTab) {

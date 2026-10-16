@@ -82,7 +82,7 @@ extension AppModel {
     private func inboxInput(_ task: TaskState) -> Inbox.TaskInput {
         Inbox.TaskInput(id: task.id, scopeID: task.scopeID, name: task.name, pullRequest: inboxPullRequest(task),
                         archivedAt: task.record.isArchived ? (task.record.archivedAt ?? task.record.createdAt) : nil,
-                        isDismantling: task.isDismantling)
+                        isDismantling: task.isDismantling, attemptsKept: task.record.attemptsKept)
     }
 
     /// An open task's pull request as `gh` last saw it. An archived one is not asked again: its record keeps the state

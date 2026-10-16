@@ -37,6 +37,16 @@ extension PaletteModel {
                 Task { await model.fileTasks([task.id], underTopic: nil) }
             })
         }
+        if let attempt = task.record.attempt, !task.isArchived {
+            items.append(PaletteItem(id: "task-compare-attempts", section: .actions, icon: "rectangle.split.3x1",
+                                     label: "Compare Attempts…", hint: "\(attempt.count) attempts of \(attempt.baseName)") {
+                model.presentCompare(group: attempt.group)
+            })
+            items.append(PaletteItem(id: "task-keep-attempt", section: .actions, icon: "checkmark.seal",
+                                     label: "Keep This Attempt", hint: "rename to “\(attempt.baseName)”, archive the others") {
+                Task { await model.keepAttempt(task) }
+            })
+        }
         items.append(PaletteItem(id: "task-archive", section: .actions, icon: "archivebox", label: "Archive Task",
                                  hint: task.name) {
             Task { await model.archiveTask(task.id) }

@@ -116,7 +116,8 @@ public actor TaskManager {
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
         contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        origin: ThreadOrigin? = nil, deliverable: String? = nil, issue: LinkedIssue? = nil
+        origin: ThreadOrigin? = nil, deliverable: String? = nil, issue: LinkedIssue? = nil,
+        attempt: TaskAttempt? = nil
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -144,7 +145,8 @@ public actor TaskManager {
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
             portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
-            deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue
+            deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue,
+            attempt: attempt
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -272,6 +274,56 @@ public actor TaskManager {
             changed.append(record)
         }
         return changed
+    }
+
+    /// *Keep this one*: the attempt takes the brief's name and branch back — `feat/x-a2` becomes `feat/x` in every
+    /// sandbox (`git branch -m`, the worktree's HEAD follows) — and leaves its family. The record remembers the
+    /// choice (`attemptsKept`); the siblings are the caller's to archive. Refused when the plain branch already
+    /// exists in a repository: that is someone's work, not a name to take over.
+    public func keepAttempt(_ id: TaskID, otherBranches: [String], now: Date = .now) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard let attempt = record.attempt else { throw TaskError.persistence("\(record.name) is not an attempt") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let target = attempt.baseBranch
+        for repo in record.activeRepos where repo.branch != target {
+            let client = await registry.client(for: repo.sandboxURL)
+            do {
+                try await client.moveBranch(from: repo.branch, to: target, in: repo.sandboxURL)
+            } catch let error as GitError {
+                throw TaskError.git(repo: repo.repoRelativePath, error)
+            }
+        }
+        for index in record.repos.indices where record.repos[index].state == .active {
+            record.repos[index].branch = target
+        }
+        record.branch = target
+        record.name = attempt.baseName
+        record.attempt = nil
+        // The topic was the family's; alone under it, the kept task would read as a group of one.
+        record.topic = nil
+        record.attemptsKept = TaskAttemptsKept(count: attempt.count, at: now, otherBranches: otherBranches)
+        try await persist(record)
+        records[id] = record
+        return record
+    }
+
+    /// Saves the uncommitted changes of every sandbox of `id` under a salvage ref, the way an archive does, and
+    /// answers the ref per repository (none for a clean one). What a file copy from another attempt overwrites
+    /// can be found again there.
+    public func salvageChanges(of id: TaskID, kind: String = "before-copy") async throws -> [String: String] {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        var refs: [String: String] = [:]
+        for repo in record.activeRepos {
+            do {
+                if let saved = try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: record, kind: kind),
+                                                 message: "Scope: changes of \(record.name) (\(repo.repoRelativePath)) before a file was copied in") {
+                    refs[repo.repoRelativePath] = saved.ref
+                }
+            } catch let error as GitError {
+                throw TaskError.git(repo: repo.repoRelativePath, error)
+            }
+        }
+        return refs
     }
 
     /// Adds a repo to a running task: creates the missing sandbox, regenerates the projection.
