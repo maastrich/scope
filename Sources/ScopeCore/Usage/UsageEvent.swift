@@ -164,9 +164,9 @@ public enum UsageID {
 
     /// Palette action ids that end in data (a repository, a topic, a task id), longest first so `editor-sandbox-`
     /// wins over `editor-`. The tail is cut, the prefix is the command.
-    static let dynamicPaletteActions = ["editor-sandbox-", "add-repo-", "task-topic-", "pr-task-", "editor-", "restore-"]
+    static let dynamicPaletteActions = ["editor-sandbox-", "add-repo-", "task-topic-", "pr-task-", "editor-", "restore-", "send-"]
     /// Action ids that look like a dynamic one and are not.
-    static let staticPaletteActions: Set<String> = ["editor-task", "restore-task"]
+    static let staticPaletteActions: Set<String> = ["editor-task", "restore-task", "send-to-thread"]
 
     /// The id a palette row is logged under. Action rows keep their id with its dynamic tail cut (`add-repo-<repo>` is
     /// `command.add-repo`); a row that *is* data — a thread, a task, a file, a scope, a pull request — logs its section

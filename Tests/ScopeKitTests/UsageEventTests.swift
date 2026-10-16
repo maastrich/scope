@@ -45,6 +45,8 @@ import Testing
         #expect(UsageID.palette(itemID: "task-archive", section: "Actions", actionSection: true) == "command.task-archive")
         #expect(UsageID.palette(itemID: "editor-task", section: "Actions", actionSection: true) == "command.editor-task")
         #expect(UsageID.palette(itemID: "restore-task", section: "Actions", actionSection: true) == "command.restore-task")
+        #expect(UsageID.palette(itemID: "send-abcdefabcdef", section: "Actions", actionSection: true) == "command.send")
+        #expect(UsageID.palette(itemID: "send-to-thread", section: "Actions", actionSection: true) == "command.send-to-thread")
         #expect(UsageID.palette(itemID: "weird-9f2c", section: "Actions", actionSection: true) == "command.other")
         #expect(UsageID.palette(itemID: "file-/Users/me/acme/a.swift", section: "Files", actionSection: false) == "palette.files")
         #expect(UsageID.palette(itemID: "thread-1234", section: "Go to Thread", actionSection: false) == "palette.go-to-thread")
