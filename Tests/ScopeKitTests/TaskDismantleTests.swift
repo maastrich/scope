@@ -106,7 +106,7 @@ import ScopeGit
         let worktrees = try await base.output(["worktree", "list", "--porcelain"])
         #expect(!worktrees.contains(task.slug))
 
-        manager.emptyTrash()
+        await manager.emptyTrash()
         let trash = ScopeHome.trashURL(home: scope.home)
         #expect(((try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []).isEmpty)
     }

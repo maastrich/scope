@@ -50,12 +50,13 @@ import ScopeGit
         let done = await reloaded.collectGarbage(now: old)
         #expect(Set(done.removedFolders.map { URL(fileURLWithPath: $0).lastPathComponent }) == [gone.slug, "being-created"])
         #expect(done.stoppedProcesses.contains { $0.contains("\(stray.processIdentifier)") })
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(!stray.isRunning && worker.isRunning)
+        // Foundation reaps the child on its own queue; `waitUntilExit` can miss that from a test's thread and hang.
+        for _ in 0..<100 where stray.isRunning { try await Task.sleep(for: .milliseconds(100)) }
+        #expect(!stray.isRunning && stray.terminationReason == .uncaughtSignal && worker.isRunning)
         #expect(!scope.exists(gone.rootURL) && scope.exists(live.rootURL))
         let worktrees = try await scope.client(for: api).output(["worktree", "list", "--porcelain"])
         #expect(!worktrees.contains(gone.slug) && worktrees.contains(live.slug))
-        reloaded.emptyTrash()
+        await reloaded.emptyTrash()
         #expect(((try? FileManager.default.contentsOfDirectory(atPath: ScopeHome.trashURL(home: scope.home).path)) ?? []).isEmpty)
         let saved = try #require(done.savedChanges.first?.split(separator: " ").last.map(String.init))
         #expect(try await scope.client(for: api).output(["show", "\(saved):lost.txt"]) == "work")

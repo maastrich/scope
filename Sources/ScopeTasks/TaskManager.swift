@@ -878,30 +878,55 @@ public actor TaskManager {
         return admin
     }
 
-    /// Deletes everything in the trash, until it stays empty. One deleter at a time per home: a second call while
-    /// one runs returns at once, the running one picks up what was added meanwhile. Never on the actor — deleting
-    /// gigabytes there would hold every archive and create behind it.
-    public nonisolated func emptyTrash() {
+    /// Deletes everything in the trash and returns once it is empty, or holds only what cannot be deleted. One
+    /// deleter at a time per home: a call while one runs joins it, and the running one goes round again for
+    /// whatever that call may have added — returning at once instead would leave it there until the next cleanup.
+    /// Never on the actor — deleting gigabytes there would hold every archive and create behind it.
+    public nonisolated func emptyTrash() async {
         let trash = ScopeHome.trashURL(home: home)
-        guard Self.emptying.withLock({ $0.insert(trash.path).inserted }) else { return }
-        defer { _ = Self.emptying.withLock { $0.remove(trash.path) } }
-        let fileManager = FileManager.default
-        while let items = try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil), !items.isEmpty {
-            var removed = 0
-            for item in items {
-                do { try fileManager.removeItem(at: item); removed += 1 } catch {
-                    Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
-                }
+        let pass = Self.emptying.withLock { running -> Task<Void, Never> in
+            if let current = running[trash.path] {
+                running[trash.path]?.again = true
+                return current.pass
             }
-            if removed == 0 { return }
+            let pass = Task.detached(priority: .background) { Self.deleteTrash(at: trash) }
+            running[trash.path] = EmptyingPass(pass: pass)
+            return pass
+        }
+        await pass.value
+    }
+
+    private static func deleteTrash(at trash: URL) {
+        repeat {
+            emptying.withLock { $0[trash.path]?.again = false }
+            let fileManager = FileManager.default
+            while let items = try? fileManager.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil), !items.isEmpty {
+                var removed = 0
+                for item in items {
+                    do { try fileManager.removeItem(at: item); removed += 1 } catch {
+                        Log.tasks.error("could not empty \(item.path): \(String(describing: error))")
+                    }
+                }
+                if removed == 0 { break }
+            }
+        } while emptying.withLock { running in
+            if running[trash.path]?.again == true { return true }
+            running[trash.path] = nil
+            return false
         }
     }
 
-    /// The trash folders being emptied right now.
-    private static let emptying = Mutex<Set<String>>([])
+    private struct EmptyingPass {
+        let pass: Task<Void, Never>
+        /// Someone joined while this pass ran: it lists the trash once more before it ends.
+        var again = false
+    }
+
+    /// The trash folders being emptied right now, by path.
+    private static let emptying = Mutex<[String: EmptyingPass]>([:])
 
     private nonisolated func emptyTrashInBackground() {
-        Task.detached(priority: .background) { [self] in emptyTrash() }
+        Task.detached(priority: .background) { [self] in await emptyTrash() }
     }
 
     /// Deletes the task root (projection files, empty folders) — for a one-repository scope the root is the
