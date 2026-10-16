@@ -20,6 +20,7 @@ import Testing
         for state in alive {
             rows += moves.map { (state, $0.0, $0.1) }
             rows.append((state, .sessionStarted, state))
+            rows.append((state, .turnSaid, state))
         }
         rows += HookEvent.Kind.allCases.map { (.exited, $0, .exited) }
         return rows
@@ -59,6 +60,7 @@ import Testing
         #expect(HookEvent.Kind.permissionRequested.stateEvent == .permissionRequested)
         #expect(HookEvent.Kind.threadEnded.stateEvent == .threadEnded)
         #expect(HookEvent.Kind.sessionStarted.stateEvent == nil)
+        #expect(HookEvent.Kind.turnSaid.stateEvent == nil)
         // No wire event stands for the PTY exit.
         #expect(!HookEvent.Kind.allCases.contains { $0.stateEvent == .processExited })
     }
