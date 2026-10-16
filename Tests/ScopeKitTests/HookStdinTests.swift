@@ -14,6 +14,19 @@ struct HookStdinTests {
         #expect(stdin.hookEventName == "Notification")
     }
 
+    @Test("MessageDisplay gives the lines just written, their message and whether it is complete")
+    func parsesMessageDisplay() {
+        let json = #"{"session_id":"abc","hook_event_name":"MessageDisplay","turn_id":"t1","message_id":"m7","index":2,"final":false,"delta":"Two lines\nso far\n"}"#
+        let stdin = HookStdin.parse(Data(json.utf8))
+        #expect(stdin.displayDelta == "Two lines\nso far\n")
+        #expect(stdin.displayMessageID == "m7")
+        #expect(stdin.displayFinal == false)
+        // The same keys on another hook mean nothing: `delta` is `MessageDisplay`'s word.
+        let other = HookStdin.parse(Data(#"{"hook_event_name":"PostToolUse","delta":"x","message_id":"m"}"#.utf8))
+        #expect(other.displayDelta == nil)
+        #expect(other.displayMessageID == nil)
+    }
+
     @Test("Codex notify payloads give their thread-id as the session id")
     func parsesCodexPayload() {
         let json = #"{"type":"agent-turn-complete","thread-id":"019","turn-id":"1","last-assistant-message":"done"}"#

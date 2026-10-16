@@ -5,17 +5,33 @@ import ScopeTasks
 
 /// The reading column's Markdown: a thread's last answer, what a task kept at archive, a task's brief.
 extension AppModel {
-    /// The last answer of `session`, rendered in the reading column. Nothing to read opens the column all the same,
-    /// saying so: a shortcut that does nothing is a shortcut the user thinks is broken.
+    /// The answer of `session`, rendered in the reading column: the one being written when its driver reports it
+    /// (`ThreadActivity.saying`), else the last one. Nothing to read opens the column all the same, saying so: a
+    /// shortcut that does nothing is a shortcut the user thinks is broken.
     func readReply(of session: ThreadSession) {
-        let reply = session.activity.lastReply ?? session.lastReply
+        showReading(replyContent(of: session))
+    }
+
+    /// The reading column follows the thread it shows: a piece of the answer, its end, or a new prompt moves the
+    /// text. Nothing happens when the column shows something else, or another thread.
+    func refreshReading(for session: ThreadSession) {
+        guard inspector.reading?.kind == .reply(session.id) else { return }
+        let next = replyContent(of: session)
+        if next != inspector.reading { inspector.reading = next }
+    }
+
+    private func replyContent(of session: ThreadSession) -> ReadingContent {
         let taskState = task(of: session)
-        let markdown = reply?.text ?? Self.noReplyText(session)
-        showReading(ReadingContent(
-            kind: .reply(session.id), title: "\(displayTitle(for: session)) · \(session.profile.name)", at: reply?.at,
-            markdown: markdown, directory: session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd,
-            taskID: taskState?.id, scopeID: session.record.scopeID
-        ))
+        let directory = session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd
+        let title = "\(displayTitle(for: session)) · \(session.profile.name)"
+        if let saying = session.activity.saying, !saying.text.isEmpty {
+            return ReadingContent(kind: .reply(session.id), title: title, at: saying.at, isLive: true, markdown: saying.text,
+                                  directory: directory, taskID: taskState?.id, scopeID: session.record.scopeID)
+        }
+        let reply = session.activity.lastReply ?? session.lastReply
+        return ReadingContent(kind: .reply(session.id), title: title, at: reply?.at,
+                              markdown: reply?.text ?? Self.noReplyText(session), directory: directory,
+                              taskID: taskState?.id, scopeID: session.record.scopeID)
     }
 
     /// ⇧⌘R: the selected thread's answer, or the only thread of the selected task.
@@ -49,10 +65,11 @@ extension AppModel {
         ))
     }
 
+    /// The reading column stands on its own: it opens beside the terminal whether the inspector is shown or not
+    /// (`RootView`), so reading an answer never brings the inspector along.
     func showReading(_ content: ReadingContent) {
         inspector.reading = content
         inspector.show(.reading)
-        inspectorShown = true
     }
 
     /// A link clicked in rendered Markdown: the browser for the web, the viewer column for a file it can find.

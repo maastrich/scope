@@ -18,6 +18,10 @@ import ScopeCore
 /// | `Stop`                                | `turn.ended`            | done                  |
 /// | `StopFailure`                         | `turn.failed`           | failed                |
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
+/// | `MessageDisplay`                      | `turn.said`             | unchanged (the answer, as it is written) |
+///
+/// `MessageDisplay` exists since Claude Code 2.1.152; an older one ignores the entry with a note and keeps the
+/// rest of the file, so the reading column simply waits for `Stop` there.
 ///
 /// `PreToolUse` only listens to the question tools (`ClaudeQuestionTools`): for any other tool it fires *before*
 /// the permission check, so it says nothing about whether the user is being asked.
@@ -55,6 +59,7 @@ public enum ClaudeHooksAdapter {
         Entry(event: "Stop", matcher: nil, arguments: ["turn.ended", "--stdin"]),
         Entry(event: "StopFailure", matcher: nil, arguments: ["turn.failed", "--stdin"]),
         Entry(event: "SessionEnd", matcher: nil, arguments: ["thread.ended", "--stdin"]),
+        Entry(event: "MessageDisplay", matcher: nil, arguments: ["turn.said", "--stdin"]),
     ]
 
     /// `<home>/threads/<thread-id>.claude-settings.json`

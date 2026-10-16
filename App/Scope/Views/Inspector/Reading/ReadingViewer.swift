@@ -17,12 +17,19 @@ struct ReadingViewer: View {
             VStack(spacing: 0) {
                 header(content)
                 Divider()
-                ScrollView {
-                    MarkdownReader(document: document)
-                        .frame(maxWidth: 720, alignment: .leading)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
-                        .frame(maxWidth: .infinity)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        MarkdownReader(document: document)
+                            .frame(maxWidth: 720, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 20)
+                            .frame(maxWidth: .infinity)
+                        Color.clear.frame(height: 1).id(Self.endAnchor)
+                    }
+                    // An answer being written is read at its end, where the new lines land.
+                    .onChange(of: document) {
+                        if content.isLive { proxy.scrollTo(Self.endAnchor, anchor: .bottom) }
+                    }
                 }
                 .environment(\.openURL, OpenURLAction { url in
                     model.openMarkdownLink(url, in: content)
@@ -33,6 +40,8 @@ struct ReadingViewer: View {
             .onChange(of: content.markdown, initial: true) { document = MarkdownDocument.parse(content.markdown) }
         }
     }
+
+    private static let endAnchor = "end"
 
     private func header(_ content: ReadingContent) -> some View {
         HStack(spacing: 8) {
@@ -45,7 +54,12 @@ struct ReadingViewer: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 4)
-            if let at = content.at {
+            if content.isLive {
+                Text("writing…")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .fixedSize()
+            } else if let at = content.at {
                 Text(at.formatted(.relative(presentation: .named)))
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.tertiary)

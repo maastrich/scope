@@ -32,8 +32,9 @@ struct RootView: View {
             SceneView()
                 .usageArea("thread")
             // The diff or base file opened from the inspector reads beside it, the height of the window, rather than
-            // under its sections (`InspectorViewerColumn`).
-            if inspectorPresented.wrappedValue, model.shownViewer != nil {
+            // under its sections (`InspectorViewerColumn`). An answer is read beside the terminal with or without
+            // the inspector: it is about the thread, not about the task's lists.
+            if viewerPresented {
                 ColumnResizeHandle(width: viewerWidth, growsWithDrag: false, defaultWidth: defaultViewerWidth, label: "Viewer width")
                 InspectorViewerColumn()
                     .usageSurface("viewer", label: "Reading column")
@@ -101,6 +102,12 @@ struct RootView: View {
             get: { model.newTaskScopeID.flatMap { model.scope($0) } },
             set: { model.newTaskScopeID = $0?.id }
         )
+    }
+
+    /// The viewer column shows with the inspector, or alone for an answer being read — never over a maximized thread.
+    private var viewerPresented: Bool {
+        guard let viewer = model.shownViewer, !model.threadMaximized else { return false }
+        return inspectorPresented.wrappedValue || viewer == .reading
     }
 
     private var inspectorWidth: Binding<Double> {

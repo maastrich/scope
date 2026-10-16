@@ -19,6 +19,29 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public static let replyLimit = 16 * 1024
     /// Characters of a turn's reply kept on the turn itself (`Turn.said`): enough to recognise it when hovering it.
     public static let saidLimit = 140
+    /// UTF-8 bytes of the answer being written kept, from its end (`saying`): more than `replyLimit`, since this one
+    /// is read as it grows and a cut at the top is less of a surprise than one in the middle.
+    public static let sayingLimit = 64 * 1024
+
+    /// The answer the agent is writing, from `turn.said` events: one message of the driver, gathered flush by flush,
+    /// replaced when the next message starts and dropped when the turn ends (`lastReply` then holds the answer).
+    /// Not written to the activity file: a half-written answer is worth nothing after a restart.
+    public struct Saying: Sendable, Equatable {
+        /// The driver's own id for the message, so a flush is appended to the right one.
+        public var messageID: String?
+        public var text: String
+        /// `true` once the driver said the message is complete.
+        public var isFinal: Bool
+        /// When the last piece arrived.
+        public var at: Date
+
+        public init(messageID: String? = nil, text: String, isFinal: Bool = false, at: Date) {
+            self.messageID = messageID
+            self.text = text
+            self.isFinal = isFinal
+            self.at = at
+        }
+    }
 
     public struct Tool: Codable, Sendable, Equatable {
         public var name: String
@@ -90,6 +113,13 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// When the driver sent the event that closed the last turn as ended or failed (`AdapterEvent.sentAt`): anything
     /// it sent before that belongs to that turn, however late it reaches the app (see `isLate(_:)`).
     public var turnEndSentAt: Date?
+    /// The answer being written, while a turn is open and the driver reports it; `nil` otherwise.
+    public var saying: Saying?
+
+    /// Everything but `saying`, which is not kept across restarts.
+    enum CodingKeys: String, CodingKey {
+        case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
+    }
 
     public init(lastTool: Tool? = nil, pendingRequest: Tool? = nil, turnStartedAt: Date? = nil, turnTools: Int = 0, turns: [Turn] = [],
                 lastReply: AgentReply? = nil, transcriptPath: String? = nil) {
@@ -121,7 +151,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
         switch event.kind {
         case .turnStarted, .inputRequested, .permissionRequested: break
-        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted: return false
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid: return false
         }
         if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
         guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
@@ -152,12 +182,15 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
             }
-        case .sessionStarted:
+        case .sessionStarted, .turnSaid:
             break
         default:
             next.pendingRequest = nil
         }
         switch event.kind {
+        case .turnSaid:
+            next.say(event.payload[HookEvent.saidKey] ?? "", message: event.payload[HookEvent.messageKey],
+                     final: event.payload[HookEvent.finalKey] == "true", at: at)
         case .turnStarted:
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 // `PostToolUse`: the tool has run. After a wait, this is the turn going on.
@@ -169,6 +202,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
                 // seen (`closingOpenTurn`), at some point after the last thing it reported.
                 next = next.closingOpenTurn(as: .interrupted, at: next.turnStartedAt ?? at)
                 next.turnStartedAt = at
+                next.saying = nil
             }
         case .turnEnded:
             next.close(.ended, at: at)
@@ -209,11 +243,30 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         return next
     }
 
+    /// A piece of the answer being written. A different message id starts the text over: the driver writes several
+    /// messages in a turn (one between each tool call), and the reading column shows the one in progress, which is
+    /// what `lastReply` will hold once the turn ends. Nothing opens a turn here: the text is read, not counted.
+    private mutating func say(_ delta: String, message: String?, final: Bool, at: Date) {
+        if var current = saying, current.messageID == message {
+            current.text += delta
+            current.isFinal = final
+            current.at = at
+            saying = current
+        } else {
+            saying = Saying(messageID: message, text: delta, isFinal: final, at: at)
+        }
+        if let text = saying?.text, text.utf8.count > Self.sayingLimit {
+            saying?.text = Self.tail(text, bytes: Self.sayingLimit)
+        }
+    }
+
     /// Records the end of a turn. A request arriving between turns says nothing new (Claude Code sends a
     /// question's `PreToolUse` and then a `Notification` for the same prompt), so it is skipped. An end with no turn
     /// open is still a turn: the driver never reported its start (Codex), or it went on after a wait, from that wait.
     private mutating func close(_ outcome: Turn.Outcome, at date: Date, error: String? = nil, onlyIfOpen: Bool = false) {
         guard inTurn || !onlyIfOpen else { return }
+        // The answer is written: `lastReply` has it, and a turn that stopped another way has no answer to show.
+        saying = nil
         let start = turnStartedAt ?? turns.last.flatMap { $0.outcome.isWait ? $0.endedAt : nil }
         // `apply` takes the reply before it closes the turn: a reply dated inside the turn is this turn's answer.
         let said = lastReply.flatMap { reply in
@@ -238,11 +291,15 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
 
     /// `reply` cut to its last `replyLimit` UTF-8 bytes, behind a `…`.
     public static func bounded(_ reply: AgentReply) -> AgentReply {
-        let bytes = reply.text.utf8
-        guard bytes.count > replyLimit else { return reply }
+        guard reply.text.utf8.count > replyLimit else { return reply }
+        return AgentReply(text: tail(reply.text, bytes: replyLimit), at: reply.at)
+    }
+
+    /// The last `bytes` UTF-8 bytes of `text`, behind a `…`.
+    static func tail(_ text: String, bytes: Int) -> String {
         // A cut in the middle of a character decodes as U+FFFD; drop that rather than show it.
-        let tail = String(decoding: bytes.suffix(replyLimit - 3), as: UTF8.self).drop { $0 == "\u{FFFD}" }
-        return AgentReply(text: "…" + tail, at: reply.at)
+        let tail = String(decoding: text.utf8.suffix(bytes - 3), as: UTF8.self).drop { $0 == "\u{FFFD}" }
+        return "…" + tail
     }
 }
 

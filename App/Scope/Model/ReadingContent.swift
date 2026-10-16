@@ -20,6 +20,8 @@ struct ReadingContent: Equatable {
     var title: String
     /// When the answer was given, for a reply.
     var at: Date?
+    /// A reply still being written: the text grows with the agent's `turn.said` events (`AppModel.refreshReading`).
+    var isLive = false
     var markdown: String
     /// Where relative file links resolve from (`FileLinkResolver`): the thread's directory, or the task's root.
     var directory: String?

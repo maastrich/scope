@@ -41,6 +41,47 @@ import Testing
         #expect(activity.transcriptPath == "/t/9b1d.jsonl")
     }
 
+    @Test func theAnswerBeingWrittenGrowsFlushByFlushAndGoesWithTheTurn() {
+        func said(_ text: String, _ message: String, _ seconds: TimeInterval, final: Bool = false) -> AdapterEvent {
+            var payload = [HookEvent.saidKey: text, HookEvent.messageKey: message]
+            if final { payload[HookEvent.finalKey] = "true" }
+            return Self.event(.turnSaid, seconds, payload)
+        }
+        var activity = Self.fold([Self.event(.turnStarted, 0), said("Reading the adapter.\n", "m1", 1),
+                                  said("Found it.\n", "m1", 2, final: true)])
+        #expect(activity.saying?.text == "Reading the adapter.\nFound it.\n")
+        #expect(activity.saying?.isFinal == true)
+        #expect(activity.saying?.at == Self.at(2))
+        // A piece of the answer neither opens a turn nor counts as a tool, nor touches a pending request.
+        #expect(activity.inTurn && activity.turnTools == 0 && activity.turns.isEmpty)
+
+        // The next message of the same turn starts the text over: the column shows the message in progress.
+        activity = Self.fold([Self.tool("Edit", "A.swift", 3), said("Done, ", "m2", 4)], from: activity)
+        #expect(activity.saying?.text == "Done, ")
+        #expect(activity.turnTools == 1)
+
+        // The turn's end has the answer in `lastReply`; the text being written is gone with it.
+        let ended = Self.fold([Self.event(.turnEnded, 5, [HookEvent.replyKey: "Done, tested."])], from: activity)
+        #expect(ended.saying == nil)
+        #expect(ended.lastReply?.text == "Done, tested.")
+        #expect(ended.turns.last?.said == "Done, tested.")
+
+        // So is a new prompt, and a question: what is shown then is the question, not a stale draft.
+        #expect(Self.fold([Self.event(.turnStarted, 5)], from: activity).saying == nil)
+        #expect(Self.fold([Self.event(.inputRequested, 5, [HookEvent.toolKey: "AskUserQuestion"])], from: activity).saying == nil)
+    }
+
+    @Test func theAnswerBeingWrittenIsNeitherSavedNorUnbounded() throws {
+        let long = String(repeating: "x", count: ThreadActivity.sayingLimit + 10)
+        let activity = Self.fold([Self.event(.turnStarted, 0), Self.event(.turnSaid, 1, [HookEvent.saidKey: long])])
+        let text = try #require(activity.saying?.text)
+        #expect(text.hasPrefix("…") && text.utf8.count <= ThreadActivity.sayingLimit)
+        let data = try JSONStore.makeEncoder(fractionalSeconds: true).encode(activity)
+        #expect(!String(decoding: data, as: UTF8.self).contains("saying"))
+        let back = try JSONStore.makeDecoder(fractionalSeconds: true).decode(ThreadActivity.self, from: data)
+        #expect(back.saying == nil && back.inTurn)
+    }
+
     @Test func theEndOfATurnRecordsItAndItsReply() {
         let activity = Self.fold([
             Self.event(.turnStarted, 1),

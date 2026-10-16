@@ -1474,6 +1474,7 @@ final class AppModel {
         if session.apply(event) {
             assistThenNotify(event, session: session)
             if event.kind == .turnEnded || event.kind == .turnFailed { scheduleCheckpoint(after: session) }
+            refreshReading(for: session)
         }
         flushDeliveries(for: session)
         acknowledgeShownResult()
