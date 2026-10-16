@@ -11,6 +11,18 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.23.0](https://github.com/maastrich/scope/releases/tag/v0.23.0) - 2026-10-16
+
+### Added
+
+- choose the model of a thread or task, and send driver slash commands over thread.send ([#56](https://github.com/maastrich/scope/pull/56)) by @maastrich
+- **tasks:** a task follows main on its own ([#57](https://github.com/maastrich/scope/pull/57)) by @maastrich
+- **assist:** on-device assist — stuck threads, notification triage, archive hint, topic pick ([#58](https://github.com/maastrich/scope/pull/58)) by @maastrich
+- a system-wide hotkey opens a quick panel to ask an orchestrator or answer the Inbox ([#59](https://github.com/maastrich/scope/pull/59)) by @maastrich
+- **tasks:** mention past tasks in prompts, open a task from an issue, show listening ports and disk size ([#60](https://github.com/maastrich/scope/pull/60)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.22.0...v0.23.0
+
 ## [0.22.0](https://github.com/maastrich/scope/releases/tag/v0.22.0) - 2026-10-16
 
 ### Added
