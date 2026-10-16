@@ -153,22 +153,26 @@ struct ThreadBanner: View {
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .help(session.canResume ? "Relaunch (⌘R) — resumes the previous session" : "Relaunch (⌘R)")
+                .usageID("banner.relaunch", label: "Relaunch (exited thread banner)")
                 if session.canResume {
                     Button("Start Fresh") {
                         Task { await model.startFresh(session.id) }
                     }
                     .help("A new \(session.profile.name) session instead of the previous one")
+                    .usageID("banner.start-fresh", label: "Start Fresh (exited thread banner)")
                 }
                 if details != nil {
                     Button(showsDetails ? "Hide details" : "Show details") {
                         showsDetails.toggle()
                     }
+                    .usageID("banner.details", label: "Show details (exited thread banner)")
                 }
                 if session.record.resident == nil {
                     Button("Close") {
                         Task { _ = await model.close(session.id, force: false) }
                     }
                     .help("Close Thread (⌘W)")
+                    .usageID("banner.close", label: "Close (exited thread banner)")
                 }
             }
         }

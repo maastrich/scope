@@ -53,6 +53,7 @@ struct InspectorViewerColumn: View {
             }
             .help(previous == .diff ? "Back to the diff" : "Back to the previous file")
             .accessibilityLabel("Back")
+            .usageID("back", label: "Back (reading column)")
         }
     }
 
@@ -64,5 +65,6 @@ struct InspectorViewerColumn: View {
         }
         .help("Close (Esc)")
         .accessibilityLabel("Close the viewer")
+        .usageID("close", label: "Close (reading column)")
     }
 }

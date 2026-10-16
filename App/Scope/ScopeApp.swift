@@ -30,6 +30,7 @@ struct ScopeApp: App {
 
         Settings {
             SettingsView()
+                .usageSurface("settings", label: "Settings window")
                 .environment(model)
         }
 

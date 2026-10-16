@@ -98,6 +98,7 @@ struct DeltaSection: View {
             }
             .disabled(repo == nil || delta.isActing || !dirty)
             .help(dirty ? "Commit… — git add -A && git commit in the sandbox" : "Nothing to commit")
+            .usageID("commit", label: "Commit")
             .accessibilityLabel("Commit")
             Button {
                 Task { await model.delta.push(task: task) }
@@ -106,6 +107,7 @@ struct DeltaSection: View {
             }
             .disabled(repo == nil || delta.isActing)
             .help("Push — git push -u origin \(task.branch)")
+            .usageID("push", label: "Push")
             .accessibilityLabel("Push")
         }
         Button {
@@ -115,6 +117,7 @@ struct DeltaSection: View {
             Image(systemName: "arrow.clockwise")
         }
         .help("Refresh")
+        .usageID("refresh", label: "Refresh")
         .accessibilityLabel("Refresh the changes")
     }
 

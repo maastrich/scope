@@ -63,6 +63,7 @@ struct BaseSection: View {
                 }
                 .buttonStyle(.iconTight)
                 .help("Pinned here — click to follow the selection again")
+                .usageID("unpin", label: "Follow the selection again")
                 .accessibilityLabel("Unpin the repository")
             }
             HeaderPicker("Repository", selection: Binding(
@@ -106,6 +107,7 @@ struct BaseSection: View {
         .buttonStyle(.headerChip)
         .disabled(model.base.isPulling)
         .help("git pull --ff-only")
+        .usageID("pull", label: "Pull")
     }
 
     @ViewBuilder
@@ -116,6 +118,7 @@ struct BaseSection: View {
             Image(systemName: "arrow.clockwise")
         }
         .help("Fetch and recount")
+        .usageID("fetch", label: "Fetch and recount")
         .accessibilityLabel("Fetch and recount")
         Button {
             model.openInEditorOrCopy(path: repo.url.path)
@@ -123,6 +126,7 @@ struct BaseSection: View {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
         }
         .help("Open the base checkout in the editor (⌥-click copies the path)")
+        .usageID("open-in-editor", label: "Open in Editor")
         .accessibilityLabel("Open in Editor")
         Button {
             Task { await model.openBaseShell(repo: repo, in: scope) }
@@ -130,6 +134,7 @@ struct BaseSection: View {
             Image(systemName: "terminal")
         }
         .help("Open a shell here (secondary terminal in the base)")
+        .usageID("open-shell", label: "Open a shell")
         .accessibilityLabel("Open a shell in the base")
         Button {
             Reveal.inFinder(repo.url)
@@ -137,6 +142,7 @@ struct BaseSection: View {
             Image(systemName: "folder")
         }
         .help("Reveal in Finder")
+        .usageID("reveal", label: "Reveal in Finder")
         .accessibilityLabel("Reveal in Finder")
     }
 

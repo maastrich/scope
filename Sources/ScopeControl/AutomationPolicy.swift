@@ -194,7 +194,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary, .configGet:
+            case .ping, .list, .summary, .configGet, .usage:
                 return .allow
             case .configSet:
                 return .refuse(.denied("only the user may change Scope's settings"))
@@ -289,7 +289,7 @@ public struct AutomationPolicy: Sendable, Equatable {
     /// One line saying what is being asked for, shown in the confirmation.
     static func subject(of call: ControlCall) -> String {
         switch call {
-        case .ping, .list, .summary, .configGet: ""
+        case .ping, .list, .summary, .configGet, .usage: ""
         case .configSet(let params): "set \(params.key) to \(params.value)"
         case .threadNew(let params):
             "open a thread" + (params.scope.map { " in \($0)" } ?? "")

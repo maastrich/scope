@@ -280,22 +280,26 @@ struct NewTaskSheet: View {
             Button("Back") { backToPrompt() }
                 .buttonStyle(.scopeSecondary)
                 .disabled(isCreating)
+                .usageID("back", label: "Back")
         }
         Button("Cancel") { dismiss() }
             .keyboardShortcut(.cancelAction)
             .buttonStyle(.scopeSecondary)
             .disabled(isCreating)
+            .usageID("cancel", label: "Cancel")
         switch step {
         case .prompt:
             Button("Continue") { continueToProposal() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.scopePrimary)
                 .disabled(!canContinue)
+                .usageID("continue", label: "Continue")
         case .proposal:
             Button("Create") { create() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.scopePrimary)
                 .disabled(!canCreate)
+                .usageID("create", label: "Create")
         }
     }
 

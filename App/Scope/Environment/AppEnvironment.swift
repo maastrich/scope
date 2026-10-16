@@ -47,6 +47,9 @@ final class AppEnvironment {
     /// Holds the `ControlService` until `AppModel` exists to provide it.
     let controls: ControlSink
     let uiState: UIStateStore
+    /// `<home>/usage`: the local log of what is used in the app (`Usage`). Off until the model has read the preference,
+    /// so nothing is written for a user who turned it off.
+    let usage: UsageRecorder
     /// Problems met while building the environment, reported once the `ProblemCenter` exists.
     let startupProblems: [Problem]
 
@@ -82,6 +85,7 @@ final class AppEnvironment {
         self.hookSink = hookSink
         self.controls = controls
         self.uiState = uiState
+        self.usage = UsageRecorder(log: UsageLog(home: home), enabled: false)
         self.startupProblems = startupProblems
     }
 

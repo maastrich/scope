@@ -36,6 +36,7 @@ struct IconButtonStyle: ButtonStyle {
                 // A disabled button keeps its layout but stops answering: no wash, and the hover state is
                 // dropped so it does not come back lit when it is enabled again.
                 .onChange(of: isEnabled) { _, enabled in if !enabled { hovering = false } }
+                .usageClicks(pressed: configuration.isPressed, hovering: hovering)
         }
 
         private var fill: Color {

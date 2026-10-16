@@ -20,6 +20,7 @@ struct ReviewBar: View {
             }
             .buttonStyle(.scopeGhost)
             .help("List, edit and delete the comments")
+            .usageID("review-comments", label: "Review comments")
             .popover(isPresented: $showsList, arrowEdge: .top) {
                 ReviewCommentList(task: task)
             }
@@ -104,6 +105,7 @@ private struct ReviewCommentList: View {
                 }
                 .buttonStyle(.iconTight)
                 .help("Edit")
+                .usageID("edit-comment", label: "Edit a comment")
                 Button {
                     model.review.delete(comment.id)
                 } label: {
@@ -111,6 +113,7 @@ private struct ReviewCommentList: View {
                 }
                 .buttonStyle(.iconTight)
                 .help("Delete")
+                .usageID("delete-comment", label: "Delete a comment")
             }
             if editing == comment.id {
                 TextEditor(text: $draft)

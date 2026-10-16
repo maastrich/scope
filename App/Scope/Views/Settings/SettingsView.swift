@@ -25,6 +25,7 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var clearedUsage = false
 
     var body: some View {
         SettingsPage {
@@ -282,6 +283,22 @@ private struct GeneralSettingsView: View {
             SettingsSection("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
                     .toggleStyle(.scope)
+            }
+            SettingsSection("Usage") {
+                Toggle("Record how I use Scope (stays on this Mac)", isOn: preference(\.recordUsage))
+                    .toggleStyle(.scope)
+                    .usageID("record-usage", label: "Record how I use Scope")
+                SettingsRow("History", caption: "Which buttons, commands and panels you use, by id, in \(model.env.home.appending(path: "usage").path) — never what you type, a path or a name. “scope usage” reads it back for you or an agent; nothing is sent anywhere. Kept 180 days.") {
+                    Button(clearedUsage ? "Cleared" : "Clear History") {
+                        Task {
+                            await model.clearUsageHistory()
+                            clearedUsage = true
+                        }
+                    }
+                    .buttonStyle(.scopeSecondary)
+                    .disabled(clearedUsage)
+                    .usageID("clear-history", label: "Clear usage history")
+                }
             }
         }
     }

@@ -57,6 +57,7 @@ scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
+scope usage [period]                <span class="c"># how Scope itself was used: controls, commands, what never is</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
 <p>Every command takes <code>--json</code>. <code>--scope</code> accepts a slug, a name, an id or a path;
@@ -118,6 +119,12 @@ an agent turn it into an account.</p>
 <p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
 or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;
 work closed before this version left nothing. A pull request's state is the last one Scope saw while its task was open.</p>
+<p><code>scope usage last week</code> reads the log Scope keeps of its own interface — on this Mac only, in
+<code>~/.scope/usage/</code>, never sent anywhere: the controls, commands, sheets and inspector sections used most,
+per area; those never used in the period; for each command, how often it came from its shortcut, the menu, the
+palette or a click; the CLI and MCP calls made by you and by agents; the time spent in each sheet and section; and
+what rose or fell against the period before. It holds ids, never what you type, a path or a name. Settings ▸
+General ▸ Usage turns it off or clears it. The MCP tool is <code>scope_usage</code>.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 

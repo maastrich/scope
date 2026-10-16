@@ -51,9 +51,15 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
                 .frame(height: bodyHeight, alignment: .top)
                 .frame(maxWidth: .infinity)
                 .clipped()
+                // On screen while open and while the inspector shows: what the time spent in a section means.
+                .onAppear { Usage.opened(usageArea, label: section.title) }
+                .onDisappear { Usage.closed(usageArea) }
             }
         }
+        .usageArea(usageArea)
     }
+
+    private var usageArea: String { UsageID.join("inspector", UsageID.slug(section.title)) }
 
     private func header(open: Bool, available: Bool) -> some View {
         HStack(spacing: 6) {
@@ -124,7 +130,11 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
         }
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture { if available { model.toggleSection(section) } }
+        .onTapGesture {
+            guard available else { return }
+            Usage.click(UsageID.join(usageArea, "header"), label: "\(section.title) header")
+            model.toggleSection(section)
+        }
     }
 }
 

@@ -149,15 +149,30 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// background and types the answer into the thread.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let threadID = ThreadID(rawValue: response.notification.request.identifier)
-        let showDelta = response.actionIdentifier == ThreadNotifier.seeDeltaAction
+        let action = response.actionIdentifier
+        let showDelta = action == ThreadNotifier.seeDeltaAction
         guard let threadID else { return }
-        if response.actionIdentifier == ThreadNotifier.replyAction {
+        if action == ThreadNotifier.replyAction {
             // Only plain values cross to the main actor: the response is not `Sendable`.
             let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
-            await MainActor.run { AppServices.model?.reply(text, to: threadID) }
+            await MainActor.run {
+                Usage.register("notification.reply", label: "Reply")
+                Usage.record(.notification, "notification.reply", source: .notification)
+                AppServices.model?.reply(text, to: threadID)
+            }
             return
         }
-        await MainActor.run { AppServices.model?.reveal(thread: threadID, showDelta: showDelta) }
+        await MainActor.run {
+            let id = switch action {
+            case UNNotificationDefaultActionIdentifier: "notification.open"
+            case ThreadNotifier.goToThreadAction: "notification.go-to-thread"
+            case ThreadNotifier.seeDeltaAction: "notification.see-delta"
+            default: "notification.other"
+            }
+            Usage.register(id, label: id == "notification.open" ? "Banner" : nil)
+            Usage.record(.notification, id, source: .notification)
+            Usage.attributed { AppServices.model?.reveal(thread: threadID, showDelta: showDelta) }
+        }
     }
 
     /// Nothing while frontmost: the sidebar dot and the badge already say it.

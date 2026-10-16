@@ -82,6 +82,7 @@ final class AppControlService: ControlService {
 
     func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
                  progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
+        noteControlCall(call, from: origin, caller: caller)
         switch call {
         case .ping:
             return .success(.ping(PingResult(app: BuildFlavor.displayName, version: model.env.appVersion,
@@ -167,6 +168,8 @@ final class AppControlService: ControlService {
                 model.updatePreferences { $0.automation = change.settings }
                 return change.answer
             }
+        case .usage(let params):
+            return await model.usageReport(params)
         case .taskClose(let params):
             return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
                                    done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
@@ -412,6 +415,13 @@ final class AppControlService: ControlService {
         let threads = wants(.threads) ? model.threads.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
         let tasks = wants(.tasks) ? model.tasks.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
         return .success(.list(ListResult(scopes: wants(.scopes) ? scopes : [], threads: threads, tasks: tasks)))
+    }
+
+    /// One line in the usage log per call carried out: the method, who asked (an agent or the user's own terminal) and
+    /// through which façade. Never the arguments.
+    private func noteControlCall(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller) {
+        let client = caller.client.hasPrefix(ControlClientName.mcp) ? "mcp" : caller.client.hasPrefix(ControlClientName.cli) ? "cli" : "other"
+        Usage.record(.control, "control.\(call.method.rawValue)", source: origin.isAgent ? .agent : .user, context: client)
     }
 
     /// Live records and the history of closed ones, handed to `ActivitySummary`. Only reads: a pull request whose state

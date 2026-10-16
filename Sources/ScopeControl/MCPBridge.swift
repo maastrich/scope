@@ -72,6 +72,26 @@ public enum MCPBridge {
             readOnly: true
         ),
         MCPTool(
+            name: "scope_usage",
+            title: "How Scope itself is used",
+            description: """
+            How the user has been using Scope's own interface over a period, from a log kept on this Mac only: the \
+            most used controls, commands and panels, per area; the instrumented elements never used in the period; \
+            for each command, how often it was reached by keyboard shortcut, menu, palette or mouse; CLI and MCP \
+            calls split between the user and agents; time spent in each sheet and inspector section; and what rose \
+            or fell against the period before. Ids only, never content. Read its `limits` before concluding that \
+            something is unused.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "period":{"type":"string","description":"today, yesterday, this week, last week, this month, last month, last 7 days, 2w, 2026-10-01, 2026-10, 2026-10-01..2026-10-14, since 2026-10-01. Weeks start on Monday. Defaults to last 7 days."},\
+            "area":{"type":"string","description":"One area only: sidebar, inspector, sheet, command, palette, control, notification, setting, settings, thread…"},\
+            "limit":{"type":"integer","minimum":1,"description":"Rows per list (default 20)."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
             name: "scope_list",
             title: "List scopes, threads and tasks",
             description: """
@@ -355,6 +375,8 @@ public enum MCPBridge {
                 return .success(.gc(try decoder.decode(GCArguments.self, from: arguments).call))
             case "scope_summary":
                 return .success(.summary(try decoder.decode(SummaryParams.self, from: arguments)))
+            case "scope_usage":
+                return .success(.usage(try decoder.decode(UsageParams.self, from: arguments)))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -381,6 +403,7 @@ public enum MCPBridge {
         case .read(let result): try encoder.encode(result)
         case .wait(let result): try encoder.encode(result)
         case .summary(let result): try encoder.encode(result)
+        case .usage(let result): try encoder.encode(result)
         }
     }
 
