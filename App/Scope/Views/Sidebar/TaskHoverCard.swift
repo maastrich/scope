@@ -3,8 +3,9 @@ import ScopeGit
 import ScopeTasks
 
 /// What a task row says when the pointer rests on it: the status in a sentence, then the branch, the repositories
-/// with their `+N −M`, the pull request and its checks, the age and the prompt. The row itself carries one glyph and
-/// a name; everything else waits here, or in the inspector's summary band.
+/// with their `+N −M`, the pull request and its checks, the task it was started from and those started from it, the
+/// age and the prompt. The row itself carries one glyph and a name; everything else waits here, or in the inspector's
+/// summary band.
 struct TaskHoverCard: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -78,6 +79,22 @@ struct TaskHoverCard: View {
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.secondary)
                         .lineLimit(1)
+                }
+            }
+            let children = model.childTasks(of: task)
+            if !children.isEmpty {
+                row("Started") {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(children) { child in
+                            HStack(spacing: 4) {
+                                TaskStatusGlyph(status: TaskStatus.resolve(model.taskFacts(for: child)), size: 10)
+                                Text(child.name)
+                                    .font(.scopeCaption)
+                                    .foregroundStyle(Ink.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
                 }
             }
             row("Created") {

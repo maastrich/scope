@@ -74,6 +74,21 @@ public enum SidebarRows: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// What a detailed row says of a thread whose turn is over.
+public enum FinishedThreadLine: String, Codable, Sendable, CaseIterable {
+    /// `Finished · 3m ago`; the reply's first line is in the row's help.
+    case elapsed
+    /// The first line of the agent's last reply.
+    case reply
+
+    public var title: String {
+        switch self {
+        case .elapsed: "When it finished"
+        case .reply: "The first line of its reply"
+        }
+    }
+}
+
 /// How the sidebar orders the work of a scope.
 public enum SidebarArrangement: String, Codable, Sendable, CaseIterable {
     /// Loose threads, then tasks, in a fixed order: a row never moves on its own.
@@ -411,6 +426,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var sidebarRows: SidebarRows
     /// As a tree by default.
     public var sidebarArrangement: SidebarArrangement
+    /// When it finished, by default.
+    public var finishedThreadLine: FinishedThreadLine
     /// By importance by default.
     public var scopeTileOrder: ScopeTileOrder
     /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
@@ -459,6 +476,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
         sidebarRows: SidebarRows = .detailed,
         sidebarArrangement: SidebarArrangement = .tree,
+        finishedThreadLine: FinishedThreadLine = .elapsed,
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
         chromeTheme: ChromeTheme = .brand,
@@ -486,6 +504,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.agentOpenedFocus = agentOpenedFocus
         self.sidebarRows = sidebarRows
         self.sidebarArrangement = sidebarArrangement
+        self.finishedThreadLine = finishedThreadLine
         self.scopeTileOrder = scopeTileOrder
         self.swipeBetweenScopes = swipeBetweenScopes
         self.chromeTheme = chromeTheme
@@ -500,7 +519,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent
     }
 
@@ -539,6 +558,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         sidebarRows = (try? container.decodeIfPresent(SidebarRows.self, forKey: .sidebarRows)) ?? defaults.sidebarRows
         sidebarArrangement = (try? container.decodeIfPresent(SidebarArrangement.self, forKey: .sidebarArrangement))
             ?? defaults.sidebarArrangement
+        finishedThreadLine = (try? container.decodeIfPresent(FinishedThreadLine.self, forKey: .finishedThreadLine))
+            ?? defaults.finishedThreadLine
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme

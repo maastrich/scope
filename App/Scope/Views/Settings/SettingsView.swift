@@ -185,6 +185,14 @@ private struct GeneralSettingsView: View {
                         }
                     }
                 }
+                SettingsRow("Finished threads") {
+                    ScopePicker("Finished threads", selection: preference(\.finishedThreadLine),
+                                title: model.config.preferences.finishedThreadLine.title) {
+                        ForEach(FinishedThreadLine.allCases, id: \.self) { line in
+                            Text(line.title).tag(line)
+                        }
+                    }
+                }
                 SettingsRow("Tiles kept") {
                     ScopePicker("Tiles kept", selection: preference(\.scopeTileOrder),
                                 title: model.config.preferences.scopeTileOrder.title) {

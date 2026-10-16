@@ -173,6 +173,9 @@ struct HookStdinTests {
          "Survey the hooks"),
         ("Agent", #"{"description":"Review the diff","prompt":"…"}"#, "Review the diff"),
         ("mcp__scope__scope_thread_wait", #"{"threads":["3f9a"],"thread":"3f9a"}"#, "3f9a"),
+        ("AskUserQuestion", #"{"questions":[{"question":"Which suite first?","header":"Suite","options":[]},{"question":"Then?"}]}"#,
+         "Which suite first?"),
+        ("ExitPlanMode", #"{"plan":"Plan: rename\n1. Read"}"#, "Plan: rename"),
     ])
     func toolTargets(tool: String, input: String, target: String) {
         let stdin = HookStdin.parse(Self.postToolUse(tool, input))

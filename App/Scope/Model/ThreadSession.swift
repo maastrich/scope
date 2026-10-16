@@ -50,6 +50,9 @@ final class ThreadSession: Identifiable {
     /// What the driver has been doing, folded from its events (`ThreadActivity`). Changes on every tool call, so not
     /// observed either; `AppModel+Activity` loads and saves it.
     @ObservationIgnored private(set) var activity = ThreadActivity()
+    /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
+    /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
+    private(set) var activityHeadline: ThreadActivityHeadline?
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
     /// transcript) — not on each tool call, which only moves `lastTool`.
     @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
@@ -218,6 +221,7 @@ final class ThreadSession: Identifiable {
         if expectingTurnSince != nil { expectingTurnSince = .now }
         inputTracker = TerminalInputTracker()
         phase = .alive(pid: view.process.shellPid, since: .now)
+        refreshActivityHeadline()
         record.lastLaunchedAt = .now
         record.launchCount += 1
         record.lastExit = nil
@@ -290,6 +294,7 @@ final class ThreadSession: Identifiable {
 
     func resetAdapterState() {
         adapterState = nil
+        refreshActivityHeadline()
     }
 
     /// The thread was just handed a prompt: until its driver reports something, it counts as at work.
@@ -315,6 +320,7 @@ final class ThreadSession: Identifiable {
         // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
         // state that had not moved.
         if adapterState != next { adapterState = next }
+        refreshActivityHeadline()
         let failure = next == .failed ? (event.payload[HookEvent.errorKey] ?? lastFailure) : nil
         if lastFailure != failure { lastFailure = failure }
         if record.lastState != next { record.lastState = next }
@@ -332,10 +338,16 @@ final class ThreadSession: Identifiable {
     func setActivity(_ next: ThreadActivity) {
         let previous = activity
         activity = next
+        refreshActivityHeadline()
         if next.turns != previous.turns || next.lastReply != previous.lastReply
             || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
             onActivityChanged?(self)
         }
+    }
+
+    private func refreshActivityHeadline() {
+        let next = ThreadActivityHeadline.make(activity, state: displayState)
+        if activityHeadline != next { activityHeadline = next }
     }
 
     /// Persists a driver session id captured elsewhere.
@@ -372,6 +384,7 @@ final class ThreadSession: Identifiable {
 
     private func setAdapterState(_ state: ThreadState) {
         adapterState = state
+        refreshActivityHeadline()
         if state != .failed { lastFailure = nil }
         record.lastState = state
         onRecordChanged?(record)

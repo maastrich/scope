@@ -66,6 +66,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
 
     public var version: Int
     public var lastTool: Tool?
+    /// What the agent is waiting on, when its driver says: the tool a permission is asked for and its target, or
+    /// the question tool and the question. `nil` again as soon as the agent goes on.
+    public var pendingRequest: Tool?
     /// When the turn in progress started; `nil` between turns.
     public var turnStartedAt: Date?
     /// Tool calls so far in the turn in progress.
@@ -76,10 +79,11 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public var lastReply: AgentReply?
     public var transcriptPath: String?
 
-    public init(lastTool: Tool? = nil, turnStartedAt: Date? = nil, turnTools: Int = 0, turns: [Turn] = [],
+    public init(lastTool: Tool? = nil, pendingRequest: Tool? = nil, turnStartedAt: Date? = nil, turnTools: Int = 0, turns: [Turn] = [],
                 lastReply: AgentReply? = nil, transcriptPath: String? = nil) {
         version = Self.currentVersion
         self.lastTool = lastTool
+        self.pendingRequest = pendingRequest
         self.turnStartedAt = turnStartedAt
         self.turnTools = turnTools
         self.turns = turns
@@ -96,6 +100,18 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         let at = event.receivedAt
         if let path = event.payload[HookEvent.transcriptKey], !path.isEmpty { next.transcriptPath = path }
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
+        switch event.kind {
+        case .inputRequested, .permissionRequested:
+            // Claude Code follows its `PermissionRequest` with a `Notification` that names no tool: that one adds
+            // nothing to the request already kept.
+            if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
+                next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
+            }
+        case .sessionStarted:
+            break
+        default:
+            next.pendingRequest = nil
+        }
         switch event.kind {
         case .turnStarted:
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {

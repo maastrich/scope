@@ -351,6 +351,26 @@ share its old topic; one filed elsewhere stays. The topic's own menu renames it,
 all. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
 
+<h3 id="delegation">Tasks started from a task</h3>
+<p>A task an agent creates from inside another task is not nested under it — the two usually share a topic, which
+already keeps them together. In the tree, with detailed rows, a quiet child's second line starts with <b>from</b> and
+the parent's name: click it to select the parent. While one of its agents works or waits, that line is the agent's. The parent's hover card lists the tasks started from it, and the context menu
+goes either way (<b>Go to Parent Task</b>, <b>Tasks Started From Here</b>).</p>
+
+<h3 id="activity">What each agent is doing</h3>
+<p>With detailed rows, a thread's second line says what its agent is doing as soon as its driver reports it:</p>
+<ul>
+  <li>while it works, the tool it just ran, in words — <i>Editing TaskTopic.swift</i>, <i>Running swift test</i>,
+  <i>Searching "topic"</i>, <i>Fetching docs.github.com</i>. A path is cut to its file name; hover the row for the
+  whole of it.</li>
+  <li>while it waits, what it asks: the question itself, or <i>Asks to run swift test</i> for a permission.</li>
+  <li>once its turn is over, how and when: <i>Finished · 3m ago</i>, <i>Failed (rate_limit) · 1h ago</i>,
+  <i>Interrupted</i>. <b>Settings ▸ Sidebar ▸ Finished threads</b> can show the first line of its reply instead.</li>
+</ul>
+<p>A task with a single thread says the same while its agent works, waits or has a result you have not read; after
+that its own status (its pull request, its checks) takes the line back. The toolbar under the thread's path says what
+the agent is doing while it works or waits. Compact rows stay one line.</p>
+
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
 <ul>

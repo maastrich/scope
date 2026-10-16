@@ -3,7 +3,8 @@ import ScopeControl
 import ScopeCore
 
 /// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path; none under a task,
-/// the indentation already says "sandbox"), state dot.
+/// the indentation already says "sandbox"), state dot. A detailed row's second line is what the agent is doing
+/// (`ThreadActivityCaption`) whenever its driver has said, and the state and the place otherwise.
 ///
 /// One row at a time may look selected, and it is the List's: the thread the scene shows used to carry an accent
 /// bar and a bold title of its own, which read as a second selection whenever the List highlighted the task row
@@ -38,7 +39,9 @@ struct ThreadRow: View {
                     .font(.scopeBody)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if detailed {
+                if detailed, let headline {
+                    ThreadActivityCaption(headline: headline)
+                } else if detailed {
                     Text([session.displayState.displayLabel, caption].compactMap { $0 }.joined(separator: " · "))
                         .font(.scopeCaption)
                         .foregroundStyle(captionInk)
@@ -132,8 +135,13 @@ struct ThreadRow: View {
         ThreadNotificationContent.failureDescription(session.lastFailure)
     }
 
+    private var headline: ThreadActivityHeadline? {
+        session.activityHeadline(model.config.preferences.finishedThreadLine)
+    }
+
     private var helpText: String {
         "\(session.displayState.displayLabel)\(failureText.map { ": \($0)" } ?? "") — \(session.record.cwd)"
+            + ((detailed ? headline?.detail : nil).map { "\n\($0)" } ?? "")
             + (originText.map { "\n\($0)" } ?? "") + (residentText.map { "\n\($0)" } ?? "")
     }
 
