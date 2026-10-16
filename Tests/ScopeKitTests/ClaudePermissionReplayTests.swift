@@ -5,7 +5,7 @@ import Testing
 @testable import ScopeDrivers
 
 /// Hook payloads captured from Claude Code 2.1.301 in an interactive terminal, replayed through what the
-/// `claude-hooks` adapter actually installs. Ids and paths are scrubbed; `tool_response` is cut short. Each run
+/// `claude-hooks` adapter actually installs. Ids and paths are scrubbed, `scratchpad_dir`, `prompt_id` and `effort` dropped, `tool_response` cut short. Each run
 /// had a hook on every event that only logged its stdin, so the logs also show the hooks Scope does not install.
 struct ClaudePermissionReplayTests {
     /// Auto mode, `curl -sI https://example.com`: the terminal says "Allowed by auto mode classifier".
@@ -29,6 +29,15 @@ struct ClaudePermissionReplayTests {
         #"{"session_id":"s3","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo scope-probe hello","description":"Print scope-probe hello"},"tool_use_id":"toolu_3"}"#,
         #"{"session_id":"s3","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo scope-probe hello","description":"Print scope-probe hello"}}"#,
         #"{"session_id":"s3","transcript_path":"/t.jsonl","cwd":"/w","hook_event_name":"Notification","message":"Claude needs your permission","notification_type":"permission_prompt"}"#,
+    ]
+
+    /// Auto mode, an ask rule and a second `PermissionRequest` hook answering allow after 10 s: `permission_prompt`
+    /// has already fired at 6 s, and nothing says the dialog closed until the tool has run.
+    static let hookAllowedLate = [
+        #"{"session_id":"s5","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo scope-probe hello && sleep 15","description":"Echo probe message then sleep 15 seconds"},"tool_use_id":"toolu_6"}"#,
+        #"{"session_id":"s5","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo scope-probe hello && sleep 15","description":"Echo probe message then sleep 15 seconds"}}"#,
+        #"{"session_id":"s5","transcript_path":"/t.jsonl","cwd":"/w","hook_event_name":"Notification","message":"Claude needs your permission","notification_type":"permission_prompt"}"#,
+        #"{"session_id":"s5","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo scope-probe hello && sleep 15","description":"Echo probe message then sleep 15 seconds"},"tool_response":{"stdout":"scope-probe hello","stderr":"","interrupted":false},"tool_use_id":"toolu_6","duration_ms":15228}"#,
     ]
 
     /// `bypassPermissions`: an ordinary command runs unasked; one matching an ask rule still opens a dialog,
@@ -85,6 +94,12 @@ struct ClaudePermissionReplayTests {
     @Test("a dialog left open waits from the permission_prompt notification, in auto mode too")
     func promptShownInAuto() throws {
         #expect(try replay(Self.promptShownInAuto) == [.running, .running, .waiting(reason: .permission)])
+    }
+
+    @Test("an answer given elsewhere after the notification leaves the thread waiting until the tool has run")
+    func hookAllowedLate() throws {
+        // The known limit: no hook reports that another one closed the dialog.
+        #expect(try replay(Self.hookAllowedLate) == [.running, .running, .waiting(reason: .permission), .running])
     }
 
     @Test("bypassPermissions only waits on a dialog it does not skip itself")
