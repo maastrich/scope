@@ -12,6 +12,7 @@ struct TokenUsageSettingsSection: View {
         SettingsSection("Token usage") {
             Toggle("Show the token meter in the toolbar", isOn: preference(\.showTokenMeter))
                 .toggleStyle(.scope)
+                .usageID("show-token-meter", label: "Show the token meter in the toolbar")
             SettingsRow("Budget per 5 h", caption: "Optional. Turns the meter into a gauge against your own figure, e.g. 20M.") {
                 TextField("Budget", text: $budgetText, prompt: Text("none"))
                     .textFieldStyle(.plain)
@@ -21,9 +22,11 @@ struct TokenUsageSettingsSection: View {
                     .onChange(of: budgetFocused) { _, focused in if !focused { commitBudget() } }
                     .scopeFieldBox(focused: budgetFocused, height: 22)
                     .frame(width: 120)
+                    .usageID("token-budget", label: "Token budget per 5 h")
             }
             Toggle("Show the API-equivalent cost", isOn: preference(\.showAPICost))
                 .toggleStyle(.scope)
+                .usageID("show-api-cost", label: "Show the API-equivalent cost")
             Text("Counted from the transcripts of Claude Code threads, subagents and cache reads included. Scope cannot see your plan’s limit, so the meter shows what was consumed, never what is left. The cost is what the same tokens would cost at API list prices, not what a subscription bills.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
