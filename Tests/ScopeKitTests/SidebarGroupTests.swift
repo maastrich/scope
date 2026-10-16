@@ -37,7 +37,7 @@ import ScopeCore
     }
 
     @Test func groupsSortMostPressingFirst() {
-        #expect(SidebarGroup.allCases.sorted() == [.needsYou, .working, .finished, .quiet])
+        #expect(SidebarGroup.allCases.sorted() == [.needsYou, .working, .finished, .quiet, .dormant])
     }
 
     @Test func sidebarPreferencesDefaultToDetailedRowsAsATree() throws {

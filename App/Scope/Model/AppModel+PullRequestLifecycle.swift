@@ -26,9 +26,11 @@ extension AppModel {
     /// branch when there is one — the thread ran `gh pr create`, or the PR was opened on GitHub — since the
     /// record only ever learnt about a PR at creation or from the Delta panel's own **Create PR**. A bound task
     /// gets `gh pr view`: checks, mergeability, state, and the title the chip shows, which GitHub lets drift.
-    func refreshTaskPullRequest(_ task: TaskState) async {
+    /// `false` when `gh` failed on the bound pull request: the background pass backs off on it.
+    @discardableResult
+    func refreshTaskPullRequest(_ task: TaskState) async -> Bool {
         if task.record.pullRequest == nil { await adoptPullRequest(of: task) }
-        guard let target = pullRequestTarget(task) else { return }
+        guard let target = pullRequestTarget(task) else { return true }
         do {
             let pr = try await target.gh.prView(number: target.number, in: target.checkout, repo: target.repo)
             pullRequests.setTaskPullRequest(pr, for: task.id)
@@ -40,7 +42,9 @@ extension AppModel {
             }
         } catch {
             pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
+            return false
         }
+        return true
     }
 
     /// `gh pr view` in each sandbox, the first repository whose branch has a pull request wins.

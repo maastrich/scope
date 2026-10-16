@@ -51,9 +51,8 @@ struct TaskHoverCard: View {
                             .font(.scopeCaption)
                             .lineLimit(2)
                         if let checks = facts.pullRequest?.checks, checks != .none {
-                            Text("\(PullRequestStyle.glyph(checks)) \(checksCaption(checks))")
+                            PullRequestChecksLabel(checks: checks, checkedAt: model.pullRequestCheckedAt(for: task))
                                 .font(.scopeCaption)
-                                .foregroundStyle(PullRequestStyle.color(checks))
                         }
                     }
                 }
@@ -147,12 +146,4 @@ struct TaskHoverCard: View {
         }
     }
 
-    private func checksCaption(_ checks: PullRequest.Checks) -> String {
-        switch checks {
-        case .passing: "checks passed"
-        case .failing: "checks failing"
-        case .pending: "checks running"
-        case .none: ""
-        }
-    }
 }

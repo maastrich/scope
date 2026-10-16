@@ -151,6 +151,8 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
 /// The four groups of the sidebar arranged by state, most pressing first.
 public enum SidebarGroup: Int, Sendable, CaseIterable, Comparable {
     case needsYou, working, finished, quiet
+    /// Forgotten: idle for days, or its pull request closed unmerged (`TaskDormancy`). Tasks only.
+    case dormant
 
     public var title: String {
         switch self {
@@ -158,6 +160,7 @@ public enum SidebarGroup: Int, Sendable, CaseIterable, Comparable {
         case .working: "Working"
         case .finished: "Finished, not read"
         case .quiet: "Quiet"
+        case .dormant: "Dormant"
         }
     }
 

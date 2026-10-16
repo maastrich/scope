@@ -399,7 +399,9 @@ struct SidebarView: View {
     private func stateGroups(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let loose = visibleScopeThreads(in: scope)
         ForEach(SidebarGroup.allCases, id: \.self) { group in
-            let groupTasks = tasks.filter { SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0))) == group }
+            let groupTasks = tasks.filter {
+                SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0)), dormancy: model.dormancy(of: $0)) == group
+            }
             let groupThreads = loose.filter { SidebarGroup($0.displayState) == group }
             if !groupTasks.isEmpty || !groupThreads.isEmpty {
                 SectionLabel(text: group.title, trailing: "\(groupTasks.count + groupThreads.count)")

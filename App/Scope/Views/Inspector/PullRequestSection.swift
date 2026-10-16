@@ -48,8 +48,7 @@ struct PullRequestSection: View {
                     Text("draft")
                 }
                 if checks != .none {
-                    Text("\(PullRequestStyle.glyph(checks)) \(Self.caption(checks))")
-                        .foregroundStyle(PullRequestStyle.color(checks))
+                    PullRequestChecksLabel(checks: checks, checkedAt: model.pullRequestCheckedAt(for: task))
                 }
             }
         } else {
@@ -96,7 +95,7 @@ struct PullRequestSection: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Refresh (automatic every minute)")
+            .help("Refresh (every minute while on screen, every 5 minutes otherwise)")
             .accessibilityLabel("Refresh the pull request")
         }
     }
@@ -148,6 +147,8 @@ struct PullRequestSection: View {
                         Text(live.updatedAt, format: .relative(presentation: .named))
                             .font(.system(size: 10.5))
                             .foregroundStyle(Ink.tertiary)
+                        PullRequestReadAge(checkedAt: model.pullRequestCheckedAt(for: task))
+                            .font(.system(size: 10.5))
                     }
                     if !live.checkRuns.isEmpty {
                         TaskPullRequestPanel(task: task, pullRequest: live, layout: .full)
@@ -174,16 +175,6 @@ struct PullRequestSection: View {
                 .foregroundStyle(Ink.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-        }
-    }
-
-    /// The folded checks state in words, for the header here and the chip of the task's sidebar row.
-    static func caption(_ checks: PullRequest.Checks) -> String {
-        switch checks {
-        case .passing: "checks passed"
-        case .failing: "checks failing"
-        case .pending: "checks running"
-        case .none: ""
         }
     }
 }

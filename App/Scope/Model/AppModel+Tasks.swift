@@ -436,10 +436,11 @@ extension AppModel {
     }
 
     /// Archive or close for the control socket: the failure goes back to the caller instead of the problem list.
+    /// `notice` is the title of a notice posted whatever was saved (`archiveIfMerged`), with Restore on an archive.
     @discardableResult
-    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode) async throws -> DismantleOutcome {
+    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode, notice: String? = nil) async throws -> DismantleOutcome {
         guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
-        return try await dismantle(task, mode)
+        return try await dismantle(task, mode, notice: notice)
     }
 
     /// The Retry of a failed archive or close: the same run again, from where the last one stopped.
@@ -477,7 +478,7 @@ extension AppModel {
     /// Archive and close: the row leaves the live list at once, the task manager does the rest (threads hung up
     /// inside its lock, through `prepare`), and the outcome is reported.
     @discardableResult
-    private func dismantle(_ task: TaskState, _ mode: DismantleMode) async throws -> DismantleOutcome {
+    private func dismantle(_ task: TaskState, _ mode: DismantleMode, notice: String? = nil) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
         await settlePullRequest(of: task)
@@ -498,7 +499,7 @@ extension AppModel {
         } else {
             forgetClosedTask(task)
         }
-        reportOutcome(outcome, task: task, mode: mode)
+        reportOutcome(outcome, task: task, mode: mode, notice: notice)
         Task { await collectGarbage() }
         return outcome
     }
@@ -595,13 +596,13 @@ extension AppModel {
         }
     }
 
-    private func dismantleFailed(_ task: TaskState, verb: String, error: any Error) {
+    func dismantleFailed(_ task: TaskState, verb: String, error: any Error) {
         problems.error("Could not \(verb) \(task.name)", detail: String(describing: error), scope: task.scopeID,
                        actions: [ProblemAction(title: "Retry", kind: .retryTaskCleanup(task.id.rawValue)),
                                  .reveal(task.record.root, title: "Reveal Task Folder")])
     }
 
-    private func reportOutcome(_ outcome: DismantleOutcome, task: TaskState, mode: DismantleMode) {
+    private func reportOutcome(_ outcome: DismantleOutcome, task: TaskState, mode: DismantleMode, notice: String? = nil) {
         var saved: [String] = []
         for notice in outcome.notices {
             switch notice {
@@ -618,11 +619,12 @@ extension AppModel {
                 saved.append("\(repo): unmerged branch \(branch) → \(ref)")
             }
         }
-        guard !saved.isEmpty else { return }
-        // Quiet: the work is safe, nothing to do unless the user wants it back.
+        guard !saved.isEmpty || notice != nil else { return }
+        // Quiet: the work is safe, nothing to do unless the user wants it back. One notice, whoever asked for it.
         let actions = mode == .archive ? [ProblemAction(title: "Restore", kind: .reopenTask(task.id.rawValue))] : []
-        problems.report(Problem(severity: .info, title: "\(task.name): unfinished work saved",
-                                detail: saved.joined(separator: "\n"), scopeID: task.scopeID, actions: actions))
+        problems.report(Problem(severity: .info, title: notice ?? "\(task.name): unfinished work saved",
+                                detail: saved.isEmpty ? nil : saved.joined(separator: "\n"), scopeID: task.scopeID,
+                                actions: actions))
     }
 
     /// What is left to do once the task manager has removed a task.

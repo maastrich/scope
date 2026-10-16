@@ -168,6 +168,24 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Archive a task when its pull request merges", isOn: preference(\.archiveMergedTasks))
+                    .toggleStyle(.scope)
+                Text("Every open task's pull request is read from GitHub every 5 minutes. Once it is merged and no thread of the task is running, the task is archived and a notice offers it back. A task you restore after its merge stays open. A pull request closed without merging never archives anything.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Idle after") {
+                    ScopePicker("Idle after", selection: preference(\.dormantAfterDays),
+                                title: Self.idleTitle(model.config.preferences.dormantAfterDays)) {
+                        ForEach(Self.idleChoices, id: \.self) { days in
+                            Text(Self.idleTitle(days)).tag(days)
+                        }
+                    }
+                }
+                Text("A task with no thread activity for that long, or whose pull request was closed without merging, says so in its row and, arranged by state, goes under Dormant.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Sidebar") {
                 SettingsRow("Rows") {
@@ -321,6 +339,12 @@ private struct GeneralSettingsView: View {
         private var defaultDriverTitle: String {
         let id = model.config.preferences.defaultDriverID
         return id.isEmpty ? "Automatic" : (model.drivers.profile(id: id)?.name ?? id)
+    }
+
+    private static let idleChoices = [1, 2, 3, 5, 7, 14, 0]
+
+    private static func idleTitle(_ days: Int) -> String {
+        days <= 0 ? "Never" : days == 1 ? "1 day" : "\(days) days"
     }
 
     private func preference<Value>(_ keyPath: WritableKeyPath<Preferences, Value>) -> Binding<Value> {
