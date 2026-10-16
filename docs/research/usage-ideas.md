@@ -90,6 +90,13 @@ Toute idée qui ajoute des boutons git ou un dialogue de confirmation va contre 
 | C8 | **Des prompts programmés** : chaque matin, l'orchestrateur reçoit « trie les PR aux checks rouges », « résume hier ». Le résultat arrive dans la boîte A2. [Codex Automations, Jules, Superset] | M | M | Audacieux. Il faut que l'app tourne, mais elle tourne déjà en continu avec son menu bar. |
 | C9 | **Des missions à jalons** : l'orchestrateur découpe un objectif en tasks séquentielles, avec un critère de validation (tests, checks verts) avant de lancer la suivante. [Factory Missions] | M | L | Très audacieux. Une partie peut vivre dans le skill `scope` plutôt que dans l'app. |
 
+Deux frictions rencontrées en lançant la vague 0 depuis un agent :
+
+| # | Idée | Impact | Effort | Pourquoi |
+|---|---|---|---|---|
+| C10 | **Un `#N` cité dans un brief ne doit pas devenir le point de départ.** Il ne compte que s'il est la demande (« reprends #37 ») ; sinon on le laisse en contexte, ou il y a un paramètre explicite `start_pr`. | M | S | Un brief qui mentionnait « PR #37 » pour le contexte a été refusé (« #37 is not a pull request of a repository in this scope ») : la PR d'un autre dépôt, ou simplement citée, bloque la création. |
+| C11 | **Le refus du préfixe `scope/` dit quoi faire.** Par exemple : « omit `branch` and Scope names it, or use another prefix ». La description MCP de `branch` le mentionne aussi. | B | S | `"scope/x" is not a valid task branch (the scope/ prefix is reserved)` alors que la spec présente `scope/<slug>` comme nom de branche par défaut. |
+
 ### D. Environnement et revue
 
 | # | Idée | Impact | Effort | Pourquoi |
