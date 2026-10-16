@@ -53,6 +53,8 @@ final class ThreadSession: Identifiable {
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
+    /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
+    private(set) var turnRevision = 0
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
     /// transcript) — not on each tool call, which only moves `lastTool`.
     @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
@@ -339,6 +341,7 @@ final class ThreadSession: Identifiable {
         let previous = activity
         activity = next
         refreshActivityHeadline()
+        if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
         if next.turns != previous.turns || next.lastReply != previous.lastReply
             || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
             onActivityChanged?(self)

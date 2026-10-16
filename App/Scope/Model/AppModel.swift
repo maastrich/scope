@@ -1175,6 +1175,7 @@ final class AppModel {
         detach(session)
         // A process that outlived the wait still exits later, and its closing turn would write the file back.
         session.onActivityChanged = nil
+        await keepTimeline(of: session.record, activity: session.activity)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
         rememberClosed(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
                                     selection: restoreSelection))
@@ -1306,6 +1307,7 @@ final class AppModel {
     func dismissExitNotice(_ id: ThreadID) async {
         guard let notice = takeExitNotice(id) else { return }
         if notice.closesThread {
+            await keepTimeline(of: notice.record, activity: nil)
             await forget(id: id, scopeID: notice.record.scopeID, profile: notice.profile)
         }
     }

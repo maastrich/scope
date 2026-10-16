@@ -432,7 +432,8 @@ final class AppControlService: ControlService {
             return .failure(.badRequest("no period called “\(params.period ?? "")”", detail: ActivityPeriod.grammar))
         }
         let scopes = scopeSummaries.map { ActivitySummary.ScopeRef(id: $0.id, slug: $0.slug, name: $0.name, root: $0.path) }
-        let tasks = await model.env.tasks.allTasks.map(\.snapshot)
+        var tasks: [TaskSnapshot] = []
+        for record in await model.env.tasks.allTasks { tasks.append(await model.summarySnapshot(of: record)) }
         let threads = model.threads.map(\.record.snapshot)
         let home = model.env.home
         let history = await Task.detached { ActivityHistory.load(home: home) }.value

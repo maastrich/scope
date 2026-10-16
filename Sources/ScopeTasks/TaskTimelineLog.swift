@@ -70,7 +70,7 @@ public actor TaskTimelineStore {
         return log
     }
 
-    public func update(_ id: TaskID, _ change: (TaskTimelineLog) -> TaskTimelineLog) {
+    public func update(_ id: TaskID, _ change: @Sendable (TaskTimelineLog) -> TaskTimelineLog) {
         let current = load(id)
         let next = change(current)
         guard next != current else { return }

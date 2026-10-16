@@ -411,7 +411,7 @@ and the inspector, the height of the window and half the terminal's width by def
 closes it).</p>
 <table>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
-  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository</td><td></td></tr>
+  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply</td><td></td></tr>
   <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
   <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
   <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
@@ -949,8 +949,9 @@ theirs, follow while they still share its old topic — they got it from it, so 
 <code>--no-children</code> moves it alone. The MCP tool is <code>scope_task_topic</code>.</p>
 <p><code>scope summary last week</code> lists, scope by scope, every task created, archived, closed or worked on
 in the period — finished or dropped alike — with an outcome (<i>merged</i>, <i>delivered</i>, <i>abandoned</i>,
-<i>archived</i>, <i>active</i>), its pull request, its topic and the opening of its brief, then the threads opened
-outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
+<i>archived</i>, <i>active</i>), its pull request, its topic, the opening of its brief, and how long its agents
+worked and how long it waited on you (a question, a permission, a result not yet followed by a prompt), then the
+threads opened outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
 week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
 <code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
 <code>--task &lt;slug&gt;</code> prints one task's whole brief. Each task and thread carries the tokens its

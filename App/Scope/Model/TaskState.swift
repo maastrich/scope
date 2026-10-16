@@ -45,6 +45,8 @@ final class TaskState: Identifiable {
     var isExpanded = true
     /// An archive or close is running: the row leaves the live list at once instead of when git is done.
     var isDismantling = false
+    /// What the timeline keeps of closed threads and of the checks (`AppModel+Timeline`); loaded on first show.
+    var timelineLog: TaskTimelineLog?
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private var watcher: FSEventsWatcher?

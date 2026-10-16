@@ -37,6 +37,8 @@ final class AppEnvironment {
     /// Replaced once `GitLocator` has found the right git (bootstrap); `/usr/bin/git` until then.
     private(set) var git: GitClientRegistry
     let taskRecords: TaskRecordStore
+    /// `<home>/tasks/<id>.timeline.json`: the turns of a task's closed threads and the colours of its checks.
+    let taskTimelines: TaskTimelineStore
     /// Rebuilt with `git` by `useGit` (before any task is loaded); `TaskManager.loadAll` runs after that.
     private(set) var tasks: TaskManager
     /// `<home>/graph/<slug>.json` (spec §4.6).
@@ -80,6 +82,7 @@ final class AppEnvironment {
         self.shell = shell
         self.git = git
         self.taskRecords = TaskRecordStore(home: home)
+        self.taskTimelines = TaskTimelineStore(home: home)
         self.tasks = TaskManager(home: home, registry: git, store: taskRecords,
                             ports: PortAllocator.range(debugBuild: BuildFlavor.isDebug))
         self.graphStore = GraphStore(home: home)

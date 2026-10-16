@@ -116,6 +116,9 @@ struct TaskSection: View {
                     ForEach(task.activeRepos) { repo in
                         TaskRepoRow(task: task, repo: repo)
                     }
+                    TaskTimelineView(task: task)
+                        .padding(.top, 8)
+                        .usageID("timeline", label: "Task timeline")
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
