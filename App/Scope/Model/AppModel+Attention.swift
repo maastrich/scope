@@ -52,8 +52,11 @@ extension AppModel {
         }
     }
 
-    /// Posts a notification for `event` on `session` when the app is in the background.
+    /// Posts a notification for `event` on `session` when the app is in the background. `session` has already
+    /// folded `event` in, so its state is the one after it.
     func notifyIfNeeded(_ event: AdapterEvent, session: ThreadSession) {
+        // Posting would replace the question's notification, quote and Reply with it, by "asks for a permission".
+        if let state = session.adapterState, ThreadStateMachine.keepsQuestion(state, over: event) { return }
         let kind: HookEvent.Kind = event.kind == .inputRequested && event.reason == "permission" ? .permissionRequested : event.kind
         guard let stateEvent = kind.stateEvent,
               ThreadNotificationContent.shouldNotify(event: stateEvent, appIsActive: NSApplication.shared.isActive),
