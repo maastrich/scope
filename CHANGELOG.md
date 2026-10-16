@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.20.0](https://github.com/maastrich/scope/releases/tag/v0.20.0) - 2026-10-16
+
+### Added
+
+- **agents:** file a running task under a topic, or out of one ([#36](https://github.com/maastrich/scope/pull/36)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.19.0...v0.20.0
+
 ## [0.19.0](https://github.com/maastrich/scope/releases/tag/v0.19.0) - 2026-10-15
 
 ### Added
