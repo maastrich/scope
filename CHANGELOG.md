@@ -11,6 +11,23 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.24.0](https://github.com/maastrich/scope/releases/tag/v0.24.0) - 2026-10-16
+
+### Added
+
+- **tasks:** try a task's branch in your own checkout, then put it back ([#62](https://github.com/maastrich/scope/pull/62)) by @maastrich
+- **control:** scope release cuts a release from a thread, the app doing the work ([#63](https://github.com/maastrich/scope/pull/63)) by @maastrich
+- **tasks:** every turn leaves a checkpoint, and the owner can go back to one ([#64](https://github.com/maastrich/scope/pull/64)) by @maastrich
+- **threads:** ask an agent interrupted by a restart to continue its work ([#65](https://github.com/maastrich/scope/pull/65)) by @maastrich
+- **tasks:** run one brief as several attempts, compare them, keep one ([#66](https://github.com/maastrich/scope/pull/66)) by @maastrich
+- scheduled prompts and milestone missions ([#67](https://github.com/maastrich/scope/pull/67)) by @maastrich
+
+### Fixed
+
+- **reader:** wrap table cells in their column instead of drawing rows over each other ([#61](https://github.com/maastrich/scope/pull/61)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.23.0...v0.24.0
+
 ## [0.23.0](https://github.com/maastrich/scope/releases/tag/v0.23.0) - 2026-10-16
 
 ### Added
