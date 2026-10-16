@@ -43,11 +43,13 @@ extension AppModel {
         reveal(thread: next.id, showDelta: false)
     }
 
-    /// Re-evaluates the Dock badge whenever any thread state it depends on changes.
+    /// Re-evaluates the Dock badge whenever any thread state it depends on changes. A base checkout on a task's
+    /// branch shows as `try` while nothing waits: the one state of the base worth a glance at the Dock.
     func startBadgeTracking() {
         withObservationTracking {
             let count = waitingThreads.count
-            NSApplication.shared.dockTile.badgeLabel = count == 0 ? nil : String(count)
+            let trying = !tryingTasks.isEmpty
+            NSApplication.shared.dockTile.badgeLabel = count == 0 ? (trying ? "try" : nil) : String(count)
         } onChange: {
             Task { @MainActor [weak self] in self?.startBadgeTracking() }
         }

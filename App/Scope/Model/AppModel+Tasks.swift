@@ -547,6 +547,13 @@ extension AppModel {
     private func dismantle(_ task: TaskState, _ mode: DismantleMode, notice: String? = nil) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
+        // A base still on the task's branch goes back first: the branch may be about to be deleted.
+        if !task.record.trying.isEmpty {
+            do { _ = try await putBack(task, reason: mode.isClose ? "task closed" : "task archived") } catch {
+                task.isDismantling = false
+                throw error
+            }
+        }
         await settlePullRequest(of: task)
         let outcome: DismantleOutcome
         do {

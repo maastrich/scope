@@ -12,6 +12,10 @@ struct MenuBarInbox: View {
     var body: some View {
         let groups = model.inboxGroups
         VStack(spacing: 0) {
+            ForEach(model.tryingTasks) { task in
+                MenuBarTryRow(task: task)
+                Divider()
+            }
             if groups.isEmpty {
                 Text("Nothing needs you")
                     .font(.scopeBody)
@@ -67,5 +71,41 @@ struct MenuBarInbox: View {
         if !NSApp.windows.contains(where: { $0.isVisible && $0.identifier?.rawValue == "main" }) {
             openWindow(id: "main")
         }
+    }
+}
+
+/// One line per task a base checkout is on (spec §4.5), with Put back: the menu bar says it wherever the window is.
+private struct MenuBarTryRow: View {
+    @Environment(AppModel.self) private var model
+    let task: TaskState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.swap")
+                .foregroundStyle(Color("WarningText"))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Your checkout is on \(task.name)")
+                    .font(.scopeBody)
+                    .lineLimit(1)
+                if let since = task.record.trying.first?.since {
+                    Text("since \(since.formatted(date: .omitted, time: .shortened)) · \(task.branch)")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            Button("Put back") {
+                Usage.click("menu-bar.try-put-back", label: "Put my checkout back")
+                Task {
+                    do { _ = try await model.putBack(task) } catch {
+                        model.problems.error("Could not put your checkout back from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                    }
+                }
+            }
+            .buttonStyle(.scopeGhost)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }

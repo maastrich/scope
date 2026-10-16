@@ -190,6 +190,8 @@ final class AppControlService: ControlService {
             return await restore(params, from: origin, caller: caller)
         case .taskRebase(let params):
             return await rebase(params, from: origin, caller: caller)
+        case .taskTry(let params):
+            return await tryInCheckout(params, from: origin, caller: caller)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -345,6 +347,38 @@ final class AppControlService: ControlService {
         }
         let line = await model.rebaseNow(task)
         return .success(.action(ActionResult(message: line, task: task.record.id.rawValue), .taskRebase))
+    }
+
+    /// `task.try`: the user's own checkout on the task's branch, refreshed, or put back (`AppModel+TryInCheckout`). The
+    /// policy refused every agent already; the check here is the belt to its braces, since the base is the user's.
+    private func tryInCheckout(_ params: TaskTryParams, from origin: ControlOrigin,
+                               caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        guard case .user = origin else {
+            return .failure(.denied("only the user may try a task in their checkout"))
+        }
+        let task: TaskState
+        switch resolveTask(params.task, scope: params.scope, callerScopeID: nil, callerCwd: caller.cwd) {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        do {
+            let line: String
+            if params.end {
+                line = try await model.putBack(task)
+            } else if params.refresh {
+                line = try await model.refreshTry(task)
+            } else {
+                line = try await model.tryInCheckout(task)
+            }
+            return .success(.action(ActionResult(message: line, task: task.record.id.rawValue), .taskTry))
+        } catch let failure as TryInCheckoutFailure {
+            switch failure {
+            case .notAllowed: return .failure(.denied(String(describing: failure), detail: "Turn it on in Settings › Tasks, or set allowTryInCheckout on the scope in config.json."))
+            default: return .failure(.badRequest(String(describing: failure)))
+            }
+        } catch {
+            return .failure(.failed(String(describing: error)))
+        }
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.

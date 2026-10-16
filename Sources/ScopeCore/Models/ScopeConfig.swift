@@ -319,6 +319,9 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     /// What happens to this scope's tasks when their default branch moves, when it differs from the preference
     /// (`Preferences.followMain`). Edited by hand in `config.json`; `nil` follows the preference.
     public var followMain: FollowMainMode?
+    /// Whether a task of this scope may be tried in the user's own checkout, when it differs from the preference
+    /// (`Preferences.allowTryInCheckout`). Edited by hand in `config.json`; `nil` follows the preference.
+    public var allowTryInCheckout: Bool?
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -338,9 +341,11 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         logoDark: String? = nil,
         context: String? = nil,
         model: String? = nil,
-        followMain: FollowMainMode? = nil
+        followMain: FollowMainMode? = nil,
+        allowTryInCheckout: Bool? = nil
     ) {
         self.followMain = followMain
+        self.allowTryInCheckout = allowTryInCheckout
         self.repoCommands = repoCommands
         self.icon = icon
         self.tint = tint
@@ -381,7 +386,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context, model,
-             followMain
+             followMain, allowTryInCheckout
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -403,6 +408,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         context = try? container.decodeIfPresent(String.self, forKey: .context)
         model = ((try? container.decodeIfPresent(String.self, forKey: .model)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
         followMain = try? container.decodeIfPresent(FollowMainMode.self, forKey: .followMain)
+        allowTryInCheckout = try? container.decodeIfPresent(Bool.self, forKey: .allowTryInCheckout)
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.
@@ -515,6 +521,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// What happens to an open task when the default branch moves under it (`FollowMainMode`). A scope's
     /// declaration may override it (`ScopeDeclaration.followMain`). Ask the agent, by default.
     public var followMain: FollowMainMode
+    /// "Try in my checkout" is offered on tasks: the user's own base checkout can be detached onto a task's branch
+    /// and put back (spec §4.5, the one exception to the untouchable base). Off by default; a scope's declaration
+    /// may override it (`ScopeDeclaration.allowTryInCheckout`).
+    public var allowTryInCheckout: Bool
 
     /// The token meter in the toolbar: what Claude Code threads consumed over five hours and seven days. On by default.
     public var showTokenMeter: Bool
@@ -596,6 +606,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         archiveMergedTasks: Bool = true,
         dormantAfterDays: Int = 3,
         followMain: FollowMainMode = .askAgent,
+        allowTryInCheckout: Bool = false,
         showTokenMeter: Bool = true,
         tokenBudgetPer5h: Int = 0,
         showAPICost: Bool = false,
@@ -643,6 +654,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.archiveMergedTasks = archiveMergedTasks
         self.dormantAfterDays = max(0, dormantAfterDays)
         self.followMain = followMain
+        self.allowTryInCheckout = allowTryInCheckout
         self.showTokenMeter = showTokenMeter
         self.tokenBudgetPer5h = max(0, tokenBudgetPer5h)
         self.showAPICost = showAPICost
@@ -666,7 +678,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
-             followMain, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
+             followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
              quickPanelHotkey, toggleWindowHotkey, quickPanelLanding
     }
@@ -723,6 +735,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         archiveMergedTasks = (try? container.decodeIfPresent(Bool.self, forKey: .archiveMergedTasks)) ?? defaults.archiveMergedTasks
         dormantAfterDays = max(0, (try? container.decodeIfPresent(Int.self, forKey: .dormantAfterDays)) ?? defaults.dormantAfterDays)
         followMain = (try? container.decodeIfPresent(FollowMainMode.self, forKey: .followMain)) ?? defaults.followMain
+        allowTryInCheckout = (try? container.decodeIfPresent(Bool.self, forKey: .allowTryInCheckout)) ?? defaults.allowTryInCheckout
         showTokenMeter = (try? container.decodeIfPresent(Bool.self, forKey: .showTokenMeter)) ?? defaults.showTokenMeter
         tokenBudgetPer5h = max(0, (try? container.decodeIfPresent(Int.self, forKey: .tokenBudgetPer5h)) ?? defaults.tokenBudgetPer5h)
         showAPICost = (try? container.decodeIfPresent(Bool.self, forKey: .showAPICost)) ?? defaults.showAPICost

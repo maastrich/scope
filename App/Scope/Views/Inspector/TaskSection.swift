@@ -144,6 +144,10 @@ struct TaskSection: View {
         } content: {
             if let task {
                 VStack(alignment: .leading, spacing: 0) {
+                    if !task.record.trying.isEmpty {
+                        TryBanner(task: task, sessions: task.record.trying, placement: "inspector.task")
+                            .padding(.bottom, 8)
+                    }
                     TaskBriefExcerpt(task: task)
                     TaskVersionStrip(task: task)
                     ForEach(task.activeRepos) { repo in

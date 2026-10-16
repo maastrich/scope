@@ -38,6 +38,12 @@ struct BaseSection: View {
             Text(repo.branchLabel ?? "…")
                 .font(.system(size: 11, design: .monospaced))
                 .truncationMode(.middle)
+            if let trying = model.currentScope.flatMap({ model.trySession(of: repo, in: $0) }) {
+                Text("on \(trying.task.name)")
+                    .foregroundStyle(Color("WarningText"))
+                    .lineLimit(1)
+                    .help("Your checkout is on the task \(trying.task.name) since \(trying.session.since.formatted(date: .omitted, time: .shortened))")
+            }
             if let behind = model.base.behind, behind > 0 {
                 Text("behind \(behind)")
                     .foregroundStyle(Color("WarningText"))
@@ -152,7 +158,12 @@ struct BaseSection: View {
     /// history already loaded), and in a caption why this repository.
     private func content(repo: RepoState, reason: BaseSubjectReason) -> some View {
         let head = model.base.commits.first
+        let trying = model.currentScope.flatMap { model.trySession(of: repo, in: $0) }
         return VStack(alignment: .leading, spacing: 4) {
+            if let trying {
+                TryBanner(task: trying.task, sessions: [trying.session], placement: "inspector.base")
+                    .padding(.bottom, 6)
+            }
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 12))

@@ -42,6 +42,9 @@ struct ScopeApp: App {
             let waiting = model.waitingThreads.count
             if waiting > 0 {
                 Image(systemName: "\(min(waiting, 50)).circle.fill")
+            } else if !model.tryingTasks.isEmpty {
+                // A base checkout is on a task's branch: said in the menu bar until it is put back.
+                Image(systemName: "arrow.triangle.swap")
             } else {
                 Image("MenuBarIcon")
             }

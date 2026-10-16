@@ -133,6 +133,41 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+/// The user's checkout of one repository is running the task's branch (spec §4.5, "Try in my checkout"): what it
+/// takes to put it back exactly. One per repository of the task at most; `endingAt` is set the moment a put back
+/// starts, so one cut short by a quit is finished at the next launch.
+public struct TrySession: Codable, Sendable, Equatable, Hashable, Identifiable {
+    /// The repository, as `TaskRepo.repoRelativePath` names it.
+    public var repoRelativePath: String
+    /// Sha `HEAD` was at in the base checkout.
+    public var previousHead: String
+    /// The branch the base had checked out; `nil` when it was already detached.
+    public var previousBranch: String?
+    /// The stash holding the base's uncommitted changes; `nil` when the tree was clean.
+    public var stashSHA: String?
+    /// The commit of the task branch the base is detached onto (moves with Refresh).
+    public var head: String
+    public var since: Date
+    /// A put back started and has not finished.
+    public var endingAt: Date?
+
+    public init(repoRelativePath: String, previousHead: String, previousBranch: String?, stashSHA: String?, head: String,
+                since: Date = .now, endingAt: Date? = nil) {
+        self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
+        self.previousHead = previousHead
+        self.previousBranch = previousBranch
+        self.stashSHA = stashSHA
+        self.head = head
+        self.since = TaskRecord.roundedToMilliseconds(since)
+        self.endingAt = endingAt.map(TaskRecord.roundedToMilliseconds)
+    }
+
+    public var id: String { repoRelativePath }
+    public var isEnding: Bool { endingAt != nil }
+    /// Where the base goes back to, as the banner says it: the branch, or the short sha it was detached at.
+    public var previousLabel: String { previousBranch ?? String(previousHead.prefix(7)) }
+}
+
 /// One `tasks/<id>.json` document (spec §4.3).
 public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Schema version written by this build. Newer documents are refused, never overwritten.
@@ -196,6 +231,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var followedMainHead: String?
     /// The GitHub issue the task was opened from, if any: its brief opens on it, and the pull request should close it.
     public var issue: LinkedIssue?
+    /// The base checkouts running this task's branch right now (`TrySession`), one per repository at most. Empty
+    /// when none is: the normal state, where the base is never touched.
+    public var trying: [TrySession] = []
 
     public init(
         id: TaskID = .generate(),
@@ -362,6 +400,12 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// The task's block of ports, once one was allocated.
     public var portBlock: PortBlock? { portBase.map { PortBlock(base: $0, size: PortAllocator.blockSize) } }
 
+    /// The try session of a repository, if its base checkout is on this task's branch.
+    public func trySession(for repoRelativePath: String) -> TrySession? {
+        let key = TaskRepo.normalize(repoRelativePath)
+        return trying.first { $0.repoRelativePath == key }
+    }
+
     /// `notRun` for a record that never ran a setup.
     public var setupState: SetupState { setup?.state ?? .notRun }
 
@@ -373,7 +417,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
         case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
-        case holdBranch, followedMainHead
+        case holdBranch, followedMainHead, trying
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -406,5 +450,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         holdBranch = (try? container.decodeIfPresent(Bool.self, forKey: .holdBranch)) ?? false
         followedMainHead = (try? container.decodeIfPresent(String.self, forKey: .followedMainHead)) ?? nil
         issue = (try? container.decodeIfPresent(LinkedIssue.self, forKey: .issue)) ?? nil
+        trying = (try? container.decodeIfPresent([TrySession].self, forKey: .trying)) ?? []
     }
 }

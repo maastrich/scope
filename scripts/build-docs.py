@@ -551,7 +551,9 @@ leaves that branch where it is and bases the task on a fresh one.</p></div>
 ├── checkout-api/             <span class="c"># worktree on feat/redis-product-catalogue-cache</span>
 └── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
 <p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
-in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+in the worktree. A single-repository scope puts the worktree at the task root itself. The one exception is yours
+to turn on and to trigger: <a href="review.html#try-in-checkout">trying a task in your checkout</a>, which
+stashes, detaches and puts everything back.</p>
 <p>The <code>sandboxes</code> folder carries a <code>.metadata_never_index</code> marker, so Spotlight leaves it
 alone: no indexing of every worktree's <code>node_modules</code>, and no second copy of your files in search
 results.</p>
@@ -785,6 +787,27 @@ FIG_BASE_SEARCH
 <p><b>Pull</b> sits in the Base header as soon as origin is ahead; it is fast-forward only and refuses on a dirty
 tree. Fetch, Open in Editor, Shell and Reveal come on hover. <b>Shell</b> opens a thread rooted at the base
 checkout — useful when you want to run something against the real branch rather than a sandbox.</p>
+<h3 id="try-in-checkout">Trying a task in your checkout</h3>
+<p>A heavy dev server — one database, one port, one <code>node_modules</code> — runs in your checkout, and you want
+to see a task's result there without a second install. That is the one time Scope moves a base, and it is off until
+you turn it on: <b>Settings ▸ General ▸ Tasks ▸ Allow trying a task in my checkout</b> (or <code>allowTryInCheckout</code>
+on a scope in <code>config.json</code>). On, a task's context menu offers <b>Try in My Checkout</b>, and so does
+<code>scope task try &lt;task&gt;</code> from your own terminal. Agents are refused, always: the base is yours.</p>
+<p>In the base of each repository of the task, Scope stashes whatever is not committed (untracked files included,
+as <code>scope-try-&lt;task&gt;-&lt;time&gt;</code>), remembers the branch and commit you were on, and detaches
+<code>HEAD</code> onto the task branch — detached, so your branch itself never moves, and never a
+<code>reset --hard</code>. It refuses a checkout in the middle of a rebase or merge, one with conflicted paths, and
+one already on another task; a repository that fails after others moved puts them back, so the task is tried whole
+or not at all. Your own git hooks apply, not the sandbox's.</p>
+<p>While it lasts, a banner on the task and on the Base panel of the repository says <i>Your checkout is on
+&lt;task&gt; since 12:04</i>, the Dock badge reads <code>try</code> and the menu bar shows it. The task's threads
+keep working in the sandbox; the base is a mirror you run. <b>Refresh</b> moves the detached checkout to the
+branch's current head once the sandbox commits more.</p>
+<p><b>Put back</b> — from the banner, the context menu or <code>scope task try &lt;task&gt; --end</code> — switches
+back to your branch and applies the stash, then drops it. It also runs on its own, without asking, when the task is
+archived or closed and when Scope quits; a put back cut short by a quit is finished at the next launch. Changes you
+made in the base while trying are stashed aside and kept. A stash that no longer applies cleanly is kept too, the
+Base panel opens on the repository and a notice says which stash it is — nothing of yours is ever dropped.</p>
 
 <h2 id="prs">Pull requests</h2>
 <p><kbd>⇧⌘P</kbd>. Open pull requests of the selected repository, through the <code>gh</code> CLI and your
