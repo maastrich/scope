@@ -83,6 +83,49 @@ import Testing
         ))])
     }
 
+    /// The release table that drew its rows over each other in the reader (v0.23.0): a short labels column, a
+    /// long prose column, inline bold and code in the cells. The parser hands the view every cell whole.
+    @Test func aTableWithLongProseCells() {
+        let text = """
+        | Release | Contenu |
+        |---|---|
+        | **v0.21.0** (vague 0+1) | restore pour les agents + actions de task dans ⌘K · capture de l'activité des threads · notifications avec extrait et réponse · ligne d'activité dans la sidebar + arbre de délégation · « Demander à l'orchestrateur » + réponse inline · PR rafraîchies en arrière-plan |
+        | **v0.22.0** (vague 2) | faux « waiting » en mode auto · thread fini mais « running » · compteur de tokens (5 h / 7 j) · lecture Markdown de la réponse + livrable gardé à l'archivage + brief visible |
+        | **v0.23.0** (vague 3) | modèle par task/thread + `thread.send --command` · rebase auto quand `main` avance · raccourci global ⌥Space (Ask / Inbox) |
+        """
+        guard case .table(let table)? = blocks(text).first, blocks(text).count == 1 else {
+            Issue.record("expected one table")
+            return
+        }
+        #expect(table.header == ["Release", "Contenu"])
+        #expect(table.alignments == [.leading, .leading])
+        #expect(table.rows.count == 3)
+        #expect(table.rows.map(\.count) == [2, 2, 2])
+        #expect(table.rows[0][0] == "**v0.21.0** (vague 0+1)")
+        #expect(table.rows[0][1].hasPrefix("restore pour les agents"))
+        #expect(table.rows[0][1].hasSuffix("PR rafraîchies en arrière-plan"))
+        #expect(table.rows[0][1].count > 250)
+        #expect(table.rows[2][1] == "modèle par task/thread + `thread.send --command` · rebase auto quand `main` avance · raccourci global ⌥Space (Ask / Inbox)")
+    }
+
+    @Test func aWideTableKeepsEveryColumn() {
+        let header = (1...8).map { "Col \($0)" }
+        let text = "| " + header.joined(separator: " | ") + " |\n|" + String(repeating: "---|", count: 8) + "\n| "
+            + (1...8).map { "cell \($0) with some words" }.joined(separator: " | ") + " |"
+        guard case .table(let table)? = blocks(text).first else {
+            Issue.record("expected a table")
+            return
+        }
+        #expect(table.header == header)
+        #expect(table.rows == [(1...8).map { "cell \($0) with some words" }])
+    }
+
+    @Test func longUnbrokenWordsStayInTheirParagraph() {
+        let path = "/Users/me/.scope/sandboxes/very/deep/path/to/App/Scope/Views/Inspector/Reading/MarkdownReader.swift"
+        let url = "https://github.com/maastrich/scope/pull/54/files#diff-0123456789abcdef0123456789abcdef0123456789abcdef"
+        #expect(blocks("See `\(path)`\nand \(url) here.") == [.paragraph("See `\(path)` and \(url) here.")])
+    }
+
     @Test func aTableRightUnderAParagraph() {
         let parsed = blocks("Results:\na | b\n--- | ---\n1 | 2\n\nafter")
         #expect(parsed == [

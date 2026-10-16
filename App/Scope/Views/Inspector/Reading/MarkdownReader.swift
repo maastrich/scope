@@ -213,42 +213,135 @@ struct MarkdownListView: View {
     }
 }
 
-/// A table on a `Grid`: the header on a quiet fill, a hairline between rows, columns aligned as the delimiter row
-/// said. Cells wrap; a table wider than the column scrolls sideways rather than squeezing its columns to nothing.
+/// A table whose columns share the reading width: a cell wraps inside its column, a row is as tall as its tallest
+/// cell, a short column keeps its width and a long one takes the rest (`MarkdownTableLayout`). A table whose columns
+/// cannot all fit, even wrapped, scrolls sideways in its own container rather than squeezing them to nothing.
+///
+/// Not a `Grid`: inside a horizontal `ScrollView` a `Grid` measures every cell at its one-line width, then clamps the
+/// frame — the text wrapped into a row sized for one line, and the rows drew over each other.
 struct MarkdownTableView: View {
     let table: MarkdownTable
+    /// The width the table may take before it scrolls: the scroll view's own, read once laid out.
+    @State private var availableWidth: CGFloat = 0
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
-                GridRow {
-                    ForEach(table.header.indices, id: \.self) { column in
-                        cell(table.header[column], column: column, font: .system(size: 12, weight: .semibold))
-                            .foregroundStyle(Ink.secondary)
-                    }
+            MarkdownTableLayout(columns: table.header.count, availableWidth: availableWidth) {
+                ForEach(table.header.indices, id: \.self) { column in
+                    cell(table.header[column], column: column, font: .system(size: 12, weight: .semibold))
+                        .foregroundStyle(Ink.secondary)
+                        .background(Surface.panel)
                 }
-                .background(Surface.panel)
                 ForEach(table.rows.indices, id: \.self) { row in
-                    Divider()
-                    GridRow {
-                        ForEach(table.rows[row].indices, id: \.self) { column in
-                            cell(table.rows[row][column], column: column, font: .system(size: 12.5))
-                        }
+                    ForEach(table.rows[row].indices, id: \.self) { column in
+                        cell(table.rows[row][column], column: column, font: .system(size: 12.5))
+                            .overlay(alignment: .top) { Rectangle().fill(Surface.stroke).frame(height: 1) }
                     }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Surface.stroke))
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
     }
 
     private func cell(_ text: String, column: Int, font: Font) -> some View {
         let alignment = table.alignments.indices.contains(column) ? table.alignments[column] : .leading
         return MarkdownInlineText(text, font: font)
             .multilineTextAlignment(alignment == .center ? .center : alignment == .trailing ? .trailing : .leading)
-            .frame(maxWidth: 360, alignment: alignment == .center ? .center : alignment == .trailing ? .trailing : .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .gridColumnAlignment(alignment == .center ? .center : alignment == .trailing ? .trailing : .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: alignment == .center ? .top : alignment == .trailing ? .topTrailing : .topLeading)
+    }
+}
+
+/// The cells of a table, row-major, laid out on shared columns — a browser's automatic table layout, in short.
+///
+/// Every column is measured at its one-line width (its *ideal*). When they all fit in `availableWidth`, each takes
+/// its ideal and the table stays as narrow as its content. Otherwise the columns narrow enough to fit a fair share
+/// keep their ideal, and the others split what is left in proportion to their ideal, down to a floor below which a
+/// column wraps too badly to read; past the floor the table is wider than the view and scrolls. Row heights are
+/// measured at the final column widths, so wrapped text never runs into the next row.
+struct MarkdownTableLayout: Layout {
+    let columns: Int
+    /// `0` before the first layout pass: columns then take their ideal, capped so a long cell still wraps.
+    let availableWidth: CGFloat
+
+    static let minColumnWidth: CGFloat = 96
+    static let maxUnmeasuredColumnWidth: CGFloat = 360
+
+    struct Cache {
+        var widths: [CGFloat] = []
+        var heights: [CGFloat] = []
+        var measuredFor: CGFloat = -1
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        measure(subviews, &cache)
+        return CGSize(width: cache.widths.reduce(0, +), height: cache.heights.reduce(0, +))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        measure(subviews, &cache)
+        var y = bounds.minY
+        for row in cache.heights.indices {
+            var x = bounds.minX
+            for column in 0..<columns {
+                let index = row * columns + column
+                guard index < subviews.count else { break }
+                let size = CGSize(width: cache.widths[column], height: cache.heights[row])
+                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+                x += size.width
+            }
+            y += cache.heights[row]
+        }
+    }
+
+    private func measure(_ subviews: Subviews, _ cache: inout Cache) {
+        guard columns > 0, cache.measuredFor != availableWidth || cache.widths.count != columns else { return }
+        var ideal = [CGFloat](repeating: 0, count: columns)
+        for (index, subview) in subviews.enumerated() {
+            let column = index % columns
+            ideal[column] = max(ideal[column], subview.sizeThatFits(.unspecified).width.rounded(.up))
+        }
+        cache.widths = Self.distribute(ideal: ideal, in: availableWidth)
+        let rows = (subviews.count + columns - 1) / columns
+        cache.heights = (0..<rows).map { row in
+            (0..<columns).reduce(CGFloat(0)) { height, column in
+                let index = row * columns + column
+                guard index < subviews.count else { return height }
+                let proposal = ProposedViewSize(width: cache.widths[column], height: nil)
+                return max(height, subviews[index].sizeThatFits(proposal).height.rounded(.up))
+            }
+        }
+        cache.measuredFor = availableWidth
+    }
+
+    /// Column widths for `ideal` one-line widths in `available` points; `0` when the width is not known yet.
+    static func distribute(ideal: [CGFloat], in available: CGFloat) -> [CGFloat] {
+        guard available > 0 else { return ideal.map { min($0, maxUnmeasuredColumnWidth) } }
+        guard ideal.reduce(0, +) > available else { return ideal }
+        var widths = ideal
+        var remaining = available
+        var flexible = Set(ideal.indices)
+        // A column narrower than an equal share keeps its width: the labels column stays one line.
+        while true {
+            let share = remaining / CGFloat(flexible.count)
+            let settled = flexible.filter { ideal[$0] <= share }
+            if settled.isEmpty { break }
+            for column in settled {
+                remaining -= ideal[column]
+                flexible.remove(column)
+            }
+            if flexible.isEmpty { return widths }
+        }
+        let total = flexible.reduce(CGFloat(0)) { $0 + ideal[$1] }
+        for column in flexible {
+            widths[column] = max(min(minColumnWidth, ideal[column]), (remaining * ideal[column] / total).rounded(.down))
+        }
+        return widths
     }
 }
