@@ -225,6 +225,26 @@ public actor TaskManager {
         return record
     }
 
+    /// "Don't rebase automatically": the branch is held, or released, when main moves (`TaskRecord.holdBranch`).
+    @discardableResult
+    public func setHoldBranch(_ hold: Bool, for id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.holdBranch != hold else { return record }
+        record.holdBranch = hold
+        try await save(record)
+        return record
+    }
+
+    /// Remembers the head of main Scope just acted on for the task, so the next refresh does not act again.
+    @discardableResult
+    public func noteFollowedMain(head: String?, for id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.followedMainHead != head else { return record }
+        record.followedMainHead = head
+        try await save(record)
+        return record
+    }
+
     /// Files the tasks `ids` under `topic` (`nil` takes them out of any). Unknown ids are skipped; the records
     /// that changed are returned.
     @discardableResult

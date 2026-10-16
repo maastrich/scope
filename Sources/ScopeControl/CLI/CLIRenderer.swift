@@ -48,8 +48,9 @@ public enum CLIRenderer {
                 }))
             }
             if !result.tasks.isEmpty {
-                blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "ROOT"], result.tasks.map {
-                    [$0.slug + ($0.archivedAt == nil ? "" : " (archived)"), $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch, $0.root]
+                blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "MAIN", "ROOT"], result.tasks.map {
+                    [$0.slug + ($0.archivedAt == nil ? "" : " (archived)"), $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch,
+                     mainColumn($0), $0.root]
                 }))
             }
             if !result.threads.isEmpty {
@@ -347,6 +348,18 @@ public enum CLIRenderer {
     }
 
     /// The BY column: Scope itself for a resident thread, the parent thread or the client otherwise.
+    /// What `scope list tasks` says of a task's lag on main: `behind 4`, `behind 4, 2 conflicts`, `up to date`,
+    /// `held` when the user asked for no automatic rebase; empty when never measured.
+    static func mainColumn(_ task: TaskSummary) -> String {
+        var parts: [String] = []
+        if let behind = task.behind {
+            if behind == 0 { parts.append("up to date") } else { parts.append("behind \(behind)") }
+            if let conflicts = task.conflicts, conflicts > 0 { parts.append("\(conflicts) conflict\(conflicts == 1 ? "" : "s")") }
+        }
+        if task.holdBranch == true { parts.append("held") }
+        return parts.joined(separator: ", ")
+    }
+
     static func openedBy(_ thread: ThreadSummary) -> String {
         if let resident = thread.resident { return "scope (\(resident))" }
         return (thread.parent.map { "thread \($0)" } ?? thread.openedBy) + (thread.depth == 0 ? "" : " (depth \(thread.depth))")

@@ -150,6 +150,7 @@ struct PullRequestSection: View {
                         PullRequestReadAge(checkedAt: model.pullRequestCheckedAt(for: task))
                             .font(.system(size: 10.5))
                     }
+                    lagLine(task)
                     if !live.checkRuns.isEmpty {
                         TaskPullRequestPanel(task: task, pullRequest: live, layout: .full)
                             .padding(.top, 2)
@@ -170,11 +171,36 @@ struct PullRequestSection: View {
             }
             .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
         } else {
-            Text("No pull request yet. Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it.")
-                .font(.scopeCaption)
-                .foregroundStyle(Ink.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("No pull request yet. Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                lagLine(task)
+            }
+            .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+        }
+    }
+
+    /// `behind main by 4 · conflicts in 2 files`, as the background pass last measured it, with the hold when the
+    /// user set one. Red when conflicts, otherwise the quiet grey of a fact.
+    @ViewBuilder
+    private func lagLine(_ task: TaskState) -> some View {
+        if let lag = model.lag(of: task), let caption = lag.caption {
+            HStack(spacing: 6) {
+                Image(systemName: lag.hasConflicts ? "exclamationmark.triangle" : (lag.isBehind ? "arrow.triangle.branch" : "checkmark"))
+                    .font(.system(size: 10))
+                Text(caption + (task.record.holdBranch ? " · held" : ""))
+                    .font(.scopeCaption)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                PullRequestReadAge(checkedAt: lag.repos.values.map(\.checkedAt).min())
+                    .font(.system(size: 10.5))
+            }
+            .foregroundStyle(lag.hasConflicts ? PullRequestStyle.failing : Ink.secondary)
+            .help(lag.conflictedPaths.isEmpty ? "The branch against \(lag.upstream), fetched by the background refresh"
+                                              : "Conflicts: " + lag.conflictedPaths.joined(separator: ", "))
+            .accessibilityLabel("Branch against main: \(caption)")
         }
     }
 }

@@ -187,6 +187,8 @@ final class AppControlService: ControlService {
             return await fileTask(params, from: origin)
         case .taskRestore(let params):
             return await restore(params, from: origin, caller: caller)
+        case .taskRebase(let params):
+            return await rebase(params, from: origin, caller: caller)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -314,6 +316,34 @@ final class AppControlService: ControlService {
         }
         lines.append("no thread was opened: `scope thread new --task \(slug)` starts one")
         return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskRestore))
+    }
+
+    /// `task.rebase`: the clean rebase or the message to the thread, on demand (`AppModel.rebaseNow`). Without a task,
+    /// the caller's own.
+    private func rebase(_ params: TaskRebaseParams, from origin: ControlOrigin,
+                        caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
+        let task: TaskState
+        if let query = params.task {
+            switch resolveTask(query, scope: params.scope, callerScopeID: callerScopeID, callerCwd: caller.cwd) {
+            case .failure(let error): return .failure(error)
+            case .success(let match): task = match
+            }
+        } else {
+            guard case .thread(let id, _) = origin, let own = model.session(id).flatMap(model.task(of:)) else {
+                return .failure(.badRequest("say which task to rebase", detail: "`scope list tasks` shows them; from a task's thread the task may be omitted."))
+            }
+            task = own
+        }
+        guard !task.isArchived else {
+            return .failure(.badRequest("\(task.record.slug) is archived", detail: "Restore it first: `scope task restore \(task.record.slug)`."))
+        }
+        if task.record.holdBranch {
+            return .failure(.denied("the branch of \(task.record.slug) is held",
+                                    detail: "The user asked for no automatic rebase on this task (Don't rebase automatically)."))
+        }
+        let line = await model.rebaseNow(task)
+        return .success(.action(ActionResult(message: line, task: task.record.id.rawValue), .taskRebase))
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.
@@ -504,7 +534,9 @@ final class AppControlService: ControlService {
             scope: scope?.name ?? task.record.scopeName, scopeSlug: task.record.scopeSlug,
             root: task.record.root, repos: task.activeRepos.map(\.repoRelativePath),
             threads: model.threads(in: task.record.id).map(\.id.rawValue),
-            topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt
+            topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt,
+            behind: model.lag(of: task)?.behind, conflicts: model.lag(of: task)?.conflicts,
+            holdBranch: task.record.holdBranch ? true : nil
         )
     }
 
