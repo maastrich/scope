@@ -52,6 +52,9 @@ public enum ScopeCLI {
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
                                           uncommitted work saved, worktrees removed; branch kept
       scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
+      scope task topic [<id|slug>] <topic>
+                                          file a task under a topic, or out of any with --clear (default: the
+                                          caller's own task); the tasks it started follow unless --no-children
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
       scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
                                           their pull requests and briefs (default: last 7 days)
@@ -250,8 +253,34 @@ public enum ScopeCLI {
                 parameters.task = words[0]
                 return .call(.taskClose(parameters), shared)
             }
+            if sub == "topic" {
+                var words: [String] = []
+                var clear = false
+                var children = true
+                let shared = try options(&rest, command: "task topic", positional: { words.append($0) }, specific: { flag, _ in
+                    switch flag {
+                    case "--clear": clear = true
+                    case "--no-children": children = false
+                    default: return false
+                    }
+                    return true
+                })
+                // The last word is the topic, the one before it the task; without a task, the caller's own. An empty
+                // topic is refused rather than read as a clear: taking a task out of its group is said out loud.
+                if clear {
+                    guard words.count <= 1 else {
+                        throw UsageError(message: "task topic --clear takes at most a task id or slug, no topic", usage: usage)
+                    }
+                    return .call(.taskTopic(TaskTopicParams(task: words.first, topic: nil, children: children)), shared)
+                }
+                guard (1...2).contains(words.count), let topic = words.last, topic.contains(where: { !$0.isWhitespace }) else {
+                    throw UsageError(message: "task topic takes a topic, after the task id or slug (or --clear)", usage: usage)
+                }
+                return .call(.taskTopic(TaskTopicParams(task: words.count == 2 ? words[0] : nil, topic: topic,
+                                                        children: children)), shared)
+            }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, archive, close", usage: usage)
+                throw UsageError(message: "task commands: new, archive, close, topic", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

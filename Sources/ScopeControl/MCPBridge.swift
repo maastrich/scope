@@ -232,6 +232,25 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_task_topic",
+            title: "File a task under a topic",
+            description: """
+            Files an existing task under a topic, or out of any with clear: true. Tasks sharing a topic sit together \
+            in the user's sidebar. Only the label changes: branch, worktrees and running threads are untouched. The \
+            tasks it started, and theirs, follow it when they still share its old topic; one someone filed elsewhere \
+            stays put. Omit task for the task you are in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted, the task you are in."},\
+            "topic":{"type":"string","description":"Short name of the piece of work, shared by its sibling tasks."},\
+            "clear":{"type":"boolean","description":"Take the task out of its topic instead; give no topic with it."},\
+            "children":{"type":"boolean","description":"false leaves the tasks it started where they are. Defaults to true."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
             name: "scope_task_close",
             title: "Close a task",
             description: """
@@ -308,6 +327,8 @@ public enum MCPBridge {
                 return .success(.taskClose(try decoder.decode(TaskCloseArguments.self, from: arguments).call))
             case "scope_task_archive":
                 return .success(.taskArchive(try decoder.decode(TaskArchiveParams.self, from: arguments)))
+            case "scope_task_topic":
+                return try decoder.decode(TaskTopicArguments.self, from: arguments).call.map(ControlCall.taskTopic)
             case "scope_gc":
                 return .success(.gc(try decoder.decode(GCArguments.self, from: arguments).call))
             case "scope_summary":
@@ -377,6 +398,7 @@ public enum MCPBridge {
             ],
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
+            "scope_task_topic": taskID.merging(["name": .rename("topic"), "remove": .rename("clear")]) { $1 },
         ]
     }()
 
@@ -459,6 +481,28 @@ public enum MCPBridge {
 
         var call: TaskCloseParams {
             TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false)
+        }
+    }
+
+    /// `scope_task_topic` arguments. Saying nothing is not a clear: an agent that forgot the topic gets told so.
+    struct TaskTopicArguments: Decodable {
+        var task: String?
+        var topic: String?
+        var clear: Bool?
+        var children: Bool?
+
+        var call: Result<TaskTopicParams, ControlError> {
+            let named = topic.flatMap { $0.contains(where: { !$0.isWhitespace }) ? $0 : nil }
+            switch (named, clear ?? false) {
+            case (let topic?, false):
+                return .success(TaskTopicParams(task: task, topic: topic, children: children ?? true))
+            case (nil, true):
+                return .success(TaskTopicParams(task: task, topic: nil, children: children ?? true))
+            case (_?, true):
+                return .failure(.badRequest("give a topic or clear: true, not both"))
+            case (nil, false):
+                return .failure(.badRequest("no topic given", detail: "Name one with topic, or pass clear: true to take the task out of its topic."))
+            }
         }
     }
 

@@ -51,6 +51,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskClose = "task.close"
     /// Archive a task: its threads and processes stopped, its worktrees removed, branch and record kept.
     case taskArchive = "task.archive"
+    /// File a task under a topic, or out of any: the sidebar regroups, nothing else about the task moves.
+    case taskTopic = "task.topic"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
@@ -64,7 +66,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     public var isMutating: Bool {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .gc: true
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .gc: true
         }
     }
 
@@ -170,6 +172,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskNew(TaskNewParams)
     case taskClose(TaskCloseParams)
     case taskArchive(TaskArchiveParams)
+    case taskTopic(TaskTopicParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
@@ -186,6 +189,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskNew: .taskNew
         case .taskClose: .taskClose
         case .taskArchive: .taskArchive
+        case .taskTopic: .taskTopic
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
@@ -203,7 +207,7 @@ public enum ControlCall: Sendable, Equatable {
         case .ping: .seconds(5)
         case .list, .threadRead, .summary: .seconds(15)
         case .threadNew: .seconds(60)
-        case .threadStop, .threadClose, .threadSend: .seconds(30)
+        case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .gc: .seconds(300)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
@@ -327,6 +331,30 @@ public struct TaskArchiveParams: Codable, Sendable, Equatable {
 
     public init(task: String) {
         self.task = task
+    }
+}
+
+/// `scope task topic [<id|slug>] <topic>` / `--clear` — the label only: branch, worktrees and threads stay as they are.
+public struct TaskTopicParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    /// The topic to file it under; `nil` takes it out of any. The façades insist on saying which: an empty topic is
+    /// refused there rather than read as a clear.
+    public var topic: String?
+    /// Whether the tasks it started, and theirs, follow it when they still share its old topic.
+    public var children: Bool
+
+    public init(task: String? = nil, topic: String?, children: Bool = true) {
+        self.task = task
+        self.topic = topic
+        self.children = children
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        task = try container.decodeIfPresent(String.self, forKey: .task)
+        topic = try container.decodeIfPresent(String.self, forKey: .topic)
+        children = try container.decodeIfPresent(Bool.self, forKey: .children) ?? true
     }
 }
 

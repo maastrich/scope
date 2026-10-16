@@ -345,8 +345,10 @@ something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>
 <p>Tasks that belong to one piece of work can share a <b>topic</b>: in the tree arrangement they sit under one
 row named after it, where the first of them stands, with the count and the most urgent state of their threads.
 Agents set it — <code>scope task new --topic</code>, and a task created from inside a task inherits its topic —
-and so can you: <b>Topic</b> in a task's menu files it under a topic in use, a new one, or none. The topic's own
-menu renames it, ungroups its tasks or archives them all. By state, tasks sit with what they are doing and the
+and so can you: <b>Topic</b> in a task's menu files it under a topic in use, a new one, or none, at any point in
+its life — branch, worktrees and running threads are left alone. The tasks it started come along while they still
+share its old topic; one filed elsewhere stays. The topic's own menu renames it, ungroups its tasks or archives them
+all. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
 
 <h2 id="states">States</h2>
@@ -826,6 +828,7 @@ scope thread close &lt;id&gt;             <span class="c"># hang it up and remov
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
+scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
@@ -866,6 +869,10 @@ the sidebar, under one row. A task created from inside a task gets that task's t
 when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
 orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
 <code>scope list tasks</code> shows each task's topic.</p>
+<p><code>scope task topic &lt;id|slug&gt; &lt;topic&gt;</code> files a task that already runs, and <code>--clear</code>
+takes it out of its topic; without a task, it is the caller's own. Only the label changes. The tasks it started, and
+theirs, follow while they still share its old topic — they got it from it, so they are the same piece of work — and
+<code>--no-children</code> moves it alone. The MCP tool is <code>scope_task_topic</code>.</p>
 <p><code>scope summary last week</code> lists, scope by scope, every task created, archived, closed or worked on
 in the period — finished or dropped alike — with an outcome (<i>merged</i>, <i>delivered</i>, <i>abandoned</i>,
 <i>archived</i>, <i>active</i>), its pull request, its topic and the opening of its brief, then the threads opened

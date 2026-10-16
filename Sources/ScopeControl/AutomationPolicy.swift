@@ -186,6 +186,10 @@ public struct AutomationPolicy: Sendable, Equatable {
             switch call.method {
             case .ping, .list, .summary:
                 return .allow
+            case .taskTopic:
+                // A label: nothing opened, nothing removed, undone by the same call. Gating it behind the task
+                // approval would ask the user about the sidebar's grouping.
+                return .allow
             case .threadStop, .threadClose, .threadSend, .threadRead, .threadWait:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
@@ -276,6 +280,9 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .taskClose(let params):
             "close the task “\(params.task)”" + (params.deleteBranch ? " and delete its branch" : "")
         case .taskArchive(let params): "archive the task “\(params.task)”"
+        case .taskTopic(let params):
+            "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
+                + (params.topic.map { "under “\($0)”" } ?? "out of its topic")
         case .gc: "clean up leftover sandboxes and processes"
         case .threadStop(let params): "stop the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"

@@ -205,15 +205,48 @@ extension AppModel {
 
     // MARK: Topics
 
-    /// Files `ids` under `topic`, or out of any with `nil` (the task menu's Topic submenu, an agent's inherited topic).
+    /// Files `ids` under `topic`, or out of any with `nil`, and only them (a topic renamed or ungrouped as a whole,
+    /// an agent's inherited topic).
     func setTopic(_ topic: String?, for ids: [TaskID]) async {
         do {
-            for record in try await env.tasks.setTopic(topic, for: ids) {
-                task(record.id)?.update(record: record)
-            }
+            try await applyTopic(topic, to: ids)
         } catch {
             problems.error("Could not change the topic", detail: String(describing: error))
         }
+    }
+
+    /// Re-files tasks one at a time, the way the task menu and `scope task topic` do: the tasks each one started
+    /// come along while they still share its old topic (`TaskTopic.followers`), so a piece of work moves whole.
+    func fileTasks(_ ids: [TaskID], underTopic topic: String?) async {
+        do {
+            try await refile(ids, underTopic: topic, withChildren: true)
+        } catch {
+            problems.error("Could not change the topic", detail: String(describing: error))
+        }
+    }
+
+    /// `fileTasks` for a caller that reports the failure itself. Returns the records that changed.
+    @discardableResult
+    func refile(_ ids: [TaskID], underTopic topic: String?, withChildren: Bool) async throws -> [TaskRecord] {
+        var moving: [TaskID] = []
+        for id in ids where !moving.contains(id) {
+            moving.append(id)
+            guard withChildren else { continue }
+            // Every task, archived ones too: the summary groups by topic, and a finished piece should not part
+            // from the rest of its work there.
+            let lineage = tasks.map { (id: $0.id, parent: $0.record.parentTask, topic: $0.record.topic) }
+            moving += TaskTopic.followers(of: id, in: lineage).filter { !moving.contains($0) }
+        }
+        return try await applyTopic(topic, to: moving)
+    }
+
+    @discardableResult
+    private func applyTopic(_ topic: String?, to ids: [TaskID]) async throws -> [TaskRecord] {
+        let changed = try await env.tasks.setTopic(topic, for: ids)
+        for record in changed {
+            task(record.id)?.update(record: record)
+        }
+        return changed
     }
 
     /// The open tasks of `scope` filed under `topic`, whatever its spelling.

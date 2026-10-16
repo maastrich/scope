@@ -164,6 +164,8 @@ final class AppControlService: ControlService {
         case .taskArchive(let params):
             return await dismantle(params.task, .archive, method: .taskArchive,
                                    done: "archived the task %@; its branch is kept")
+        case .taskTopic(let params):
+            return await fileTask(params, from: origin)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -197,10 +199,59 @@ final class AppControlService: ControlService {
                                                waited: Int(Date.now.timeIntervalSince(started).rounded()))))
     }
 
-    /// Archive and close: the task named by id or slug, the outcome said in a few lines.
-    private func dismantle(_ name: String, _ mode: DismantleMode, method: ControlMethod, done: String) async -> Result<ControlResultPayload, ControlError> {
+    /// The task named by id or slug.
+    private func task(named name: String) -> Result<TaskState, ControlError> {
         guard let task = model.tasks.first(where: { $0.record.id.rawValue == name || $0.record.slug == name }) else {
             return .failure(.notFound("no task “\(name)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
+        }
+        return .success(task)
+    }
+
+    /// `task.topic`: the label, and the tasks it started that share it. The answer echoes the topic as stored —
+    /// trimmed and bounded — so the agent sees what the sidebar shows.
+    private func fileTask(_ params: TaskTopicParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
+        let found: Result<TaskState, ControlError>
+        if let name = params.task {
+            found = task(named: name)
+        } else if case .thread(let id, _) = origin,
+                  let raw = model.session(id)?.record.taskID, let own = model.tasks.first(where: { $0.record.id.rawValue == raw }) {
+            found = .success(own)
+        } else {
+            found = .failure(.badRequest("which task?", detail: "You are not in a task: name one by id or slug (`scope list tasks`)."))
+        }
+        let task: TaskState
+        switch found {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let topic = TaskTopic.normalize(params.topic)
+        if params.topic != nil, topic == nil {
+            return .failure(.badRequest("the topic is empty", detail: "Name one, or clear the task's topic instead."))
+        }
+        let slug = task.record.slug
+        let changed: [TaskRecord]
+        do {
+            changed = try await model.refile([task.id], underTopic: topic, withChildren: params.children)
+        } catch {
+            return .failure(.failed("could not change the topic of \(slug)", detail: String(describing: error)))
+        }
+        var lines: [String]
+        if !changed.contains(where: { $0.id == task.id }) {
+            lines = [topic.map { "\(slug) is already under “\($0)”" } ?? "\(slug) has no topic"]
+        } else {
+            lines = [topic.map { "filed \(slug) under “\($0)”" } ?? "took \(slug) out of its topic"]
+        }
+        let followers = changed.filter { $0.id != task.id }.map(\.slug)
+        if !followers.isEmpty { lines.append("along with the tasks it started: " + followers.joined(separator: ", ")) }
+        return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskTopic))
+    }
+
+    /// Archive and close: the task named by id or slug, the outcome said in a few lines.
+    private func dismantle(_ name: String, _ mode: DismantleMode, method: ControlMethod, done: String) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch self.task(named: name) {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
         }
         let slug = task.record.slug
         let outcome: DismantleOutcome
