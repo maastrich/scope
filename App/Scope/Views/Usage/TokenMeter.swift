@@ -88,6 +88,17 @@ struct TokenUsagePopover: View {
             }
 
             VStack(spacing: 4) {
+                if preferences.showAPICost {
+                    HStack {
+                        Spacer()
+                        Text("API-equivalent")
+                        Text("tokens")
+                            .frame(minWidth: 44, alignment: .trailing)
+                    }
+                    .font(.scopeMicro)
+                    .foregroundStyle(Ink.tertiary)
+                    .textCase(.uppercase)
+                }
                 windowRow("Last 5 hours", snapshot.all.fiveHours, budget: preferences.tokenBudgetPer5h, cost: preferences.showAPICost)
                 windowRow("Today", snapshot.all.today, cost: preferences.showAPICost)
                 windowRow("Last 7 days", snapshot.all.sevenDays, cost: preferences.showAPICost)
@@ -212,7 +223,8 @@ struct TokenUsagePopover: View {
 
     private func dollars(_ window: TokenWindow) -> String {
         let cost = TokenPricing.dollars(byModel: window.byModel)
-        return cost.dollars.formatted(.currency(code: "USD").precision(.fractionLength(cost.dollars < 10 ? 2 : 0)))
+        // Always `$`, whatever the locale: these are US list prices, not an amount in the user's currency.
+        return "$" + cost.dollars.formatted(.number.precision(.fractionLength(cost.dollars < 10 ? 2 : 0)))
             + (cost.unpriced.isEmpty ? "" : "+")
     }
 
