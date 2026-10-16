@@ -88,8 +88,12 @@ extension AppModel {
     /// (`UserMessage.canTypeIntoStartedThread`), then typed; a thread that does not come up keeps it in the Problem
     /// Center rather than losing it.
     private func startThenSubmit(_ text: String, to id: ThreadID) {
-        if let session = session(id), !session.isAlive, !isLaunching(session) {
-            Task { await relaunch(id) }
+        if let session = session(id), !session.isAlive {
+            // The emulator outlives the process: a TUI killed before it could turn bracketed paste off leaves the
+            // flag on, and the gate below would open on a shell still starting the driver. Off here (on the
+            // emulator alone, nothing reaches a child), on again once the new driver draws its prompt.
+            session.terminalView.feed(text: "\u{1b}[?2004l")
+            if !isLaunching(session) { Task { await relaunch(id) } }
         }
         Task { [weak self] in
             let clock = ContinuousClock()
