@@ -11,6 +11,30 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.21.0](https://github.com/maastrich/scope/releases/tag/v0.21.0) - 2026-10-16
+
+### Added
+
+- restore archived tasks from agents, and task actions in the palette ([#38](https://github.com/maastrich/scope/pull/38)) by @maastrich
+- **threads:** remember what each agent last did and said ([#39](https://github.com/maastrich/scope/pull/39)) by @maastrich
+- **notifications:** quote what the agent said, and reply from the banner ([#40](https://github.com/maastrich/scope/pull/40)) by @maastrich
+- **sidebar:** show what each agent is doing, and where a task came from ([#41](https://github.com/maastrich/scope/pull/41)) by @maastrich
+- ask the orchestrator from ⌘K, reply to a thread from the sidebar ([#43](https://github.com/maastrich/scope/pull/43)) by @maastrich
+- **tasks:** cited pull requests stay context, --pr to start from one, scope config for budgets ([#44](https://github.com/maastrich/scope/pull/44)) by @maastrich
+- **usage:** a private log of how Scope is used, readable with scope usage ([#45](https://github.com/maastrich/scope/pull/45)) by @maastrich
+- a task's Claude Code threads load every repository's skills ([#46](https://github.com/maastrich/scope/pull/46)) by @maastrich
+- **tasks:** refresh every task's pull request in the background, archive on merge, flag forgotten tasks ([#42](https://github.com/maastrich/scope/pull/42)) by @maastrich
+
+### Fixed
+
+- **tasks:** emptying the trash waits for the pass already running ([#47](https://github.com/maastrich/scope/pull/47)) by @maastrich
+
+### Documentation
+
+- **research:** ideas to improve how Scope is used ([#37](https://github.com/maastrich/scope/pull/37)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.20.0...v0.21.0
+
 ## [0.20.0](https://github.com/maastrich/scope/releases/tag/v0.20.0) - 2026-10-16
 
 ### Added
