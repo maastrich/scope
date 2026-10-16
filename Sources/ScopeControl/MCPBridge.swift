@@ -371,6 +371,33 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_release",
+            title: "Cut a release",
+            description: """
+            Cuts a release of a repository the way the user would from a clean main: Scope clones the repository's \
+            default branch into its own home (never a sandbox, never the user's checkout), checks that CI on the \
+            head is green and that no release workflow is already running, then runs the repository's \
+            scripts/release.sh there — or, without one, computes the next version with git-cliff, creates the \
+            annotated tag and pushes it — with the user's own git identity and credentials. A release cannot be \
+            taken back, so it follows its own approval (Settings ▸ Automation ▸ Releases, after asking by default). \
+            Without version, the next one from the Conventional Commits since the last tag. With dry_run true, \
+            everything but the push: the notes and the plan come back, nothing is published, no approval is asked. \
+            force releases on a red, running or absent CI. Use it instead of running scripts/release.sh from a \
+            sandbox, whose git hooks refuse the push to main the script needs.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "version":{"type":"string","description":"X.Y.Z or X.Y.Z-pre.N, without the v; omitted, the next version from Conventional Commits."},\
+            "repo":{"type":"string","description":"Repository relative to the scope root; omitted, the one your task works on or that holds your cwd, else the scope's only one."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of the scope; omitted, your own."},\
+            "dry_run":{"type":"boolean","description":"Clone, check and print the plan; publish nothing."},\
+            "force":{"type":"boolean","description":"Release although CI on the head is not green, or never ran."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
             name: "scope_ping",
             title: "Check Scope",
             description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying.",
@@ -426,6 +453,8 @@ public enum MCPBridge {
                 return .success(.summary(try decoder.decode(SummaryParams.self, from: arguments)))
             case "scope_task_show":
                 return .success(.taskShow(try decoder.decode(TaskShowParams.self, from: arguments)))
+            case "scope_release":
+                return .success(.release(try decoder.decode(ReleaseArguments.self, from: arguments).call))
             case "scope_usage":
                 return .success(.usage(try decoder.decode(UsageParams.self, from: arguments)))
             default:
@@ -456,6 +485,7 @@ public enum MCPBridge {
         case .summary(let result): try encoder.encode(result)
         case .taskShow(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
+        case .release(let result): try encoder.encode(result)
         }
     }
 
@@ -500,6 +530,7 @@ public enum MCPBridge {
             "scope_task_close": taskID,
             "scope_task_restore": taskID,
             "scope_task_rebase": taskID,
+            "scope_release": ["tag": .rename("version"), "repository": .rename("repo"), "preview": .rename("dry_run")],
             // Not `name` for the topic: on a task, the name is the task's own.
             "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
         ]
@@ -570,6 +601,25 @@ public enum MCPBridge {
         let names = unknown.map { "“\($0)”" }.joined(separator: ", ")
         return .badRequest("\(tool.name) does not take \(names); nothing was done",
                            detail: (hints + ["It takes: " + known.joined(separator: ", ")]).joined(separator: "\n"))
+    }
+
+    /// `scope_release` arguments, snake_case.
+    struct ReleaseArguments: Decodable {
+        var version: String?
+        var repo: String?
+        var scope: String?
+        var dryRun: Bool?
+        var force: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case version, repo, scope, force
+            case dryRun = "dry_run"
+        }
+
+        var call: ReleaseParams {
+            ReleaseParams(version: version.map(ReleaseVersion.stripped), repo: repo, scope: scope,
+                          dryRun: dryRun ?? false, force: force ?? false)
+        }
     }
 
     /// `scope_task_close` arguments, snake_case like the other task tool.

@@ -229,6 +229,11 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // A preview reads; the real pass stops processes and removes folders no task owns.
                 if case .gc(let params) = call, params.dryRun { return .allow }
                 approval = settings.tasks
+            case .release:
+                // A dry run clones and prints the plan, pushes nothing. The real one ships a version: its own
+                // approval, which asks by default.
+                if case .release(let params) = call, params.dryRun { return .allow }
+                approval = settings.releases
             case .threadNew, .taskNew:
                 let childDepth = depth + 1
                 if let limit = settings.depthLimit, childDepth > limit {
@@ -320,6 +325,9 @@ public struct AutomationPolicy: Sendable, Equatable {
             "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")
         case .gc: "clean up leftover sandboxes and processes"
+        case .release(let params):
+            "release " + (params.repo.map { "\($0) " } ?? "") + (params.version.map { "v\($0)" } ?? "the next version")
+                + (params.scope.map { " in \($0)" } ?? "") + (params.force ? ", CI unchecked" : "")
         case .threadStop(let params): "stop the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"
         case .threadSend(let params): (params.command ? "run a driver command in the thread " : "type into the thread ") + params.thread

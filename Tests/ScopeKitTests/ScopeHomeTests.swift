@@ -53,7 +53,8 @@ struct ScopeHomeTests {
         let home = URL(fileURLWithPath: "/tmp/scope-a", isDirectory: true)
         let paths = [ScopeHome.configURL(home: home), ScopeHome.driversURL(home: home), ScopeHome.graphURL(home: home),
                      ScopeHome.threadsURL(home: home), ScopeHome.sandboxesURL(home: home),
-                     ScopeHome.spotlightMarkerURL(home: home), ScopeHome.uiStateURL(home: home)]
+                     ScopeHome.spotlightMarkerURL(home: home), ScopeHome.uiStateURL(home: home),
+                     ScopeHome.releasesURL(home: home)]
         for path in paths { #expect(path.path.hasPrefix("/tmp/scope-a/"), "\(path.path)") }
     }
 }

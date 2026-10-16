@@ -56,6 +56,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .configGet(let params): try encoder.encode(wire(params))
         case .configSet(let params): try encoder.encode(wire(params))
         case .usage(let params): try encoder.encode(wire(params))
+        case .release(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -107,6 +108,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .configGet: .configGet(try decoder.decode(Params<ConfigGetParams>.self, from: data).params ?? ConfigGetParams())
             case .configSet: .configSet(try required(ConfigSetParams.self))
             case .usage: .usage(try decoder.decode(Params<UsageParams>.self, from: data).params ?? UsageParams())
+            case .release: .release(try decoder.decode(Params<ReleaseParams>.self, from: data).params ?? ReleaseParams())
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -196,6 +198,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .summary(let result): try encoder.encode(wire(result))
         case .taskShow(let result): try encoder.encode(wire(result))
         case .usage(let result): try encoder.encode(wire(result))
+        case .release(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -223,6 +226,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .summary: .summary(try decoder.decode(Wrapped<SummaryResult>.self, from: data).result)
             case .taskShow: .taskShow(try decoder.decode(Wrapped<TaskShowResult>.self, from: data).result)
             case .usage: .usage(try decoder.decode(Wrapped<UsageResult>.self, from: data).result)
+            case .release: .release(try decoder.decode(Wrapped<ReleaseResult>.self, from: data).result)
             }
         }
         return ControlResponse(rpc: line.rpc, id: line.id, kind: kind, message: line.message,
