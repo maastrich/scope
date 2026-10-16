@@ -58,8 +58,8 @@ public enum MCPBridge {
             description: """
             What the user did over a period, scope by scope: every task created, archived or closed in it, or whose \
             threads ran in it — finished or dropped alike — with its outcome (merged, delivered, abandoned, archived, \
-            active), its pull request, its topic, the opening of its brief, its threads and the tokens they consumed; \
-            plus the threads opened \
+            active), its pull request, its topic, the opening of its brief, its threads, the tokens they consumed, and the \
+            time its agents worked and waited on the user (`agentSeconds`, `waitingSeconds`); plus the threads opened \
             outside any task. Facts, not prose: write the summary yourself from them, and say what they cannot tell \
             (the `limits` of the answer). Give `task` for one task's whole brief.
             """,

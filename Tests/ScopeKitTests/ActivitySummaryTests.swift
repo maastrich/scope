@@ -221,6 +221,32 @@ import Testing
         #expect(text.contains("note: Nothing said in a thread is kept by Scope"))
     }
 
+    @Test func eachTaskSaysHowLongItsAgentsWorkedAndHowLongItWaitedOnYou() {
+        var timed = Self.task("t1", slug: "timed", created: Self.date(10, 6), archived: Self.date(10, 7))
+        timed.agentSeconds = 3 * 3600 + 20 * 60
+        timed.waitingSeconds = 20 * 60
+        var closed = Self.task("t2", slug: "closed-timed", created: Self.date(10, 6))
+        closed.agentSeconds = 90
+        closed.waitingSeconds = 0
+        let untimed = Self.task("t3", slug: "untimed", created: Self.date(10, 6))
+        let result = ActivitySummary.build(period: Self.week, timeZone: Self.zone, scopes: [Self.acme], tasks: [timed, untimed],
+                                           threads: [], history: [.taskClosed(closed, at: Self.date(10, 8))])
+        let tasks = Dictionary(uniqueKeysWithValues: result.scopes[0].tasks.map { ($0.slug, $0) })
+        #expect(tasks["timed"]?.agentSeconds == 12_000)
+        #expect(tasks["timed"]?.waitingSeconds == 1_200)
+        #expect(tasks["closed-timed"]?.agentSeconds == 90, "a closed task keeps the totals it left in the history")
+        #expect(tasks["untimed"]?.agentSeconds == nil)
+
+        let text = CLIRenderer.text(.summary(result))
+        #expect(text.contains("agent 3 h 20, waited on you 20 min"))
+        #expect(!text.contains("Untimed [untimed] · created 2026-10-06, last active 2026-10-06 · agent"))
+        #expect(result.limits.contains { $0.hasPrefix("Agent time adds up") })
+
+        let detail = ActivitySummary.detail(of: "timed", timeZone: Self.zone, period: Self.week, scopes: [Self.acme],
+                                            tasks: [timed], threads: [], history: [])
+        #expect(CLIRenderer.text(.summary(detail!)).contains("time        agent 3 h 20, waited on you 20 min"))
+    }
+
     @Test func theResultSurvivesTheWire() throws {
         let history = [HistoryEntry.taskClosed(Self.task("t9", slug: "dropped", created: Self.date(10, 5)), at: Self.date(10, 8))]
         let result = ActivitySummary.build(period: Self.week, timeZone: Self.zone, scopes: [Self.acme],

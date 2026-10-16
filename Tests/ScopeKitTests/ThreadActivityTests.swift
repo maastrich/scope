@@ -48,9 +48,26 @@ import Testing
             Self.event(.turnEnded, 9, raw: #"{"last_assistant_message":"Built."}"#),
         ])
         #expect(!activity.inTurn)
-        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(9), outcome: .ended, tools: 1)])
+        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(9), outcome: .ended, tools: 1, said: "Built.")])
         #expect(activity.lastReply == AgentReply(text: "Built.", at: Self.at(9)))
         #expect(activity.lastTool?.name == "Bash", "the last tool outlives its turn")
+    }
+
+    @Test func eachTurnKeepsTheOpeningOfItsOwnReplyOnly() {
+        let long = String(repeating: "word ", count: 60) + "end"
+        let activity = Self.fold([
+            Self.event(.turnStarted, 1),
+            Self.event(.turnEnded, 9, raw: #"{"last_assistant_message":"\#(long)"}"#),
+            Self.event(.turnStarted, 20),
+            Self.event(.inputRequested, 25),
+        ])
+        let said = activity.turns[0].said ?? ""
+        #expect(said.hasPrefix("word word"))
+        #expect(said.hasSuffix("…"))
+        #expect(said.count <= ThreadActivity.saidLimit + 1)
+        #expect(ThreadActivity.excerpt("Done.\n\n  Next:  tests") == "Done. Next: tests")
+        #expect(activity.turns[1].said == nil, "the reply of the turn before is not this one's")
+        #expect(ThreadActivity.excerpt("  \n ") == nil)
     }
 
     @Test func eachWayATurnEndsIsKept() {

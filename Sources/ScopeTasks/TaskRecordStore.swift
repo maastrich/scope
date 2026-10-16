@@ -82,16 +82,20 @@ public actor TaskRecordStore {
         try JSONStore.save(record, to: url(for: record.id), fractionalSeconds: true)
     }
 
-    /// Removes `<id>.json`, after writing what it held to the history: a closed task leaves nothing else behind, and
-    /// a summary of past work still has to name it. A missing file is not an error.
+    /// Removes `<id>.json` and its timeline, after writing what they held to the history: a closed task leaves
+    /// nothing else behind, and a summary of past work still has to name it and say how long it took. Its threads are
+    /// hung up before, so the timeline holds all of their turns. A missing file is not an error.
     public func delete(_ id: TaskID) async throws {
         let file = url(for: id)
         guard FileManager.default.fileExists(atPath: file.path) else { return }
+        let timeline = TaskTimelineStore.url(for: id, in: directory)
         if let data = try? Data(contentsOf: file),
            let record = try? JSONStore.makeDecoder(fractionalSeconds: true).decode(TaskRecord.self, from: data) {
-            ActivityHistory.append(.taskClosed(record.snapshot), home: home)
+            let lanes = TaskTimelineStore.load(from: timeline).lanes
+            ActivityHistory.append(.taskClosed(record.snapshot(lanes: lanes)), home: home)
         }
         try FileManager.default.removeItem(at: file)
+        try? FileManager.default.removeItem(at: timeline)
     }
 
     private struct VersionProbe: Decodable {
