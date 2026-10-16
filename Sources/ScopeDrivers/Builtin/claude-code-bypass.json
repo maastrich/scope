@@ -5,7 +5,9 @@
   "args": [
     "--dangerously-skip-permissions"
   ],
-  "env": {},
+  "env": {
+    "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"
+  },
   "context": {
     "file": "CLAUDE.md",
     "mode": "generate"
@@ -43,10 +45,14 @@
   "prompt": [
     "{prompt}"
   ],
+  "addDir": [
+    "--add-dir",
+    "{dir}"
+  ],
   "adapter": {
     "kind": "claude-hooks"
   },
   "icon": "asterisk",
   "builtin": true,
-  "version": 3
+  "version": 4
 }

@@ -125,7 +125,11 @@ it before it starts:</p>
   <li>It copies the files your base checkout keeps out of git, <code>.env*</code> by default. A file already in the
   sandbox is never overwritten, and nothing is followed out of the repository: <code>..</code>, a symlink leading
   outside, a sandbox folder that is a symlink are all refused. A copied file the repository does not ignore is
-  added to <code>.git/info/exclude</code>, so it cannot end up in a commit.</li>
+  added to <code>.git/info/exclude</code>, so it cannot end up in a commit. The skills, commands and agents under
+  <code>.claude/skills</code>, <code>.claude/commands</code> and <code>.claude/agents</code> that the sandbox lacks
+  (a repository that ignores <code>.claude/</code>) are copied too, each whole, with no setting needed. They are
+  copies, not links, so an agent editing a skill never edits your checkout; <code>settings.local.json</code> is
+  left behind unless <code>copyFiles</code> names it.</li>
   <li>It runs the repository's <b>setup</b> command — <code>pnpm install</code>, <code>bundle</code>,
   <code>make deps</code> — in the sandbox, with your login-shell environment.</li>
 </ol>
@@ -185,6 +189,13 @@ the installed drivers read (<code>AGENTS.md</code>, and <code>CLAUDE.md</code> f
 <code>CLAUDE.md</code> stays exactly as it is. For Claude Code the task context then goes to
 <code>CLAUDE.local.md</code>, which Claude reads alongside the repository's file (excluded from git like the
 others); other drivers start from the repository's file and their prompt.</p>
+<h3 id="skills">Every repository's skills</h3>
+<p>A thread at the root of a task of several repositories would see none of their skills, slash commands or
+subagents: Claude Code looks for <code>.claude/</code> in its own folder, and the repositories sit one level down.
+So Scope hands it each sandbox with <code>--add-dir</code> (the profile's <code>addDir</code>), and sets
+<code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> so each repository's <code>CLAUDE.md</code> is read
+from the start rather than only when the agent opens a file there. A thread already running when you add a
+repository sees it the next time it is relaunched or resumed.</p>
 
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
@@ -224,7 +235,7 @@ outright — a number, <code>#123</code>, <code>owner/repo#123</code> or its URL
 A pull request Scope only read off the prompt is a guess: when it is not one of the scope's (another repository, a
 number that does not exist), the task is created on a new branch all the same and the answer says, in one line,
 which reference it ignored.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
