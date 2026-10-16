@@ -212,4 +212,31 @@ import ScopeGit
         let files = try await scope.client(for: api).output(["ls-tree", "-r", "--name-only", ref])
         #expect(files.contains("notes.txt") && !files.contains("dump.sql"))
     }
+
+    @Test func archivingKeepsTheRepliesAndTheReportForGood() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "study", branch: "feat/study", in: scope.declaration, repos: ["api"],
+                                            deliverable: "docs/study.md")
+        #expect(task.deliverable == "docs/study.md")
+        let sandbox = task.repos[0].sandboxURL
+        try FileManager.default.createDirectory(at: sandbox.appending(path: "docs"), withIntermediateDirectories: true)
+        try scope.write(sandbox, "docs/study.md", "# Study\n")
+        try scope.write(sandbox, "REPORT.md", "report\n")
+        let answer = TaskDeliverable.Reply(threadID: "th1", title: "Claude", driver: "claude", text: "## Findings",
+                                           at: Date(timeIntervalSince1970: 1))
+
+        _ = try await manager.dismantle(task.id, .archive, replies: [answer])
+        let kept = try #require(TaskDeliverableStore.load(home: scope.home, taskID: task.id.rawValue))
+        #expect(kept.replies == [answer])
+        #expect(kept.files.map(\.name) == ["docs/study.md", "REPORT.md"])
+        #expect(kept.files.map(\.text) == ["# Study\n", "report\n"])
+
+        // A close afterwards finds no thread and no sandbox: what the archive kept stays, and outlives the record.
+        try await manager.close(task.id, deleteBranch: false)
+        #expect(await manager.task(task.id) == nil)
+        #expect(TaskDeliverableStore.load(home: scope.home, taskID: task.id.rawValue) == kept)
+        #expect(await TaskRecordStore(home: scope.home).loadAll().problems.isEmpty)
+    }
 }

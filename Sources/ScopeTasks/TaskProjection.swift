@@ -45,6 +45,9 @@ public enum TaskProjection {
         lines.append("- Scope: \(scopeName)")
         lines.append("- Branch: `\(task.branch)`")
         lines.append("- Task root: `\(task.root)`")
+        if let deliverable = task.deliverable {
+            lines.append("- Deliverable: `\(deliverable)` (in the task root or a sandbox) — write the result of the task there; Scope keeps it when the task is archived")
+        }
         lines.append("")
         if let prompt = task.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
             lines.append("## Goal")

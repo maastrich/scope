@@ -113,7 +113,7 @@ public actor TaskManager {
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
         contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        origin: ThreadOrigin? = nil
+        origin: ThreadOrigin? = nil, deliverable: String? = nil
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -140,7 +140,8 @@ public actor TaskManager {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
-            portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin
+            portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
+            deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -406,7 +407,11 @@ public actor TaskManager {
     /// record for a close. Nothing asks and nothing refuses: what could be lost is saved under
     /// `refs/scope/salvage/` first (`DismantleNotice.changesSaved`, `.branchSaved`).
     @discardableResult
+    ///
+    /// `replies` are the last answers of the task's threads, read by the caller before `prepare` closes them: they
+    /// are kept with the task's report file, if it wrote one, before any folder goes (`TaskDeliverable`).
     public func dismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown? = nil,
+                          replies: [TaskDeliverable.Reply] = [],
                           prepare: (@Sendable () async -> Void)? = nil) async throws -> DismantleOutcome {
         while let running = dismantling[id] {
             if running.mode == mode { return try await running.run.value }
@@ -416,7 +421,7 @@ public actor TaskManager {
         // The run clears its own entry before it completes, so a waiter never sees a finished run still listed.
         let run = Task {
             defer { finishDismantle(id, token: token) }
-            return try await runDismantle(id, mode, teardown: teardown, prepare: prepare)
+            return try await runDismantle(id, mode, teardown: teardown, replies: replies, prepare: prepare)
         }
         dismantling[id] = (token, mode, run)
         return try await run.value
@@ -426,7 +431,7 @@ public actor TaskManager {
         if dismantling[id]?.token == token { dismantling[id] = nil }
     }
 
-    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown?,
+    private func runDismantle(_ id: TaskID, _ mode: DismantleMode, teardown: Teardown?, replies: [TaskDeliverable.Reply],
                               prepare: (@Sendable () async -> Void)?) async throws -> DismantleOutcome {
         guard var record = records[id] else {
             if mode.isClose { return DismantleOutcome(record: nil) }
@@ -441,6 +446,11 @@ public actor TaskManager {
             var notices = await runTeardown(record, teardown)
             let swept = await sweep([record.rootURL])
             if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
+            // The processes are stopped, so the report is finished; the sandboxes are still there to read it from.
+            TaskDeliverableStore.keep(TaskDeliverable(
+                taskID: id.rawValue, savedAt: TaskRecord.roundedToMilliseconds(.now), replies: replies,
+                files: TaskDeliverable.collectFiles(named: record.deliverableNames, in: record.deliverableFolders)
+            ), home: home)
             for index in record.repos.indices where record.repos[index].state == .active {
                 // Saved and written down before the folder goes, so a failure in between never loses it.
                 if let saved = try await salvage(record.repos[index], task: record) {

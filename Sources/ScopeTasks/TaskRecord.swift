@@ -185,6 +185,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Restored with a pull request: someone wants it open, so a merge no longer archives it (`MergedTaskArchive`).
     /// Set by `TaskManager.reopen`.
     public var keptOpenAfterMerge: Bool = false
+    /// The file the task's work ends in, relative to the task root or a sandbox (`docs/study.md`): kept with the
+    /// threads' last answers when the task is archived or closed (`TaskDeliverable`). `REPORT.md` is looked for anyway.
+    public var deliverable: String?
 
     public init(
         id: TaskID = .generate(),
@@ -207,7 +210,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         cleanup: PendingCleanup? = nil,
         topic: String? = nil,
         parentTask: TaskID? = nil,
-        origin: ThreadOrigin? = nil
+        origin: ThreadOrigin? = nil,
+        deliverable: String? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -231,6 +235,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.topic = TaskTopic.normalize(topic)
         self.parentTask = parentTask
         self.origin = origin
+        self.deliverable = deliverable
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -329,6 +334,21 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         return snapshot
     }
 
+    /// Where `TaskDeliverable.collectFiles` looks: the task root, and every sandbox still there.
+    public var deliverableFolders: [TaskDeliverable.Folder] {
+        var folders = [TaskDeliverable.Folder(url: rootURL, label: nil)]
+        let active = activeRepos
+        for repo in active where repo.sandboxURL.standardizedFileURL != rootURL.standardizedFileURL {
+            folders.append(.init(url: repo.sandboxURL, label: active.count == 1 ? nil : repo.repoRelativePath))
+        }
+        return folders
+    }
+
+    /// The report names to look for: the task's own, then `REPORT.md`.
+    public var deliverableNames: [String] {
+        [deliverable, TaskDeliverable.defaultFileName].compactMap { $0 }
+    }
+
     /// `notRun` for a record that never ran a setup.
     public var setupState: SetupState { setup?.state ?? .notRun }
 
@@ -339,7 +359,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge
+        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -368,5 +388,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         parentTask = (try? container.decodeIfPresent(TaskID.self, forKey: .parentTask)) ?? nil
         origin = (try? container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)) ?? nil
         keptOpenAfterMerge = (try? container.decodeIfPresent(Bool.self, forKey: .keptOpenAfterMerge)) ?? false
+        deliverable = (try? container.decodeIfPresent(String.self, forKey: .deliverable)) ?? nil
     }
 }
