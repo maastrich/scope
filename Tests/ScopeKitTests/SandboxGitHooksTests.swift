@@ -103,6 +103,26 @@ import ScopeCore
         #expect(toBranch.succeeded, "\(toBranch.output)")
     }
 
+    /// A release is a tag: one pushed on its own passes. `scripts/release.sh` pushes `main` and the tag in one atomic
+    /// push, which the hook refuses as a whole — nothing half-published, and `scope release` is the way.
+    @Test func aTagAloneGoesThroughButNotBesideTheBranch() async throws {
+        let fixture = try await Fixture.make()
+        try fixture.scope.write(fixture.sandbox, "g.txt", "g\n")
+        #expect(try fixture.commitAll(in: fixture.sandbox, "feat: g").succeeded)
+        #expect(try fixture.git(["tag", "-a", "v9.9.9", "-m", "nine"], in: fixture.sandbox).succeeded)
+        let tagAlone = try fixture.git(["push", "-q", "origin", "v9.9.9"], in: fixture.sandbox)
+        #expect(tagAlone.succeeded, "\(tagAlone.output)")
+        #expect(try fixture.git(["ls-remote", "--tags", "origin", "refs/tags/v9.9.9"], in: fixture.sandbox).output.contains("v9.9.9"))
+
+        try fixture.scope.write(fixture.sandbox, "h.txt", "h\n")
+        #expect(try fixture.commitAll(in: fixture.sandbox, "feat: h").succeeded)
+        #expect(try fixture.git(["tag", "v9.9.10"], in: fixture.sandbox).succeeded)
+        let withMain = try fixture.git(["push", "--atomic", "-q", "origin", "HEAD:main", "v9.9.10"], in: fixture.sandbox)
+        #expect(!withMain.succeeded)
+        #expect(withMain.output.contains("scope: refusing to push to main"), "\(withMain.output)")
+        #expect(try fixture.git(["ls-remote", "--tags", "origin", "refs/tags/v9.9.10"], in: fixture.sandbox).output.isEmpty)
+    }
+
     @Test func theRepositorysOwnHooksStillRun() async throws {
         let fixture = try await Fixture.make()
         let marker = fixture.scope.root.appending(path: "own-hook-ran", directoryHint: .notDirectory)
