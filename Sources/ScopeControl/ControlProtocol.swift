@@ -555,12 +555,16 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     /// a new branch. Given, it must resolve or the call fails; `nil` = only a pull request the prompt asks to work
     /// on (`PullRequestReference.startPoint`), and one that does not resolve is ignored.
     public var startPR: String?
+    /// The GitHub issue to work on (`123`, `#123`, `owner/repo#123`, its URL): read with `gh`, it opens the brief and
+    /// the task records it. Given, it must resolve or the call fails; `nil` = only an issue the prompt asks to work on.
+    public var issue: String?
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
                 dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
-                startPR: String? = nil, deliverable: String? = nil, model: String? = nil) {
+                startPR: String? = nil, deliverable: String? = nil, model: String? = nil, issue: String? = nil) {
         self.prompt = prompt
+        self.issue = issue
         self.deliverable = deliverable
         self.scope = scope
         self.repos = repos
@@ -592,6 +596,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
         topic = try container.decodeIfPresent(String.self, forKey: .topic)
         startPR = try container.decodeIfPresent(String.self, forKey: .startPR)
+        issue = try container.decodeIfPresent(String.self, forKey: .issue)
         deliverable = try container.decodeIfPresent(String.self, forKey: .deliverable)
     }
 }
@@ -806,11 +811,14 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
     public var topic: String?
     /// One line about something Scope decided on the caller's behalf (a pull request it ignored), when it did.
     public var note: String?
+    /// The issue the task was opened from (`#123`), when one was.
+    public var issue: String?
 
     public init(created: Bool, task: String? = nil, name: String, slug: String, branch: String,
                 scope: String, scopeSlug: String, root: String? = nil, repos: [TaskRepoResult] = [],
-                thread: String? = nil, topic: String? = nil, note: String? = nil) {
+                thread: String? = nil, topic: String? = nil, note: String? = nil, issue: String? = nil) {
         self.created = created
+        self.issue = issue
         self.task = task
         self.name = name
         self.slug = slug

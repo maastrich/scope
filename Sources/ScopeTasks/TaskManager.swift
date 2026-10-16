@@ -113,7 +113,7 @@ public actor TaskManager {
         in scope: ScopeDeclaration, repos: [String], startPoint: TaskStartPoint = .defaultBranch,
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
         contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        origin: ThreadOrigin? = nil, deliverable: String? = nil
+        origin: ThreadOrigin? = nil, deliverable: String? = nil, issue: LinkedIssue? = nil
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -141,7 +141,7 @@ public actor TaskManager {
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
             portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
-            deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -736,6 +736,14 @@ public actor TaskManager {
         }
 
         report.pendingTasks = records.values.filter { $0.cleanup != nil && dismantling[$0.id] == nil }.map(\.id).sorted()
+        if dryRun {
+            // What the live tasks weigh, biggest first: a preview is when one asks how much the sandboxes take.
+            let live = records.values.filter { !$0.isArchived }
+            report.sandboxSizes = live.map { SandboxSize.bytes(under: $0.rootURL) }
+            var sizes: [String: Int64] = [:]
+            for (record, bytes) in zip(live, report.sandboxSizes) { sizes["\(record.scopeSlug)/\(record.slug)", default: 0] += bytes }
+            report.largestSandboxes = SandboxSize.largest(sizes, count: 3).map { "\($0.key): \(SandboxSize.text($0.bytes))" }
+        }
         return report
     }
 

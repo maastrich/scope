@@ -115,9 +115,10 @@ final class AppControlService: ControlService {
                 return .success(.action(ActionResult(message: "closed \(session.id.rawValue) — \(session.title)",
                                                      thread: session.id.rawValue), .threadClose))
             }
-        case .threadSend(let params):
+        case .threadSend(var params):
             // A driver command rewrites how another agent works and carries no signature: its own, narrower reach.
             let reach = params.command ? automation.effectiveCommandReach : automation.threadReach
+            params.text = await model.expandMentions(params.text)
             return act(on: params.thread, from: origin, reach: reach) { session in
                 guard session.isAlive else {
                     // A scope's residents start on its first visit; a message is a good reason to start one sooner.
@@ -380,7 +381,7 @@ final class AppControlService: ControlService {
 
     static func describe(_ report: GarbageReport, dryRun: Bool) -> String {
         if report.skipped { return "a cleanup is already running; try again in a moment" }
-        guard !report.isEmpty else { return "nothing to clean" }
+        guard !report.isEmpty || (dryRun && !report.sandboxSizes.isEmpty) else { return "nothing to clean" }
         var lines: [String] = []
         func section(_ title: String, _ items: [String]) {
             guard !items.isEmpty else { return }
@@ -396,6 +397,12 @@ final class AppControlService: ControlService {
         section(dryRun ? "would delete expired saved changes:" : "deleted expired saved changes:", report.deletedRefs)
         if report.emptiedTrash > 0 {
             lines.append((dryRun ? "would empty " : "emptied ") + "\(report.emptiedTrash) \(report.emptiedTrash == 1 ? "item" : "items") from the trash")
+        }
+        if dryRun, !report.sandboxSizes.isEmpty {
+            let count = report.sandboxSizes.count
+            lines.append("live sandboxes take \(SandboxSize.text(report.sandboxBytes)) across \(count) \(count == 1 ? "task" : "tasks")"
+                         + (report.largestSandboxes.isEmpty ? "" : "; the heaviest:"))
+            lines += report.largestSandboxes.map { "  \($0)" }
         }
         return lines.joined(separator: "\n")
     }
@@ -583,8 +590,10 @@ final class AppControlService: ControlService {
         }
 
         let threadOrigin = childOrigin(of: origin, caller: caller)
+        var prompt = params.prompt
+        if let given = prompt { prompt = await model.expandMentions(given) }
         guard let session = await model.newThread(in: scopeID, driverID: params.driver, cwdKind: cwdKind,
-                                                  taskID: taskID, title: params.title, initialPrompt: params.prompt,
+                                                  taskID: taskID, title: params.title, initialPrompt: prompt,
                                                   origin: threadOrigin, model: requestedModel) else {
             return .failure(.failed("Scope could not open the thread",
                                     detail: "The app reported it as a problem; its window says why."))
@@ -654,7 +663,7 @@ final class AppControlService: ControlService {
         guard let scope = model.scopes.first(where: { $0.id.rawValue == summary.id }) else {
             return .failure(.notFound("scope \(summary.slug) went away"))
         }
-        let prompt = params.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = await model.expandMentions(params.prompt.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !prompt.isEmpty else { return .failure(.badRequest("a task needs a prompt")) }
         // Refused before the proposal, which would otherwise keep the caller waiting for nothing.
         if let branch = params.branch, TaskBranch.isReserved(branch) {
@@ -673,6 +682,15 @@ final class AppControlService: ControlService {
             }
             startPR = reference
         }
+        var issue: PullRequestReference?
+        if let raw = params.issue {
+            guard let reference = PullRequestReference.parseIssue(raw) else {
+                return .failure(.badRequest("“\(raw)” is not an issue",
+                                            detail: "Give its number (123, #123), owner/repo#123 or its URL."))
+            }
+            guard startPR == nil else { return .failure(.badRequest("a task starts from a pull request or works on an issue, not both")) }
+            issue = reference
+        }
 
         var repos: [String] = []
         for query in params.repos {
@@ -683,7 +701,7 @@ final class AppControlService: ControlService {
         }
 
         // What the prompt is about, before anything is created: the pull request asked for wins over everything.
-        var request = await model.resolveTaskRequest(prompt: prompt, in: scope.id, startPR: startPR, repos: repos)
+        var request = await model.resolveTaskRequest(prompt: prompt, in: scope.id, startPR: startPR, issue: issue, repos: repos)
         if let existing = request.existingTask {
             return .failure(.init(.failed, "that pull request already has a task",
                                   detail: "Task \(existing.rawValue) in \(summary.slug)."))
@@ -694,6 +712,9 @@ final class AppControlService: ControlService {
             // beats no task over a reference the caller may not even have meant.
             guard startPR == nil else {
                 return .failure(.badRequest("the pull request \(params.startPR ?? "") could not be used", detail: unresolved))
+            }
+            guard issue == nil else {
+                return .failure(.badRequest("the issue \(params.issue ?? "") could not be read", detail: unresolved))
             }
             note = TaskNewResult.ignoredReference(request.reference?.label ?? "", reason: request.unresolvedReason ?? unresolved)
             request = .init(repos: request.repos)
@@ -709,6 +730,13 @@ final class AppControlService: ControlService {
             progress("asking \(model.profile(id: params.driver)?.name ?? "the driver") what to call it")
             proposal = await model.proposeTask(prompt: prompt, driverID: params.driver, repos: repos,
                                                evidence: evidence, in: scope.id)
+            // The microsession read an issue the request only alluded to: `gh` says what it is, as for a URL.
+            if request.issue == nil, request.pullRequest == nil, let reference = proposal.issue,
+               let resolved = await model.resolveProposedIssue(reference, in: scope.id) {
+                request.issue = resolved.issue
+                if repos.isEmpty { repos = resolved.repos }
+            }
+            if request.issue != nil, params.title == nil, let issue = request.issue { proposal.title = IssueBrief.title(for: issue) }
             if let title = params.title { proposal.title = title }
             if let branch = params.branch { proposal.branch = branch }
             if let slug = params.slug { proposal.slug = slug }
@@ -736,7 +764,7 @@ final class AppControlService: ControlService {
                 repos: repos.map { TaskRepoResult(repo: $0, worktree: sandboxes.appending(path: $0).path,
                                                   branch: proposal.branch,
                                                   branchCreated: startPoint.requiredBranch == nil) },
-                note: note
+                note: note, issue: request.issue?.label
             )))
         }
 
@@ -753,7 +781,7 @@ final class AppControlService: ControlService {
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
                                                runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
                                                topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable,
-                                               model: requestedModel)
+                                               model: requestedModel, issue: request.issue)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }
@@ -767,7 +795,8 @@ final class AppControlService: ControlService {
             scope: summary.name, scopeSlug: summary.slug, root: record.root,
             repos: record.repos.map { TaskRepoResult(repo: $0.repoRelativePath, worktree: $0.sandboxPath,
                                                      branch: $0.branch, branchCreated: $0.branchCreated ?? false) },
-            thread: model.threads(in: record.id).first?.id.rawValue, topic: record.topic, note: note
+            thread: model.threads(in: record.id).first?.id.rawValue, topic: record.topic, note: note,
+            issue: record.issue?.label
         )))
     }
 

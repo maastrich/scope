@@ -44,7 +44,7 @@ private struct InlineReplyRow: View {
                     .textSelection(.enabled)
             }
             MessageComposer(text: $draft, placeholder: "Reply to \(model.displayTitle(for: session))…",
-                            font: .system(size: 12), height: 54) {
+                            font: .system(size: 12), height: 54, mentions: model.mentionCandidates(in: session.record.scopeID)) {
                 guard model.sendMessage(draft, to: session.id, toast: false) else { return }
                 model.endReply()
             } onCancel: {

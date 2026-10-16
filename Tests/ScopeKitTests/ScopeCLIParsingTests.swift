@@ -46,6 +46,12 @@ import Testing
             == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "hello", submit: false)))
     }
 
+    @Test func taskNewTakesAnIssueToWorkOn() throws {
+        #expect(try Self.call(["task", "new", "fix it", "--issue", "#12"]) == .taskNew(TaskNewParams(prompt: "fix it", issue: "#12")))
+        #expect(try Self.call(["task", "new", "fix it", "--issue=https://github.com/a/b/issues/12"])
+                == .taskNew(TaskNewParams(prompt: "fix it", issue: "https://github.com/a/b/issues/12")))
+    }
+
     @Test func nothingIsHelp() throws {
         guard case .help = try ScopeCLI.parse([]) else {
             Issue.record("a bare `scope` should say what it can do")

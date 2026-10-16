@@ -368,6 +368,9 @@ struct NewTaskSheet: View {
 
     private var sourceCaption: String {
         if let unresolved = resolution?.unresolved { return unresolved }
+        if let issue = resolution?.issue, startPoint == .defaultBranch {
+            return "Works on issue #\(issue.number) — its title, body and labels open the brief."
+        }
         switch startPoint {
         case .pullRequest(let pr):
             return "Checks \(pr.isCrossRepository ? "the fork's head" : pr.headRefName) out — no branch is created."
@@ -463,11 +466,13 @@ struct NewTaskSheet: View {
                 return
             }
 
-            // 4. Otherwise: level 0 now, the microsession's answer when it comes.
+            // 4. Otherwise: level 0 now, the microsession's answer when it comes. An issue names the task.
             if let branch = TaskTargets.branch(namedIn: request, among: evidence.branches) {
                 startPoint = .existingBranch(branch)
             }
-            apply(model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID), force: true)
+            var level0 = model.fallbackProposal(prompt: request, evidence: evidence, in: scopeID)
+            if let issue = resolved.issue { level0.title = IssueBrief.title(for: issue) }
+            apply(level0, force: true)
             focus = .title
             if startPoint == .defaultBranch, model.drivers.profile(id: driver)?.microsession?.isEmpty == false {
                 let proposal = await model.proposeTask(prompt: request, driverID: driver, repos: evidenceRepos, evidence: evidence, in: scopeID)
@@ -482,6 +487,14 @@ struct NewTaskSheet: View {
                     resolution = resolved
                     applyRepos(resolved.repos)
                     applyPullRequest(pr, in: scopeID, force: false)
+                } else if resolved.issue == nil, let reference = proposal.issue,
+                          let fromIssue = await model.resolveProposedIssue(reference, in: scopeID), let issue = fromIssue.issue {
+                    guard !Task.isCancelled else { return }
+                    resolution = fromIssue
+                    applyRepos(fromIssue.repos)
+                    var named = proposal
+                    named.title = IssueBrief.title(for: issue)
+                    apply(named, force: false)
                 } else {
                     apply(proposal, force: false)
                 }
@@ -596,8 +609,9 @@ struct NewTaskSheet: View {
         let repos = repos
         Task {
             do {
-                try await model.createTask(proposal, prompt: request, driverID: driverID, in: scope.id, repos: repos,
-                                           startPoint: startPoint, runSetup: runSetup)
+                try await model.createTask(proposal, prompt: await model.expandMentions(request), driverID: driverID,
+                                           in: scope.id, repos: repos, startPoint: startPoint, runSetup: runSetup,
+                                           issue: resolution?.issue)
                 dismiss()
             } catch TaskError.branchAlreadyCheckedOut(_, let busy, let path) {
                 checkedOut = (busy, holder(of: path))

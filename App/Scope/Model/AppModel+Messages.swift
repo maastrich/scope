@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ScopeAdapters
+import ScopeControl
 import ScopeCore
 
 /// What the chrome that sends messages needs beyond `AppModel` (which is extended, not edited): the thread whose
@@ -73,14 +74,27 @@ extension AppModel {
     /// Sends `text` to `id` and says so in a toast with *Show*. `false` when there was nothing to send or no thread.
     @discardableResult
     func sendMessage(_ text: String, to id: ThreadID, toast: Bool = true) -> Bool {
-        guard let text = UserMessage.normalized(text), let session = session(id) else { return false }
+        guard let text = UserMessage.normalized(text), session(id) != nil else { return false }
+        // `@task:` / `@thread:` mentions are read from the disk: expanded first, the message goes a moment later.
+        if TaskMention.mentions(text) {
+            Task { [weak self] in
+                guard let self else { return }
+                self.deliver(await self.expandMentions(text), to: id)
+            }
+        } else {
+            deliver(text, to: id)
+        }
+        if toast { messageUI.showSent("Sent to \(messageTargetName(id))", thread: id) }
+        return true
+    }
+
+    private func deliver(_ text: String, to id: ThreadID) {
+        guard let session = session(id) else { return }
         if session.isAlive {
             session.submit(text)
         } else {
             startThenSubmit(text, to: id)
         }
-        if toast { messageUI.showSent("Sent to \(messageTargetName(id))", thread: id) }
-        return true
     }
 
     /// A stopped thread is started for the message, as `thread.send` starts a resident — here even one the user

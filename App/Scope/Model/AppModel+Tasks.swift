@@ -55,6 +55,8 @@ extension AppModel {
         var reference: PullRequestReference?
         /// A task of this scope is already bound to that pull request.
         var existingTask: TaskID?
+        /// The GitHub issue the prompt asks to work on, read through `gh`: the brief opens on it, the task records it.
+        var issue: Issue?
     }
 
     /// Reads the prompt and works out what it is about, before anything is created.
@@ -65,20 +67,31 @@ extension AppModel {
     /// start point and its number the task's identity. Otherwise repositories and an existing branch are
     /// matched against what the scope already knows. Local and instant except for the one `gh pr view`.
     func resolveTaskRequest(prompt: String, in scopeID: ScopeID, knownBranches: [String] = [],
-                            startPR: PullRequestReference? = nil, repos: [String] = []) async -> TaskRequestResolution {
+                            startPR: PullRequestReference? = nil, issue: PullRequestReference? = nil,
+                            repos: [String] = []) async -> TaskRequestResolution {
         guard let scope = scope(scopeID) else { return TaskRequestResolution() }
         let candidates = repoCandidates(in: scope)
 
         var resolution = TaskRequestResolution()
         resolution.repos = TaskTargets.repos(namedIn: prompt, among: candidates)
 
+        let named = repos.map(TaskRepo.normalize)
+        let among = named.isEmpty ? candidates : candidates.filter { named.contains(TaskRepo.normalize($0.path)) }
         if let startPR {
-            let named = repos.map(TaskRepo.normalize)
-            let among = named.isEmpty ? candidates : candidates.filter { named.contains(TaskRepo.normalize($0.path)) }
             return await resolve(startPR, in: scope, candidates: among, keeping: resolution)
         }
+        if let issue {
+            return await resolveIssue(issue, in: scope, candidates: among, keeping: resolution)
+        }
         if let reference = PullRequestReference.startPoint(in: prompt) {
-            return await resolve(reference, in: scope, candidates: candidates, keeping: resolution)
+            // An issue URL is one for sure; a bare `#123` is tried as a pull request, and `gh` says when it is an issue.
+            if reference.isIssue { return await resolveIssue(reference, in: scope, candidates: candidates, keeping: resolution) }
+            let resolved = await resolve(reference, in: scope, candidates: candidates, keeping: resolution)
+            if resolved.pullRequest == nil, resolved.unresolvedReason?.contains("not a pull request of a repository") != true {
+                let asIssue = await resolveIssue(reference, in: scope, candidates: candidates, keeping: resolution)
+                if asIssue.issue != nil { return asIssue }
+            }
+            return resolved
         }
 
         if let branch = TaskTargets.branch(namedIn: prompt, among: knownBranches) {
@@ -131,6 +144,50 @@ extension AppModel {
                         reason: "gh could not read it (\(String(describing: error)))")
         }
         return resolution
+    }
+
+    /// Turns an issue reference into the issue itself through `gh issue view`: its title, body and labels open the
+    /// brief, nothing of it becomes a checkout. The repository is found the way a pull request's is.
+    func resolveIssue(_ reference: PullRequestReference, in scope: ScopeState, candidates: [RepoCandidate],
+                      keeping resolution: TaskRequestResolution) async -> TaskRequestResolution {
+        var resolution = resolution
+        var reference = reference
+        reference.isIssue = true
+        resolution.reference = reference
+        func fail(_ text: String, reason: String) -> TaskRequestResolution {
+            resolution.unresolved = text
+            resolution.unresolvedReason = reason
+            return resolution
+        }
+        guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
+            let reason = reference.isBare && candidates.count > 1
+                ? "a bare number names no repository, and this scope holds several"
+                : "not an issue of this scope"
+            return fail("\(reference.label) is not an issue of a repository in this scope.", reason: reason)
+        }
+        guard let gh = GhClient.locate() else {
+            return fail("\(reference.label): gh is not installed, so the issue cannot be read.", reason: "gh is not installed to read it")
+        }
+        let checkout = baseURLs(of: [candidate.path], in: scope).first ?? scope.url
+        do {
+            let issue = try await gh.issueView(number: reference.number, in: checkout, repo: reference.fullName)
+            resolution.repos = [candidate.path]
+            resolution.issue = issue
+            resolution.unresolved = nil
+            resolution.unresolvedReason = nil
+        } catch {
+            return fail("\(reference.label) could not be read as an issue: \(String(describing: error))",
+                        reason: "gh could not read it (\(String(describing: error)))")
+        }
+        return resolution
+    }
+
+    /// An issue a microsession found in a request that named none literally, read through `gh` as a pasted URL
+    /// would be. Nil when it resolves to nothing, so the caller keeps the proposal it has.
+    func resolveProposedIssue(_ reference: PullRequestReference, in scopeID: ScopeID) async -> TaskRequestResolution? {
+        guard let scope = scope(scopeID) else { return nil }
+        let resolved = await resolveIssue(reference, in: scope, candidates: repoCandidates(in: scope), keeping: TaskRequestResolution())
+        return resolved.issue == nil ? nil : resolved
     }
 
     /// `base`, or `base-2`, `base-3`… when a task or a sandbox folder of the scope already uses it.
@@ -191,11 +248,13 @@ extension AppModel {
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
         startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
         threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        deliverable: String? = nil, model: String? = nil
+        deliverable: String? = nil, model: String? = nil, issue: Issue? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
         let summaries = await graphSummaries(for: scope)
+        // The brief opens on the issue: the thread reads it first, and the record keeps it that way.
+        let prompt = issue.map { IssueBrief.prefixed(prompt, with: $0) } ?? prompt
         let record: TaskRecord
         do {
             record = try await env.tasks.create(
@@ -204,7 +263,8 @@ extension AppModel {
                 pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
                 scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
                 createdBy: createdBy, topic: topic, parentTask: parentTask,
-                origin: threadOrigin.author == .control ? threadOrigin : nil, deliverable: deliverable
+                origin: threadOrigin.author == .control ? threadOrigin : nil, deliverable: deliverable,
+                issue: issue.map(LinkedIssue.init)
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
@@ -215,6 +275,7 @@ extension AppModel {
         state.startWatching()
         state.refresh()
         startSetup(for: state, runCommands: runSetup)
+        refreshDiskUsage(of: state)
         if takesSelection(threadOrigin, in: scopeID) { selection = .task(record.id) }
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
@@ -378,6 +439,8 @@ extension AppModel {
                                                       runner: runner, only: only) { record in
                 await MainActor.run { task.update(record: record) }
             }
+            // A setup is what fills a sandbox (`node_modules`): the size shown is stale until measured again.
+            refreshDiskUsage(of: task)
             guard record.setupState == .failed else { return }
             problems.error("The setup of \(task.name) failed", detail: SetupLog.tail(record.setup?.log ?? "", lines: 60),
                            scope: task.scopeID,
@@ -472,6 +535,7 @@ extension AppModel {
         let record = try await env.tasks.reopen(taskID)
         task.update(record: record)
         task.startWatching()
+        refreshDiskUsage(of: task)
         if let scope = scope(task.scopeID) { await refreshContextFiles(of: scope) }
         scope(task.scopeID)?.refreshFacts()
         return record
