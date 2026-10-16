@@ -436,15 +436,17 @@ final class AppControlService: ControlService {
         let threads = model.threads.map(\.record.snapshot)
         let home = model.env.home
         let history = await Task.detached { ActivityHistory.load(home: home) }.value
+        let tokens = model.tokenTotalsByThread
         if let name = params.task {
             guard let result = ActivitySummary.detail(of: name, timeZone: timeZone, period: period, scopes: scopes,
-                                                      tasks: tasks, threads: threads, history: history) else {
+                                                      tasks: tasks, threads: threads, history: history, tokens: tokens) else {
                 return .failure(.notFound("no task “\(name)”, open, archived or closed since the history began"))
             }
             return .success(.summary(result))
         }
         return .success(.summary(ActivitySummary.build(period: period, timeZone: timeZone, scopes: scopes, tasks: tasks,
-                                                       threads: threads, history: history, scopeFilter: params.scope)))
+                                                       threads: threads, history: history, scopeFilter: params.scope,
+                                                       tokens: tokens)))
     }
 
     private func summary(_ session: ThreadSession) -> ThreadSummary {
@@ -457,7 +459,8 @@ final class AppControlService: ControlService {
             state: session.displayState.name, alive: session.isAlive,
             openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent,
             resident: session.record.resident?.rawValue,
-            activity: ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now)
+            activity: ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
+            tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue])
         )
     }
 

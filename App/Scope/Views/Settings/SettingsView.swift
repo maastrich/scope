@@ -298,6 +298,7 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
+            TokenUsageSettingsSection()
             SettingsSection("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
                     .toggleStyle(.scope)

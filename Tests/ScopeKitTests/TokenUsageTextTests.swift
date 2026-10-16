@@ -27,6 +27,28 @@ import Testing
         #expect(TokenUsageText.threadField(nil) == nil)
     }
 
+    @Test func aBudgetIsTypedTheWayItReads() {
+        #expect(TokenUsageText.budget("20M") == 20_000_000)
+        #expect(TokenUsageText.budget(" 1.5m ") == 1_500_000)
+        #expect(TokenUsageText.budget("500k") == 500_000)
+        #expect(TokenUsageText.budget("2,000,000") == 2_000_000)
+        #expect(TokenUsageText.budget("") == nil)
+        #expect(TokenUsageText.budget("lots") == nil)
+        #expect(TokenUsageText.budget("-5M") == nil)
+    }
+
+    @Test func thePreferencesDefaultToConsumptionOnlyAndReadAnOlderConfig() throws {
+        let older = try JSONDecoder().decode(Preferences.self, from: Data("{}".utf8))
+        #expect(older.showTokenMeter)
+        #expect(older.tokenBudgetPer5h == 0)
+        #expect(!older.showAPICost)
+        var preferences = Preferences.default
+        preferences.tokenBudgetPer5h = 20_000_000
+        preferences.showAPICost = true
+        let decoded = try JSONDecoder().decode(Preferences.self, from: JSONEncoder().encode(preferences))
+        #expect(decoded == preferences)
+    }
+
     // MARK: Price
 
     @Test func eachFamilyHasItsPriceAndALongerIdWinsOverItsPrefix() {

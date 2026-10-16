@@ -96,6 +96,7 @@ struct TaskHoverCard: View {
                     }
                 }
             }
+            TaskTokensHoverRow(task: task)
             row("Created") {
                 Text(task.record.createdAt.formatted(.relative(presentation: .named)))
                     .font(.scopeCaption)

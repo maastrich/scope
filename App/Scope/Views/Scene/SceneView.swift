@@ -80,6 +80,7 @@ struct SceneView: View {
             if model.config.preferences.attentionCounter == .toolbar {
                 AttentionToolbarButton()
             }
+            TokenMeterToolbarButton()
             if model.currentThread != nil || model.currentScope != nil {
                 Button {
                     if NSEvent.modifierFlags.contains(.option), let path = model.currentEditorPath {

@@ -25,6 +25,17 @@ public enum TokenUsageText {
         return compact(row.windows.fiveHours.counts.total) + " · 5h"
     }
 
+    /// A budget as typed in Settings: `20M`, `500k`, `1.5m`, `2,000,000`. `nil` for anything else, which means none.
+    public static func budget(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces).lowercased()
+            .replacingOccurrences(of: ",", with: "").replacingOccurrences(of: " ", with: "")
+        guard let last = trimmed.last else { return nil }
+        let multiplier: Double = switch last { case "k": 1e3; case "m": 1e6; case "b": 1e9; default: 1 }
+        let digits = multiplier == 1 ? trimmed : String(trimmed.dropLast())
+        guard let value = Double(digits), value > 0, value * multiplier < Double(Int.max) else { return nil }
+        return Int(value * multiplier)
+    }
+
     /// `scope summary`'s note on what the token figures are.
     public static let summaryLimit = "Tokens are read from Claude Code transcripts (subagents included, cache reads included) for threads Scope ran; other drivers report none, and a thread closed more than 90 days ago is forgotten."
 }
