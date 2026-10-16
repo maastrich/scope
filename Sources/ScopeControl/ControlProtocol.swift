@@ -622,10 +622,13 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     /// The latest thing its agent did, and when (`ThreadActivityLine`): `Edit Sources/App.swift · 2m ago`. Absent
     /// until its driver reports something, and for good without an adapter.
     public var activity: String?
+    /// Tokens its agent consumed over the last five hours (`TokenUsageText.threadField`): `1.2M · 5h`. Absent for a
+    /// thread Scope reads no Claude Code transcript for.
+    public var tokens: String?
 
     public init(id: String, title: String, driver: String, scope: String, scopeSlug: String, task: String?,
                 cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
-                resident: String? = nil, activity: String? = nil) {
+                resident: String? = nil, activity: String? = nil, tokens: String? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -640,6 +643,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.parent = parent
         self.resident = resident
         self.activity = activity
+        self.tokens = tokens
     }
 }
 

@@ -71,6 +71,8 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         /// The driver's own session id, for a driver that keeps transcripts of its own (Claude Code's `--resume`).
         public var session: String?
         public var openedByAgent: Bool
+        /// Tokens its agent consumed, all told (`TokenLedger`); absent when Scope read no transcript for it.
+        public var tokens: Int?
     }
 
     public struct Task: Codable, Sendable, Equatable {
@@ -93,6 +95,8 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         /// The opening lines of the brief, at most `ActivitySummary.briefLimit` characters; the detail has it whole.
         public var brief: String?
         public var threads: [Thread]
+        /// Tokens its threads consumed, all told; absent when Scope read a transcript for none of them.
+        public var tokens: Int?
     }
 
     public struct Counts: Codable, Sendable, Equatable {
@@ -177,9 +181,9 @@ public enum ActivitySummary {
     public static func build(
         period: ActivityPeriod, timeZone: TimeZone = .current,
         scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry],
-        scopeFilter: String? = nil
+        scopeFilter: String? = nil, tokens: [String: Int] = [:]
     ) -> SummaryResult {
-        let world = World(declared: declared, tasks: tasks, threads: threads, history: history)
+        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, tokens: tokens)
         let wanted = scopeFilter.map { world.matchingScopeKeys($0) }
 
         var byScope: [String: (tasks: [SummaryResult.Task], threads: [SummaryResult.Thread])] = [:]
@@ -195,7 +199,7 @@ public enum ActivitySummary {
         for (snapshot, closedAt) in world.looseThreads {
             let key = world.scopeKey(id: snapshot.scopeID, root: snapshot.scopeRoot)
             guard wanted?.contains(key) ?? true else { continue }
-            let thread = World.render(snapshot, closedAt: closedAt)
+            let thread = world.render(snapshot, closedAt: closedAt)
             guard [thread.createdAt, thread.lastLaunchedAt, thread.closedAt].compactMap({ $0 }).contains(where: period.contains)
             else { continue }
             byScope[key, default: ([], [])].threads.append(thread)
@@ -213,16 +217,17 @@ public enum ActivitySummary {
 
         return SummaryResult(
             period: .init(label: period.label, since: period.since, until: period.until, timeZone: timeZone.identifier),
-            scopes: scopes, detail: nil, historySince: history.map(\.at).min(), limits: limits(history: history)
+            scopes: scopes, detail: nil, historySince: history.map(\.at).min(), limits: limits(history: history, tokens: tokens)
         )
     }
 
     /// One task, found by id or slug among live records first, then among closed ones (the latest close wins).
     public static func detail(
         of name: String, timeZone: TimeZone = .current, period: ActivityPeriod,
-        scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry]
+        scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry],
+        tokens: [String: Int] = [:]
     ) -> SummaryResult? {
-        let world = World(declared: declared, tasks: tasks, threads: threads, history: history)
+        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, tokens: tokens)
         let candidates = world.allTasks.filter { $0.snapshot.id == name || $0.snapshot.slug == name }
         guard let entry = candidates.first(where: { $0.closedAt == nil }) ?? candidates.max(by: { ($0.closedAt ?? .distantPast) < ($1.closedAt ?? .distantPast) })
         else { return nil }
@@ -231,15 +236,15 @@ public enum ActivitySummary {
         return SummaryResult(
             period: .init(label: period.label, since: period.since, until: period.until, timeZone: timeZone.identifier),
             scopes: [], detail: .init(scope: world.identity(of: key).slug, task: world.render(entry), prompt: prompt),
-            historySince: history.map(\.at).min(), limits: limits(history: history)
+            historySince: history.map(\.at).min(), limits: limits(history: history, tokens: tokens)
         )
     }
 
-    static func limits(history: [HistoryEntry]) -> [String] {
+    static func limits(history: [HistoryEntry], tokens: [String: Int] = [:]) -> [String] {
         let since = history.map(\.at).min()
         let start = since.map { "Closed tasks and threads are known from \($0.formatted(.iso8601.year().month().day())) on" }
             ?? "No task or thread has been closed since Scope started keeping a history"
-        return fixedLimits + [start + "; one closed earlier left no trace."]
+        return fixedLimits + [start + "; one closed earlier left no trace."] + (tokens.isEmpty ? [] : [TokenUsageText.summaryLimit])
     }
 
     /// Topic first (tasks without one after), then creation.
@@ -297,9 +302,12 @@ public enum ActivitySummary {
         let looseThreads: [(ThreadSnapshot, Date?)]
         /// Undeclared scopes met in the records: key → identity as recorded.
         let recorded: [String: Identity]
+        /// Thread id → tokens consumed, all told.
+        let tokens: [String: Int]
 
-        init(declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry]) {
+        init(declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry], tokens: [String: Int]) {
             self.declared = declared
+            self.tokens = tokens
             let live = Set(tasks.map(\.id))
             var closedTasks: [TaskEntry] = []
             var closedThreads: [(ThreadSnapshot, Date?)] = []
@@ -367,7 +375,7 @@ public enum ActivitySummary {
 
         func render(_ entry: TaskEntry) -> SummaryResult.Task {
             let task = entry.snapshot
-            let threads = (threadsByTask[task.id] ?? []).map { World.render($0.0, closedAt: $0.1) }
+            let threads = (threadsByTask[task.id] ?? []).map { render($0.0, closedAt: $0.1) }
                 .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
             let pr = task.pullRequest
             let outcome = TaskOutcome.classify(archived: task.archivedAt != nil, closed: entry.closedAt != nil,
@@ -380,14 +388,15 @@ public enum ActivitySummary {
                 lastActivity: dates.max() ?? task.createdAt,
                 pullRequest: pr.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
                 createdByAgent: task.createdByAgent, parentTask: task.parentTask,
-                brief: ActivitySummary.excerpt(task.prompt), threads: threads
+                brief: ActivitySummary.excerpt(task.prompt), threads: threads,
+                tokens: threads.compactMap(\.tokens).reduce(nil) { ($0 ?? 0) + $1 }
             )
         }
 
-        static func render(_ thread: ThreadSnapshot, closedAt: Date?) -> SummaryResult.Thread {
+        func render(_ thread: ThreadSnapshot, closedAt: Date?) -> SummaryResult.Thread {
             SummaryResult.Thread(id: thread.id, title: thread.title, driver: thread.driverID, createdAt: thread.createdAt,
                                  lastLaunchedAt: thread.lastLaunchedAt, closedAt: closedAt, launches: thread.launchCount,
-                                 session: thread.session, openedByAgent: thread.openedByAgent)
+                                 session: thread.session, openedByAgent: thread.openedByAgent, tokens: tokens[thread.id])
         }
     }
 }
