@@ -36,11 +36,20 @@ public struct HookStdin: Sendable, Equatable {
     /// What the driver is asking, in its own words: the questions of `AskUserQuestion`, the plan of `ExitPlanMode`,
     /// the message of a `Notification` hook when it is more than Claude Code's stock line.
     public var question: String?
+    /// Claude Code `MessageDisplay`: the lines of the answer completed since the previous flush (`delta`), the id of
+    /// the message being written (`message_id`, stable across its flushes) and whether this is its last flush
+    /// (`final`). Display-only on Claude Code's side; here it is what the reading column shows while the agent writes.
+    public var displayDelta: String?
+    public var displayMessageID: String?
+    public var displayFinal: Bool?
+    /// `PostToolUse`: how long the call took (`duration_ms`).
+    public var toolDurationMs: Int?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
                 lastAssistantMessage: String? = nil, toolTarget: String? = nil, transcriptPath: String? = nil,
-                question: String? = nil) {
+                question: String? = nil, displayDelta: String? = nil, displayMessageID: String? = nil,
+                displayFinal: Bool? = nil) {
         self.sessionID = sessionID
         self.notificationType = notificationType
         self.hookEventName = hookEventName
@@ -51,6 +60,9 @@ public struct HookStdin: Sendable, Equatable {
         self.toolTarget = toolTarget
         self.transcriptPath = transcriptPath
         self.question = question
+        self.displayDelta = displayDelta
+        self.displayMessageID = displayMessageID
+        self.displayFinal = displayFinal
     }
 
     /// `true` for a command-line argument that is the driver's hook JSON itself: Codex `notify` runs the
@@ -151,8 +163,14 @@ public struct HookStdin: Sendable, Equatable {
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let input = object["tool_input"] as? [String: Any]
         result.toolTarget = toolTarget(tool: result.toolName, input: input)
+        result.toolDurationMs = (object["duration_ms"] as? NSNumber).map(\.intValue)
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.question = question(tool: result.toolName, input: input, message: object["message"] as? String)
+        if result.hookEventName == "MessageDisplay" {
+            result.displayDelta = object["delta"] as? String
+            result.displayMessageID = (object["message_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            result.displayFinal = object["final"] as? Bool
+        }
         let file = filePathKeys.lazy.compactMap { input?[$0] as? String }.first { $0.hasPrefix("/") }
         if let file {
             result.directory = URL(fileURLWithPath: file).deletingLastPathComponent().path

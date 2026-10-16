@@ -80,7 +80,8 @@ public enum ThreadStateMachine {
 }
 
 extension HookEvent.Kind {
-    /// The `ThreadStateEvent` this wire event stands for; `nil` for `session.started`, which moves nothing.
+    /// The `ThreadStateEvent` this wire event stands for; `nil` for `session.started` and `turn.said`, which move
+    /// nothing.
     public var stateEvent: ThreadStateEvent? {
         switch self {
         case .turnStarted: .turnStarted
@@ -89,7 +90,7 @@ extension HookEvent.Kind {
         case .inputRequested: .inputRequested
         case .permissionRequested: .permissionRequested
         case .threadEnded: .threadEnded
-        case .sessionStarted: nil
+        case .sessionStarted, .turnSaid: nil
         }
     }
 }

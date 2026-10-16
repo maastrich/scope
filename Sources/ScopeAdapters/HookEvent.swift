@@ -19,7 +19,8 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// The state-changing events come from spec §4.7, plus `turn.failed` for a turn that ended on an error
     /// (its code in `payload["error"]`). `session.started` is informational: it never moves the thread state and
     /// only exists so an adapter can hand over the driver's session id (`payload["session_id"]`) as soon as the
-    /// driver starts, before any turn.
+    /// driver starts, before any turn. `turn.said` is informational too: a piece of the answer the driver is
+    /// writing (Claude Code's `MessageDisplay` hook), read live by the reading column and gone once the turn ends.
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
@@ -28,9 +29,10 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case permissionRequested = "permission.requested"
         case threadEnded = "thread.ended"
         case sessionStarted = "session.started"
+        case turnSaid = "turn.said"
 
-        /// `true` for the events that move the thread state (everything but `session.started`).
-        public var changesState: Bool { self != .sessionStarted }
+        /// `true` for the events that move the thread state (everything but `session.started` and `turn.said`).
+        public var changesState: Bool { self != .sessionStarted && self != .turnSaid }
     }
 
     /// Value of `SCOPE_THREAD` in the driver's environment.
@@ -78,8 +80,18 @@ extension HookEvent {
     /// call was about (`HookStdin.toolTarget`). On `turn.started` they say the agent just ran that tool.
     public static let toolKey = "tool"
     public static let targetKey = "target"
+    /// Payload key under which `scope-hook` forwards how long a tool call took, in milliseconds (`PostToolUse`'s
+    /// `duration_ms`; `HookStdin.toolDurationMs`).
+    public static let durationKey = "duration"
     /// Payload key under which `scope-hook` forwards the driver's transcript file (`HookStdin.transcriptPath`).
     public static let transcriptKey = "transcript"
+
+    /// Payload keys of `turn.said`: the lines just written (`HookStdin.displayDelta`), the id of the message they
+    /// belong to, and `"true"` on the message's last piece. The text travels in the payload, not in `raw`: a
+    /// flush is small and the app never has to parse the hook's JSON.
+    public static let saidKey = "said"
+    public static let messageKey = "message"
+    public static let finalKey = "final"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

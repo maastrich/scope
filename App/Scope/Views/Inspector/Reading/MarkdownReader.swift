@@ -72,6 +72,10 @@ struct MarkdownBlockView: View {
             MarkdownTableView(table: table)
         case .rule:
             Rectangle().fill(Surface.stroke).frame(height: 1).padding(.vertical, 4)
+        case .raw(let text):
+            // Not Markdown the reader knows: shown as the agent wrote it, told apart from code by its label and its
+            // quieter ink, never interpreted.
+            MarkdownCodeBlock(language: "raw", text: text, quiet: true)
         }
     }
 
@@ -147,6 +151,8 @@ struct MarkdownInlineText: View {
 struct MarkdownCodeBlock: View {
     let language: String?
     let text: String
+    /// Secondary ink: for a raw block, which is kept rather than meant to be read as code.
+    var quiet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -164,7 +170,7 @@ struct MarkdownCodeBlock: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(text)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Ink.primary)
+                    .foregroundStyle(quiet ? Ink.secondary : Ink.primary)
                     .lineSpacing(2)
                     .fixedSize(horizontal: true, vertical: true)
                     .padding(.horizontal, 10)

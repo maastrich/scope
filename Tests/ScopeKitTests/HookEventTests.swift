@@ -48,10 +48,11 @@ import Testing
         #expect(HookEvent.Kind(rawValue: wire) == kind)
     }
 
-    @Test func allCasesCoverTheStateEventsPlusSessionStarted() {
-        #expect(HookEvent.Kind.allCases.count == 7)
+    @Test func allCasesCoverTheStateEventsPlusTheInformationalOnes() {
+        #expect(HookEvent.Kind.allCases.count == 8)
         #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 6)
         #expect(!HookEvent.Kind.sessionStarted.changesState)
+        #expect(!HookEvent.Kind.turnSaid.changesState)
     }
 
     @Test func sessionIDTravelsInThePayload() throws {

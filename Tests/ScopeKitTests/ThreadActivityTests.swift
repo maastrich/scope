@@ -41,6 +41,78 @@ import Testing
         #expect(activity.transcriptPath == "/t/9b1d.jsonl")
     }
 
+    @Test func aTurnKeepsItsCallsInOrderWithTheirDurationUpToTheLimit() throws {
+        var payload = [HookEvent.toolKey: "Bash", HookEvent.targetKey: "swift test", HookEvent.durationKey: "12400"]
+        let timed = Self.event(.turnStarted, 2, payload)
+        payload[HookEvent.durationKey] = "not a number"
+        let untimed = Self.event(.turnStarted, 3, payload)
+        var activity = Self.fold([Self.event(.turnStarted, 1), Self.tool("Read", "/w/a.swift", 1.5), timed, untimed])
+        #expect(activity.turnCalls.map(\.name) == ["Read", "Bash", "Bash"])
+        #expect(activity.turnCalls.map(\.durationMs) == [nil, 12_400, nil])
+        #expect(activity.currentCalls == activity.turnCalls)
+
+        activity = Self.fold([Self.event(.turnEnded, 4, [HookEvent.replyKey: "Done."])], from: activity)
+        #expect(activity.turnCalls.isEmpty)
+        #expect(activity.turns.last?.calls?.count == 3)
+        // Between turns, "this turn" is the one that just ended.
+        #expect(activity.currentCalls.count == 3)
+        // A new prompt starts an empty list, and the old turn keeps its own.
+        activity = Self.fold([Self.event(.turnStarted, 5), Self.tool("Edit", "/w/b.swift", 6)], from: activity)
+        #expect(activity.currentCalls.map(\.name) == ["Edit"])
+        #expect(activity.turns.last?.calls?.count == 3)
+
+        let many = (0..<(ThreadActivity.callLimit + 5)).map { Self.tool("Read", "/w/\($0)", Double(10 + $0)) }
+        let busy = Self.fold([Self.event(.turnStarted, 9)] + many)
+        #expect(busy.turnTools == ThreadActivity.callLimit + 5)
+        #expect(busy.turnCalls.count == ThreadActivity.callLimit)
+
+        // Files written before calls existed decode: `calls` is optional on a turn.
+        let data = Data(#"{"version":1,"turnTools":0,"turns":[{"endedAt":"2026-09-15T12:08:40.424Z","outcome":"ended","tools":2}]}"#.utf8)
+        let old = try JSONStore.makeDecoder(fractionalSeconds: true).decode(ThreadActivity.self, from: data)
+        #expect(old.turns.first?.calls == nil && old.currentCalls.isEmpty)
+    }
+
+    @Test func theAnswerBeingWrittenGrowsFlushByFlushAndGoesWithTheTurn() {
+        func said(_ text: String, _ message: String, _ seconds: TimeInterval, final: Bool = false) -> AdapterEvent {
+            var payload = [HookEvent.saidKey: text, HookEvent.messageKey: message]
+            if final { payload[HookEvent.finalKey] = "true" }
+            return Self.event(.turnSaid, seconds, payload)
+        }
+        var activity = Self.fold([Self.event(.turnStarted, 0), said("Reading the adapter.\n", "m1", 1),
+                                  said("Found it.\n", "m1", 2, final: true)])
+        #expect(activity.saying?.text == "Reading the adapter.\nFound it.\n")
+        #expect(activity.saying?.isFinal == true)
+        #expect(activity.saying?.at == Self.at(2))
+        // A piece of the answer neither opens a turn nor counts as a tool, nor touches a pending request.
+        #expect(activity.inTurn && activity.turnTools == 0 && activity.turns.isEmpty)
+
+        // The next message of the same turn starts the text over: the column shows the message in progress.
+        activity = Self.fold([Self.tool("Edit", "A.swift", 3), said("Done, ", "m2", 4)], from: activity)
+        #expect(activity.saying?.text == "Done, ")
+        #expect(activity.turnTools == 1)
+
+        // The turn's end has the answer in `lastReply`; the text being written is gone with it.
+        let ended = Self.fold([Self.event(.turnEnded, 5, [HookEvent.replyKey: "Done, tested."])], from: activity)
+        #expect(ended.saying == nil)
+        #expect(ended.lastReply?.text == "Done, tested.")
+        #expect(ended.turns.last?.said == "Done, tested.")
+
+        // So is a new prompt, and a question: what is shown then is the question, not a stale draft.
+        #expect(Self.fold([Self.event(.turnStarted, 5)], from: activity).saying == nil)
+        #expect(Self.fold([Self.event(.inputRequested, 5, [HookEvent.toolKey: "AskUserQuestion"])], from: activity).saying == nil)
+    }
+
+    @Test func theAnswerBeingWrittenIsNeitherSavedNorUnbounded() throws {
+        let long = String(repeating: "x", count: ThreadActivity.sayingLimit + 10)
+        let activity = Self.fold([Self.event(.turnStarted, 0), Self.event(.turnSaid, 1, [HookEvent.saidKey: long])])
+        let text = try #require(activity.saying?.text)
+        #expect(text.hasPrefix("…") && text.utf8.count <= ThreadActivity.sayingLimit)
+        let data = try JSONStore.makeEncoder(fractionalSeconds: true).encode(activity)
+        #expect(!String(decoding: data, as: UTF8.self).contains("saying"))
+        let back = try JSONStore.makeDecoder(fractionalSeconds: true).decode(ThreadActivity.self, from: data)
+        #expect(back.saying == nil && back.inTurn)
+    }
+
     @Test func theEndOfATurnRecordsItAndItsReply() {
         let activity = Self.fold([
             Self.event(.turnStarted, 1),
@@ -48,7 +120,8 @@ import Testing
             Self.event(.turnEnded, 9, raw: #"{"last_assistant_message":"Built."}"#),
         ])
         #expect(!activity.inTurn)
-        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(9), outcome: .ended, tools: 1, said: "Built.")])
+        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(9), outcome: .ended, tools: 1, said: "Built.",
+                                         calls: [.init(name: "Bash", target: "swift build", at: Self.at(2))])])
         #expect(activity.lastReply == AgentReply(text: "Built.", at: Self.at(9)))
         #expect(activity.lastTool?.name == "Bash", "the last tool outlives its turn")
     }
@@ -104,7 +177,8 @@ import Testing
         ])
         #expect(activity.turns == [
             .init(startedAt: Self.at(1), endedAt: Self.at(2), outcome: .permissionRequested),
-            .init(startedAt: Self.at(30), endedAt: Self.at(40), outcome: .ended, tools: 1),
+            .init(startedAt: Self.at(30), endedAt: Self.at(40), outcome: .ended, tools: 1,
+                  calls: [.init(name: "Bash", target: "rm -rf build", at: Self.at(30))]),
         ])
     }
 
@@ -116,7 +190,8 @@ import Testing
             Self.tool("Read", "/w/a.swift", 2),
             Self.event(.turnStarted, 3_600),
         ])
-        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(2), outcome: .interrupted, tools: 1)])
+        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(2), outcome: .interrupted, tools: 1,
+                                         calls: [.init(name: "Read", target: "/w/a.swift", at: Self.at(2))])])
         #expect(activity.turnStartedAt == Self.at(3_600))
         #expect(activity.turnTools == 0)
     }
@@ -124,7 +199,8 @@ import Testing
     @Test func anInterruptKeystrokeClosesTheTurnThere() {
         let open = Self.fold([Self.event(.turnStarted, 1), Self.tool("Bash", "make", 2)])
         let stopped = open.closingOpenTurn(as: .interrupted, at: Self.at(4))
-        #expect(stopped.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(4), outcome: .interrupted, tools: 1)])
+        #expect(stopped.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(4), outcome: .interrupted, tools: 1,
+                                        calls: [.init(name: "Bash", target: "make", at: Self.at(2))])])
         #expect(!stopped.inTurn)
         #expect(Self.fold([Self.event(.turnStarted, 9)], from: stopped).turns.count == 1, "the next prompt adds nothing")
     }
@@ -169,7 +245,7 @@ import Testing
     @Test func anExitClosesTheOpenTurnAtItsLastKnownMoment() {
         let open = Self.fold([Self.event(.turnStarted, 1), Self.tool("Bash", "make", 8)])
         #expect(open.closingOpenTurn(at: Self.at(3)).turns == [
-            .init(startedAt: Self.at(1), endedAt: Self.at(8), outcome: .exited, tools: 1),
+            .init(startedAt: Self.at(1), endedAt: Self.at(8), outcome: .exited, tools: 1, calls: [.init(name: "Bash", target: "make", at: Self.at(8))]),
         ])
         #expect(ThreadActivity().closingOpenTurn(at: Self.at(3)) == ThreadActivity())
     }

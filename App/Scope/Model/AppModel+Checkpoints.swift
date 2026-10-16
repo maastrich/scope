@@ -39,6 +39,7 @@ extension AppModel {
         guard let task = task(taskID) else { return }
         task.checkpoints = list
         task.checkpointsLoaded = true
+        for session in threads(in: taskID) { refreshReading(for: session) }
     }
 
     /// *Show diff*: the checkpoint against the sandboxes as they are now, in the reading column.
@@ -54,6 +55,13 @@ extension AppModel {
         } catch {
             problems.error("Could not read checkpoint \(checkpoint.number) of \(task.name)", detail: String(describing: error), scope: task.scopeID)
         }
+    }
+
+    /// The *Changes* row of a reply: the turn's checkpoint, as *Show diff* opens it.
+    func openChanges(_ changes: ReadingTurn.Changes) {
+        guard let task = task(changes.taskID),
+              let checkpoint = task.checkpoints.first(where: { $0.number == changes.number }) else { return }
+        Task { await readCheckpointDiff(checkpoint, of: task) }
     }
 
     /// *Restore files*, from the Task section: no question asked — the state replaced is itself a checkpoint, and the

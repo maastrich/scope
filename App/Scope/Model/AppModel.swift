@@ -215,6 +215,11 @@ final class AppModel {
     /// The checkpoint waiting to be taken for a task, after a turn ended (`AppModel+Checkpoints`); a turn ending in
     /// the meantime replaces it.
     @ObservationIgnored var checkpointJobs: [TaskID: Task<Void, Never>] = [:]
+    /// The turns read out of each thread's transcript for the reading column (`AppModel+Reading`), and the reads
+    /// in flight. `nil` means never read; an empty list, read and found nothing.
+    @ObservationIgnored var replyHistory: [ThreadID: [TranscriptTurn]] = [:]
+    @ObservationIgnored var replyHistoryUnavailable: Set<ThreadID> = []
+    @ObservationIgnored var replyHistoryJobs: [ThreadID: Task<Void, Never>] = [:]
     /// The background pull request refresh (`startPullRequestRefresh`) and when each task is next due.
     @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
     /// The loop behind `AppModel+Ports`.
@@ -1481,6 +1486,7 @@ final class AppModel {
         if session.apply(event) {
             assistThenNotify(event, session: session)
             if event.kind == .turnEnded || event.kind == .turnFailed { scheduleCheckpoint(after: session) }
+            refreshReading(for: session, turnEnded: event.kind == .turnEnded || event.kind == .turnFailed)
         }
         flushDeliveries(for: session)
         acknowledgeShownResult()

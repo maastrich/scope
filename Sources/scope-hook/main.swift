@@ -163,9 +163,20 @@ enum HookCLI {
         for case let (key, value?) in lifted where payload[key] == nil && !value.isEmpty {
             payload[key] = value
         }
+        if payload[HookEvent.durationKey] == nil, let ms = stdin.toolDurationMs, ms >= 0 {
+            payload[HookEvent.durationKey] = String(ms)
+        }
         // A cut `raw` no longer parses, and a long answer is what gets it cut: the answer travels on its own then.
         if rawTruncated, kind == .turnEnded, let reply = stdin.lastAssistantMessage {
             payload[HookEvent.replyKey] = String(reply.prefix(maxRawBytes / 2))
+        }
+        // A piece of the answer being written: what it says goes in the payload, and `raw` (the same text again,
+        // wrapped in JSON) stays home — a flush per few lines must cost the socket as little as possible.
+        if kind == .turnSaid {
+            payload[HookEvent.saidKey] = String((stdin.displayDelta ?? "").prefix(maxRawBytes / 2))
+            if let id = stdin.displayMessageID { payload[HookEvent.messageKey] = id }
+            if stdin.displayFinal == true { payload[HookEvent.finalKey] = "true" }
+            return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: nil)
         }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }

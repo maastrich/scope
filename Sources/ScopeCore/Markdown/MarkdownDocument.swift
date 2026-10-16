@@ -45,10 +45,13 @@ public indirect enum MarkdownBlock: Sendable, Equatable {
     case list(MarkdownList)
     case table(MarkdownTable)
     case rule
+    /// Lines that are not Markdown the reader knows — an HTML block, a `:::` container — kept verbatim and shown as
+    /// such: a newer notation degrades to readable text, never to a paragraph that swallows its tags.
+    case raw(String)
 
     var plainText: String {
         switch self {
-        case .heading(_, let text), .paragraph(let text), .code(_, let text): text
+        case .heading(_, let text), .paragraph(let text), .code(_, let text), .raw(let text): text
         case .quote(let blocks): blocks.map(\.plainText).joined(separator: "\n")
         case .list(let list): list.items.flatMap(\.blocks).map(\.plainText).joined(separator: "\n")
         case .table(let table): ([table.header] + table.rows).map { $0.joined(separator: " ") }.joined(separator: "\n")
@@ -250,6 +253,8 @@ struct BlockParser {
                 index += 1
             } else if Self.isQuote(line) {
                 blocks.append(quote())
+            } else if Self.isRawStart(line) {
+                blocks.append(raw())
             } else if let marker = ListMarker.parse(line), marker.indent <= 3 {
                 blocks.append(list(marker))
             } else if let table = table() {
@@ -358,6 +363,35 @@ struct BlockParser {
             index += 1
         }
         return .table(MarkdownTable(header: header, alignments: alignments, rows: rows))
+    }
+
+    /// An HTML block (`<tag`, `<!--`, `</tag`) or a `:::` container opening, at most 3 spaces in.
+    static func isRawStart(_ line: String) -> Bool {
+        guard line.prefix(while: { $0 == " " }).count <= 3 else { return false }
+        let rest = line.drop { $0 == " " }
+        if rest.hasPrefix(":::") { return true }
+        guard rest.first == "<", let next = rest.dropFirst().first else { return false }
+        return next.isLetter || next == "!" || next == "/"
+    }
+
+    /// The raw lines: an HTML block runs to the next blank line, a `:::` container to its closing `:::` (or the end).
+    private mutating func raw() -> MarkdownBlock {
+        let container = lines[index].drop { $0 == " " }.hasPrefix(":::")
+        var collected: [String] = [lines[index]]
+        index += 1
+        while index < lines.count {
+            let line = lines[index]
+            if container {
+                collected.append(line)
+                index += 1
+                if line.trimmingCharacters(in: .whitespaces) == ":::" { break }
+            } else {
+                if line.allSatisfy(\.isWhitespace) { break }
+                collected.append(line)
+                index += 1
+            }
+        }
+        return .raw(collected.joined(separator: "\n"))
     }
 
     private mutating func paragraph() -> MarkdownBlock {
