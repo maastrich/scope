@@ -37,13 +37,32 @@ import Testing
         #expect(log.read(since: .distantPast, until: .distantFuture).count == 3)
     }
 
+    /// The ticker is the test's own stream: nothing is written until it ticks, and the write is awaited, not polled.
     @Test func theTickerFlushesOnItsOwn() async throws {
         let log = UsageLog(directory: Self.directory())
-        let recorder = UsageRecorder(log: log, limits: .init(flushInterval: .milliseconds(50)))
+        let (ticks, tick) = AsyncStream.makeStream(of: Void.self)
+        let recorder = UsageRecorder(log: log, limits: Self.slow, ticks: ticks)
+        var flushes = recorder.flushes.makeAsyncIterator()
         recorder.record(Self.event("sidebar.tick"))
-        for _ in 0..<40 where log.files().isEmpty { try await Task.sleep(for: .milliseconds(25)) }
+        #expect(log.files().isEmpty)
+        tick.yield()
+        let written = await flushes.next()
+        #expect(written == 1)
         #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["sidebar.tick"])
-        _ = recorder
+        recorder.record(Self.event("sidebar.tock"))
+        tick.yield()
+        #expect(await flushes.next() == 2)
+        #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["sidebar.tick", "sidebar.tock"])
+    }
+
+    /// The real clock, once: a busy runner makes this slower, never wrong, because the flush is awaited.
+    @Test(.timeLimit(.minutes(1))) func theDefaultTickerFiresOnTheClock() async throws {
+        let log = UsageLog(directory: Self.directory())
+        let recorder = UsageRecorder(log: log, limits: .init(flushInterval: .milliseconds(20)))
+        var flushes = recorder.flushes.makeAsyncIterator()
+        recorder.record(Self.event("sidebar.tick"))
+        #expect(await flushes.next() == 1)
+        #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["sidebar.tick"])
     }
 
     @Test func eventsGoToTheFileOfTheirMonth() async throws {

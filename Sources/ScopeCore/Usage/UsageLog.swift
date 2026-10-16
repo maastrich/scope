@@ -140,8 +140,14 @@ public actor UsageRecorder {
     }
 
     public nonisolated let log: UsageLog
+    /// The running total of events taken from the buffer, one element per write. Only the latest is kept, so a
+    /// reader that comes late sees the current total and nothing piles up in a recorder nobody watches.
+    public nonisolated let flushes: AsyncStream<Int>
     private let limits: Limits
+    private let ticks: AsyncStream<Void>
     private let continuation: AsyncStream<Command>.Continuation
+    private let flushed: AsyncStream<Int>.Continuation
+    private var written = 0
     private var buffer: [UsageEvent] = []
     private var registry: UsageRegistry
     private var registryDirty = false
@@ -151,20 +157,40 @@ public actor UsageRecorder {
     /// Months whose file hit `maxFileBytes`, so the size is not read again for every batch.
     private var fullMonths: Set<String> = []
 
-    public init(log: UsageLog, enabled: Bool = true, limits: Limits = Limits()) {
+    /// `ticks` drives the periodic flush; by default a clock ticking every `limits.flushInterval`. A test hands in
+    /// its own stream and decides when the ticker fires.
+    public init(log: UsageLog, enabled: Bool = true, limits: Limits = Limits(), ticks: AsyncStream<Void>? = nil) {
         self.log = log
         self.limits = limits
         self.enabled = enabled
         self.registry = log.readRegistry()
+        self.ticks = ticks ?? Self.ticks(every: limits.flushInterval)
         let (stream, continuation) = AsyncStream.makeStream(of: Command.self)
         self.continuation = continuation
+        (self.flushes, self.flushed) = AsyncStream.makeStream(of: Int.self, bufferingPolicy: .bufferingNewest(1))
         Task { await self.start(stream) }
     }
 
     deinit {
         continuation.finish()
+        flushed.finish()
         consumer?.cancel()
         ticker?.cancel()
+    }
+
+    /// A tick every `interval` for as long as someone listens.
+    public static func ticks(every interval: Duration) -> AsyncStream<Void> {
+        AsyncStream { continuation in
+            let sleeper = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: interval)
+                    guard !Task.isCancelled else { break }
+                    continuation.yield()
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in sleeper.cancel() }
+        }
     }
 
     private func start(_ stream: AsyncStream<Command>) {
@@ -173,13 +199,10 @@ public actor UsageRecorder {
                 await self?.handle(command)
             }
         }
-        let interval = limits.flushInterval
+        let ticks = ticks
         let continuation = continuation
         ticker = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
-                continuation.yield(.flush(nil))
-            }
+            for await _ in ticks { continuation.yield(.flush(nil)) }
         }
     }
 
@@ -267,6 +290,8 @@ public actor UsageRecorder {
             }
             append(data, to: url, fileManager: fileManager)
         }
+        written += events.count
+        flushed.yield(written)
     }
 
     private func append(_ data: Data, to url: URL, fileManager: FileManager) {
