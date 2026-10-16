@@ -11,6 +11,10 @@ enum PaletteMode: Equatable {
     case files
     /// *Restore Archived Task…*: the current scope's archived tasks alone.
     case archivedTasks
+    /// *Send to Thread…*: the threads alone; picking one opens `compose` on it.
+    case pickThread
+    /// *Ask Orchestrator…*, *Send to Thread…*: a message field addressed to one thread (`PaletteModel+Messages`).
+    case compose(ThreadID)
 }
 
 /// One root the file finder lists: a base checkout or a task sandbox.

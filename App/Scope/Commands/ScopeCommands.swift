@@ -257,6 +257,12 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("k", modifiers: .command)
             .disabled(model == nil)
 
+            Button("Ask Orchestrator…") {
+                model?.showAskOrchestrator()
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .disabled(model?.currentOrchestrator == nil)
+
             Button("Go to File…") {
                 model?.showPalette(mode: .files)
             }
