@@ -323,7 +323,8 @@ public struct SkillInstaller: Sendable {
 
         To pick archived work back up, `scope task restore <slug>` rebuilds its worktrees on the branch it kept and
         puts back the uncommitted changes saved at archive; then open a thread in it (`scope thread new --task`).
-        `scope list tasks` marks archived tasks `(archived)`. A restored task counts against the budget again.
+        `scope list tasks` marks archived tasks `(archived)`. Restoring one needs a free slot of the task budget, and
+        one you created holds it again until you archive it.
 
         ## What you may do
 

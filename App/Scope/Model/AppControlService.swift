@@ -265,13 +265,14 @@ final class AppControlService: ControlService {
         case .success(let match): task = match
         }
         let slug = task.record.slug
-        guard task.record.isArchived else {
-            return .failure(.badRequest("\(slug) is not archived", detail: "It is open already: `scope list tasks` shows its sandboxes."))
-        }
-        // The task manager would answer with the record as it is: say why instead of reporting a restore that did nothing.
+        // First: an archive that stopped halfway has no `archivedAt` yet, and its sandboxes may be gone already. The
+        // task manager would hand the record back as it is; say why instead of reporting a restore that did nothing.
         guard task.record.cleanup == nil, !task.isDismantling else {
             return .failure(.failed("\(slug) is still being archived",
                                     detail: "Its last archive did not finish. `scope task archive \(slug)` runs it again; restore it after."))
+        }
+        guard task.record.isArchived else {
+            return .failure(.badRequest("\(slug) is not archived", detail: "It is open already: `scope list tasks` shows its sandboxes."))
         }
         // Read before: the restore clears them.
         let salvaged = task.record.repos.filter { $0.salvageRef != nil }.map(\.repoRelativePath)
