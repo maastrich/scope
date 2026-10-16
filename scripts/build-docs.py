@@ -388,6 +388,12 @@ single thread is a single row — selecting it shows that thread's terminal — 
 from the second one on.</p>
 <p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
 you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
+<p><b>Since your last visit.</b> Coming back to a scope — switching to it, or bringing the app back after 20
+minutes away — shows a line under the scope's header when something moved while you looked elsewhere:
+<i>Since 11:40 — 1 question for you · checks failing on api-cache · PR merged on token-refresh · 2 turns
+finished</i>. What waits on you comes first, at most four items. Each one shows the thread or task it names (an
+archived task opens its pull request); the line goes at your first click, after ten seconds on screen, or with its
+×. Nothing moved, nothing shown. Settings ▸ General turns it off and sets the delay.</p>
 <p>States come from the driver's own hooks, not from guessing at terminal output. See
 <a href="adapters.html">hooks and thread states</a>.</p>
 
@@ -1192,6 +1198,7 @@ REFERENCE = """
 ├── graph/&lt;scope&gt;.json    <span class="c"># the repository cards</span>
 ├── sandboxes/            <span class="c"># the task worktrees</span>
 ├── ui-state.json         <span class="c"># selection, expansion, panel widths</span>
+├── scope-visits.json     <span class="c"># when each scope was last looked at</span>
 └── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>

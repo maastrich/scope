@@ -464,6 +464,14 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// The meter's breakdown adds what the tokens would have cost on the API. Off by default: a subscription is not
     /// billed per token.
     public var showAPICost: Bool
+    /// Coming back to a scope shows what moved since it was last looked at — turns finished, questions, pull
+    /// requests merged, checks failing — in a strip at the top of the sidebar. On by default.
+    public var showReturnDigest: Bool
+    /// How long the app must have been in the background for coming back to it to count as a return. 20 by default.
+    public var returnDigestAwayMinutes: Int
+
+    /// Allowed values of `returnDigestAwayMinutes`.
+    public static let returnDigestAwayRange = 1...240
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -506,7 +514,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         dormantAfterDays: Int = 3,
         showTokenMeter: Bool = true,
         tokenBudgetPer5h: Int = 0,
-        showAPICost: Bool = false
+        showAPICost: Bool = false,
+        showReturnDigest: Bool = true,
+        returnDigestAwayMinutes: Int = 20
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -541,6 +551,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.showTokenMeter = showTokenMeter
         self.tokenBudgetPer5h = max(0, tokenBudgetPer5h)
         self.showAPICost = showAPICost
+        self.showReturnDigest = showReturnDigest
+        self.returnDigestAwayMinutes = min(max(returnDigestAwayMinutes, Self.returnDigestAwayRange.lowerBound),
+                                           Self.returnDigestAwayRange.upperBound)
     }
 
     public static let `default` = Preferences()
@@ -550,7 +563,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
-             showTokenMeter, tokenBudgetPer5h, showAPICost
+             showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
     }
 
     public init(from decoder: any Decoder) throws {
@@ -605,6 +618,10 @@ public struct Preferences: Codable, Sendable, Equatable {
         showTokenMeter = (try? container.decodeIfPresent(Bool.self, forKey: .showTokenMeter)) ?? defaults.showTokenMeter
         tokenBudgetPer5h = max(0, (try? container.decodeIfPresent(Int.self, forKey: .tokenBudgetPer5h)) ?? defaults.tokenBudgetPer5h)
         showAPICost = (try? container.decodeIfPresent(Bool.self, forKey: .showAPICost)) ?? defaults.showAPICost
+        showReturnDigest = (try? container.decodeIfPresent(Bool.self, forKey: .showReturnDigest)) ?? defaults.showReturnDigest
+        returnDigestAwayMinutes = min(max((try? container.decodeIfPresent(Int.self, forKey: .returnDigestAwayMinutes))
+                                              ?? defaults.returnDigestAwayMinutes, Self.returnDigestAwayRange.lowerBound),
+                                      Self.returnDigestAwayRange.upperBound)
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

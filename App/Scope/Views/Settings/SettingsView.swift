@@ -299,6 +299,24 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(Ink.secondary)
             }
             TokenUsageSettingsSection()
+            SettingsSection("Since your last visit") {
+                Toggle("Say what moved when I come back to a scope", isOn: preference(\.showReturnDigest))
+                    .toggleStyle(.scope)
+                    .usageID("return-digest", label: "Say what moved when I come back")
+                SettingsRow("Away for at least") {
+                    ScopePicker("Away for at least", selection: preference(\.returnDigestAwayMinutes),
+                                title: "\(model.config.preferences.returnDigestAwayMinutes) min") {
+                        ForEach(Self.awayChoices(including: model.config.preferences.returnDigestAwayMinutes), id: \.self) { minutes in
+                            Text("\(minutes) min").tag(minutes)
+                        }
+                    }
+                    .disabled(!model.config.preferences.showReturnDigest)
+                }
+                Text("Switching to a scope, or coming back to the app after this long, shows a line at the top of the sidebar: turns finished, questions, pull requests merged, checks failing. It goes at the first click or after ten seconds.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Menu bar") {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
                     .toggleStyle(.scope)
@@ -323,6 +341,11 @@ private struct GeneralSettingsView: View {
     }
 
     /// What the default actually decides: the driver a scope opens with, until you open one in it.
+    /// The away delays offered, with a value set by hand in `config.json` kept in the list so the picker can show it.
+    private static func awayChoices(including current: Int) -> [Int] {
+        Array(Set([5, 10, 20, 30, 60, 120, current])).sorted()
+    }
+
     private var driverCaption: String {
         let automatic = model.config.preferences.defaultDriverID.isEmpty
         let name = model.preferredProfile?.name ?? "the first driver"
