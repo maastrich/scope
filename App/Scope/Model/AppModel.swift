@@ -205,6 +205,9 @@ final class AppModel {
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
     /// The 30-minute garbage collection loop (`startGarbageCollection`).
     @ObservationIgnored var garbageCollector: Task<Void, Never>?
+    /// The background pull request refresh (`startPullRequestRefresh`) and when each task is next due.
+    @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
+    @ObservationIgnored var pullRequestSchedule = PullRequestRefreshSchedule()
     /// Resident threads Scope will not start again on its own, and why (`ResidentHold`). Cleared by the next launch.
     var residentHolds: [ThreadID: ResidentHold] = [:]
     /// Resident threads whose process died and that are about to start again; the banner says so.
@@ -619,6 +622,7 @@ final class AppModel {
         await autoRelaunchThreads(orphans: restore.orphans, skippedOnce: skipAutoRelaunch)
         startFollowingVibeIsland()
         startGarbageCollection()
+        startPullRequestRefresh()
         isBootstrapped = true
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }

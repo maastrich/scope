@@ -169,6 +169,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Who asked for the task, as recorded for its first thread: what tells an agent's task from the user's when the
     /// budgets count them. `nil` on records from before it existed and on tasks the user made in the app.
     public var origin: ThreadOrigin?
+    /// Restored after its pull request merged: the user wants it open, so a merge no longer archives it
+    /// (`MergedTaskArchive`). Set by `TaskManager.reopen`.
+    public var keptOpenAfterMerge: Bool = false
 
     public init(
         id: TaskID = .generate(),
@@ -302,7 +305,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy, portBase, setup, cleanup, topic, parentTask, origin
+        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -330,5 +333,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         topic = TaskTopic.normalize(try? container.decodeIfPresent(String.self, forKey: .topic))
         parentTask = (try? container.decodeIfPresent(TaskID.self, forKey: .parentTask)) ?? nil
         origin = (try? container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)) ?? nil
+        keptOpenAfterMerge = (try? container.decodeIfPresent(Bool.self, forKey: .keptOpenAfterMerge)) ?? false
     }
 }

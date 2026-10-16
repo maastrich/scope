@@ -450,6 +450,11 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Keep a log of which controls, commands and panels are used, under `SCOPE_HOME/usage` and nowhere else (`scope
     /// usage` reads it). On by default.
     public var recordUsage: Bool
+    /// A task is archived once a background refresh sees its pull request merged and none of its threads is at
+    /// work. On by default.
+    public var archiveMergedTasks: Bool
+    /// Days without thread activity after which an open task is called idle (`TaskDormancy`); 0 never. 3 by default.
+    public var dormantAfterDays: Int
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -487,7 +492,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         automation: AutomationSettings? = nil,
         cleanUpAutomatically: Bool = true,
         notificationsQuoteAgent: Bool = true,
-        recordUsage: Bool = true
+        recordUsage: Bool = true,
+        archiveMergedTasks: Bool = true,
+        dormantAfterDays: Int = 3
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -517,6 +524,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.cleanUpAutomatically = cleanUpAutomatically
         self.notificationsQuoteAgent = notificationsQuoteAgent
         self.recordUsage = recordUsage
+        self.archiveMergedTasks = archiveMergedTasks
+        self.dormantAfterDays = max(0, dormantAfterDays)
     }
 
     public static let `default` = Preferences()
@@ -525,7 +534,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays
     }
 
     public init(from decoder: any Decoder) throws {
@@ -575,6 +584,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         notificationsQuoteAgent = (try? container.decodeIfPresent(Bool.self, forKey: .notificationsQuoteAgent))
             ?? defaults.notificationsQuoteAgent
         recordUsage = (try? container.decodeIfPresent(Bool.self, forKey: .recordUsage)) ?? defaults.recordUsage
+        archiveMergedTasks = (try? container.decodeIfPresent(Bool.self, forKey: .archiveMergedTasks)) ?? defaults.archiveMergedTasks
+        dormantAfterDays = max(0, (try? container.decodeIfPresent(Int.self, forKey: .dormantAfterDays)) ?? defaults.dormantAfterDays)
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

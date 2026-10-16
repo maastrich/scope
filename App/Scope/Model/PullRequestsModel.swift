@@ -35,12 +35,15 @@ final class PullRequestsModel {
     private(set) var taskPullRequests: [TaskID: PullRequest] = [:]
     /// Why the last fetch of a task's pull request failed.
     private(set) var taskPullRequestErrors: [TaskID: String] = [:]
+    /// When `gh pr view` last answered for each task: how old its checks are (`PullRequestFreshness`).
+    private(set) var taskPullRequestCheckedAt: [TaskID: Date] = [:]
     /// Tasks whose pull request is being merged (the button shows a spinner).
     private(set) var merging: Set<TaskID> = []
 
     func setTaskPullRequest(_ pr: PullRequest, for task: TaskID) {
         taskPullRequests[task] = pr
         taskPullRequestErrors[task] = nil
+        taskPullRequestCheckedAt[task] = .now
     }
 
     func setTaskPullRequestError(_ message: String, for task: TaskID) {
