@@ -78,6 +78,7 @@ public struct HookStdin: Sendable, Equatable {
         "WebFetch": ["url"], "WebSearch": ["query"],
         "Task": ["description", "subagent_type"], "Agent": ["description", "subagent_type"],
         "Skill": ["skill", "command"], "SlashCommand": ["command"],
+        "ExitPlanMode": ["plan"], "AskUserQuestion": ["question"],
     ]
 
     /// Keys tried for a tool missing from `toolTargetKeys` (MCP tools, tools newer than this build).
@@ -87,7 +88,11 @@ public struct HookStdin: Sendable, Equatable {
     /// The target of a call to `tool` with `input`: the first non-empty value among its keys, cut to its first
     /// non-empty line and to `toolTargetLimit` characters.
     public static func toolTarget(tool: String?, input: [String: Any]?) -> String? {
-        guard let input else { return nil }
+        guard var input else { return nil }
+        // `AskUserQuestion` holds its questions in an array: the first one is what the user is being asked.
+        if tool == "AskUserQuestion", let first = (input["questions"] as? [[String: Any]])?.first {
+            input = first
+        }
         let keys = tool.flatMap { toolTargetKeys[$0] } ?? fallbackTargetKeys
         for key in keys {
             guard let value = input[key] as? String else { continue }
