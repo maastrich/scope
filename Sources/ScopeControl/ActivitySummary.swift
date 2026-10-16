@@ -17,8 +17,8 @@ public struct SummaryParams: Codable, Sendable, Equatable {
     }
 }
 
-/// How a task ended, or where it stands — judged from the record alone, since nothing of what was said in its threads
-/// survives them.
+/// How a task ended, or where it stands — judged from the record alone. What its threads last said is kept when it is
+/// archived or closed (`TaskDeliverable`), but an answer does not say whether the work landed.
 public enum TaskOutcome: String, Codable, Sendable, CaseIterable {
     /// Its pull request was seen merged.
     case merged
@@ -101,6 +101,11 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         public var agentSeconds: Double?
         /// Seconds it waited on its owner (questions, permissions, results left unread), wall-clock.
         public var waitingSeconds: Double?
+        /// The opening lines of the last answer kept when the task was archived or closed, at most
+        /// `ActivitySummary.answerLimit` characters: what a study came to. Agent output.
+        public var answer: String?
+        /// The report files kept with it (`REPORT.md`, `api/docs/study.md`).
+        public var reports: [String]?
     }
 
     public struct Counts: Codable, Sendable, Equatable {
@@ -151,6 +156,9 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         public var scope: String
         public var task: Task
         public var prompt: String?
+        /// Each thread's last answer, kept when the task was archived or closed, its end cut to
+        /// `ActivitySummary.detailReplyLimit` characters; `scope task show` has them whole. Agent output.
+        public var replies: [TaskDeliverable.Reply]?
     }
 }
 
@@ -175,9 +183,13 @@ public enum ActivitySummary {
     public static let briefLimit = 240
     /// The detail of one task shows its brief up to this.
     public static let detailPromptLimit = 20_000
+    /// A task's line shows the start of its last answer up to this.
+    public static let answerLimit = 300
+    /// The detail of one task shows the end of each kept answer up to this.
+    public static let detailReplyLimit = 6_000
 
     public static let fixedLimits = [
-        "Nothing said in a thread is kept by Scope: a task is known by its name, its brief, its branch and its pull request, not by what its agents did.",
+        "Of what was said in a task's threads, Scope keeps only each thread's last answer (and the task's REPORT.md), and only from the moment the task is archived or closed; a thread closed before that left nothing. `scope task show <task>` prints them whole.",
         "Pull request states are the last ones Scope saw while the task was open; an absent state means Scope never looked — check it with `gh pr view <url>`.",
         "`archived` means put away without a pull request: finished with nothing to merge, or set aside. Scope cannot tell which.",
         "Agent time adds up the turns of every thread of a task; waiting time is how long it waited on you — a question, a permission, or a result not yet followed by a new prompt — counted once however many threads waited. Both come from the hooks of the drivers that have them, and are absent for a task Scope saw no turn of.",
@@ -186,9 +198,9 @@ public enum ActivitySummary {
     public static func build(
         period: ActivityPeriod, timeZone: TimeZone = .current,
         scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry],
-        scopeFilter: String? = nil, tokens: [String: Int] = [:]
+        deliverables: [String: TaskDeliverable] = [:], scopeFilter: String? = nil, tokens: [String: Int] = [:]
     ) -> SummaryResult {
-        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, tokens: tokens)
+        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, deliverables: deliverables, tokens: tokens)
         let wanted = scopeFilter.map { world.matchingScopeKeys($0) }
 
         var byScope: [String: (tasks: [SummaryResult.Task], threads: [SummaryResult.Thread])] = [:]
@@ -230,19 +242,46 @@ public enum ActivitySummary {
     public static func detail(
         of name: String, timeZone: TimeZone = .current, period: ActivityPeriod,
         scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry],
-        tokens: [String: Int] = [:]
+        deliverables: [String: TaskDeliverable] = [:], tokens: [String: Int] = [:]
     ) -> SummaryResult? {
-        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, tokens: tokens)
-        let candidates = world.allTasks.filter { $0.snapshot.id == name || $0.snapshot.slug == name }
-        guard let entry = candidates.first(where: { $0.closedAt == nil }) ?? candidates.max(by: { ($0.closedAt ?? .distantPast) < ($1.closedAt ?? .distantPast) })
-        else { return nil }
+        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, deliverables: deliverables, tokens: tokens)
+        guard let entry = world.task(named: name) else { return nil }
         let key = world.scopeKey(id: entry.snapshot.scopeID, slug: entry.snapshot.scopeSlug)
         let prompt = entry.snapshot.prompt.map { $0.count > detailPromptLimit ? String($0.prefix(detailPromptLimit)) + "…" : $0 }
+        let replies = deliverables[entry.snapshot.id]?.replies.map { reply in
+            var trimmed = reply
+            if reply.text.count > detailReplyLimit { trimmed.text = "…" + reply.text.suffix(detailReplyLimit) }
+            return trimmed
+        }
         return SummaryResult(
             period: .init(label: period.label, since: period.since, until: period.until, timeZone: timeZone.identifier),
-            scopes: [], detail: .init(scope: world.identity(of: key).slug, task: world.render(entry), prompt: prompt),
+            scopes: [], detail: .init(scope: world.identity(of: key).slug, task: world.render(entry), prompt: prompt,
+                                      replies: replies.flatMap { $0.isEmpty ? nil : $0 }),
             historySince: history.map(\.at).min(), limits: limits(history: history, tokens: tokens)
         )
+    }
+
+    /// `scope task show`: one task's whole brief and everything kept of it, found like `detail` finds it.
+    public static func show(
+        _ name: String, scopes declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot],
+        history: [HistoryEntry], deliverables: [String: TaskDeliverable]
+    ) -> TaskShowResult? {
+        let world = World(declared: declared, tasks: tasks, threads: threads, history: history, deliverables: deliverables, tokens: [:])
+        guard let entry = world.task(named: name) else { return nil }
+        let key = world.scopeKey(id: entry.snapshot.scopeID, slug: entry.snapshot.scopeSlug)
+        let task = world.render(entry)
+        let deliverable = deliverables[entry.snapshot.id]
+        var notes: [String] = []
+        if task.outcome == .active || (task.archivedAt == nil && task.closedAt == nil) {
+            notes.append("The task is open: its threads' last answers are kept when it is archived or closed. `scope thread read <thread> --reply` shows one now.")
+        } else if deliverable == nil {
+            notes.append("Nothing was kept: the task was put away before Scope kept answers, its threads had answered nothing, or they were closed before it.")
+        }
+        if entry.closedAt != nil, let prompt = entry.snapshot.prompt, prompt.hasSuffix("…"), prompt.count > TaskSnapshot.promptLimit {
+            notes.append("The brief is cut at \(TaskSnapshot.promptLimit) characters: closed tasks keep no more of it.")
+        }
+        return TaskShowResult(scope: world.identity(of: key).slug, task: task, prompt: entry.snapshot.prompt,
+                              deliverable: deliverable, notes: notes)
     }
 
     static func limits(history: [HistoryEntry], tokens: [String: Int] = [:]) -> [String] {
@@ -310,9 +349,13 @@ public enum ActivitySummary {
         /// Thread id → tokens consumed, all told.
         let tokens: [String: Int]
 
-        init(declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry], tokens: [String: Int]) {
+        let deliverables: [String: TaskDeliverable]
+
+        init(declared: [ScopeRef], tasks: [TaskSnapshot], threads: [ThreadSnapshot], history: [HistoryEntry],
+             deliverables: [String: TaskDeliverable] = [:], tokens: [String: Int]) {
             self.declared = declared
             self.tokens = tokens
+            self.deliverables = deliverables
             let live = Set(tasks.map(\.id))
             var closedTasks: [TaskEntry] = []
             var closedThreads: [(ThreadSnapshot, Date?)] = []
@@ -344,6 +387,13 @@ public enum ActivitySummary {
                     ?? Identity(slug: task.scopeSlug, name: task.scopeName, declared: false)
             }
             self.recorded = recorded
+        }
+
+        /// A task by id or slug: a live record first, then the latest close.
+        func task(named name: String) -> TaskEntry? {
+            let candidates = allTasks.filter { $0.snapshot.id == name || $0.snapshot.slug == name }
+            return candidates.first(where: { $0.closedAt == nil })
+                ?? candidates.max(by: { ($0.closedAt ?? .distantPast) < ($1.closedAt ?? .distantPast) })
         }
 
         /// A declared scope by id; otherwise the slug the task recorded.
@@ -380,6 +430,7 @@ public enum ActivitySummary {
 
         func render(_ entry: TaskEntry) -> SummaryResult.Task {
             let task = entry.snapshot
+            let kept = deliverables[task.id]
             let threads = (threadsByTask[task.id] ?? []).map { render($0.0, closedAt: $0.1) }
                 .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
             let pr = task.pullRequest
@@ -395,7 +446,9 @@ public enum ActivitySummary {
                 createdByAgent: task.createdByAgent, parentTask: task.parentTask,
                 brief: ActivitySummary.excerpt(task.prompt), threads: threads,
                 tokens: threads.compactMap(\.tokens).reduce(nil) { ($0 ?? 0) + $1 },
-                agentSeconds: task.agentSeconds, waitingSeconds: task.waitingSeconds
+                agentSeconds: task.agentSeconds, waitingSeconds: task.waitingSeconds,
+                answer: kept.flatMap { ActivitySummary.excerpt($0.lastReply?.text, limit: ActivitySummary.answerLimit) },
+                reports: kept.flatMap { $0.files.isEmpty ? nil : $0.files.map(\.name) }
             )
         }
 
@@ -404,5 +457,39 @@ public enum ActivitySummary {
                                  lastLaunchedAt: thread.lastLaunchedAt, closedAt: closedAt, launches: thread.launchCount,
                                  session: thread.session, openedByAgent: thread.openedByAgent, tokens: tokens[thread.id])
         }
+    }
+}
+
+/// `scope task show <id|slug>` — a task's whole brief and what was kept of it when it was archived or closed: each
+/// thread's last answer and its report file. Read-only; open, archived and closed tasks alike.
+public struct TaskShowParams: Codable, Sendable, Equatable {
+    /// Task id or slug.
+    public var task: String
+
+    public init(task: String) {
+        self.task = task
+    }
+}
+
+public struct TaskShowResult: Codable, Sendable, Equatable {
+    /// The slug of the task's scope.
+    public var scope: String
+    public var task: SummaryResult.Task
+    /// The whole brief (cut at `TaskSnapshot.promptLimit` for a closed task).
+    public var prompt: String?
+    /// What was kept at archive or close; `nil` for an open task and for one put away with nothing to keep.
+    public var deliverable: TaskDeliverable?
+    /// What the answer cannot say, in plain words.
+    public var notes: [String]
+    /// Always `true`: the replies and reports are agents' output.
+    public var untrusted: Bool
+
+    public init(scope: String, task: SummaryResult.Task, prompt: String?, deliverable: TaskDeliverable?, notes: [String]) {
+        self.scope = scope
+        self.task = task
+        self.prompt = prompt
+        self.deliverable = deliverable
+        self.notes = notes
+        self.untrusted = true
     }
 }

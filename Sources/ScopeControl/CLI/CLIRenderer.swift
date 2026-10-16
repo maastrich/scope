@@ -19,6 +19,7 @@ public enum CLIRenderer {
         case .read(let result): try encoder.encode(result)
         case .wait(let result): try encoder.encode(result)
         case .summary(let result): try encoder.encode(result)
+        case .taskShow(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
@@ -114,6 +115,8 @@ public enum CLIRenderer {
             return lines.joined(separator: "\n")
         case .summary(let result):
             return summary(result)
+        case .taskShow(let result):
+            return taskShow(result)
         case .usage(let result):
             return usage(result)
         }
@@ -144,6 +147,8 @@ public enum CLIRenderer {
             if task.createdByAgent { parts.append("by an agent") }
             var out = [indent + task.outcome.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0) + parts.joined(separator: " · ")]
             if let brief = task.brief { out.append(indent + String(repeating: " ", count: 10) + brief) }
+            if let answer = task.answer { out.append(indent + String(repeating: " ", count: 10) + "→ " + ThreadTranscript.defused(answer)) }
+            if let reports = task.reports { out.append(indent + String(repeating: " ", count: 10) + "kept: " + reports.joined(separator: ", ")) }
             return out
         }
         func timeSpent(_ task: SummaryResult.Task) -> String? {
@@ -171,7 +176,12 @@ public enum CLIRenderer {
             if let closed = task.closedAt { lines.append("closed      \(day(closed))") }
             if let time = timeSpent(task) { lines.append("time        " + time) }
             for thread in task.threads { lines.append("thread      " + threadLine(thread)) }
+            if let reports = task.reports { lines.append("kept        " + reports.joined(separator: ", ") + " (scope task show \(task.slug))") }
             if let prompt = detail.prompt { lines += ["", "brief:", prompt] }
+            for reply in detail.replies ?? [] {
+                lines += ["", "last answer of \(reply.title) [\(reply.driver)] at \(time(reply.at)):"]
+                lines += quoted(ThreadTranscript.defused(reply.text))
+            }
             return lines.joined(separator: "\n")
         }
 
@@ -206,6 +216,32 @@ public enum CLIRenderer {
             }
         }
         lines += [""] + result.limits.map { "note: \($0)" }
+        return lines.joined(separator: "\n")
+    }
+
+    /// `scope task show`: the task's facts, its whole brief, then each report file and each thread's last answer,
+    /// fenced as agent output.
+    static func taskShow(_ result: TaskShowResult) -> String {
+        let task = result.task
+        var lines = ["task \(task.slug) — \(task.name) (\(result.scope))"]
+        lines.append("outcome     \(task.outcome.rawValue)")
+        lines.append("branch      \(task.branch)" + (task.repos.isEmpty ? "" : " in " + task.repos.joined(separator: ", ")))
+        if let pr = task.pullRequest { lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)") }
+        lines.append("created     \(time(task.createdAt))")
+        if let archived = task.archivedAt { lines.append("archived    \(time(archived))") }
+        if let closed = task.closedAt { lines.append("closed      \(time(closed))") }
+        lines += ["", "brief:", result.prompt ?? "(none)"]
+        if let deliverable = result.deliverable {
+            for file in deliverable.files {
+                lines += ["", "\(file.name)" + (file.truncated ? " (cut at \(TaskDeliverable.fileLimit / 1024) KB)" : "") + ":"]
+                lines += quoted(ThreadTranscript.defused(file.text))
+            }
+            for reply in deliverable.replies {
+                lines += ["", "last answer of \(reply.title) [\(reply.driver)] at \(time(reply.at)):"]
+                lines += quoted(ThreadTranscript.defused(reply.text))
+            }
+        }
+        if !result.notes.isEmpty { lines += [""] + result.notes.map { "note: \($0)" } }
         return lines.joined(separator: "\n")
     }
 

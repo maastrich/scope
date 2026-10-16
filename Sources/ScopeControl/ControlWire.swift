@@ -50,6 +50,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .threadRead(let params): try encoder.encode(wire(params))
         case .threadWait(let params): try encoder.encode(wire(params))
         case .summary(let params): try encoder.encode(wire(params))
+        case .taskShow(let params): try encoder.encode(wire(params))
         case .configGet(let params): try encoder.encode(wire(params))
         case .configSet(let params): try encoder.encode(wire(params))
         case .usage(let params): try encoder.encode(wire(params))
@@ -98,6 +99,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             case .threadWait: .threadWait(try required(ThreadWaitParams.self))
             case .summary: .summary(try decoder.decode(Params<SummaryParams>.self, from: data).params ?? SummaryParams())
+            case .taskShow: .taskShow(try required(TaskShowParams.self))
             case .configGet: .configGet(try decoder.decode(Params<ConfigGetParams>.self, from: data).params ?? ConfigGetParams())
             case .configSet: .configSet(try required(ConfigSetParams.self))
             case .usage: .usage(try decoder.decode(Params<UsageParams>.self, from: data).params ?? UsageParams())
@@ -188,6 +190,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .read(let result): try encoder.encode(wire(result))
         case .wait(let result): try encoder.encode(wire(result))
         case .summary(let result): try encoder.encode(wire(result))
+        case .taskShow(let result): try encoder.encode(wire(result))
         case .usage(let result): try encoder.encode(wire(result))
         }
     }
@@ -214,6 +217,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)
             case .summary: .summary(try decoder.decode(Wrapped<SummaryResult>.self, from: data).result)
+            case .taskShow: .taskShow(try decoder.decode(Wrapped<TaskShowResult>.self, from: data).result)
             case .usage: .usage(try decoder.decode(Wrapped<UsageResult>.self, from: data).result)
             }
         }

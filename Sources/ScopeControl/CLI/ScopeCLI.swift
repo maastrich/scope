@@ -49,6 +49,8 @@ public enum ScopeCLI {
       scope thread wait <id>...           block until the threads finish their turn or need someone, then print
                                           their state and last answer (--any for the first one, --timeout <s>)
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
+      scope task show <id|slug>           its whole brief, and what was kept when it was archived or closed: each
+                                          thread's last answer and its report file (REPORT.md or --deliverable)
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
                                           uncommitted work saved, worktrees removed; branch kept
       scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
@@ -88,6 +90,8 @@ public enum ScopeCLI {
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread
       --topic <text>                file it under a topic (default: the topic of the caller's own task)
+      --deliverable <path>          the file the work ends in, relative to the task root or a sandbox; kept with
+                                    the threads' last answers at archive (REPORT.md is kept anyway)
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
       --no-setup                    skip the repositories' setup commands (.env files are still copied)
@@ -100,7 +104,8 @@ public enum ScopeCLI {
                                     last 14 days, 2w, 2026-10-01, 2026-10, 2026-10-01..2026-10-14,
                                     since 2026-10-01 (weeks start on Monday)
       --scope <slug|name|id>        only that scope
-      --task <id|slug>              one task: its whole brief and every thread, whatever the period
+      --task <id|slug>              one task: its whole brief, every thread and their kept answers, whatever
+                                    the period
 
     usage:
       [period]                      same words as summary (default: last 7 days)
@@ -284,6 +289,12 @@ public enum ScopeCLI {
         case "task":
             let sub = rest.first
             rest = rest.dropFirst()
+            if sub == "show" {
+                var words: [String] = []
+                let shared = try options(&rest, command: "task show", positional: { words.append($0) })
+                guard words.count == 1 else { throw UsageError(message: "task show takes one task id or slug", usage: usage) }
+                return .call(.taskShow(TaskShowParams(task: words[0])), shared)
+            }
             if sub == "archive" {
                 var words: [String] = []
                 let shared = try options(&rest, command: "task archive", positional: { words.append($0) })
@@ -344,7 +355,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, archive, close, restore, topic", usage: usage)
+                throw UsageError(message: "task commands: new, show, archive, close, restore, topic", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")
@@ -358,6 +369,7 @@ public enum ScopeCLI {
                 case "--driver": parameters.driver = try value()
                 case "--topic": parameters.topic = try value()
                 case "--pr": parameters.startPR = try value()
+                case "--deliverable": parameters.deliverable = try value()
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false
