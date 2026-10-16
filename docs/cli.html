@@ -55,6 +55,7 @@ scope task close &lt;id|slug&gt;          <span class="c"># archive it and forge
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
+scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
@@ -185,7 +186,11 @@ further. What stops a loop of agents starting agents is not how deep the chain g
 task is a worktree per repository, each thread a process. So the budgets count what agents keep open right now,
 across every scope, and refuse the request that would go past them — with the way out in the answer: archive the
 tasks that are done, close the threads that are. Requests still being carried out hold their share, so five
-sent at once cannot all take the last slot. A depth limit remains for whoever wants one. With approvals set to
+sent at once cannot all take the last slot. A depth limit remains for whoever wants one.
+<code>config.json</code> is read at launch and rewritten by the app, so raise a budget from a terminal with
+<code>scope config set automation.maxAgentTasks 20</code> (or <code>automation.maxAgentThreads</code>;
+<code>scope config get</code> lists them): it takes effect at once, as the Settings window would. Agents are
+refused it — from a thread or through <code>scope mcp</code> — and it is not an MCP tool. With approvals set to
 <i>after asking</i>, Scope shows one question at a time; a question left past the approval timeout is refused,
 and so is a request that finds three already waiting.</p>
 <p>Every thread records who opened it, the line of threads above it and its depth, so the chain survives a

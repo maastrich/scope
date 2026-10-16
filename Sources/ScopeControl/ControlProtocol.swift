@@ -63,12 +63,17 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case threadWait = "thread.wait"
     /// What was done over a period, scope by scope, from the records and the history of closed ones.
     case summary
+    /// The preferences `ConfigKey` lists, as the app holds them right now.
+    case configGet = "config.get"
+    /// Changes one of them live, as the Settings window would. The user's own terminal only.
+    case configSet = "config.set"
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc: true
+        case .ping, .list, .threadRead, .threadWait, .summary, .configGet: false
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc,
+             .configSet: true
         }
     }
 
@@ -180,6 +185,8 @@ public enum ControlCall: Sendable, Equatable {
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
     case summary(SummaryParams)
+    case configGet(ConfigGetParams)
+    case configSet(ConfigSetParams)
 
     public var method: ControlMethod {
         switch self {
@@ -198,6 +205,8 @@ public enum ControlCall: Sendable, Equatable {
         case .threadRead: .threadRead
         case .threadWait: .threadWait
         case .summary: .summary
+        case .configGet: .configGet
+        case .configSet: .configSet
         }
     }
 
@@ -209,7 +218,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary: .seconds(15)
+        case .list, .threadRead, .summary, .configGet, .configSet: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .gc: .seconds(300)
@@ -225,6 +234,26 @@ public enum ControlCall: Sendable, Equatable {
         case .threadWait(let params): max(floor, .seconds(params.effectiveTimeout + 10))
         default: floor
         }
+    }
+}
+
+/// `scope config get [key]` — one preference, or every one `ConfigKey` lists.
+public struct ConfigGetParams: Codable, Sendable, Equatable {
+    public var key: String?
+
+    public init(key: String? = nil) {
+        self.key = key
+    }
+}
+
+/// `scope config set <key> <value>`.
+public struct ConfigSetParams: Codable, Sendable, Equatable {
+    public var key: String
+    public var value: String
+
+    public init(key: String, value: String) {
+        self.key = key
+        self.value = value
     }
 }
 
@@ -481,10 +510,15 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public var runSetup: Bool
     /// The topic the task is filed under in the sidebar; `nil` = the topic of the caller's own task, if any.
     public var topic: String?
+    /// The pull request to start from (`#123`, `owner/repo#123`, a URL, `123`): its head is checked out instead of
+    /// a new branch. Given, it must resolve or the call fails; `nil` = only a pull request the prompt asks to work
+    /// on (`PullRequestReference.startPoint`), and one that does not resolve is ignored.
+    public var startPR: String?
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
-                dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil) {
+                dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
+                startPR: String? = nil) {
         self.prompt = prompt
         self.scope = scope
         self.repos = repos
@@ -496,6 +530,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         self.openThread = openThread
         self.runSetup = runSetup
         self.topic = topic
+        self.startPR = startPR
     }
 
     // Lenient on everything but the prompt: a `scope` binary older than a field never sends it.
@@ -512,6 +547,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         openThread = try container.decodeIfPresent(Bool.self, forKey: .openThread) ?? true
         runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
         topic = try container.decodeIfPresent(String.self, forKey: .topic)
+        startPR = try container.decodeIfPresent(String.self, forKey: .startPR)
     }
 }
 
@@ -704,10 +740,12 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
     public var thread: String?
     /// The topic the task is filed under: the one asked for, or the one it inherited from the caller's task.
     public var topic: String?
+    /// One line about something Scope decided on the caller's behalf (a pull request it ignored), when it did.
+    public var note: String?
 
     public init(created: Bool, task: String? = nil, name: String, slug: String, branch: String,
                 scope: String, scopeSlug: String, root: String? = nil, repos: [TaskRepoResult] = [],
-                thread: String? = nil, topic: String? = nil) {
+                thread: String? = nil, topic: String? = nil, note: String? = nil) {
         self.created = created
         self.task = task
         self.name = name
@@ -719,6 +757,15 @@ public struct TaskNewResult: Codable, Sendable, Equatable {
         self.repos = repos
         self.thread = thread
         self.topic = topic
+        self.note = note
+    }
+}
+
+extension TaskNewResult {
+    /// The note of a task created without the pull request its prompt asked to work on, because that pull request
+    /// could not be resolved: the task goes ahead from a new branch rather than failing on a reference.
+    public static func ignoredReference(_ label: String, reason: String) -> String {
+        "ignored the reference \(label): \(reason); the task starts on a new branch (start_pr / --pr starts it from a pull request)"
     }
 }
 

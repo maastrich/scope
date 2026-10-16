@@ -58,6 +58,8 @@ public enum ScopeCLI {
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope config get [key]              settings Scope applies live: automation.maxAgentTasks, automation.maxAgentThreads
+      scope config set <key> <value>      change one, as Settings would; from your own terminal only, never an agent's
       scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
                                           their pull requests and briefs (default: last 7 days)
       scope mcp                           speak MCP on stdio, same commands
@@ -74,7 +76,11 @@ public enum ScopeCLI {
     task new:
       --scope <slug|name|id|path>   which scope
       --repo <relative/path>        repository to sandbox; repeat for several (default: proposed)
-      --branch <name>               branch to create (default: proposed from the prompt)
+      --branch <name>               branch to create (default: proposed from the prompt, after the repository's
+                                    convention); the scope/ prefix is reserved for Scope
+      --pr <ref>                    start from that pull request's head: 123, #123, owner/repo#123 or its URL
+                                    (default: a pull request the prompt asks to work on — "review #123" —
+                                    never one it only cites; an unresolvable one is then ignored)
       --title <text>                task name (default: proposed)
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread
@@ -230,6 +236,19 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.threadNew(parameters), shared)
+        case "config":
+            var words: [String] = []
+            let shared = try options(&rest, command: "config", positional: { words.append($0) })
+            switch words.first {
+            case "get":
+                guard words.count <= 2 else { throw UsageError(message: "config get takes at most one key", usage: usage) }
+                return .call(.configGet(ConfigGetParams(key: words.dropFirst().first)), shared)
+            case "set":
+                guard words.count == 3 else { throw UsageError(message: "config set takes a key and a value", usage: usage) }
+                return .call(.configSet(ConfigSetParams(key: words[1], value: words[2])), shared)
+            default:
+                throw UsageError(message: "config commands: get, set", usage: usage)
+            }
         case "task":
             let sub = rest.first
             rest = rest.dropFirst()
@@ -306,6 +325,7 @@ public enum ScopeCLI {
                 case "--slug": parameters.slug = try value()
                 case "--driver": parameters.driver = try value()
                 case "--topic": parameters.topic = try value()
+                case "--pr": parameters.startPR = try value()
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false

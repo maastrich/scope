@@ -1,12 +1,31 @@
 import Foundation
 import ScopeCore
 
-/// Branch naming for tasks (M2): `<prefix>/<slug>`, `scope/auth-refresh` by default.
+/// Branch naming helpers for tasks. A task's branch is proposed from the repository's own convention
+/// (`TaskProposer`), never under the reserved `scope/` prefix.
 public enum TaskBranch {
     /// Fallback slug for an empty or unslugifiable task name.
     public static let fallbackSlug = "task"
 
-    /// Builds the branch name for a task.
+    /// The prefix no task branch may use: Scope reserves it.
+    public static let reservedPrefix = "scope/"
+
+    /// `true` for a branch under `reservedPrefix`.
+    public static func isReserved(_ branch: String) -> Bool {
+        branch.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(reservedPrefix)
+    }
+
+    /// What to do instead of asking for a reserved branch.
+    public static let reservedAdvice = "omit the branch and Scope names it after the repository's convention, "
+        + "or use another prefix such as feat/"
+
+    /// The refusal of a reserved branch, said so that the caller knows what to do next.
+    public static func reservedRefusal(_ branch: String) -> String {
+        "\"\(branch)\" is not a valid task branch: the \(reservedPrefix) prefix is reserved for Scope; \(reservedAdvice)"
+    }
+
+    /// Builds `<prefix>/<slug>` for a task. Unused by task creation since branches are proposed from the
+    /// repository's convention (`Preferences.branchPrefix` is deprecated); kept for its slug rules.
     ///
     /// - Parameters:
     ///   - prefix: `Preferences.branchPrefix`, e.g. `"scope"` or `"mathis/wip"`. Each `/`-separated

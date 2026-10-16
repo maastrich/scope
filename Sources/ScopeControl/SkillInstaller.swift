@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 10
+    public static let version = 11
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -199,7 +199,7 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--title T] [--topic P] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, title, topic, open_thread: false, run_setup: false, dry_run}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--title T] [--topic P] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, title, topic, open_thread: false, run_setup: false, dry_run}` |
         | `scope thread new [--task T] [--repo R] [--driver D] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
@@ -228,6 +228,14 @@ public struct SkillInstaller: Sendable {
         the prompt as its opening request, and answers with the task and that thread's id. Title, slug, branch and
         repositories are proposed from the prompt; pin any of them when you know better. `--dry-run` shows what
         would be created and writes nothing — use it only when you cannot tell which repositories the work needs.
+
+        A branch you name may not start with `scope/` — Scope reserves it. Leave `--branch` out and Scope names it
+        after the repository's convention, or use another prefix such as `feat/`.
+
+        To work on an existing pull request, pass it: `--pr 123` (`start_pr`; also `#123`, `owner/repo#123` or its
+        URL) checks its head out, and fails if it cannot be found. Without it, only a pull request the prompt asks
+        to work on ("review #123") is taken; one your brief merely cites for context is not, and one that cannot be
+        found is ignored with a `note` in the answer.
 
         This works from inside a task too: a task may create tasks, which may create theirs.
 

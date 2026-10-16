@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import ScopeControl
 import ScopeCore
+import ScopeGit
 import ScopeTasks
 
 /// The app side of the control socket: the only place where a `ControlCall` becomes something happening in
@@ -158,6 +159,14 @@ final class AppControlService: ControlService {
             return await wait(params, from: origin)
         case .summary(let params):
             return await summary(params)
+        case .configGet(let params):
+            return ConfigKey.get(params, in: automation)
+        case .configSet(let params):
+            // The policy already turned agents away; this is the user, applied the way Settings ▸ Automation does.
+            return ConfigKey.set(params, in: automation).map { change in
+                model.updatePreferences { $0.automation = change.settings }
+                return change.answer
+            }
         case .taskClose(let params):
             return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
                                    done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
@@ -549,15 +558,17 @@ final class AppControlService: ControlService {
         }
         let prompt = params.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return .failure(.badRequest("a task needs a prompt")) }
-
-        // What the prompt is about, before anything is created: a pull request it names wins over everything.
-        let request = await model.resolveTaskRequest(prompt: prompt, in: scope.id)
-        if let existing = request.existingTask {
-            return .failure(.init(.failed, "that pull request already has a task",
-                                  detail: "Task \(existing.rawValue) in \(summary.slug)."))
+        // Refused before the proposal, which would otherwise keep the caller waiting for nothing.
+        if let branch = params.branch, TaskBranch.isReserved(branch) {
+            return .failure(.badRequest(TaskBranch.reservedRefusal(branch)))
         }
-        if let unresolved = request.unresolved {
-            return .failure(.badRequest("the pull request in the prompt could not be read", detail: unresolved))
+        var startPR: PullRequestReference?
+        if let raw = params.startPR {
+            guard let reference = PullRequestReference.parse(raw) else {
+                return .failure(.badRequest("“\(raw)” is not a pull request",
+                                            detail: "Give its number (123, #123), owner/repo#123 or its URL."))
+            }
+            startPR = reference
         }
 
         var repos: [String] = []
@@ -566,6 +577,23 @@ final class AppControlService: ControlService {
             case .failure(let error): return .failure(error)
             case .success(let path): repos.append(path)
             }
+        }
+
+        // What the prompt is about, before anything is created: the pull request asked for wins over everything.
+        var request = await model.resolveTaskRequest(prompt: prompt, in: scope.id, startPR: startPR, repos: repos)
+        if let existing = request.existingTask {
+            return .failure(.init(.failed, "that pull request already has a task",
+                                  detail: "Task \(existing.rawValue) in \(summary.slug)."))
+        }
+        var note: String?
+        if let unresolved = request.unresolved {
+            // Asked for by name, it must be there. Read off the prompt, it is Scope's guess: a task on a new branch
+            // beats no task over a reference the caller may not even have meant.
+            guard startPR == nil else {
+                return .failure(.badRequest("the pull request \(params.startPR ?? "") could not be used", detail: unresolved))
+            }
+            note = TaskNewResult.ignoredReference(request.reference?.label ?? "", reason: request.unresolvedReason ?? unresolved)
+            request = .init(repos: request.repos)
         }
         if repos.isEmpty { repos = request.repos }
 
@@ -604,7 +632,8 @@ final class AppControlService: ControlService {
                 scope: summary.name, scopeSlug: summary.slug, root: sandboxes.path,
                 repos: repos.map { TaskRepoResult(repo: $0, worktree: sandboxes.appending(path: $0).path,
                                                   branch: proposal.branch,
-                                                  branchCreated: startPoint.requiredBranch == nil) }
+                                                  branchCreated: startPoint.requiredBranch == nil) },
+                note: note
             )))
         }
 
@@ -634,7 +663,7 @@ final class AppControlService: ControlService {
             scope: summary.name, scopeSlug: summary.slug, root: record.root,
             repos: record.repos.map { TaskRepoResult(repo: $0.repoRelativePath, worktree: $0.sandboxPath,
                                                      branch: $0.branch, branchCreated: $0.branchCreated ?? false) },
-            thread: model.threads(in: record.id).first?.id.rawValue, topic: record.topic
+            thread: model.threads(in: record.id).first?.id.rawValue, topic: record.topic, note: note
         )))
     }
 

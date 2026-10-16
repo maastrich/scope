@@ -18,6 +18,20 @@ import Testing
         return options
     }
 
+    @Test func configGetsAndSetsOneKey() throws {
+        #expect(try Self.call(["config", "get"]) == .configGet(ConfigGetParams()))
+        #expect(try Self.call(["config", "get", "automation.maxAgentTasks"]) == .configGet(ConfigGetParams(key: "automation.maxAgentTasks")))
+        #expect(try Self.call(["config", "set", "automation.maxAgentThreads", "30"])
+            == .configSet(ConfigSetParams(key: "automation.maxAgentThreads", value: "30")))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["config", "set", "automation.maxAgentThreads"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["config"]) }
+    }
+
+    @Test func taskNewTakesAPullRequestToStartFrom() throws {
+        #expect(try Self.call(["task", "new", "review it", "--pr", "#42"]) == .taskNew(TaskNewParams(prompt: "review it", startPR: "#42")))
+        #expect(try Self.call(["task", "new", "review it", "--pr=42"]) == .taskNew(TaskNewParams(prompt: "review it", startPR: "42")))
+    }
+
     @Test func nothingIsHelp() throws {
         guard case .help = try ScopeCLI.parse([]) else {
             Issue.record("a bare `scope` should say what it can do")

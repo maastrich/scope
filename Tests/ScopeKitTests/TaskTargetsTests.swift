@@ -76,6 +76,54 @@ struct PullRequestReferenceTests {
         #expect(!reference.matches(nil))
     }
 
+    @Test("a reference given on purpose may be a plain number")
+    func explicitReference() {
+        #expect(PullRequestReference.parse("123") == PullRequestReference(number: 123))
+        #expect(PullRequestReference.parse(" #123 ") == PullRequestReference(number: 123))
+        #expect(PullRequestReference.parse("acme/front#88") == PullRequestReference(number: 88, owner: "acme", repo: "front"))
+        #expect(PullRequestReference.parse("https://github.com/acme/front/pull/12")?.number == 12)
+        #expect(PullRequestReference.parse("0") == nil)
+        #expect(PullRequestReference.parse("the login one") == nil)
+    }
+
+    @Test("a reference given on its own, or asked to be worked on, is the start point", arguments: [
+        ("#4211", 4211),
+        ("https://github.com/acme/front/pull/12", 12),
+        ("PR #4211 please", 4211),
+        ("review #4211 and merge it", 4211),
+        ("Review PR #4211", 4211),
+        ("rebase la pr https://github.com/acme-devops/acme-front/pull/6613 stp", 6613),
+        ("please fix the CI on acme/front#88", 88),
+        ("can you take over https://github.com/acme/front/pull/12? the author left", 12),
+        ("address the review comments on #42", 42),
+        ("reprends la PR #31 et finis les tests", 31),
+        ("Context: this follows #37.\nReview #40 before it ships.", 40),
+        ("https://github.com/acme/front/pull/12\nfix the failing test", 12),
+        ("#6613: address the review comments", 6613),
+    ])
+    func startPoints(prompt: String, number: Int) {
+        #expect(PullRequestReference.startPoint(in: prompt)?.number == number, "\(prompt)")
+    }
+
+    @Test("a reference cited as context is not the start point", arguments: [
+        // What happened: a long brief that cites a research note's pull request on its first line.
+        """
+        Wave 1 of the "Scope usage ideas" plan (context: docs/research/usage-ideas.md, #37). Two frictions met today.
+
+        # C10: a pull request merely cited in a brief must not become the start point
+        Fix the proposer so that a cited reference stays context.
+        """,
+        "fix the bug introduced in #37",
+        "port the fix from acme/front#88 please",
+        "add a rate limiter like the one in https://github.com/acme/api/pull/7",
+        "see #37 for the research, then build the sidebar it describes",
+        "The review of #37 found a race in the socket server; fix it.",
+    ])
+    func citations(prompt: String) {
+        #expect(PullRequestReference.detect(in: prompt) != nil, "the reference is still found")
+        #expect(PullRequestReference.startPoint(in: prompt) == nil, "\(prompt)")
+    }
+
     @Test("a bare reference matches any remote — the caller restricts it to one repository")
     func bareMatchesAnything() {
         let bare = PullRequestReference.detect(in: "#4211")!

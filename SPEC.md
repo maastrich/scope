@@ -59,7 +59,7 @@ Scope ne touche pas au dossier de l'utilisateur. Tout ce qu'il produit vit dans 
   sandboxes/<scope-slug>/<task-slug>/  # racine de task = cwd du thread (multi-repo)
     AGENTS.md                          # projection du graph + périmètre de la task
     <task-slug>.code-workspace         # multi-root pour Cursor / VS Code
-    api/                               # sandbox = worktree, branche scope/auth-refresh
+    api/                               # sandbox = worktree, branche feat/auth-refresh
     web/
   threads/<thread-id>.json             # driver, cwd, id de reprise, logs
   scope.sock                           # socket unix pour les adaptateurs
@@ -93,8 +93,9 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 
 ### 4.3 Tasks et sandboxes
 
-- **Créer une task** : nom → slug, choix des repos (pour un multi-repo scope ; suggestion depuis le graph : "quels repos pour *ajouter un refresh token* ?"), branche `scope/<slug>` (préfixe configurable) depuis la base à jour (`fetch` puis branche depuis `origin/<default>`).
-- Pour chaque repo : `git -C <repo> worktree add <task-root>/<repo> -b scope/<slug> origin/<default>`, puis préparation de la sandbox, en arrière-plan, avant que le premier thread ne démarre (il attend) :
+- **Créer une task** : nom → slug, choix des repos (pour un multi-repo scope ; suggestion depuis le graph : "quels repos pour *ajouter un refresh token* ?"), branche proposée d'après la convention du repo (le driver en headless lit les branches et les commits récents ; à défaut, préfixe dominant ou `feat/`/`fix/`, sinon le slug nu), depuis la base à jour (`fetch` puis branche depuis `origin/<default>`). Le préfixe `scope/` est réservé à Scope et refusé, avec la marche à suivre : omettre la branche, ou un autre préfixe comme `feat/`. La préférence `branchPrefix` n'est plus lue.
+- **Partir d'une pull request** : sa tête est checkoutée au lieu d'une nouvelle branche. Explicite (`scope task new --pr <ref>`, `start_pr` côté MCP), elle doit se résoudre, sinon la création échoue. Sinon, seule une PR que le prompt demande de travailler compte — le prompt n’est guère que la référence ou s’ouvre sur une ligne qui l’est, ou une phrase s'ouvre sur un verbe d'action qui la vise (« review #123 », « rebase la pr <url> ») ; une PR citée pour contexte dans un brief n'est pas un point de départ. Une PR ainsi lue qui ne se résout pas dans le scope (autre repo, inexistante) est ignorée : la task part d'une nouvelle branche et la réponse le dit en une ligne.
+- Pour chaque repo : `git -C <repo> worktree add <task-root>/<repo> -b <branche> origin/<default>`, puis préparation de la sandbox, en arrière-plan, avant que le premier thread ne démarre (il attend) :
   1. **Copie des fichiers non versionnés** de la base vers la sandbox, par globs (`.env*` par défaut ; jokers dans le nom de fichier seulement). Refus de `..`, des chemins absolus, d'une source symlink qui sort de la base et d'une destination dont le chemin passe par un symlink ; un fichier déjà présent n'est jamais écrasé ; un fichier copié que le repo n'ignore pas est ajouté à `.git/info/exclude`.
   2. **Commande de setup** du repo (`pnpm i`, `bundle`, `make deps`) : le champ `setup` de la carte du graph, surchargé par repo dans la config du scope (`repoCommands` dans `config.json` : `setup`, `teardown`, `copyFiles` ; une chaîne vide désactive). Lancée avec `<shell> -c` dans la sandbox, avec l'environnement du shell de login plus `SCOPE_TASK`, `SCOPE_SCOPE`, `SCOPE_SANDBOX` (le worktree), `SCOPE_BASE_PATH` (le checkout principal), `SCOPE_DEFAULT_BRANCH` et `SCOPE_PORT`.
   - L'état du setup (`notRun` · `running` · `succeeded` · `failed` · `skipped`) et son log (borné à 64 Ko, la fin gardée) vivent sur le record de la task. Un échec va dans le Problem Center avec le log et *Relancer le setup*. Un setup interrompu par un quit est `failed` au lancement suivant.
@@ -279,7 +280,7 @@ Le raisonnement, les options écartées et ce qui a été construit sont dans `d
 1. **`~/.scope/` vs Application Support** pour tout ce qui est visible en terminal (proposé : `~/.scope/`, surcharge `SCOPE_HOME`).
 2. **Emplacement des sandboxes** par défaut : `~/.scope/sandboxes/` (proposé) ou à côté des repos, en opt-in par scope.
 3. **Cwd par défaut d'un thread** : task (proposé) ou racine du scope ?
-4. **Nom de branche** : `scope/<slug>` ou `<user>/<slug>` ?
+4. ~~**Nom de branche** : `scope/<slug>` ou `<user>/<slug>` ?~~ Tranché : la convention du repo, proposée par le driver ; `scope/` réservé.
 5. **Base de branche** : `origin/<default>` fraîchement fetché (proposé) ou la base locale ?
 6. ~~**Projection mono-repo** : flag de contexte du driver, ou fichier + `.git/info/exclude` ?~~ Tranché : fichier + `exclude`, écrit dans le cwd des threads, sous chaque nom déclaré par les drivers ; un fichier que Scope n'a pas généré est laissé en place et signalé.
 7. **Rendu du delta** : natif SwiftUI + parser (proposé, cohérent, plus long) ou `WKWebView` + diff2html (rapide, moins natif).

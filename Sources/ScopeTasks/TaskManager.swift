@@ -129,7 +129,7 @@ public actor TaskManager {
         // The start point dictates the branch when it continues existing work: the branch is not a name to
         // choose, it is the one already carrying the commits.
         let branch = (startPoint.requiredBranch ?? branch).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !branch.isEmpty, !branch.hasPrefix("scope/") else { throw TaskError.invalidBranch(branch) }
+        guard !branch.isEmpty, !TaskBranch.isReserved(branch) else { throw TaskError.invalidBranch(branch) }
         let slugSource = requestedSlug?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let slug = uniqueSlug(for: slugSource.isEmpty ? name : slugSource, in: scope)
         let root = scopeSandboxesURL(scopeSlug: scope.slug).appending(path: slug, directoryHint: .isDirectory)
