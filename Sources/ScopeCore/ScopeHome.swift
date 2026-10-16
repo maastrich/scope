@@ -104,6 +104,11 @@ public enum ScopeHome {
         home.appending(path: "ui-state.json", directoryHint: .notDirectory)
     }
 
+    /// `<home>/scope-visits.json` — when each scope was last looked at, for the "since your last visit" strip.
+    public static func scopeVisitsURL(home: URL) -> URL {
+        home.appending(path: "scope-visits.json", directoryHint: .notDirectory)
+    }
+
     /// `<home>/scope-logos/`: the copies of the images chosen as scope logos.
     public static func scopeLogosURL(home: URL) -> URL {
         home.appending(path: "scope-logos", directoryHint: .isDirectory)

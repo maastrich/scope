@@ -7,7 +7,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     }
 
     /// The `statusCheckRollup` folded into one state: a failure beats a pending check, which beats success.
-    public enum Checks: String, Sendable, Equatable, Hashable {
+    public enum Checks: String, Codable, Sendable, Equatable, Hashable {
         case passing, failing, pending, none
     }
 
@@ -15,7 +15,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         case mergeable, conflicting, unknown
     }
 
-    public enum State: String, Sendable, Equatable, Hashable {
+    public enum State: String, Codable, Sendable, Equatable, Hashable {
         case open, merged, closed
     }
 
