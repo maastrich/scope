@@ -363,7 +363,7 @@ goes either way (<b>Go to Parent Task</b>, <b>Tasks Started From Here</b>).</p>
   <li>while it works, the tool it just ran, in words — <i>Editing TaskTopic.swift</i>, <i>Running swift test</i>,
   <i>Searching "topic"</i>, <i>Fetching docs.github.com</i>. A path is cut to its file name; hover the row for the
   whole of it.</li>
-  <li>while it waits, what it asks: the question itself, or <i>Asks to run swift test</i> for a permission.</li>
+  <li>while it waits, what it asks: the question itself, or <i>Asks to run swift test</i> for a permission when the driver names the tool. Claude Code's permission notification names none, so its permission waits read <i>Waiting for your permission</i>.</li>
   <li>once its turn is over, how and when: <i>Finished · 3m ago</i>, <i>Failed (rate_limit) · 1h ago</i>,
   <i>Interrupted</i>. <b>Settings ▸ Sidebar ▸ Finished threads</b> can show the first line of its reply instead.</li>
 </ul>
@@ -1105,7 +1105,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
   <tr><td><code>SessionStart</code></td><td>no change; the session id is captured, which is what lets <b>Relaunch</b> pick the session back up</td></tr>
   <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running</td></tr>
   <tr><td><code>PreToolUse</code> on <code>AskUserQuestion</code> / <code>ExitPlanMode</code></td><td><span class="dot waiting"></span>waiting — <b>question</b></td></tr>
-  <tr><td><code>PermissionRequest</code>, <code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> (an elicitation dialog is a question) — and a macOS notification when Scope is in the background</td></tr>
+  <tr><td><code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> once a permission dialog has sat unanswered for about six seconds (an elicitation dialog is a question) — and a macOS notification when Scope is in the background. A permission that auto mode, <code>bypassPermissions</code> or another <code>PermissionRequest</code> hook grants never shows as waiting</td></tr>
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
   <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
 </table>
