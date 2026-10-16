@@ -109,7 +109,7 @@ import Testing
         #expect(rendered.tokens == 1_300_000)
         #expect(rendered.threads.first { $0.id == "th3" }?.tokens == nil)
         #expect(result.limits.last == TokenUsageText.summaryLimit)
-        #expect(CLIRenderer.text(.summary(result)).contains("1.3M tokens"))
+        #expect(CLIRenderer.text(.summary(result)).contains("1.3M tokens all told"))
     }
 
     @Test func noTranscriptMeansNoTokensAndNoNote() throws {

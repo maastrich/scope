@@ -138,7 +138,7 @@ public enum CLIRenderer {
             else { when += ", last active \(day(task.lastActivity))" }
             parts.append(when)
             if !task.threads.isEmpty { parts.append("\(task.threads.count) thread\(task.threads.count == 1 ? "" : "s")") }
-            if let tokens = task.tokens { parts.append("\(TokenUsageText.compact(tokens)) tokens") }
+            if let tokens = task.tokens { parts.append("\(TokenUsageText.compact(tokens)) tokens all told") }
             if task.createdByAgent { parts.append("by an agent") }
             var out = [indent + task.outcome.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0) + parts.joined(separator: " · ")]
             if let brief = task.brief { out.append(indent + String(repeating: " ", count: 10) + brief) }
@@ -148,7 +148,7 @@ public enum CLIRenderer {
             var line = "\(thread.id)  \(thread.title) [\(thread.driver)] · opened \(day(thread.createdAt))"
             if let closed = thread.closedAt { line += ", closed \(day(closed))" }
             else if let launched = thread.lastLaunchedAt { line += ", last launched \(day(launched))" }
-            if let tokens = thread.tokens { line += " · \(TokenUsageText.compact(tokens)) tokens" }
+            if let tokens = thread.tokens { line += " · \(TokenUsageText.compact(tokens)) tokens all told" }
             return line
         }
 

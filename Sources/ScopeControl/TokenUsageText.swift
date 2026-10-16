@@ -37,7 +37,7 @@ public enum TokenUsageText {
     }
 
     /// `scope summary`'s note on what the token figures are.
-    public static let summaryLimit = "Tokens are read from Claude Code transcripts (subagents included, cache reads included) for threads Scope ran; other drivers report none, and a thread closed more than 90 days ago is forgotten."
+    public static let summaryLimit = "Tokens are read from Claude Code transcripts (subagents included, cache reads included) for threads Scope ran; other drivers report none, and a thread is forgotten 90 days after its last call. A task's or thread's tokens are all told, not only those of the period."
 }
 
 /// What the tokens would have cost on the Anthropic API, for someone on a subscription who wants a sense of scale. Never

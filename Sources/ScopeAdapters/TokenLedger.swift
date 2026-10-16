@@ -311,9 +311,9 @@ public actor TokenLedgerStore {
             let main = URL(fileURLWithPath: source.transcript)
             for file in [main] + TranscriptUsage.subagentTranscripts(of: main) {
                 let path = file.path
+                // A resumed session goes on in its transcript: what was read stays with the thread that read it, what
+                // comes next counts for the thread reading it now, from where the other stopped.
                 var cursor = ledger.files[path] ?? .init(thread: source.thread)
-                // A transcript belongs to the thread it was first read for: a resumed session does not move it.
-                guard cursor.thread == source.thread || ledger.threads[cursor.thread] == nil else { continue }
                 cursor.thread = source.thread
                 guard let size = Self.size(of: path), size != cursor.offset else { continue }
                 do {
@@ -326,6 +326,9 @@ public actor TokenLedgerStore {
                 }
             }
         }
+        // A thread whose transcript never had a call (a session never prompted) is kept only while it is open.
+        let open = Set(sources.map(\.thread))
+        ledger.threads = ledger.threads.filter { $0.value.lastAt != nil || open.contains($0.key) }
         ledger.prune(now: now)
         if ledger != before { save(ledger) }
         self.ledger = ledger

@@ -186,7 +186,7 @@ import Testing
         #expect(snapshot.threads["a"]?.total.output == 502)
     }
 
-    @Test func aClosedThreadKeepsItsTotalsAndATranscriptStaysWithItsFirstThread() async throws {
+    @Test func aClosedThreadKeepsItsTotalsAndAResumingThreadCountsWhatComesNext() async throws {
         let home = Self.home()
         defer { try? FileManager.default.removeItem(at: home) }
         let transcript = home.appending(path: "projects/p/9b1d.jsonl")
@@ -200,8 +200,9 @@ import Testing
         let snapshot = await store.scan([.init(thread: "b", title: "B", scope: "s", task: "t", transcript: transcript.path)],
                                         now: Self.fixtureNow, calendar: Self.paris)
         #expect(snapshot.threads["a"]?.total.output == 186)
-        #expect(snapshot.threads["b"]?.total.isZero == true)
-        #expect(snapshot.tasks["t"]?.total.output == 186)
+        #expect(snapshot.threads["b"]?.total.output == 316)
+        #expect(snapshot.tasks["t"]?.total.output == 502)
+        #expect(snapshot.all.fiveHours.counts.output == 502)
     }
 
     @Test func aMissingTranscriptIsNotAnError() async {
@@ -210,5 +211,15 @@ import Testing
         let snapshot = await TokenLedgerStore(home: home).scan(
             [.init(thread: "a", title: "A", scope: "s", task: nil, transcript: "/nowhere/x.jsonl")], now: Self.now, calendar: Self.paris)
         #expect(snapshot.threads["a"]?.total.isZero == true)
+    }
+
+    @Test func aThreadThatNeverMadeACallGoesOnceClosed() async {
+        let home = Self.home()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let store = TokenLedgerStore(home: home)
+        _ = await store.scan([.init(thread: "a", title: "A", scope: "s", task: nil, transcript: "/nowhere/x.jsonl")],
+                             now: Self.now, calendar: Self.paris)
+        let snapshot = await store.scan([], now: Self.now, calendar: Self.paris)
+        #expect(snapshot.threads.isEmpty)
     }
 }
