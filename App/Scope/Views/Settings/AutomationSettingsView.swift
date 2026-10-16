@@ -217,6 +217,20 @@ struct AutomationSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Releases") {
+                    ScopePicker("Releases", selection: automation(\.releases),
+                                title: model.config.preferences.automationSettings.releases.title) {
+                        ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .usageID("releases-approval", label: "Releases")
+                }
+                Text("`scope release` from an agent: Scope clones the repository's default branch under its own home "
+                     + "and runs the release script there with your git identity, outside any sandbox. After asking by "
+                     + "default — the one place Scope's autonomy default flips: a tag pushed is a version shipped, and "
+                     + "nothing takes it back. A dry run never asks.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             SettingsSection("Socket") {

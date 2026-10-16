@@ -181,10 +181,29 @@ into any repository, and git run from your own terminal or editor never sees the
   <li><b>pre-commit</b> refuses a commit in your base checkout, or in another task's sandbox, of a repository
   this task works on. A repository the task has nothing to do with is left alone.</li>
   <li><b>pre-push</b> refuses a push from the sandbox onto the remote's default branch: the work goes through the
-  task's branch and a pull request.</li>
+  task's branch and a pull request. A push of tags alone (<code>refs/tags/v1.2.3</code>, no branch) goes through —
+  that is how a release is cut — but the branch beside a tag is still refused, so a repository's
+  <code>scripts/release.sh</code>, which pushes <code>main</code> and the tag together, fails from a sandbox as a
+  whole. <code>scope release</code> is the way (below).</li>
 </ul>
 <p>Every hook then hands over to the repository's own — husky, lefthook and pre-commit keep working. It is a
 guardrail, not a lock: <code>--no-verify</code> still walks past it.</p>
+
+<h2 id="release">Cutting a release from a thread</h2>
+<p><code>scope release [X.Y.Z] [--repo R] [--dry-run] [--force]</code> (MCP: <code>scope_release</code>) cuts a
+release the way you would from a clean, up-to-date <code>main</code> — but it is Scope that does it, not the thread.
+Scope reads the remote's default branch (and refuses when there is none), clones it into
+<code>~/.scope/releases/&lt;owner-repo&gt;/</code> (reused, fetched and reset, from one release to the next), asks
+<code>gh</code> that no release workflow is already running and that CI on the head is green
+(<code>--force</code> overrides the CI check; without <code>gh</code>, the check is skipped and the answer says so),
+then runs the repository's <code>scripts/release.sh [X.Y.Z] --yes</code> there — or, without one, what the script does:
+the next version from <code>git cliff --bumped-version</code>, an annotated tag, the tag pushed — with your login
+shell's environment, your git identity and credentials, no <code>SCOPE_*</code> and no sandbox hook. The script's
+output streams back while it runs and comes with the answer, its end kept when it is long. Without a version, the
+next one from the Conventional Commits since the last tag; <code>--dry-run</code> clones, checks and prints the notes
+and the plan without pushing anything, and asks nobody.</p>
+<p>For agents it follows <b>Settings ▸ Automation ▸ Releases</b>, <i>after asking</i> by default — the one place
+Scope's autonomy default flips, because a pushed tag is a shipped version. Your own terminal is never asked.</p>
 
 <h2 id="context">AGENTS.md</h2>
 <p>Scope writes a context file generated from the prompt and the <a href="graph.html">graph</a>: the goal, and
@@ -265,7 +284,7 @@ answer kept when it was archived (or its report file). Archived and closed tasks
 that implements it without anyone pasting. <code>@thread:&lt;id&gt;</code> does the same for a thread: title, task,
 last answer. In the app, typing <code>@</code> in a message field offers the tasks of the scope, recent first; Tab
 or ↩ completes one. A mention nothing answers to stays as typed, with a note.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

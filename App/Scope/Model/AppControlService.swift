@@ -192,6 +192,8 @@ final class AppControlService: ControlService {
             return await rebase(params, from: origin, caller: caller)
         case .taskTry(let params):
             return await tryInCheckout(params, from: origin, caller: caller)
+        case .release(let params):
+            return await release(params, from: origin, caller: caller, progress: progress)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -379,6 +381,80 @@ final class AppControlService: ControlService {
         } catch {
             return .failure(.failed(String(describing: error)))
         }
+    }
+
+    /// `release`: the repository resolved from what the caller said or where it runs, then `ReleaseRunner` in the
+    /// app's own processes — the user's login-shell environment, no `SCOPE_*`, no sandbox hooks — in a clone under
+    /// `<home>/releases/`. The script's lines come back as progress while it runs, and in the answer.
+    private func release(_ params: ReleaseParams, from origin: ControlOrigin, caller: ControlCaller,
+                         progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
+        let session: ThreadSession? = if case .thread(let id, _) = origin { model.session(id) } else { nil }
+        let summary: ScopeSummary
+        switch ScopeResolver.resolve(params.scope, in: scopeSummaries, callerScopeID: session?.record.scopeID.rawValue,
+                                     callerCwd: caller.cwd) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): summary = found
+        }
+        guard let scope = model.scopes.first(where: { $0.id.rawValue == summary.id }) else {
+            return .failure(.notFound("no scope “\(summary.slug)”"))
+        }
+        let relativePath: String
+        switch releaseRepo(params.repo, in: summary, task: session.flatMap(model.task(of:)), cwd: caller.cwd) {
+        case .failure(let error): return .failure(error)
+        case .success(let path): relativePath = path
+        }
+        guard let repo = scope.repo(relativePath: relativePath) else {
+            return .failure(.notFound("no repository “\(relativePath)” in \(summary.slug)", detail: summary.repos.joined(separator: "\n")))
+        }
+        var facts = repo.facts
+        if facts?.originURL == nil {
+            facts = await RepoFacts.load(for: repo.url, using: await model.env.git.client(for: repo.url))
+        }
+        guard let originURL = facts?.originURL, !originURL.isEmpty else {
+            return .failure(.failed("\(repo.displayName) has no origin remote", detail: "A release is cut from a clone of origin's default branch."))
+        }
+        let name = facts?.remote?.fullName.replacingOccurrences(of: "/", with: "-") ?? repo.url.lastPathComponent
+        let target = ReleaseTarget(repo: relativePath.isEmpty ? "." : relativePath, scopeSlug: summary.slug,
+                                   originURL: originURL, name: name)
+        let shell = await model.env.shell.environment()
+        let runner = ReleaseRunner(
+            home: model.env.home, gitPath: model.env.git.gitPath,
+            ghPath: ExecutableResolver.resolve("gh", path: shell.path, shell: shell.shell) ?? GhClient.locate(environment: shell.variables)?.executable,
+            cliffPath: ExecutableResolver.resolve("git-cliff", path: shell.path, shell: shell.shell),
+            environment: SandboxGitHooks.withoutInheritedThread(shell.variables), runner: ProcessReleaseRunner()
+        )
+        // An agent is waiting on the answer, and the clone and the script take minutes a napping app would stretch.
+        let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "release")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+        return await runner.release(target, params: params, progress: progress).map { .release($0) }
+    }
+
+    /// Which repository `scope release` means: the one named, else the task's only one, else the one whose sandbox or
+    /// base checkout holds the caller's cwd, else the scope's only one.
+    private func releaseRepo(_ query: String?, in scope: ScopeSummary, task: TaskState?, cwd: String?) -> Result<String, ControlError> {
+        if let query {
+            return ScopeResolver.resolveRepo(query, in: scope).map { $0 == "." ? "" : $0 }
+        }
+        func normalized(_ path: String) -> String { path == "." ? "" : path }
+        let active = task?.record.repos.filter { $0.state == .active } ?? []
+        if active.count == 1 { return .success(normalized(active[0].repoRelativePath)) }
+        if let cwd {
+            let standardized = (cwd as NSString).standardizingPath
+            if let inSandbox = active.first(where: { standardized == $0.sandboxPath || standardized.hasPrefix($0.sandboxPath + "/") }) {
+                return .success(normalized(inSandbox.repoRelativePath))
+            }
+            let root = (scope.path as NSString).standardizingPath
+            let inBase = scope.repos
+                .filter { path in
+                    let base = path.isEmpty ? root : root + "/" + path
+                    return standardized == base || standardized.hasPrefix(base + "/")
+                }
+                .max { $0.count < $1.count }
+            if let inBase { return .success(inBase) }
+        }
+        if scope.repos.count == 1 { return .success(scope.repos[0]) }
+        return .failure(.badRequest("which repository?",
+                                    detail: "Name one with --repo:\n" + scope.repos.map { "  \($0.isEmpty ? "." : $0)" }.joined(separator: "\n")))
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.

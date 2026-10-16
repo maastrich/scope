@@ -70,6 +70,10 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     /// default: Scope exists to let agents work unattended, and a task is sandboxed and undone in one step;
     /// `ask` is there for whoever would rather confirm each one.
     public var tasks: Approval
+    /// Cutting a release from an agent (`scope release`): a clone of the default branch under Scope's home, the
+    /// repository's release script, the user's git identity. `ask` by default — the one place the autonomy default
+    /// flips: a tag pushed is a version shipped, and nothing undoes it.
+    public var releases: Approval
     /// How long the app waits for the user to answer an `ask` before refusing, in seconds.
     public var approvalTimeout: Int
 
@@ -85,7 +89,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
                 depthLimit: Int? = nil,
                 maxAgentTasks: Int = AutomationSettings.defaultMaxAgentTasks,
                 maxAgentThreads: Int = AutomationSettings.defaultMaxAgentThreads,
-                threads: Approval = .allow, tasks: Approval = .allow,
+                threads: Approval = .allow, tasks: Approval = .allow, releases: Approval = .ask,
                 approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
         self.agentsMayDrive = agentsMayDrive
         self.threadReach = threadReach
@@ -95,6 +99,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         self.maxAgentThreads = AutomationSettings.clampBudget(maxAgentThreads)
         self.threads = threads
         self.tasks = tasks
+        self.releases = releases
         self.approvalTimeout = max(5, approvalTimeout)
     }
 
@@ -108,7 +113,8 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case agentsMayDrive, threadReach, commandReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, approvalTimeout
+        case agentsMayDrive, threadReach, commandReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, releases,
+             approvalTimeout
     }
 
     /// `maxDepth` was the ceiling when it was the only guard, 1 by default. Settings wrote the whole block on any
@@ -138,6 +144,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
             (try? container.decodeIfPresent(Int.self, forKey: .maxAgentThreads)).flatMap { $0 } ?? defaults.maxAgentThreads)
         threads = (try? container.decodeIfPresent(Approval.self, forKey: .threads)).flatMap { $0 } ?? defaults.threads
         tasks = (try? container.decodeIfPresent(Approval.self, forKey: .tasks)).flatMap { $0 } ?? defaults.tasks
+        releases = (try? container.decodeIfPresent(Approval.self, forKey: .releases)).flatMap { $0 } ?? defaults.releases
         approvalTimeout = max(5, try container.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? defaults.approvalTimeout)
     }
 }

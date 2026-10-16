@@ -21,6 +21,7 @@ public enum CLIRenderer {
         case .summary(let result): try encoder.encode(result)
         case .taskShow(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
+        case .release(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -36,7 +37,7 @@ public enum CLIRenderer {
             methods     \(result.methods.joined(separator: ", "))
             automation  agents \(automation.agentsMayDrive ? "may drive" : "may not drive"), \
             threads \(automation.threads.rawValue), tasks \(automation.tasks.rawValue), \
-            reach \(automation.threadReach.rawValue)
+            releases \(automation.releases.rawValue), reach \(automation.threadReach.rawValue)
             budget      \(automation.maxAgentTasks) open tasks, \(automation.maxAgentThreads) running threads\
             \(automation.depthLimit.map { ", depth ≤ \($0)" } ?? ", any depth")
             """
@@ -121,7 +122,32 @@ public enum CLIRenderer {
             return taskShow(result)
         case .usage(let result):
             return usage(result)
+        case .release(let result):
+            return release(result)
         }
+    }
+
+    /// What happened, then the script's own words: it already says what it fetched, planned and pushed.
+    static func release(_ result: ReleaseResult) -> String {
+        var lines: [String] = []
+        let what = result.tag ?? "a release"
+        if result.dryRun {
+            lines.append("dry run of \(what) for \(result.repo) in \(result.scopeSlug): nothing was pushed")
+        } else if result.released {
+            lines.append("released \(what) of \(result.repo) in \(result.scopeSlug)")
+        } else {
+            lines.append("the release of \(result.repo) in \(result.scopeSlug) did not go through")
+        }
+        lines.append("head        \(result.branch) @ \(result.head.prefix(12))")
+        if let ci = result.ci { lines.append("ci          \(ci)") }
+        lines.append("method      \(result.method)")
+        lines.append("checkout    \(result.checkout)")
+        if !result.output.isEmpty {
+            lines.append("")
+            if result.truncated { lines.append("[… output cut, its end follows]") }
+            lines.append(result.output.trimmingCharacters(in: .newlines))
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// One block per scope, a line per task with the start of its brief under it, the threads outside tasks, then what

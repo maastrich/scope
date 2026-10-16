@@ -69,6 +69,10 @@ public enum ScopeCLI {
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope release [X.Y.Z]               cut a release of a repository: Scope clones its default branch under its
+                                          own home and runs scripts/release.sh there (else tags and pushes), with
+                                          your git identity, outside any sandbox; refused unless CI on the head
+                                          is green (--force) and no release is already running (--dry-run, --repo)
       scope config get [key]              settings Scope applies live: automation.maxAgentTasks, automation.maxAgentThreads
       scope config set <key> <value>      change one, as Settings would; from your own terminal only, never an agent's
       scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
@@ -120,6 +124,15 @@ public enum ScopeCLI {
     list:
       --scope <slug|name|id|path>   only that scope
 
+    release:
+      [X.Y.Z]                       the version to release (default: the next one from Conventional Commits,
+                                    as scripts/release.sh or `git cliff --bumped-version` computes it)
+      --repo <relative/path>        which repository (default: your task's, or the one holding your cwd, or the
+                                    scope's only one)
+      --scope <slug|name|id|path>   which scope
+      --dry-run                     clone, check, print the notes and the plan; publish nothing
+      --force                       release although CI on the head is red, still running or absent
+
     summary:
       [period]                      today, yesterday, this week, last week, this month, last month,
                                     last 14 days, 2w, 2026-10-01, 2026-10, 2026-10-01..2026-10-14,
@@ -164,6 +177,28 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.gc(parameters), shared)
+        case "release":
+            var words: [String] = []
+            var parameters = ReleaseParams()
+            let shared = try options(&rest, command: "release", positional: { words.append($0) }, specific: { flag, value in
+                switch flag {
+                case "--dry-run": parameters.dryRun = true
+                case "--force": parameters.force = true
+                case "--repo": parameters.repo = try value()
+                case "--scope": parameters.scope = try value()
+                default: return false
+                }
+                return true
+            })
+            guard words.count <= 1 else { throw UsageError(message: "release takes at most one version", usage: usage) }
+            if let word = words.first {
+                let version = word.hasPrefix("v") ? String(word.dropFirst()) : word
+                guard ReleaseVersion.isValid(version) else {
+                    throw UsageError(message: "“\(word)” is not a version: expected X.Y.Z or X.Y.Z-pre.N", usage: usage)
+                }
+                parameters.version = version
+            }
+            return .call(.release(parameters), shared)
         case "summary":
             var words: [String] = []
             var parameters = SummaryParams()

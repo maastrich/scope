@@ -114,6 +114,12 @@ public enum ScopeHome {
         home.appending(path: "scope-logos", directoryHint: .isDirectory)
     }
 
+    /// `<home>/releases/`: one clone per repository released through `scope release`, reused from one release to
+    /// the next. Never a sandbox: the task hooks do not reach it, and no agent works in it.
+    public static func releasesURL(home: URL) -> URL {
+        home.appending(path: "releases", directoryHint: .isDirectory)
+    }
+
     /// `<home>/sandboxes/`
     public static func sandboxesURL(home: URL) -> URL {
         home.appending(path: "sandboxes", directoryHint: .isDirectory)

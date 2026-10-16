@@ -13,6 +13,10 @@ import ScopeDrivers
 /// repository's hook of the same name (husky's `.husky/_`, lefthook's or pre-commit's `.git/hooks`), read from
 /// the config files alone so this override does not answer for them.
 ///
+/// A push of tags alone passes: a release is a tag, and `scope release` cuts one from the app's own clone. The
+/// branch beside it is still refused, so `scripts/release.sh` — which pushes `main` and the tag together — fails
+/// from a sandbox as a whole rather than half-publishing.
+///
 /// They are a guardrail, not a lock: `git commit --no-verify` or `git push --no-verify` walks past them.
 public enum SandboxGitHooks {
     /// `<home>/githooks`
@@ -166,7 +170,9 @@ public enum SandboxGitHooks {
     }
 
     # Refuses a push from the task's sandbox onto the remote's default branch: the work goes through the
-    # task's own branch and a pull request.
+    # task's own branch and a pull request. A tag on its own (refs/tags/v1.2.3, no branch) goes through: it
+    # is how a release is cut. The branch stays refused even beside a tag, so `git push --atomic origin main
+    # v1.2.3` — what scripts/release.sh does — fails from a sandbox as a whole; `scope release` is the way.
     check_push() {
         root=$(task_root) || return 0
         top=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
@@ -176,6 +182,7 @@ public enum SandboxGitHooks {
         default=${default#"$1"/}
         while read -r local_ref local_sha remote_ref remote_sha; do
             case "$remote_ref" in
+                refs/tags/*) continue ;;
                 "refs/heads/$default" | refs/heads/main | refs/heads/master)
                     [ -n "$default" ] && [ "$remote_ref" != "refs/heads/$default" ] && continue
                     echo "scope: refusing to push to ${remote_ref#refs/heads/} on $1 from a task sandbox." >&2

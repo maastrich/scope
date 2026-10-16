@@ -57,6 +57,7 @@ scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived ta
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
+scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope usage [period]                <span class="c"># how Scope itself was used: controls, commands, what never is</span>
@@ -172,7 +173,7 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_gc</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
 <code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same
@@ -213,6 +214,7 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
   <tr><td>Driver commands</td><td>only the ones it opened</td><td>Which threads an agent may hand a driver command to (<code>thread send --command</code>: <code>/model</code>, <code>/clear</code>…), typed verbatim with no sender line. Never wider than <i>Talking to threads</i>.</td></tr>
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
   <tr><td>Creating a task</td><td>without asking</td><td>A task writes a branch and a worktree per repository, all of it undone by closing the task. Set it to after asking to confirm each one.</td></tr>
+  <tr><td>Releases</td><td><b>after asking</b></td><td><code>scope release</code> from an agent. The one place the autonomy default flips: a tag pushed is a version shipped, and nothing takes it back. A dry run never asks.</td></tr>
 </table>
 <p>Threads talk to each other: by default an agent may read and type into any thread Scope runs — another
 task's, another scope's, yours — and every message it sends is signed with its thread id, so the receiver

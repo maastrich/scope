@@ -76,13 +76,16 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case configSet = "config.set"
     /// How the user has been using Scope's own interface, from the local usage log.
     case usage
+    /// Cut a release of a repository: the app clones its default branch into its own home and runs the release
+    /// script there, outside any sandbox and its hooks.
+    case release
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .configGet, .usage: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .taskTry, .gc, .configSet: true
+             .taskRebase, .taskTry, .gc, .configSet, .release: true
         }
     }
 
@@ -200,6 +203,7 @@ public enum ControlCall: Sendable, Equatable {
     case configGet(ConfigGetParams)
     case configSet(ConfigSetParams)
     case usage(UsageParams)
+    case release(ReleaseParams)
 
     public var method: ControlMethod {
         switch self {
@@ -224,6 +228,7 @@ public enum ControlCall: Sendable, Equatable {
         case .configGet: .configGet
         case .configSet: .configSet
         case .usage: .usage
+        case .release: .release
         }
     }
 
@@ -239,6 +244,8 @@ public enum ControlCall: Sendable, Equatable {
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .gc: .seconds(300)
+        // A clone, the CI check and the release script itself, one after the other.
+        case .release: .seconds(ReleaseParams.serverTimeout + 30)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -249,8 +256,45 @@ public enum ControlCall: Sendable, Equatable {
     public func serverDeadline(floor: Duration) -> Duration {
         switch self {
         case .threadWait(let params): max(floor, .seconds(params.effectiveTimeout + 10))
+        case .release: max(floor, .seconds(ReleaseParams.serverTimeout + 15))
         default: floor
         }
+    }
+}
+
+/// `scope release [X.Y.Z]` — a release of one repository, cut by the app from a clone of its default branch.
+public struct ReleaseParams: Codable, Sendable, Equatable {
+    /// How long the app gives the whole run — clone or fetch, the CI check, the script — before answering `timeout`.
+    public static let serverTimeout = 900
+
+    /// `X.Y.Z` or `X.Y.Z-pre.N`, without the `v`; `nil` lets the release script (or `git cliff --bumped-version`)
+    /// pick the next one from the Conventional Commits since the last tag.
+    public var version: String?
+    /// Repository relative to the scope root; `nil` = the one the caller works in (its task's, or the one holding
+    /// its cwd), else the scope's only one.
+    public var repo: String?
+    /// Slug, name, id or path of the scope; `nil` = the caller's own, then the scope holding its cwd.
+    public var scope: String?
+    /// Print the plan and the notes, publish nothing. The clone still happens.
+    public var dryRun: Bool
+    /// Release although CI on the head is not green, or has not run.
+    public var force: Bool
+
+    public init(version: String? = nil, repo: String? = nil, scope: String? = nil, dryRun: Bool = false, force: Bool = false) {
+        self.version = version
+        self.repo = repo
+        self.scope = scope
+        self.dryRun = dryRun
+        self.force = force
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+        repo = try container.decodeIfPresent(String.self, forKey: .repo)
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
+        dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
+        force = try container.decodeIfPresent(Bool.self, forKey: .force) ?? false
     }
 }
 
@@ -980,6 +1024,48 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
     }
 }
 
+/// `release` — what was released, or what would have been, and what the script said.
+public struct ReleaseResult: Codable, Sendable, Equatable {
+    /// Repository relative to its scope root (`.` for a repository that is the scope).
+    public var repo: String
+    public var scopeSlug: String
+    /// The default branch released from, and the commit at its head on origin.
+    public var branch: String
+    public var head: String
+    /// The tag pushed (`v1.2.3`), when the run got that far. A dry run reports the one it would push when the
+    /// version was given.
+    public var tag: String?
+    /// `false` for a dry run: nothing was pushed.
+    public var released: Bool
+    public var dryRun: Bool
+    /// What ran: `scripts/release.sh` or Scope's own tag-and-push fallback.
+    public var method: String
+    /// The clone the release ran in, under Scope's home.
+    public var checkout: String
+    /// What the CI check found on `head`: `green`, `no runs`, or what `--force` overrode.
+    public var ci: String?
+    /// The script's output, stdout and stderr interleaved as they came, its end kept when it was too long.
+    public var output: String
+    /// `true` when `output` lost its beginning to the bound.
+    public var truncated: Bool
+
+    public init(repo: String, scopeSlug: String, branch: String, head: String, tag: String? = nil, released: Bool,
+                dryRun: Bool, method: String, checkout: String, ci: String? = nil, output: String, truncated: Bool = false) {
+        self.repo = repo
+        self.scopeSlug = scopeSlug
+        self.branch = branch
+        self.head = head
+        self.tag = tag
+        self.released = released
+        self.dryRun = dryRun
+        self.method = method
+        self.checkout = checkout
+        self.ci = ci
+        self.output = output
+        self.truncated = truncated
+    }
+}
+
 /// A successful answer, typed per method.
 public enum ControlResultPayload: Sendable, Equatable {
     case ping(PingResult)
@@ -993,6 +1079,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case summary(SummaryResult)
     case taskShow(TaskShowResult)
     case usage(UsageResult)
+    case release(ReleaseResult)
 
     public var method: ControlMethod {
         switch self {
@@ -1006,6 +1093,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .summary: .summary
         case .taskShow: .taskShow
         case .usage: .usage
+        case .release: .release
         }
     }
 }

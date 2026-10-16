@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 18
+    public static let version = 19
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -213,6 +213,7 @@ public struct SkillInstaller: Sendable {
         | `scope task rebase [<slug>] [--scope S]` | `scope_task_rebase` `{task, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
+        | `scope release [X.Y.Z] [--repo R] [--scope S] [--dry-run] [--force]` | `scope_release` `{version, repo, scope, dry_run, force}` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
         | `scope usage [period] [--area A] [--limit N]` | `scope_usage` `{period, area, limit}` |
 
@@ -392,13 +393,31 @@ public struct SkillInstaller: Sendable {
         theirs: the call is refused to agents whatever the automation settings say, so do not try it, and keep working
         in the sandbox — the base is a mirror the user runs, never a place to edit.
 
+        ## Cutting a release
+
+        Do not run a repository's `scripts/release.sh` from a sandbox: it needs a clean, up-to-date `main` checkout,
+        and the task's git hooks refuse the push to `main` it makes (a tag alone would pass; the script pushes both
+        at once, so the whole push fails). Cloning into a temp folder does not help either. `scope release`
+        (`scope_release`) is the way: Scope clones the repository's default branch into its own home — never a
+        sandbox, never the user's checkout — checks that CI on the head is green and that no release workflow is
+        already running, then runs `scripts/release.sh` there (or, without one, computes the next version with
+        git-cliff, tags and pushes the tag) with the user's own git identity and credentials. The script's output
+        comes back as the answer. `scope release` alone releases the next version from the Conventional Commits
+        since the last tag; `scope release 1.4.0` names it; `--dry-run` clones and prints the notes and the plan
+        without pushing, and asks nobody; `--force` releases on a red, running or absent CI — only when the user
+        said so. `--repo` names the repository when you are not in its task or sandbox.
+
+        A release is the one thing Scope does not let agents do without asking by default: Settings ▸ Automation ▸
+        Releases is *after asking me*, because a pushed tag is a shipped version and nothing takes it back. Refused
+        or unanswered, report it and stop; do not tag by hand instead.
+
         ## What you may do
 
         The user runs Scope so agents work unattended: create tasks and open threads when the work calls for it,
         without asking first. Scope applies the user's rules (Settings ▸ Automation): agents allowed at all, how
         many tasks and running threads agents may keep open at once (every agent together, every scope), a depth
-        limit if the user set one, *without asking* / *after asking* / *never* for threads and for tasks, which
-        threads you may reach. `scope ping` prints them. Refused for the budget: archive or close what is done
+        limit if the user set one, *without asking* / *after asking* / *never* for threads, for tasks and for
+        releases, which threads you may reach. `scope ping` prints them. Refused for the budget: archive or close what is done
         first, then ask again. A refusal is an answer, not an error to work around: do not retry
         it another way; tell the user what was refused and which setting decides it.
 
