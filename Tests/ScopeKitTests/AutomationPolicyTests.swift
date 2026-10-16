@@ -299,6 +299,21 @@ import Testing
         #expect(AutomationPolicy.mayTouch(.user, from: .thread(Self.agent, depth: 0), reach: .own)?.code == .denied)
     }
 
+    /// A driver command has its own fence, `own` by default, and never a wider one than messages have.
+    @Test func driverCommandsReachTheAgentsOwnThreadsUnlessOpened() throws {
+        #expect(AutomationSettings().commandReach == .own)
+        #expect(AutomationSettings().effectiveCommandReach == .own)
+        #expect(AutomationSettings(threadReach: .any, commandReach: .any).effectiveCommandReach == .any)
+        #expect(AutomationSettings(threadReach: .own, commandReach: .any).effectiveCommandReach == .own)
+        let decoded = try JSONDecoder().decode(AutomationSettings.self, from: Data(#"{"commandReach":"any"}"#.utf8))
+        #expect(decoded.effectiveCommandReach == .any)
+        #expect(try JSONDecoder().decode(AutomationSettings.self, from: Data("{}".utf8)).commandReach == .own)
+        let reach = AutomationSettings().effectiveCommandReach
+        #expect(AutomationPolicy.mayTouch(Self.openedByAgent, from: .thread(Self.agent, depth: 0), reach: reach) == nil)
+        #expect(AutomationPolicy.mayTouch(Self.openedByOther, from: .thread(Self.agent, depth: 0), reach: reach)?.code == .denied)
+        #expect(AutomationPolicy.mayTouch(.user, from: .user, reach: reach) == nil)
+    }
+
     /// An orchestrator waits for the thread its task's agent started: `own` is everything below it, not one level.
     @Test func fencedAnAgentReachesItsDescendantsButNotItsKin() {
         let child = ThreadOrigin.child(of: Self.agent.rawValue, origin: .user, depth: 1, client: "scope-cli/1")

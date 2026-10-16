@@ -28,7 +28,9 @@ import Testing
     @Test func theConfigCallsAndAStartPullRequestRoundTrip() throws {
         for call in [ControlCall.configGet(ConfigGetParams()), .configGet(ConfigGetParams(key: "automation.maxAgentTasks")),
                      .configSet(ConfigSetParams(key: "automation.maxAgentTasks", value: "30")),
-                     .taskNew(TaskNewParams(prompt: "review it", startPR: "acme/front#42"))] {
+                     .taskNew(TaskNewParams(prompt: "review it", startPR: "acme/front#42", model: "claude-opus-5-5")),
+                     .threadNew(ThreadNewParams(driver: "codex", model: "gpt-5-codex")),
+                     .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "/clear", command: true))] {
             let request = ControlRequest(id: "abcd1234", caller: Self.caller, call: call)
             #expect(try ControlRequest.decode(try request.encoded()).get() == request)
         }

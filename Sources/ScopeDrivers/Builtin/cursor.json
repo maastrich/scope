@@ -8,8 +8,9 @@
   "resume" : ["cursor-agent", "--resume", "{resume_id}"],
   "headless" : ["cursor-agent", "-p", "{prompt}"],
   "prompt" : ["{prompt}"],
+  "modelArgs" : ["--model", "{model}"],
   "adapter" : { "kind" : "cursor-hooks" },
   "icon" : "cursorarrow.rays",
   "builtin" : true,
-  "version" : 2
+  "version" : 3
 }

@@ -306,7 +306,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .gc: "clean up leftover sandboxes and processes"
         case .threadStop(let params): "stop the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"
-        case .threadSend(let params): "type into the thread \(params.thread)"
+        case .threadSend(let params): (params.command ? "run a driver command in the thread " : "type into the thread ") + params.thread
         case .threadRead(let params): "read the thread \(params.thread)"
         case .threadWait(let params): "wait for " + params.threads.joined(separator: ", ")
         }

@@ -74,6 +74,21 @@ enum PaletteModel {
                                      hint: model.newThreadTargetDescription ?? "in \(scope.name)", shortcut: "⌘T") {
                 Task { await model.newThreadInCurrentContext() }
             })
+            // One row per driver, and one per model a profile lists: the palette has no submenus, and "Claude Code ·
+            // claude-fable-5-1" is what someone types to get it.
+            for profile in model.drivers.profiles {
+                items.append(PaletteItem(id: "new-thread-with-\(profile.id)", section: .actions, icon: profile.icon ?? "terminal",
+                                         label: "New Thread With \(profile.name)", hint: model.newThreadTargetDescription ?? "in \(scope.name)") {
+                    Task { await model.newThreadInCurrentContext(driverID: profile.id) }
+                })
+                for name in profile.knownModels {
+                    items.append(PaletteItem(id: "new-thread-with-\(profile.id)-\(name)", section: .actions, icon: profile.icon ?? "terminal",
+                                             label: "New Thread With \(profile.name) · \(name)",
+                                             hint: model.newThreadTargetDescription ?? "in \(scope.name)") {
+                        Task { await model.newThreadInCurrentContext(driverID: profile.id, model: name) }
+                    })
+                }
+            }
             if scope.kind != .missing {
                 items.append(PaletteItem(id: "new-task", section: .actions, icon: "arrow.triangle.branch", label: "New Task",
                                          hint: "in \(scope.name)", shortcut: "⇧⌘T") { model.presentNewTask(in: scope.id) })

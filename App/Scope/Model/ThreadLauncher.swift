@@ -41,7 +41,8 @@ struct ThreadLauncher {
             home: env.home.path,
             prompt: initialPrompt,
             scopeHook: scopeHook,
-            theme: theme
+            theme: theme,
+            model: record.model
         )
         let variables = TerminalEnvironment.ScopeVariables(
             thread: record.id.rawValue,

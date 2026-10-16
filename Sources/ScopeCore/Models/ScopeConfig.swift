@@ -288,6 +288,9 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     /// What every agent working in this scope should know, in the owner's words: added to the context file of
     /// each task.
     public var context: String?
+    /// The model threads of this scope open on when nothing names one, ahead of the driver's default in Settings
+    /// (`ModelChoice`); `nil` defers to that.
+    public var model: String?
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -305,7 +308,8 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         tint: ScopeTint? = nil,
         logo: String? = nil,
         logoDark: String? = nil,
-        context: String? = nil
+        context: String? = nil,
+        model: String? = nil
     ) {
         self.repoCommands = repoCommands
         self.icon = icon
@@ -313,6 +317,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         self.logo = logo
         self.logoDark = logoDark
         self.context = context
+        self.model = model
         let normalized = ScopeDeclaration.normalizedPath(path)
         self.id = id
         self.path = normalized
@@ -345,7 +350,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context
+        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context, model
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -365,6 +370,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         logo = try? container.decodeIfPresent(String.self, forKey: .logo)
         logoDark = try? container.decodeIfPresent(String.self, forKey: .logoDark)
         context = try? container.decodeIfPresent(String.self, forKey: .context)
+        model = ((try? container.decodeIfPresent(String.self, forKey: .model)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.
@@ -418,6 +424,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// means *automatic*: `defaultDriverID` unless that is the shell, else the first agent profile installed. A running
     /// orchestrator keeps its driver until it next starts.
     public var orchestratorDriverID: String
+    /// The model each driver opens on when neither the request nor the scope names one, by profile id
+    /// (Settings ▸ Drivers ▸ Default model). Empty — the default — leaves the driver to its own.
+    public var driverModels: [String: String]
     /// Where the "N waiting for you" counter lives. In the sidebar by default.
     public var attentionCounter: AttentionCounterPlacement
     /// Whether what an agent opens comes to the front. Only when nothing is being read, by default.
@@ -500,6 +509,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
         orchestratorDriverID: String = "",
+        driverModels: [String: String] = [:],
         attentionCounter: AttentionCounterPlacement = .sidebar,
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
         sidebarRows: SidebarRows = .detailed,
@@ -537,6 +547,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
         self.orchestratorDriverID = orchestratorDriverID
+        self.driverModels = driverModels
         self.attentionCounter = attentionCounter
         self.agentOpenedFocus = agentOpenedFocus
         self.sidebarRows = sidebarRows
@@ -567,7 +578,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
     }
 
@@ -599,6 +610,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.autoRelaunchThreads
         orchestratorDriverID = (try? container.decodeIfPresent(String.self, forKey: .orchestratorDriverID))
             ?? defaults.orchestratorDriverID
+        driverModels = ((try? container.decodeIfPresent([String: String].self, forKey: .driverModels)) ?? nil) ?? defaults.driverModels
         attentionCounter = try container.decodeIfPresent(AttentionCounterPlacement.self, forKey: .attentionCounter)
             ?? defaults.attentionCounter
         agentOpenedFocus = (try? container.decodeIfPresent(AgentOpenedFocus.self, forKey: .agentOpenedFocus))

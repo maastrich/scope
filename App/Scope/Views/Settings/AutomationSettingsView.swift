@@ -187,6 +187,19 @@ struct AutomationSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("Driver commands") {
+                    ScopePicker("Driver commands", selection: automation(\.commandReach),
+                                title: model.config.preferences.automationSettings.commandReach.title) {
+                        ForEach(AutomationSettings.ThreadReach.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .disabled(model.config.preferences.automationSettings.threadReach == .own)
+                    .usageID("command-reach", label: "Driver commands")
+                }
+                Text("Which threads an agent may hand a driver command to (`scope thread send --command`: /model, /clear, "
+                     + "/compact), typed verbatim with no line saying who sent it. Never wider than Talking to threads.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 SettingsRow("Opening a thread") {
                     ScopePicker("Opening a thread", selection: automation(\.threads),
                                 title: model.config.preferences.automationSettings.threads.title) {

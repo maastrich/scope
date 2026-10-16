@@ -206,10 +206,8 @@ struct TaskContextMenu: View {
             Task { _ = await model.newThread(in: task.scopeID, taskID: task.id) }
         }
         Menu("New Thread With Driver") {
-            ForEach(model.drivers.profiles) { profile in
-                Button(profile.name) {
-                    Task { _ = await model.newThread(in: task.scopeID, driverID: profile.id, taskID: task.id) }
-                }
+            DriverMenuItems { driver, chosen in
+                Task { _ = await model.newThread(in: task.scopeID, driverID: driver, taskID: task.id, model: chosen) }
             }
         }
         Divider()

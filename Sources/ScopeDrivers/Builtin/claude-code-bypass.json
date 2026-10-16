@@ -49,10 +49,20 @@
     "--add-dir",
     "{dir}"
   ],
+  "modelArgs": [
+    "--model",
+    "{model}"
+  ],
+  "models": [
+    "claude-fable-5-1",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5"
+  ],
   "adapter": {
     "kind": "claude-hooks"
   },
   "icon": "asterisk",
   "builtin": true,
-  "version": 4
+  "version": 5
 }

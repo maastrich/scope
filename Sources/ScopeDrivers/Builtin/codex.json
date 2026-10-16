@@ -8,8 +8,9 @@
   "resume" : ["codex", "-c", "notify=[\"{scope_hook}\",\"turn.ended\",\"--stdin\"]", "resume", "{resume_id}"],
   "headless" : ["codex", "exec", "{prompt}"],
   "prompt" : ["{prompt}"],
+  "modelArgs" : ["--model", "{model}"],
   "adapter" : { "kind" : "codex-notify" },
   "icon" : "cpu",
   "builtin" : true,
-  "version" : 2
+  "version" : 3
 }

@@ -162,6 +162,7 @@ Un adaptateur transforme les événements d'un driver en états de thread. Méca
 - **Notifications macOS** sur `input.requested`, `permission.requested`, `turn.ended` si l'app n'est pas au premier plan, avec actions *Répondre* / *Aller au thread* / *Voir le delta*. Badge = threads en attente.
   - Le corps cite l'agent : la question qu'il pose (`AskUserQuestion`, le plan d'`ExitPlanMode`, le message d'un `Notification` qui n'est pas la phrase standard), sinon la fin de sa dernière réponse si elle date du tour en cours ; pour `turn.ended`, le début de la réponse. Markdown retiré, blancs écrasés, ~180 caractères coupés sur un mot ; le constat (« needs your answer », …) passe en sous-titre. `turn.failed` et `permission.requested` gardent leurs mots. Préférence *Show what the agent said* (activée par défaut) pour revenir au corps générique.
   - *Répondre* (`UNTextInputNotificationAction`, bouton *Send*) tape la réponse dans le thread par le même chemin que `thread.send` (origine utilisateur, ↩ inclus), sans ramener l'app au premier plan, puis retire la notification. Une réponse vide n'envoie rien ; un échec remplace la notification par « Reply not sent ».
+- **Commandes du driver** (`thread.send --command`, MCP `command: true`) : un message envoyé par `thread.send` arrive sous une ligne de signature (`[Scope: message from thread …]`), que le driver lit comme de la prose — `/model …`, `/clear`, `/compact` n'y survivent pas. Avec `--command`, le texte est tapé tel quel, sans signature, et soumis avec ↩ : il est destiné aux commandes slash du driver lui-même. Permis depuis le terminal de l'utilisateur ; pour un agent, seulement vers les threads qu'il a ouverts (et leurs descendants), sauf si *Réglages ▸ Automation ▸ Driver commands* (`automation.commandReach`, même valeurs que `threadReach`, `own` par défaut) ouvre tous les threads — jamais plus large que *Talking to threads*.
 - **Sans adaptateur** : `running` tant que le process vit ; heuristique regex sur la sortie, désactivée par défaut.
 - Les adaptateurs sont déclarés dans les profils de driver, donc extensibles sans recompiler.
 
@@ -211,11 +212,17 @@ Les mécanismes d'événements changent vite : à vérifier contre la doc de cha
   "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
   "prompt": ["{prompt}"],
   "addDir": ["--add-dir", "{dir}"],
+  "modelArgs": ["--model", "{model}"],
+  "models": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
   "adapter": { "kind": "claude-hooks" }
 }
 ```
 
 `addDir` est répété pour chaque répertoire supplémentaire du thread (§4.3), `{dir}` valant ce répertoire ; il vient après l'argv `prompt`, parce qu'un flag variadique comme `--add-dir` placé avant prendrait le prompt pour un répertoire. Absent, le thread ne voit que son cwd. Seuls les profils Claude Code le déclarent pour l'instant.
+
+**Modèle.** `modelArgs` dit comment le driver reçoit un modèle, `{model}` valant celui du thread : ajouté après `args` au lancement et après l'argv `resume` à la reprise — avant le prompt, le flag ne prend qu'une valeur — et après un argv `headless` quand l'appel en donne un (les appels headless d'aujourd'hui, graphe et proposition de task, n'en donnent pas ; `headlessLight` garde son modèle léger). Claude Code, Codex et Cursor prennent `--model` ; le shell n'a pas de `modelArgs` et refuse un modèle. `models` liste ceux que les menus proposent (*New Thread With Driver ▸ Claude Code ▸ …*, palette, Réglages) ; tout autre nom passe quand même par *Other Model…* ou `--model`.
+
+Le modèle d'un thread est fixé à son ouverture (`thread.new --model`, `task.new --model`, MCP `model`) et gardé sur son enregistrement (`ThreadRecord.model`), donc Relaunch et la reprise le repassent ; il s'affiche dans le sous-titre de la barre d'outils et dans `scope list threads`. Précédence quand rien n'est passé, dans l'ordre : le modèle de l'agent appelant, s'il ouvre un thread de son propre driver (un modèle Claude ne dit rien à Codex) ; le défaut du scope (feuille de réglages du scope, `ScopeDeclaration.model`) ; le défaut du driver (*Réglages ▸ Drivers ▸ Default model*, `preferences.driverModels[<driver>]`) ; sinon le driver choisit (`ModelChoice`, `ScopeDrivers`). Les résidents (orchestrateur) suivent les défauts du scope et du driver.
 
 Un driver custom = un fichier JSON dans `~/.scope/drivers/`. Contribuer un driver au projet = ouvrir une PR avec ce fichier et, si besoin, un adaptateur.
 

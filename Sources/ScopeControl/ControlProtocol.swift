@@ -281,11 +281,16 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
     public var text: String
     /// Presses ↩ after the text (the default); `false` leaves it on the line.
     public var submit: Bool
+    /// A command for the driver itself (`/model claude-opus-5-5`, `/clear`, `/compact`): typed verbatim, with no
+    /// line saying who sent it — a signature would turn the command into prose — and submitted. Off by default;
+    /// agents may only command the threads `AutomationSettings.commandReach` lets them.
+    public var command: Bool
 
-    public init(thread: String, text: String, submit: Bool = true) {
+    public init(thread: String, text: String, submit: Bool = true, command: Bool = false) {
         self.thread = thread
         self.text = text
         self.submit = submit
+        self.command = command
     }
 
     public init(from decoder: any Decoder) throws {
@@ -293,6 +298,7 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
         thread = try container.decode(String.self, forKey: .thread)
         text = try container.decode(String.self, forKey: .text)
         submit = try container.decodeIfPresent(Bool.self, forKey: .submit) ?? true
+        command = try container.decodeIfPresent(Bool.self, forKey: .command) ?? false
     }
 }
 
@@ -482,15 +488,19 @@ public struct ThreadNewParams: Codable, Sendable, Equatable {
     public var title: String?
     /// First thing typed into the driver once it is up.
     public var prompt: String?
+    /// The model the driver runs on, through the profile's `modelArgs`; `nil` = the caller's own model for a thread
+    /// of the same driver, else the scope's default, else the driver's (`ModelChoice`).
+    public var model: String?
 
     public init(scope: String? = nil, driver: String? = nil, task: String? = nil, repo: String? = nil,
-                title: String? = nil, prompt: String? = nil) {
+                title: String? = nil, prompt: String? = nil, model: String? = nil) {
         self.scope = scope
         self.driver = driver
         self.task = task
         self.repo = repo
         self.title = title
         self.prompt = prompt
+        self.model = model
     }
 }
 
@@ -511,6 +521,8 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     /// Sandbox folder name; `nil` = derived from the title.
     public var slug: String?
     public var driver: String?
+    /// The model of the first thread (`ThreadNewParams.model`).
+    public var model: String?
     /// Answer with the proposal and create nothing.
     public var dryRun: Bool
     /// Open the task's first thread once it exists (the app's own behaviour). `false` leaves it cold.
@@ -528,7 +540,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
                 dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
-                startPR: String? = nil, deliverable: String? = nil) {
+                startPR: String? = nil, deliverable: String? = nil, model: String? = nil) {
         self.prompt = prompt
         self.deliverable = deliverable
         self.scope = scope
@@ -537,6 +549,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         self.title = title
         self.slug = slug
         self.driver = driver
+        self.model = model
         self.dryRun = dryRun
         self.openThread = openThread
         self.runSetup = runSetup
@@ -554,6 +567,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         title = try container.decodeIfPresent(String.self, forKey: .title)
         slug = try container.decodeIfPresent(String.self, forKey: .slug)
         driver = try container.decodeIfPresent(String.self, forKey: .driver)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
         dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
         openThread = try container.decodeIfPresent(Bool.self, forKey: .openThread) ?? true
         runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
@@ -611,6 +625,8 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     public var id: String
     public var title: String
     public var driver: String
+    /// The model the thread was opened with; absent when the driver runs on its own default.
+    public var model: String?
     public var scope: String
     public var scopeSlug: String
     public var task: String?
@@ -634,12 +650,13 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     /// thread Scope reads no Claude Code transcript for.
     public var tokens: String?
 
-    public init(id: String, title: String, driver: String, scope: String, scopeSlug: String, task: String?,
+    public init(id: String, title: String, driver: String, model: String? = nil, scope: String, scopeSlug: String, task: String?,
                 cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
                 resident: String? = nil, activity: String? = nil, tokens: String? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
+        self.model = model
         self.scope = scope
         self.scopeSlug = scopeSlug
         self.task = task
@@ -706,17 +723,20 @@ public struct ThreadNewResult: Codable, Sendable, Equatable {
     public var thread: String
     public var title: String
     public var driver: String
+    /// The model the thread runs on, once every default had its say; absent for the driver's own.
+    public var model: String?
     public var scope: String
     public var scopeSlug: String
     public var cwd: String
     public var task: String?
     public var depth: Int
 
-    public init(thread: String, title: String, driver: String, scope: String, scopeSlug: String,
+    public init(thread: String, title: String, driver: String, model: String? = nil, scope: String, scopeSlug: String,
                 cwd: String, task: String? = nil, depth: Int) {
         self.thread = thread
         self.title = title
         self.driver = driver
+        self.model = model
         self.scope = scope
         self.scopeSlug = scopeSlug
         self.cwd = cwd

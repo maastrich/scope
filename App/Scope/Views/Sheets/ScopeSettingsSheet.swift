@@ -18,11 +18,12 @@ struct ScopeSettingsSheet: View {
     @State private var name = ""
     @State private var icon = ""
     @State private var context = ""
+    @State private var defaultModel = ""
     /// Why the last image was refused, said under the wells.
     @State private var imageProblem: String?
     /// What the graph says of each repository, for the list under the Graph row.
     @State private var summaries: [RepoContextSummary]?
-    private enum Field { case name, icon, context }
+    private enum Field { case name, icon, context, model }
     @FocusState private var focus: Field?
 
     var body: some View {
@@ -45,6 +46,15 @@ struct ScopeSettingsSheet: View {
                         Button("Reveal") { Reveal.inFinder(scope.url) }
                             .buttonStyle(.scopeLink)
                     }
+                }
+                SheetRow("Model") {
+                    TextField("Model", text: $defaultModel, prompt: Text("driver's default"))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .monospaced))
+                        .focused($focus, equals: .model)
+                        .scopeFieldBox(focused: focus == .model)
+                        .usageID("scope-model", label: "Default model of the scope")
+                        .help("What threads of this scope run on when nothing names a model: ahead of the driver's default in Settings ▸ Drivers. Only drivers that take a model use it.")
                 }
             }
             tile
@@ -70,6 +80,7 @@ struct ScopeSettingsSheet: View {
             name = scope.name
             icon = scope.declaration.icon ?? ""
             context = scope.declaration.context ?? ""
+            defaultModel = scope.declaration.model ?? ""
         }
         .onDisappear(perform: save)
         .task(id: model.graph.isGenerating) {
@@ -81,6 +92,7 @@ struct ScopeSettingsSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty, trimmed != scope.name { model.renameScope(scope.id, name: trimmed) }
         model.setScopeContext(scope.id, context)
+        model.setScopeModel(scope.id, defaultModel)
     }
 
     // MARK: Tile
