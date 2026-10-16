@@ -102,7 +102,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
         switch event.kind {
         case .inputRequested, .permissionRequested:
-            // Claude Code follows its `PermissionRequest` with a `Notification` that names no tool: that one adds
+            // Claude Code follows a question's `PreToolUse` with a `Notification` that names no tool: that one adds
             // nothing to the request already kept.
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
@@ -164,7 +164,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     }
 
     /// Records the end of a turn. A request arriving between turns says nothing new (Claude Code sends a
-    /// `PermissionRequest` and then a `Notification` for the same prompt), so it is skipped. An end with no turn
+    /// question's `PreToolUse` and then a `Notification` for the same prompt), so it is skipped. An end with no turn
     /// open is still a turn: the driver never reported its start (Codex), or it went on after a wait, from that wait.
     private mutating func close(_ outcome: Turn.Outcome, at date: Date, error: String? = nil, onlyIfOpen: Bool = false) {
         guard inTurn || !onlyIfOpen else { return }

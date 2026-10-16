@@ -28,7 +28,7 @@ public enum ThreadStateMachine {
     ///
     /// A permission request derived from Claude Code's `Notification` hook never replaces a question: the question
     /// UI (`AskUserQuestion`) sends a `permission_prompt` notification a few seconds in, which carries no tool name
-    /// to tell it from a real one. The real ones arrive through `PermissionRequest`, which does.
+    /// to tell it from a real one. Real permission prompts arrive the same way, so the question is what decides.
     public static func next(_ current: ThreadState, on event: AdapterEvent) -> ThreadState {
         if event.kind == .inputRequested, event.reason == "permission" {
             return next(current, on: .permissionRequested)

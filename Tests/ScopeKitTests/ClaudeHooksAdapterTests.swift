@@ -30,7 +30,7 @@ struct ClaudeHooksAdapterTests {
     func settingsShape() throws {
         let document = ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath)
         let hooks = try hooks(document)
-        #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest",
+        #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                     "Notification", "Stop", "StopFailure", "SessionEnd"])
         for (event, groups) in hooks {
             #expect(groups.count == 1, Comment(rawValue: event))
@@ -50,7 +50,6 @@ struct ClaudeHooksAdapterTests {
         #expect(try commands(document, "SessionStart") == ["\(Self.hookPath) session.started --stdin"])
         #expect(try commands(document, "UserPromptSubmit") == ["\(Self.hookPath) turn.started --stdin"])
         #expect(try commands(document, "PostToolUse") == ["\(Self.hookPath) turn.started --stdin"])
-        #expect(try commands(document, "PermissionRequest") == ["\(Self.hookPath) permission.requested --stdin"])
         #expect(try commands(document, "Notification") == ["\(Self.hookPath) notification --stdin"])
         #expect(try commands(document, "Stop") == ["\(Self.hookPath) turn.ended --stdin"])
         #expect(try commands(document, "StopFailure") == ["\(Self.hookPath) turn.failed --stdin"])

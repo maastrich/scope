@@ -14,14 +14,20 @@ import ScopeCore
 /// | `UserPromptSubmit`                    | `turn.started`          | running               |
 /// | `PreToolUse` (question tools only)    | `input.requested`       | waiting(input)        |
 /// | `PostToolUse`                         | `turn.started`          | running (after a permission was granted, or a question answered) |
-/// | `PermissionRequest`                   | `permission.requested`  | waiting(permission); waiting(input) for a question tool |
 /// | `Notification` (matcher on type)      | `notification` → derived| waiting(permission / input) |
 /// | `Stop`                                | `turn.ended`            | done                  |
 /// | `StopFailure`                         | `turn.failed`           | failed                |
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 ///
 /// `PreToolUse` only listens to the question tools (`ClaudeQuestionTools`): for any other tool it fires *before*
-/// the permission check, so it says nothing about whether the user is being asked. Two moments have no hook at
+/// the permission check, so it says nothing about whether the user is being asked.
+///
+/// `PermissionRequest` is deliberately not installed: it fires as the dialog is about to open, alongside every
+/// other `PermissionRequest` hook, and any of those may answer on the user's behalf (a companion app, an
+/// auto-approver). Nothing follows such an answer until the tool's `PostToolUse`, so a thread running a long
+/// command would sit in `waiting` for its whole duration. The `permission_prompt` notification only fires once the
+/// dialog has actually waited about six seconds, so it is the one signal that someone has to act. Auto mode's
+/// classifier and `bypassPermissions` fire neither. Two moments have no hook at
 /// all — an interrupt (Esc) and the approval of a permission prompt — and come from the user's keystrokes instead
 /// (`TerminalInputSignal`). `scope-hook` writes nothing on stdout, so no hook ever changes Claude Code's own
 /// decisions.
@@ -45,7 +51,6 @@ public enum ClaudeHooksAdapter {
         Entry(event: "UserPromptSubmit", matcher: nil, arguments: ["turn.started", "--stdin"]),
         Entry(event: "PreToolUse", matcher: ClaudeQuestionTools.matcher, arguments: ["input.requested", "--stdin"]),
         Entry(event: "PostToolUse", matcher: nil, arguments: ["turn.started", "--stdin"]),
-        Entry(event: "PermissionRequest", matcher: nil, arguments: ["permission.requested", "--stdin"]),
         Entry(event: "Notification", matcher: ClaudeNotificationMapping.matcher, arguments: ["notification", "--stdin"]),
         Entry(event: "Stop", matcher: nil, arguments: ["turn.ended", "--stdin"]),
         Entry(event: "StopFailure", matcher: nil, arguments: ["turn.failed", "--stdin"]),
