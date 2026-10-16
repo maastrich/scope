@@ -8,7 +8,7 @@ struct ParentTaskLink: View {
     @State private var isHovered = false
 
     /// The parent's name gives way before the line it opens: this many characters at most, the full name in the help.
-    private static let nameLimit = 22
+    private static let nameLimit = 14
 
     var body: some View {
         if parent.isArchived {
