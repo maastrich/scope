@@ -218,6 +218,7 @@ extension AppModel {
         if takesSelection(threadOrigin, in: scopeID) { selection = .task(record.id) }
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
+        assistTaskCreated(state)
         guard openThread else { return state }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         await newThread(in: scopeID, driverID: driverID, taskID: record.id,

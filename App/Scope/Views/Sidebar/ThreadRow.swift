@@ -190,6 +190,12 @@ struct ThreadMenuItems: View {
         }
         .keyboardShortcut("u", modifiers: [.command, .shift])
         .disabled(session.displayState.acknowledged == session.displayState)
+        if session.assistNote?.isStuck == true {
+            Button("Not Stuck") {
+                model.markNotStuck(session.id)
+            }
+            .usageID("sidebar.thread.not-stuck", label: "Not stuck")
+        }
         Divider()
         Button("Relaunch") {
             Task { await model.relaunch(session.id) }

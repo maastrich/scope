@@ -188,6 +188,20 @@ Pour savoir ce qui sert vraiment dans Scope — et ce qui ne sert jamais — l'a
 
 ---
 
+### 4.10 Assist
+
+Un assistant qui **ne tourne que sur événement** — fin de tour, question, thread `running` depuis plus de 4 min, création de task — lit la fin du terminal et répond par des **étiquettes**, jamais par une action. La sortie du terminal est une donnée non fiable : elle est citée entre les marqueurs de `thread.read`, sous le même avertissement, et le modèle n'a aucun outil.
+
+- **Deux étages** (`ScopeAssist`, testé ; AppKit et FoundationModels restent dans l'app) :
+  - *étage 0* : Apple Foundation Models (`FoundationAssistModel`, macOS 26, `SystemLanguageModel.default`), gratuit et local, bon pour classer en sortie structurée (`@Generable`), 4 k tokens de contexte, une session par appel (le transcript d'une session garde chaque réponse, une deuxième queue n'y tiendrait plus), `prewarm()` au lancement ;
+  - *étage 1* : le modèle léger du driver via un **nouveau gabarit sans outil** du profil, `headlessAssist` (`claude -p {prompt} --output-format json --model haiku --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence`, `{prompt}` avant les flags variadiques). Jamais `headlessLight`, qui autorise `gh` et `git`. `HeadlessAssistModel` refuse un argv qui n'est pas prouvé sans outil (`--tools ""` présent, ni `--allowedTools` ni `--dangerously-skip-permissions`). Il sert de second avis sur un verdict « bloqué » du local, et de repli quand le local est indisponible, sous un **plafond quotidien** (40 par défaut) tenu dans `<home>/assist.json`.
+- **Jobs** (`AssistJobs`), chacun un schéma et une consigne : `ThreadDigest {activity, stuck, reason}`, `NotificationTriage {kind ∈ blockingQuestion, informational, failure}`, `ArchiveHint {looksFinished, reason}`, `TopicPick {topic}` parmi les topics existants du scope (un choix hors liste est ignoré).
+- **Déclencheurs** (`AssistTriggers`, fonction pure de l'événement, des threads, du dernier passage et de l'heure) : digest d'un thread `running` dont le tour a plus de 4 min, puis toutes les 4 min au plus ; tri sur `input.requested` et `turn.ended`, **avant** la notification, une fois par 5 s par thread ; indice d'archivage sur `turn.ended` d'une task sans PR dont la réponse ressemble à un livrable (≥ 200 caractères, ne finit pas sur une question) ; topic à la création d'une task sans topic quand le scope en a. L'entrée est la fin du terminal, ANSI retiré, ≈ 3 k tokens au plus (`TranscriptTail`).
+- **Ce qui s'affiche** : la ligne d'activité du thread prend les mots du digest pendant le tour ; un verdict « bloqué » devient *Seems stuck — raison* dans la sidebar, un élément de l'Inbox et une notification ; *Not stuck* (Inbox, menu contextuel) efface la marque et compte un faux positif ; une fin de tour classée informationnelle ne notifie pas (préférence) ; *Looks finished — archive?* dans le bandeau de la task, proposition avec son ✕ ; le topic choisi est posé sur la task si personne ne l'a fait entre-temps.
+- **Réglages ▸ Assist** : *Off* / *On-device only* (défaut) / *On-device + Haiku* avec le plafond ; disponibilité des deux modèles ; appels du jour par étage, dernière latence, faux positifs ; les trois décisions débrayables.
+- **Journal** : chaque décision va dans le journal d'usage (`kind: assist`, `assist.<job>.<verdict>`, `context` = étage ou `false-positive`), jamais le texte lu.
+- **Mesuré** (M1 Max, macOS 26.5, `swiftc` non signé) : contexte 4096 ; digest ≈ 1,2 s à chaud, 1,7–4 s aux premiers appels d'un processus ; 6/6 digests justes sur les deux queues de la note de recherche, 2/2 tris justes.
+
 ## 5. Profils de driver (v1)
 
 Les mécanismes d'événements changent vite : à vérifier contre la doc de chaque outil au moment de l'implémentation.

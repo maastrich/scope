@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAssist
 import ScopeCore
 import ScopeGit
 import ScopeTasks
@@ -45,6 +46,12 @@ final class TaskState: Identifiable {
     var isExpanded = true
     /// An archive or close is running: the row leaves the live list at once instead of when git is done.
     var isDismantling = false
+    /// The assistant reads the last reply as a final deliverable (spec §4.10): a proposal in the band, never an action.
+    private(set) var archiveHint: ArchiveHint?
+
+    func setArchiveHint(_ hint: ArchiveHint?) {
+        if archiveHint != hint { archiveHint = hint }
+    }
     /// What the timeline keeps of closed threads and of the checks (`AppModel+Timeline`); loaded on first show.
     var timelineLog: TaskTimelineLog?
 

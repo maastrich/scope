@@ -61,7 +61,7 @@ public enum ThreadTranscript {
     /// A row as a reader wants it: the emulator hands back NUL for cells nothing was drawn in (between words a
     /// TUI positioned with the cursor, not with spaces) and keeps stray control bytes; both read as noise, and NUL
     /// cuts some readers' strings short.
-    static func cleaned(_ line: String) -> String {
+    public static func cleaned(_ line: String) -> String {
         var scalars = String.UnicodeScalarView()
         for scalar in line.unicodeScalars {
             switch scalar.value {

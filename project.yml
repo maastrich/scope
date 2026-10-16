@@ -89,6 +89,8 @@ targets:
         product: ScopeGraph
       - package: ScopeKit
         product: ScopeControl
+      - package: ScopeKit
+        product: ScopeAssist
       - package: SwiftTerm
         product: SwiftTerm
       - package: Sparkle # embeds Sparkle.framework (Autoupdate, Updater.app, Installer.xpc, Downloader.xpc)

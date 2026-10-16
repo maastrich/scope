@@ -418,6 +418,19 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Which models the assistant may use (spec §4.10).
+public enum AssistMode: String, Codable, Sendable, CaseIterable {
+    /// Nothing is read, nothing is classified.
+    case off
+    /// Apple's on-device model only: free, local, and silent when the machine has none.
+    case onDevice
+    /// The on-device model first; the driver's light model (Haiku, no tools) as a second opinion on a stuck verdict and
+    /// as the fallback when the on-device model is unavailable, under `assistDailyCap`.
+    case onDeviceAndHaiku
+
+    public var allowsSecondTier: Bool { self == .onDeviceAndHaiku }
+}
+
 /// User preferences stored in `config.json`. Every field has a default so a partial document decodes.
 public struct Preferences: Codable, Sendable, Equatable {
     /// Driver a scope starts on, before you open one in it. Empty — the default — means *automatic*: Scope
@@ -517,6 +530,21 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// How long the app must have been in the background for coming back to it to count as a return. 20 by default.
     public var returnDigestAwayMinutes: Int
 
+    /// The assistant that reads threads on events (spec §4.10): off, the on-device model only, or that model with the
+    /// driver's light model as a capped second opinion. On-device only by default.
+    public var assist: AssistMode
+    /// Most calls the second tier may make per day. 40 by default.
+    public var assistDailyCap: Int
+    /// A finished turn the assistant reads as informational posts no notification. On by default.
+    public var assistQuietsInformational: Bool
+    /// A task created without a topic is filed under one of the scope's topics when the assistant can tell. On by default.
+    public var assistPicksTopic: Bool
+    /// A task whose last reply reads as final shows "Looks finished — archive?" in its band. On by default.
+    public var assistSuggestsArchive: Bool
+
+    /// Allowed values of `assistDailyCap`.
+    public static let assistDailyCapRange = 1...500
+
     /// Allowed values of `returnDigestAwayMinutes`.
     public static let returnDigestAwayRange = 1...240
 
@@ -566,7 +594,12 @@ public struct Preferences: Codable, Sendable, Equatable {
         tokenBudgetPer5h: Int = 0,
         showAPICost: Bool = false,
         showReturnDigest: Bool = true,
-        returnDigestAwayMinutes: Int = 20
+        returnDigestAwayMinutes: Int = 20,
+        assist: AssistMode = .onDevice,
+        assistDailyCap: Int = 40,
+        assistQuietsInformational: Bool = true,
+        assistPicksTopic: Bool = true,
+        assistSuggestsArchive: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -607,6 +640,11 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.showReturnDigest = showReturnDigest
         self.returnDigestAwayMinutes = min(max(returnDigestAwayMinutes, Self.returnDigestAwayRange.lowerBound),
                                            Self.returnDigestAwayRange.upperBound)
+        self.assist = assist
+        self.assistDailyCap = min(max(assistDailyCap, Self.assistDailyCapRange.lowerBound), Self.assistDailyCapRange.upperBound)
+        self.assistQuietsInformational = assistQuietsInformational
+        self.assistPicksTopic = assistPicksTopic
+        self.assistSuggestsArchive = assistSuggestsArchive
     }
 
     public static let `default` = Preferences()
@@ -616,7 +654,8 @@ public struct Preferences: Codable, Sendable, Equatable {
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
-             followMain, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
+             followMain, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
+             assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive
     }
 
     public init(from decoder: any Decoder) throws {
@@ -678,6 +717,14 @@ public struct Preferences: Codable, Sendable, Equatable {
         returnDigestAwayMinutes = min(max((try? container.decodeIfPresent(Int.self, forKey: .returnDigestAwayMinutes))
                                               ?? defaults.returnDigestAwayMinutes, Self.returnDigestAwayRange.lowerBound),
                                       Self.returnDigestAwayRange.upperBound)
+        assist = (try? container.decodeIfPresent(AssistMode.self, forKey: .assist)) ?? defaults.assist
+        assistDailyCap = min(max((try? container.decodeIfPresent(Int.self, forKey: .assistDailyCap)) ?? defaults.assistDailyCap,
+                                 Self.assistDailyCapRange.lowerBound), Self.assistDailyCapRange.upperBound)
+        assistQuietsInformational = (try? container.decodeIfPresent(Bool.self, forKey: .assistQuietsInformational))
+            ?? defaults.assistQuietsInformational
+        assistPicksTopic = (try? container.decodeIfPresent(Bool.self, forKey: .assistPicksTopic)) ?? defaults.assistPicksTopic
+        assistSuggestsArchive = (try? container.decodeIfPresent(Bool.self, forKey: .assistSuggestsArchive))
+            ?? defaults.assistSuggestsArchive
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

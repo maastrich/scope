@@ -1,5 +1,6 @@
 import AppKit
 import ScopeAdapters
+import ScopeAssist
 import ScopeCore
 
 /// Everything that pulls the user back to a thread (spec §4.7): notifications when the app is not frontmost,
@@ -53,10 +54,15 @@ extension AppModel {
     }
 
     /// Posts a notification for `event` on `session` when the app is in the background. `session` has already
-    /// folded `event` in, so its state is the one after it.
-    func notifyIfNeeded(_ event: AdapterEvent, session: ThreadSession) {
+    /// folded `event` in, so its state is the one after it. `triage` is what the assistant made of the agent's words,
+    /// when it was asked (spec §4.10): a finished turn it reads as informational stays silent when the preference says.
+    func notifyIfNeeded(_ event: AdapterEvent, session: ThreadSession, triage: NotificationTriage? = nil) {
         // Posting would replace the question's notification, quote and Reply with it, by "asks for a permission".
         if let state = session.adapterState, ThreadStateMachine.keepsQuestion(state, over: event) { return }
+        if event.kind == .turnEnded, let triage, !triage.interrupts, config.preferences.assistQuietsInformational {
+            Usage.record(.assist, "assist.triage.quieted", source: .app)
+            return
+        }
         let kind: HookEvent.Kind = event.kind == .inputRequested && event.reason == "permission" ? .permissionRequested : event.kind
         guard let stateEvent = kind.stateEvent,
               ThreadNotificationContent.shouldNotify(event: stateEvent, appIsActive: NSApplication.shared.isActive),

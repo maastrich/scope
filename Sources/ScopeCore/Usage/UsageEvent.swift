@@ -23,6 +23,9 @@ public struct UsageEvent: Codable, Sendable, Equatable {
         case view
         /// A preference changed; `id` is its key, the value is never recorded.
         case setting
+        /// The assistant classified something; `id` is `assist.<job>.<verdict>` and `context` the tier that answered
+        /// (`on-device`, `haiku`) or `false-positive` for a verdict the user overruled. Never the text it read.
+        case assist
     }
 
     public enum Source: String, Codable, Sendable, CaseIterable {

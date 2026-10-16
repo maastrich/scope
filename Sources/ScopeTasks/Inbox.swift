@@ -23,6 +23,8 @@ public enum Inbox {
         case reply
         /// A turn ended on an error (`failed`).
         case failure
+        /// The assistant reads the thread as going in circles while it is still `running` (spec §4.10).
+        case stuck
         /// The task's pull request is open, mergeable and its checks pass.
         case readyToMerge
         /// The task's pull request has a failing check.
@@ -33,7 +35,7 @@ public enum Inbox {
         /// Thread items clear with the thread's state; the others with a dismissal.
         public var isThreadItem: Bool {
             switch self {
-            case .question, .permission, .reply, .failure: true
+            case .question, .permission, .reply, .failure, .stuck: true
             case .readyToMerge, .checksFailing, .archivedOnMerge: false
             }
         }
@@ -50,14 +52,17 @@ public enum Inbox {
         public var since: Date
         /// The question, the permission asked, the reply or the error, as the app words it; its first line is shown.
         public var text: String?
+        /// Why the assistant reads a `running` thread as stuck, when it does; the item then exists under `.stuck`.
+        public var stuckReason: String?
 
         public init(id: ThreadID, scopeID: ScopeID, taskID: TaskID? = nil, title: String, state: ThreadState, since: Date,
-                    text: String? = nil) {
+                    text: String? = nil, stuckReason: String? = nil) {
             self.id = id
             self.scopeID = scopeID
             self.taskID = taskID
             self.title = title
             self.state = state
+            self.stuckReason = stuckReason
             self.since = since
             self.text = text
         }
@@ -198,10 +203,12 @@ public enum Inbox {
         case .waiting(.permission): kind = .permission
         case .done: kind = .reply
         case .failed: kind = .failure
+        case .running where thread.stuckReason != nil: kind = .stuck
         case .idle, .running, .exited: return nil
         }
         return Item(id: "thread:\(thread.id.rawValue)", kind: kind, scopeID: thread.scopeID, taskID: thread.taskID,
-                    threadID: thread.id, title: thread.title, detail: headline(thread.text), at: thread.since,
+                    threadID: thread.id, title: thread.title, detail: headline(kind == .stuck ? thread.stuckReason : thread.text),
+                    at: thread.since,
                     fingerprint: "\(kind.rawValue)@\(thread.since.timeIntervalSinceReferenceDate)")
     }
 
