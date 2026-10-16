@@ -1258,7 +1258,7 @@ output, under a daily cap you set (40 by default). Each call counts against your
 is remembered as a false positive; a finished turn the model reads as informational stays silent (a question or a
 failure always notifies); a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
 its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
-one fits. Every decision goes to the <a href="reference.html#usage">usage log</a> by its id and tier only.</p>
+one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
 
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too
