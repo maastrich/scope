@@ -62,6 +62,8 @@ Scope ne touche pas au dossier de l'utilisateur. Tout ce qu'il produit vit dans 
     api/                               # sandbox = worktree, branche feat/auth-refresh
     web/
   threads/<thread-id>.json             # driver, cwd, id de reprise, logs
+  usage/usage-YYYY-MM.jsonl            # journal local d'usage de l'app (ids seulement, 180 jours)
+  usage/registry.json                  # tout élément instrumenté : id, libellé, zone
   scope.sock                           # socket unix pour les adaptateurs
 
 ~/Library/Application Support/Scope/   # état purement UI (fenêtres, splits, onglets)
@@ -152,6 +154,15 @@ Un adaptateur transforme les événements d'un driver en états de thread. Méca
   - *Répondre* (`UNTextInputNotificationAction`, bouton *Send*) tape la réponse dans le thread par le même chemin que `thread.send` (origine utilisateur, ↩ inclus), sans ramener l'app au premier plan, puis retire la notification. Une réponse vide n'envoie rien ; un échec remplace la notification par « Reply not sent ».
 - **Sans adaptateur** : `running` tant que le process vit ; heuristique regex sur la sortie, désactivée par défaut.
 - Les adaptateurs sont déclarés dans les profils de driver, donc extensibles sans recompiler.
+
+### 4.9 Usage de l'app
+
+Pour savoir ce qui sert vraiment dans Scope — et ce qui ne sert jamais — l'app tient un journal **local** de son propre usage. Rien ne quitte le Mac : ni réseau, ni SDK, ni tiers. Activé par défaut ; *Réglages ▸ General ▸ Usage* le coupe (*Record how I use Scope*) et efface l'historique (*Clear History*).
+
+- **Journal** : `<home>/usage/usage-YYYY-MM.jsonl` (mois UTC), un événement par ligne `{at, kind, id, source, scope?, context?, duration?}`. `kind` ∈ `click`, `shortcut`, `menu`, `palette`, `notification`, `control`, `view`, `setting`. Jamais de chemin, de prompt, de texte du terminal, de nom de repo ou de branche : des ids d'éléments et de méthodes, le scope par son UUID, une préférence par sa clé (pas sa valeur). Écrit par un acteur (`UsageRecorder`, `ScopeCore`) qui reçoit les événements par un flux — le thread principal ne fait qu'enfiler —, écrit toutes les 5 s et à la fermeture, plafonne un mois à 8 Mo et supprime au lancement les mois de plus de 180 jours.
+- **Ids** : `<zone>.<élément>`. Les contrôles de l'app (`Controls.swift`, `IconButtonStyle`) comptent un clic dans la zone où ils sont dessinés (`.usageArea` : `sidebar`, `inspector.delta`, `sheet.graph`, `settings.terminal`…) sous leur `.usageID`, sinon `<zone>.button`. Les commandes du menu sont lues sur `NSMenu.didSendActionNotification` (menu principal seulement ; `shortcut` si un `keyDown` les a déclenchées) et partagent leur id `command.<…>` avec la ligne de palette de la même commande. Le reste : sélection d'une ligne de la sidebar à la souris, balayage entre scopes, sections de l'inspecteur et feuilles (temps à l'écran), lien ⌘-cliqué dans le terminal, fichier ouvert depuis Delta, revue envoyée, actions de notification, et chaque appel CLI/MCP (méthode, appelant agent ou utilisateur).
+- **Registre** : `<home>/usage/registry.json`, chaque élément dessiné ou déclaré au moins une fois (menu principal parcouru au lancement), pour pouvoir dire ce qui n'a *jamais* servi.
+- **Lecture** : `scope usage [période] [--area A] [--limit N] [--json]`, outil MCP `scope_usage` (lecture seule, permis aux agents comme `summary`). Mêmes périodes que `scope summary`. Réponse : éléments les plus utilisés, par zone ; éléments jamais utilisés sur la période ; clavier / menu / palette / souris par commande ; appels agent / utilisateur par méthode ; temps passé par feuille et section ; tendances face à la période précédente de même durée ; et les `limits` (ce que le journal ne peut pas savoir).
 
 ### 4.8 Ouvrir dans l'éditeur
 

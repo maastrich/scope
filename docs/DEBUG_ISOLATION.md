@@ -38,6 +38,7 @@ Also separated, and found that way: the MCP server entry (`scope` / `scope-debug
 (`scope` / `scope-debug`, formerly `scope-tasks` / `scope-debug-tasks`) are named per build (`MCPRegistration.swift:53`, `SkillInstaller.swift:43`),
 and so is its companion `/scope-summary` (`scope-summary` / `scope-debug-summary`, `SkillInstaller.summaryName`); the history of
 closed tasks and threads that `scope summary` reads is `<home>/history.jsonl` (`ActivityHistory.url(home:)`);
+the usage log that `scope usage` reads is `<home>/usage/` (`UsageLog(home:)`), so a Debug build counts its own clicks;
 driver hook settings are written per thread under `<home>/threads/`; git hooks live in `<home>/githooks` and
 reach git through the thread's environment, not through a repository's config.
 
