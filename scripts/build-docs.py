@@ -353,8 +353,8 @@ topic shows in the hover card, with the task an agent created it from.</p>
 
 <h3 id="delegation">Tasks started from a task</h3>
 <p>A task an agent creates from inside another task is not nested under it — the two usually share a topic, which
-already keeps them together. In the tree, with detailed rows, its second line starts with <b>from</b> and the parent's
-name: click it to select the parent. The parent's hover card lists the tasks started from it, and the context menu
+already keeps them together. In the tree, with detailed rows, a quiet child's second line starts with <b>from</b> and
+the parent's name: click it to select the parent. While one of its agents works or waits, that line is the agent's. The parent's hover card lists the tasks started from it, and the context menu
 goes either way (<b>Go to Parent Task</b>, <b>Tasks Started From Here</b>).</p>
 
 <h3 id="activity">What each agent is doing</h3>

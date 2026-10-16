@@ -51,7 +51,7 @@ struct TaskRow: View {
                     .truncationMode(.tail)
                 if detailed {
                     HStack(spacing: 0) {
-                        if let parent = linkedParent {
+                        if let parent = linkedParent(threads) {
                             ParentTaskLink(parent: parent)
                             Text(" · ")
                                 .font(.scopeCaption)
@@ -113,10 +113,13 @@ struct TaskRow: View {
         model.selection == .task(task.id)
     }
 
-    /// In the tree, a task started from another one names it at the start of its second line. By state, rows move
-    /// with what they are doing and the hover card says where a task came from.
-    private var linkedParent: TaskState? {
-        guard model.config.preferences.sidebarArrangement == .tree else { return nil }
+    /// In the tree, a quiet task started from another one names it at the start of its second line. While one of
+    /// its agents works or waits, what it is doing needs the whole width, and the parent stays one hover card or
+    /// right-click away. By state, rows move with what they are doing and the hover card says where a task came from.
+    private func linkedParent(_ threads: [ThreadSession]) -> TaskState? {
+        guard model.config.preferences.sidebarArrangement == .tree,
+              !threads.contains(where: { $0.displayState == .running || $0.displayState.needsAttention })
+        else { return nil }
         return model.parentTask(of: task)
     }
 
