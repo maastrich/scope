@@ -7,8 +7,7 @@ public enum TaskBranch {
     /// Fallback slug for an empty or unslugifiable task name.
     public static let fallbackSlug = "task"
 
-    /// The prefix no task branch may use: Scope keeps the `scope` namespace for its own refs (`refs/scope/salvage/…`),
-    /// and a task branch under it would read as one of them.
+    /// The prefix no task branch may use: Scope reserves it.
     public static let reservedPrefix = "scope/"
 
     /// `true` for a branch under `reservedPrefix`.

@@ -79,7 +79,8 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     /// research in #37"), and a task started on such a reference checks out the wrong code, or fails outright when
     /// the reference belongs to another repository. A reference counts when
     ///
-    /// - the prompt is little more than the reference: `#123`, a pasted URL, "the PR #123 please";
+    /// - the prompt is little more than the reference: `#123`, a pasted URL, "the PR #123 please" — or it opens
+    ///   on a line or sentence that is ("<url>\nfix the failing test", "#6613: address the comments");
     /// - or a sentence opens on a verb of working on it and reaches the reference through a few words that only
     ///   say what of it ("review #4211", "rebase la pr <url> stp", "please fix the CI on acme/front#88").
     ///
@@ -98,11 +99,9 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
         }
         masked += prompt[cursor...]
 
-        let sentences = splitSentences(masked).map(tokens)
-        let words = sentences.flatMap { $0 }
-        if words.allSatisfy({ if case .word(let word) = $0 { return bareFiller.contains(word) } else { return true } }),
-           case .reference(let index)? = words.first(where: { if case .reference = $0 { true } else { false } }) {
-            return found[index].reference
+        let sentences = splitSentences(masked).map(tokens).filter { !$0.isEmpty }
+        for candidate in [sentences.flatMap { $0 }, sentences.first ?? []] {
+            if let index = bareReference(candidate) { return found[index].reference }
         }
         for sentence in sentences {
             if let index = referenceGoverned(in: sentence) { return found[index].reference }
@@ -113,6 +112,18 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     private enum Token: Equatable {
         case word(String)
         case reference(Int)
+    }
+
+    /// The first reference of `tokens` when nothing else in them is more than filler.
+    private static func bareReference(_ tokens: [Token]) -> Int? {
+        var first: Int?
+        for token in tokens {
+            switch token {
+            case .reference(let index): first = first ?? index
+            case .word(let word): guard bareFiller.contains(word) else { return nil }
+            }
+        }
+        return first
     }
 
     private static let placeholderOpen: Character = "\u{E000}"

@@ -98,6 +98,8 @@ struct PullRequestReferenceTests {
         ("address the review comments on #42", 42),
         ("reprends la PR #31 et finis les tests", 31),
         ("Context: this follows #37.\nReview #40 before it ships.", 40),
+        ("https://github.com/acme/front/pull/12\nfix the failing test", 12),
+        ("#6613: address the review comments", 6613),
     ])
     func startPoints(prompt: String, number: Int) {
         #expect(PullRequestReference.startPoint(in: prompt)?.number == number, "\(prompt)")
