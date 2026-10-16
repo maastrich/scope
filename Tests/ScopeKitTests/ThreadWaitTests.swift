@@ -39,6 +39,37 @@ import Testing
         #expect(!Self.settled("idle", expecting: ThreadWait.startGrace + 1, starting: true))
     }
 
+    /// Seconds ago, as a date.
+    static func ago(_ seconds: TimeInterval?) -> Date? { seconds.map { now.addingTimeInterval(-$0) } }
+
+    static func running(reply: TimeInterval?, turnStarted: TimeInterval?, prompt: TimeInterval? = nil,
+                        expecting: TimeInterval? = nil, reportsTurnStart: Bool = true, waitingFor: TimeInterval? = nil) -> Bool {
+        ThreadWait.isSettled(.init(state: "running", expectingSince: ago(expecting), reportsTurnStart: reportsTurnStart,
+                                   replyAt: ago(reply), turnStartedAt: ago(turnStarted), lastPromptAt: ago(prompt)),
+                             now: now, waitingSince: ago(waitingFor))
+    }
+
+    /// The safety net: `running`, but the agent answered after anything that started a turn.
+    @Test func runningWithAnAnswerNewerThanItsTurnIsSettled() {
+        #expect(Self.running(reply: 60, turnStarted: 120))
+        #expect(Self.running(reply: 60, turnStarted: nil), "nothing ever reported a start")
+        #expect(!Self.running(reply: 120, turnStarted: 60), "a prompt or a tool came after the answer: a turn is on")
+        #expect(!Self.running(reply: nil, turnStarted: nil))
+        #expect(!Self.running(reply: 60, turnStarted: 120, prompt: 30), "handed a prompt since: the answer is for something else")
+        #expect(!Self.running(reply: 60, turnStarted: 120, expecting: 30))
+        // Codex: `running` comes from the prompt typed, which no hook timestamps.
+        #expect(!Self.running(reply: 60, turnStarted: nil, reportsTurnStart: false))
+    }
+
+    /// An answer landing during the wait ends it, even if the state reads `running` again by the next look.
+    @Test func anAnswerDuringTheWaitEndsIt() {
+        #expect(Self.running(reply: 5, turnStarted: 2, waitingFor: 60))
+        #expect(!Self.running(reply: 90, turnStarted: 2, waitingFor: 60), "an answer from before the wait says nothing")
+        #expect(!Self.running(reply: 5, turnStarted: 2, prompt: 1, waitingFor: 60), "nor one older than the last prompt")
+        #expect(ThreadWait.isSettled(.init(state: "idle", expectingSince: Self.ago(30), replyAt: Self.ago(5), lastPromptAt: Self.ago(30)),
+                                     now: Self.now, waitingSince: Self.ago(60)))
+    }
+
     @Test func allWaitsForEveryThreadAndAnyForTheFirst() {
         #expect(ThreadWait.isOver([true, true], until: .all))
         #expect(!ThreadWait.isOver([true, false], until: .all))

@@ -200,10 +200,18 @@ final class AppControlService: ControlService {
         }
         let started = Date.now
         let deadline = started.addingTimeInterval(TimeInterval(params.effectiveTimeout))
-        var settled = sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now) }
+        // An agent is blocked on this answer: without it, App Nap stretches the half-second tick of a background app
+        // into minutes.
+        let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "thread.wait")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+        func look() -> [Bool] {
+            sessions.forEach { $0.settleOutlivedTurn() }
+            return sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now, waitingSince: started) }
+        }
+        var settled = look()
         while !ThreadWait.isOver(settled, until: params.until), Date.now < deadline, !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(500))
-            settled = sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now) }
+            settled = look()
         }
         let entries = zip(sessions, settled).map { session, settled in
             ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,

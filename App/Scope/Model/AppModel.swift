@@ -1420,8 +1420,8 @@ final class AppModel {
 
     func handle(_ event: AdapterEvent) {
         guard let session = session(event.threadID), session.isAlive else { return }
-        session.apply(event)
-        notifyIfNeeded(event, session: session)
+        // A late event changed nothing: no "needs your permission" for a thread whose turn is over.
+        if session.apply(event) { notifyIfNeeded(event, session: session) }
         flushDeliveries(for: session)
         acknowledgeShownResult()
     }
