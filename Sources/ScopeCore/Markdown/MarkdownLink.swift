@@ -68,11 +68,21 @@ public enum MarkdownLink: Sendable, Equatable {
             return path.contains("/") && !path.hasSuffix("/") && path.first?.isLetter == true
         }
         // An extension is short and lower case, with a letter: `swift`, `md`, `ts`, `h`, `mp4` — not
-        // `replyLimit` (a property) nor `3` (a version).
-        let ext = name[name.index(after: dot)...]
-        return (1...6).contains(ext.count) && ext.allSatisfy { ($0.isLetter && $0.isLowercase) || $0.isNumber }
-            && ext.contains(where: \.isLetter)
+        // `replyLimit` (a property) nor `3` (a version). A bare `Name.word` is as often a member access
+        // (`CacheKey.make`) as a file: without a folder, only an extension files are known by counts.
+        let ext = String(name[name.index(after: dot)...])
+        guard (1...6).contains(ext.count), ext.allSatisfy({ ($0.isLetter && $0.isLowercase) || $0.isNumber }),
+              ext.contains(where: \.isLetter) else { return false }
+        return path.contains("/") || fileExtensions.contains(ext)
     }
+
+    /// Extensions a bare file name is taken by, without a folder to vouch for it.
+    static let fileExtensions: Set<String> = [
+        "md", "markdown", "txt", "rst", "swift", "ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "yml", "yaml", "toml",
+        "py", "rb", "rs", "go", "java", "kt", "kts", "c", "h", "cc", "cpp", "hpp", "m", "mm", "cs", "php", "sh", "zsh",
+        "bash", "fish", "sql", "csv", "html", "css", "scss", "vue", "svelte", "xml", "plist", "lock", "env", "log",
+        "png", "jpg", "jpeg", "gif", "svg", "pdf", "xcconfig", "pbxproj", "ini", "cfg", "conf",
+    ]
 
     private static func scheme(of text: String) -> String? {
         guard let colon = text.firstIndex(of: ":") else { return nil }

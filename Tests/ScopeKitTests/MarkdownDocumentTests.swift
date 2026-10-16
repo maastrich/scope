@@ -176,7 +176,7 @@ import Testing
     }
 
     @Test func codeSpansThatNamePathsBecomeLinks() {
-        for path in ["Sources/App.swift:12", "README.md", "./scripts/build.sh", "/tmp/x.log", "Sources/ScopeCore", "~/notes.md"] {
+        for path in ["Sources/App.swift:12", "README.md", "package.json", "Makefile.toml", "./scripts/build.sh", "/tmp/x.log", "Sources/ScopeCore", "~/notes.md"] {
             let url = MarkdownLink.pathLink(forCode: path)
             #expect(url != nil, "\(path)")
             #expect(url.map { MarkdownLink.classify($0.absoluteString) } == .file(path), "\(path)")
@@ -185,7 +185,7 @@ import Testing
 
     @Test func codeIsNotAPath() {
         for code in ["foo.bar()", "x = 1", "v1.2.3", "--flag", "ThreadActivity.replyLimit", "swift test",
-                     "https://x.dev/a.md", "localhost:3000", "$HOME/x", "TaskRecord.snapshot"] {
+                     "https://x.dev/a.md", "localhost:3000", "$HOME/x", "TaskRecord.snapshot", "CacheKey.make", "Array.first"] {
             #expect(MarkdownLink.pathLink(forCode: code) == nil, "\(code)")
         }
     }
