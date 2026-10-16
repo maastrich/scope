@@ -27,7 +27,7 @@ final class ReturnDigestModel {
     /// When the app last went to the back.
     @ObservationIgnored var resignedAt: Date?
     /// The return being measured, so a pull request refresh that lands late updates that one and no other.
-    @ObservationIgnored var pendingReturn: (scopeID: ScopeID, since: Date, id: UUID)?
+    @ObservationIgnored var pendingReturn: (scopeID: ScopeID, visit: ScopeVisits.Visit, id: UUID)?
     /// When `gh` was last asked about each task on a return: switching back and forth must not ask it every time.
     @ObservationIgnored var askedGitHub: [TaskID: Date] = [:]
 
@@ -83,14 +83,20 @@ extension AppModel {
 
     /// `currentScopeID` moved from `old` to `new`: `old` stops being looked at, `new` is returned to.
     func scopeSwitched(from old: ScopeID?, to new: ScopeID?) {
-        if let old { stampVisit(old) }
+        if let old, isLooking { stampVisit(old) }
         if returnDigests.shown?.scopeID != new { returnDigests.dismiss() }
         if let new { returnTo(new) }
     }
 
     /// Quitting is leaving the scope on screen.
     func stampCurrentVisit() {
-        if let id = currentScopeID { stampVisit(id) }
+        if let id = currentScopeID, isLooking { stampVisit(id) }
+    }
+
+    /// The owner sees the window. A notification click switches scope before the app is active again, and a quit
+    /// from the Dock happens in the back: the stamp taken when the app went to the back is the one that holds.
+    private var isLooking: Bool {
+        NSApplication.shared.isActive && returnDigests.resignedAt == nil
     }
 
     /// Writes `id`'s visit as ending now, with its tasks' pull requests as they are.
@@ -119,7 +125,8 @@ extension AppModel {
     private func returnTo(_ id: ScopeID) {
         guard config.preferences.showReturnDigest, let visit = returnDigests.visits[id] else { return }
         let returnID = UUID()
-        returnDigests.pendingReturn = (id, visit.lastSeen, returnID)
+        // The visit as it is now: a stamp taken while GitHub is being asked must not become the baseline.
+        returnDigests.pendingReturn = (id, visit, returnID)
         Task { [weak self] in
             guard let self else { return }
             await self.measureReturn(returnID)
@@ -129,9 +136,8 @@ extension AppModel {
     }
 
     private func measureReturn(_ returnID: UUID) async {
-        guard let pending = returnDigests.pendingReturn, pending.id == returnID,
-              let visit = returnDigests.visits[pending.scopeID] else { return }
-        let seen = visit.seenPullRequests
+        guard let pending = returnDigests.pendingReturn, pending.id == returnID else { return }
+        let seen = pending.visit.seenPullRequests
         let threads = await threadFacts(in: pending.scopeID)
         // Archived tasks count only if they were live when the owner left: auto-archiving on merge must not hide
         // the merge, and a task archived long ago is not news.
@@ -140,7 +146,7 @@ extension AppModel {
         }
         // The owner may have moved on while the activity was read.
         guard returnDigests.pendingReturn?.id == returnID, currentScopeID == pending.scopeID else { return }
-        guard let digest = ReturnDigest.make(since: pending.since, threads: threads, tasks: tasks, seen: seen) else { return }
+        guard let digest = ReturnDigest.make(since: pending.visit.lastSeen, threads: threads, tasks: tasks, seen: seen) else { return }
         returnDigests.show(.init(scopeID: pending.scopeID, digest: digest, returnID: returnID))
     }
 
