@@ -39,6 +39,10 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     public let mergeable: Mergeable
     /// Every check of the rollup, in the order `gh` listed them; `checks` is their fold.
     public let checkRuns: [PullRequestCheck]
+    /// When it was opened, merged and closed, as GitHub dates them: what a task's timeline marks.
+    public let createdAt: Date?
+    public let mergedAt: Date?
+    public let closedAt: Date?
 
     public var id: Int { number }
 
@@ -46,9 +50,13 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         number: Int, title: String, author: String, headRefName: String, baseRefName: String,
         isDraft: Bool = false, reviewDecision: ReviewDecision = .none, checks: Checks = .none,
         updatedAt: Date = .now, url: URL, isCrossRepository: Bool = false, headOwner: String? = nil,
-        mergeable: Mergeable = .unknown, checkRuns: [PullRequestCheck] = [], state: State = .open
+        mergeable: Mergeable = .unknown, checkRuns: [PullRequestCheck] = [], state: State = .open,
+        createdAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil
     ) {
         self.checkRuns = checkRuns
+        self.createdAt = createdAt
+        self.mergedAt = mergedAt
+        self.closedAt = closedAt
         self.state = state
         self.number = number
         self.title = title
@@ -69,6 +77,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     public static let jsonFields = [
         "number", "title", "author", "headRefName", "baseRefName", "isDraft", "reviewDecision",
         "statusCheckRollup", "updatedAt", "url", "isCrossRepository", "headRepositoryOwner", "mergeable", "state",
+        "createdAt", "mergedAt", "closedAt",
     ].joined(separator: ",")
 
     // MARK: Parsing
@@ -141,6 +150,9 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         var headRepositoryOwner: Login?
         var mergeable: String?
         var state: String?
+        var createdAt: Date?
+        var mergedAt: Date?
+        var closedAt: Date?
     }
 
     init(dto: DTO) {
@@ -169,8 +181,15 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
                     detailsURL: (check.detailsUrl ?? check.targetUrl).flatMap { $0.isEmpty ? nil : URL(string: $0) }
                 )
             },
-            state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open
+            state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open,
+            createdAt: Self.real(dto.createdAt), mergedAt: Self.real(dto.mergedAt), closedAt: Self.real(dto.closedAt)
         )
+    }
+
+    /// GraphQL answers a date that never happened with `null`, but some `gh` builds print the zero time instead.
+    static func real(_ date: Date?) -> Date? {
+        guard let date, date > Date(timeIntervalSince1970: 0) else { return nil }
+        return date
     }
 
     /// `owner/name` of the repository a pull request URL points into (`https://github.com/owner/name/pull/12`),

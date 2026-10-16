@@ -17,6 +17,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public static let turnLimit = 200
     /// UTF-8 bytes of the last reply kept, from its end: an answer's conclusion is at its bottom.
     public static let replyLimit = 16 * 1024
+    /// Characters of a turn's reply kept on the turn itself (`Turn.said`): enough to recognise it when hovering it.
+    public static let saidLimit = 140
 
     public struct Tool: Codable, Sendable, Equatable {
         public var name: String
@@ -54,14 +56,21 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         public var tools: Int
         /// `turn.failed`: the driver's error code (`rate_limit`, …).
         public var error: String?
+        /// The first words of what the agent answered at the end of the turn, at most `saidLimit` characters, when
+        /// its driver says. Optional so files written before it existed still decode under the same version.
+        public var said: String?
 
-        public init(startedAt: Date?, endedAt: Date, outcome: Outcome, tools: Int = 0, error: String? = nil) {
+        public init(startedAt: Date?, endedAt: Date, outcome: Outcome, tools: Int = 0, error: String? = nil, said: String? = nil) {
             self.startedAt = startedAt
             self.endedAt = endedAt
             self.outcome = outcome
             self.tools = tools
             self.error = error
+            self.said = said
         }
+
+        /// Seconds of work, `0` when the start is unknown.
+        public var duration: TimeInterval { startedAt.map { max(0, endedAt.timeIntervalSince($0)) } ?? 0 }
     }
 
     public var version: Int
@@ -169,11 +178,25 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     private mutating func close(_ outcome: Turn.Outcome, at date: Date, error: String? = nil, onlyIfOpen: Bool = false) {
         guard inTurn || !onlyIfOpen else { return }
         let start = turnStartedAt ?? turns.last.flatMap { $0.outcome.isWait ? $0.endedAt : nil }
+        // `apply` takes the reply before it closes the turn: a reply dated inside the turn is this turn's answer.
+        let said = lastReply.flatMap { reply in
+            reply.at >= (start ?? turns.last?.endedAt ?? .distantPast) && reply.at <= date ? Self.excerpt(reply.text) : nil
+        }
         turns.append(Turn(startedAt: start, endedAt: date, outcome: outcome, tools: turnTools,
-                          error: error.flatMap { $0.isEmpty ? nil : $0 }))
+                          error: error.flatMap { $0.isEmpty ? nil : $0 }, said: said))
         if turns.count > Self.turnLimit { turns.removeFirst(turns.count - Self.turnLimit) }
         turnStartedAt = nil
         turnTools = 0
+    }
+
+    /// The opening of `text` on one line, whitespace collapsed, cut at a word before `saidLimit`; `nil` when empty.
+    public static func excerpt(_ text: String, limit: Int = saidLimit) -> String? {
+        let line = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !line.isEmpty else { return nil }
+        guard line.count > limit else { return line }
+        let cut = line.prefix(limit)
+        let atWord = cut.lastIndex(of: " ").map { cut[..<$0] } ?? cut
+        return atWord + "…"
     }
 
     /// `reply` cut to its last `replyLimit` UTF-8 bytes, behind a `…`.

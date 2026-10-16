@@ -35,11 +35,11 @@ extension AppModel {
             let pr = try await target.gh.prView(number: target.number, in: target.checkout, repo: target.repo)
             pullRequests.setTaskPullRequest(pr, for: task.id)
             // The state too: once the task is archived nobody asks GitHub again, and the record is what a summary
-            // of past work reads to tell a merged pull request from a dropped one.
-            if let linked = task.record.pullRequest, linked.number == pr.number,
-               linked.title != pr.title || linked.state != pr.state.rawValue {
+            // of past work reads to tell a merged pull request from a dropped one. The dates are the timeline's ticks.
+            if let linked = task.record.pullRequest, linked.isStale(against: pr) {
                 await link(pr, to: task)
             }
+            await recordChecks(of: pr, for: task)
         } catch {
             pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
             return false

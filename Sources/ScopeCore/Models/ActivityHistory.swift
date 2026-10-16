@@ -40,6 +40,11 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
     /// An agent asked for the task (`TaskRecord.createdByAgent`).
     public var createdByAgent: Bool
     public var parentTask: String?
+    /// Seconds the task's agents worked, every thread added up (`TaskTimeline`); `nil` when Scope never saw a turn
+    /// end, or on entries written before it counted them.
+    public var agentSeconds: Double?
+    /// Seconds the task waited on its owner: questions, permissions, results left unread.
+    public var waitingSeconds: Double?
 
     /// A brief longer than this is cut before it goes to the history: the summary only ever shows its first lines,
     /// and the detail of one task is still readable at this length.
@@ -48,7 +53,7 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
     public init(id: String, name: String, slug: String, scopeID: String, scopeSlug: String, scopeName: String,
                 branch: String, topic: String? = nil, repos: [String] = [], createdAt: Date, archivedAt: Date? = nil,
                 prompt: String? = nil, pullRequest: PullRequest? = nil, createdByAgent: Bool = false,
-                parentTask: String? = nil) {
+                parentTask: String? = nil, agentSeconds: Double? = nil, waitingSeconds: Double? = nil) {
         self.id = id
         self.name = name
         self.slug = slug
@@ -64,6 +69,8 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
         self.pullRequest = pullRequest
         self.createdByAgent = createdByAgent
         self.parentTask = parentTask
+        self.agentSeconds = agentSeconds
+        self.waitingSeconds = waitingSeconds
     }
 
     /// The copy kept in the history: the prompt cut at `promptLimit`.

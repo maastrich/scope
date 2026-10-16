@@ -102,6 +102,8 @@ struct TaskHoverCard: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
+            TaskTimelineView(task: task, compact: true)
+                .padding(.top, 2)
             if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
                 Divider()
                 Text(prompt)

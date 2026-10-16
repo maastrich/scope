@@ -99,15 +99,22 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
     /// `open`, `merged` or `closed`, as GitHub last answered while the task was open: what tells a delivered task
     /// from a dropped one once it is archived and nobody asks GitHub any more. `nil` on links never refreshed.
     public var state: String?
+    /// When GitHub says it was opened, merged, closed: the ticks of the task's timeline. `nil` until a refresh asked.
+    public var openedAt: Date?
+    public var mergedAt: Date?
+    public var closedAt: Date?
 
     public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false,
-                state: String? = nil) {
+                state: String? = nil, openedAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil) {
         self.number = number
         self.url = url
         self.title = title
         self.headOwner = headOwner
         self.isCrossRepository = isCrossRepository
         self.state = state
+        self.openedAt = openedAt
+        self.mergedAt = mergedAt
+        self.closedAt = closedAt
     }
 
     /// `#123`
@@ -116,7 +123,13 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
     /// The link that binds a task to `pr`.
     public init(_ pr: PullRequest) {
         self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository,
-                  state: pr.state.rawValue)
+                  state: pr.state.rawValue, openedAt: pr.createdAt, mergedAt: pr.mergedAt, closedAt: pr.closedAt)
+    }
+
+    /// `pr` says something this link does not keep yet: a new title, state or date.
+    public func isStale(against pr: PullRequest) -> Bool {
+        number == pr.number && (title != pr.title || state != pr.state.rawValue || openedAt != pr.createdAt
+                                || mergedAt != pr.mergedAt || closedAt != pr.closedAt)
     }
 }
 
@@ -304,6 +317,16 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
             pullRequest: pullRequest.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
             createdByAgent: createdByAgent, parentTask: parentTask?.rawValue
         )
+    }
+
+    /// `snapshot` with the time its agents worked and waited, from the turns of its threads.
+    public func snapshot(lanes: [TimelineLaneSource], now: Date = .now) -> TaskSnapshot {
+        var snapshot = snapshot
+        guard lanes.contains(where: { !$0.turns.isEmpty || $0.openTurnSince != nil }) else { return snapshot }
+        let totals = TaskTimeline.totals(createdAt: createdAt, archivedAt: archivedAt, now: now, lanes: lanes)
+        snapshot.agentSeconds = totals.agent.rounded()
+        snapshot.waitingSeconds = totals.waiting.rounded()
+        return snapshot
     }
 
     /// `notRun` for a record that never ran a setup.

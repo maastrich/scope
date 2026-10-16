@@ -1,4 +1,5 @@
 import Foundation
+import ScopeCore
 
 /// Turns a result into what the terminal shows. Pure, so what the CLI prints is under test.
 ///
@@ -139,10 +140,15 @@ public enum CLIRenderer {
             parts.append(when)
             if !task.threads.isEmpty { parts.append("\(task.threads.count) thread\(task.threads.count == 1 ? "" : "s")") }
             if let tokens = task.tokens { parts.append("\(TokenUsageText.compact(tokens)) tokens all told") }
+            if let time = timeSpent(task) { parts.append(time) }
             if task.createdByAgent { parts.append("by an agent") }
             var out = [indent + task.outcome.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0) + parts.joined(separator: " · ")]
             if let brief = task.brief { out.append(indent + String(repeating: " ", count: 10) + brief) }
             return out
+        }
+        func timeSpent(_ task: SummaryResult.Task) -> String? {
+            guard let agent = task.agentSeconds else { return nil }
+            return "agent \(DurationText.short(agent)), waited on you \(DurationText.short(task.waitingSeconds ?? 0))"
         }
         func threadLine(_ thread: SummaryResult.Thread) -> String {
             var line = "\(thread.id)  \(thread.title) [\(thread.driver)] · opened \(day(thread.createdAt))"
@@ -163,6 +169,7 @@ public enum CLIRenderer {
             if let tokens = task.tokens { lines.append("tokens      \(TokenUsageText.compact(tokens))") }
             if let archived = task.archivedAt { lines.append("archived    \(day(archived))") }
             if let closed = task.closedAt { lines.append("closed      \(day(closed))") }
+            if let time = timeSpent(task) { lines.append("time        " + time) }
             for thread in task.threads { lines.append("thread      " + threadLine(thread)) }
             if let prompt = detail.prompt { lines += ["", "brief:", prompt] }
             return lines.joined(separator: "\n")

@@ -51,7 +51,7 @@ let package = Package(
         ),
         .target(
             name: "ScopeTasks",
-            dependencies: ["ScopeCore", "ScopeGit", "ScopeDrivers"],
+            dependencies: ["ScopeCore", "ScopeGit", "ScopeDrivers", "ScopeAdapters"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(

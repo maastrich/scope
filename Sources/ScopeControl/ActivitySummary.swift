@@ -97,6 +97,10 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         public var threads: [Thread]
         /// Tokens its threads consumed, all told; absent when Scope read a transcript for none of them.
         public var tokens: Int?
+        /// Seconds its agents worked, every thread added up; absent when Scope saw no turn of it.
+        public var agentSeconds: Double?
+        /// Seconds it waited on its owner (questions, permissions, results left unread), wall-clock.
+        public var waitingSeconds: Double?
     }
 
     public struct Counts: Codable, Sendable, Equatable {
@@ -176,6 +180,7 @@ public enum ActivitySummary {
         "Nothing said in a thread is kept by Scope: a task is known by its name, its brief, its branch and its pull request, not by what its agents did.",
         "Pull request states are the last ones Scope saw while the task was open; an absent state means Scope never looked — check it with `gh pr view <url>`.",
         "`archived` means put away without a pull request: finished with nothing to merge, or set aside. Scope cannot tell which.",
+        "Agent time adds up the turns of every thread of a task; waiting time is how long it waited on you — a question, a permission, or a result not yet followed by a new prompt — counted once however many threads waited. Both come from the hooks of the drivers that have them, and are absent for a task Scope saw no turn of.",
     ]
 
     public static func build(
@@ -389,7 +394,8 @@ public enum ActivitySummary {
                 pullRequest: pr.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
                 createdByAgent: task.createdByAgent, parentTask: task.parentTask,
                 brief: ActivitySummary.excerpt(task.prompt), threads: threads,
-                tokens: threads.compactMap(\.tokens).reduce(nil) { ($0 ?? 0) + $1 }
+                tokens: threads.compactMap(\.tokens).reduce(nil) { ($0 ?? 0) + $1 },
+                agentSeconds: task.agentSeconds, waitingSeconds: task.waitingSeconds
             )
         }
 

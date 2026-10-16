@@ -61,7 +61,8 @@ public enum ScopeCLI {
       scope config get [key]              settings Scope applies live: automation.maxAgentTasks, automation.maxAgentThreads
       scope config set <key> <value>      change one, as Settings would; from your own terminal only, never an agent's
       scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
-                                          their pull requests and briefs (default: last 7 days)
+                                          their pull requests and briefs, agent time and time waiting on you
+                                          (default: last 7 days)
       scope usage [period]                how Scope's own interface was used: top controls and commands, what was
                                           never used, keyboard vs menu vs palette, agent vs user calls (local log)
       scope mcp                           speak MCP on stdio, same commands
