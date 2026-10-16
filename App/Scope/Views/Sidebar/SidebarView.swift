@@ -93,6 +93,7 @@ struct SidebarView: View {
                             scopeBeingRenamed = scope
                         }
                         GlobalViewsRow(scope: scope)
+                        ReturnDigestStrip()
                         filterField
                         if model.config.preferences.attentionCounter == .sidebar {
                             AttentionBanner()

@@ -44,6 +44,8 @@ final class AppModel {
     let inspector = InspectorModel()
     /// Tokens Claude Code threads consumed (`AppModel+TokenUsage`).
     let tokenUsage = TokenUsageModel()
+    /// What moved in a scope while the owner looked elsewhere (`AppModel+ReturnDigest`).
+    let returnDigests = ReturnDigestModel()
     /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
     var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
@@ -101,6 +103,7 @@ final class AppModel {
             persistUIState()
             // The residents of a scope start on its first visit (`AutoRelaunchPlanner` starts the first scope's).
             if isBootstrapped, let id = currentScopeID { startResidents(in: id) }
+            if isBootstrapped { scopeSwitched(from: oldValue, to: currentScopeID) }
         }
     }
 
@@ -627,6 +630,7 @@ final class AppModel {
         startGarbageCollection()
         startPullRequestRefresh()
         isBootstrapped = true
+        startReturnTracking()
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }
 
@@ -1480,6 +1484,7 @@ final class AppModel {
         for session in threads where session.isAlive {
             session.stop(escalateAfter: 1.5)
         }
+        stampCurrentVisit()
         env.uiState.flush()
         await env.config.flush()
         Usage.closeAll()
