@@ -658,6 +658,7 @@ final class AppModel {
         env.knownThreads.replaceAll(Set(threads.map(\.id)))
 
         restoreUIState()
+        await finishInterruptedPutBacks()
         await autoRelaunchThreads(orphans: restore.orphans, skippedOnce: skipAutoRelaunch)
         startFollowingVibeIsland()
         startGarbageCollection()
@@ -1526,6 +1527,8 @@ final class AppModel {
     /// the quit and the saves interleave.
     func terminateNow() async {
         isTerminating = true
+        // The user's checkouts come back first, before anything is hung up: no confirmation, no base left on a task.
+        await putBackAll(reason: "Scope quit")
         for session in threads where session.isAlive {
             await env.threadRecords.save(session.record)
         }

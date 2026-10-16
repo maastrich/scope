@@ -61,6 +61,10 @@ public enum ScopeCLI {
       scope task rebase [<id|slug>]        bring a task up to date with main now: behind and clean, Scope rebases
                                           the sandbox and pushes with lease; conflicting, its thread is asked
                                           (default: the caller's own task; --scope for a shared slug)
+      scope task try <id|slug>            run the task's branch in your own checkout: uncommitted changes stashed,
+                                          HEAD detached onto the branch (--refresh to follow the branch's new head,
+                                          --end to put the checkout back; --scope for a shared slug). Your own
+                                          terminal only, never an agent's; Settings › Tasks must allow it
       scope task topic [<id|slug>] <topic>
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
@@ -360,6 +364,24 @@ public enum ScopeCLI {
                 })
                 guard words.count <= 1 else { throw UsageError(message: "task rebase takes at most one task id or slug", usage: usage) }
                 return .call(.taskRebase(TaskRebaseParams(task: words.first, scope: scope)), shared)
+            }
+            if sub == "try" {
+                var words: [String] = []
+                var scope: String?
+                var end = false
+                var refresh = false
+                let shared = try options(&rest, command: "task try", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--scope": scope = try value()
+                    case "--end": end = true
+                    case "--refresh": refresh = true
+                    default: return false
+                    }
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "task try takes one task id or slug", usage: usage) }
+                guard !(end && refresh) else { throw UsageError(message: "task try takes --end or --refresh, not both", usage: usage) }
+                return .call(.taskTry(TaskTryParams(task: words[0], scope: scope, end: end, refresh: refresh)), shared)
             }
             if sub == "topic" {
                 var words: [String] = []

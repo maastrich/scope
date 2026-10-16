@@ -247,7 +247,10 @@ struct TaskContextMenu: View {
                 Usage.click("sidebar.task.hold-branch", label: "Don't rebase automatically")
                 Task { await model.setHoldBranch(hold, for: task) }
             }))
-        Divider()
+        if model.mayTryInCheckout(task) || !task.record.trying.isEmpty {
+            TryInCheckoutMenuItems(task: task)
+            Divider()
+        }
         Button("Reveal in Finder") {
             Reveal.inFinder(task.record.rootURL)
         }
@@ -273,6 +276,44 @@ struct TaskContextMenu: View {
         }
         Button("Close Task and Delete Branch", role: .destructive) {
             Task { await model.closeTask(task.id, deleteBranch: true) }
+        }
+    }
+}
+
+/// "Try in My Checkout", and while trying "Refresh My Checkout" / "Put My Checkout Back" (spec §4.5). Shown only when
+/// the scope allows it, or a checkout is on the task and must be offered the way back whatever the setting says now.
+struct TryInCheckoutMenuItems: View {
+    @Environment(AppModel.self) private var model
+    let task: TaskState
+
+    var body: some View {
+        if task.record.trying.isEmpty {
+            Button("Try in My Checkout") {
+                Usage.click("sidebar.task.try-in-checkout", label: "Try in my checkout")
+                Task {
+                    do { _ = try await model.tryInCheckout(task) } catch {
+                        model.problems.error("Could not try \(task.name) in your checkout", detail: String(describing: error), scope: task.scopeID)
+                    }
+                }
+            }
+            .disabled(task.isArchived)
+        } else {
+            Button("Refresh My Checkout") {
+                Usage.click("sidebar.task.try-refresh", label: "Refresh my checkout")
+                Task {
+                    do { _ = try await model.refreshTry(task) } catch {
+                        model.problems.error("Could not refresh your checkout for \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                    }
+                }
+            }
+            Button("Put My Checkout Back") {
+                Usage.click("sidebar.task.try-put-back", label: "Put my checkout back")
+                Task {
+                    do { _ = try await model.putBack(task) } catch {
+                        model.problems.error("Could not put your checkout back from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                    }
+                }
+            }
         }
     }
 }

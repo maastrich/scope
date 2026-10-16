@@ -111,7 +111,9 @@ leaves that branch where it is and bases the task on a fresh one.</p></div>
 ├── checkout-api/             <span class="c"># worktree on feat/redis-product-catalogue-cache</span>
 └── web-storefront/           <span class="c"># same branch, second repository</span></code></pre>
 <p>Your own checkouts are untouched: they stay on whatever branch you left them on, and the task branch exists
-in the worktree. A single-repository scope puts the worktree at the task root itself.</p>
+in the worktree. A single-repository scope puts the worktree at the task root itself. The one exception is yours
+to turn on and to trigger: <a href="review.html#try-in-checkout">trying a task in your checkout</a>, which
+stashes, detaches and puts everything back.</p>
 <p>The <code>sandboxes</code> folder carries a <code>.metadata_never_index</code> marker, so Spotlight leaves it
 alone: no indexing of every worktree's <code>node_modules</code>, and no second copy of your files in search
 results.</p>

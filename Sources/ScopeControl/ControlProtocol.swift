@@ -57,6 +57,9 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskRestore = "task.restore"
     /// Bring a task up to date with main now: rebase its sandbox when clean, ask its thread when it conflicts.
     case taskRebase = "task.rebase"
+    /// Run a task's branch in the user's own checkout, refresh it there, or put the checkout back (spec §4.5). The
+    /// user's own terminal only: an agent is refused whatever the automation settings say.
+    case taskTry = "task.try"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
@@ -79,7 +82,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .configGet, .usage: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .gc, .configSet: true
+             .taskRebase, .taskTry, .gc, .configSet: true
         }
     }
 
@@ -188,6 +191,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskTopic(TaskTopicParams)
     case taskRestore(TaskRestoreParams)
     case taskRebase(TaskRebaseParams)
+    case taskTry(TaskTryParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
@@ -211,6 +215,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskTopic: .taskTopic
         case .taskRestore: .taskRestore
         case .taskRebase: .taskRebase
+        case .taskTry: .taskTry
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
@@ -233,7 +238,7 @@ public enum ControlCall: Sendable, Equatable {
         case .list, .threadRead, .summary, .taskShow, .configGet, .configSet, .usage: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .gc: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .gc: .seconds(300)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -411,6 +416,27 @@ public struct TaskRebaseParams: Codable, Sendable, Equatable {
     public init(task: String? = nil, scope: String? = nil) {
         self.task = task
         self.scope = scope
+    }
+}
+
+/// `scope task try <id|slug> [--end|--refresh]` — the task's branch in the user's own checkout (spec §4.5). Plain: the
+/// base of each repository of the task is stashed and detached onto the branch. `--refresh`: moved to the branch's
+/// current head. `--end`: put back on its branch with its stash applied. Refused to agents, always.
+public struct TaskTryParams: Codable, Sendable, Equatable {
+    /// Task id or slug.
+    public var task: String
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
+    /// Put the checkout back.
+    public var end: Bool
+    /// Move the detached checkout to the branch's current head.
+    public var refresh: Bool
+
+    public init(task: String, scope: String? = nil, end: Bool = false, refresh: Bool = false) {
+        self.task = task
+        self.scope = scope
+        self.end = end
+        self.refresh = refresh
     }
 }
 

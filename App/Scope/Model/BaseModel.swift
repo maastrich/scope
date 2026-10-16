@@ -117,6 +117,16 @@ final class BaseModel {
         repoURL = nil
     }
 
+    /// The checkout moved under the panel (a task tried or put back): HEAD, tree and the behind count are read
+    /// again when one of `urls` is the repository shown.
+    func reloadIfShowing(any urls: [URL]) {
+        guard let repoURL, urls.contains(where: { $0.standardizedFileURL == repoURL.standardizedFileURL }) else { return }
+        lastFetch[repoURL] = nil
+        Task { await loadTree() }
+        Task { await loadHistory() }
+        Task { await refreshBehind(force: true) }
+    }
+
     // MARK: Header
 
     /// `git fetch` + `rev-list --count HEAD..origin/<default>`; skipped when fetched less than a minute ago.

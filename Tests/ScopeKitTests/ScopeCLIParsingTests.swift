@@ -27,6 +27,15 @@ import Testing
         #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["config"]) }
     }
 
+    @Test func taskTryTakesOneTaskAndOneMode() throws {
+        #expect(try Self.call(["task", "try", "auth-cache"]) == .taskTry(TaskTryParams(task: "auth-cache")))
+        #expect(try Self.call(["task", "try", "auth-cache", "--end", "--scope", "acme"])
+            == .taskTry(TaskTryParams(task: "auth-cache", scope: "acme", end: true)))
+        #expect(try Self.call(["task", "try", "auth-cache", "--refresh"]) == .taskTry(TaskTryParams(task: "auth-cache", refresh: true)))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "try"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "try", "a", "--end", "--refresh"]) }
+    }
+
     @Test func taskNewTakesAPullRequestToStartFrom() throws {
         #expect(try Self.call(["task", "new", "review it", "--pr", "#42"]) == .taskNew(TaskNewParams(prompt: "review it", startPR: "#42")))
         #expect(try Self.call(["task", "new", "review it", "--pr=42"]) == .taskNew(TaskNewParams(prompt: "review it", startPR: "42")))

@@ -188,6 +188,14 @@ public struct AutomationPolicy: Sendable, Equatable {
                         + "or to change it in Settings ▸ Automation."
                 ))
             }
+            if call.method == .taskTry {
+                // The base is the user's: an agent never moves it, whatever the automation settings allow.
+                return .refuse(.denied(
+                    "only the user may try a task in their checkout",
+                    detail: "Trying a task's branch in the base checkout is the user's own move: ask them to run "
+                        + "`scope task try <task>` in a terminal of their own, or to use Try in my checkout in Scope."
+                ))
+            }
             guard settings.agentsMayDrive else {
                 return .refuse(.denied("agents may not drive Scope",
                                        detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json."))
@@ -198,6 +206,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                 return .allow
             case .configSet:
                 return .refuse(.denied("only the user may change Scope's settings"))
+            case .taskTry:
+                return .refuse(.denied("only the user may try a task in their checkout"))
             case .taskTopic:
                 // A label: nothing opened, nothing removed, undone by the same call. Gating it behind the task
                 // approval would ask the user about the sidebar's grouping.
@@ -302,6 +312,10 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .taskArchive(let params): "archive the task “\(params.task)”"
         case .taskRestore(let params): "restore the archived task “\(params.task)”"
         case .taskRebase(let params): "rebase " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " on main"
+        case .taskTry(let params):
+            params.end ? "put your checkout back from the task “\(params.task)”"
+                : params.refresh ? "move your checkout to the head of the task “\(params.task)”"
+                : "try the task “\(params.task)” in your checkout"
         case .taskTopic(let params):
             "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")

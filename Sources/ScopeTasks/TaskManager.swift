@@ -235,6 +235,16 @@ public actor TaskManager {
         return record
     }
 
+    /// Rewrites the try sessions of a task (`TaskRecord.trying`): one begun, refreshed, marked as ending or ended.
+    @discardableResult
+    public func setTrying(_ sessions: [TrySession], for id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard sessions != record.trying else { return record }
+        record.trying = sessions
+        try await save(record)
+        return record
+    }
+
     /// Remembers the head of main Scope just acted on for the task, so the next refresh does not act again.
     @discardableResult
     public func noteFollowedMain(head: String?, for id: TaskID) async throws -> TaskRecord {

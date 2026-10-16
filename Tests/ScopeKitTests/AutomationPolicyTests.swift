@@ -39,6 +39,22 @@ import Testing
         #expect(Self.policy().decide(read, from: .externalAgent(client: "scope-mcp/1")) == .allow)
     }
 
+    /// The base is the user's: trying a task there is refused to every agent, whatever the settings allow.
+    @Test func onlyTheUserTriesATaskInTheirCheckout() {
+        let open = AutomationSettings(agentsMayDrive: true, threads: .allow, tasks: .allow)
+        for call in [ControlCall.taskTry(TaskTryParams(task: "auth")), .taskTry(TaskTryParams(task: "auth", end: true)),
+                     .taskTry(TaskTryParams(task: "auth", refresh: true))] {
+            #expect(Self.policy(open).decide(call, from: .user) == .allow)
+            for origin in [ControlOrigin.thread(Self.thread, depth: 0), .externalAgent(client: "scope-mcp/1")] {
+                guard case .refuse(let error) = Self.policy(open).decide(call, from: origin) else {
+                    Issue.record("\(origin) may not try a task in the user's checkout")
+                    continue
+                }
+                #expect(error.code == .denied)
+            }
+        }
+    }
+
     @Test func yourOwnTerminalIsYou() {
         let locked = AutomationSettings(agentsMayDrive: false, threads: .deny, tasks: .deny)
         #expect(Self.policy(locked).decide(Self.openThread, from: .user) == .allow)

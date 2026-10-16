@@ -188,6 +188,13 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Allow trying a task in my checkout", isOn: preference(\.allowTryInCheckout))
+                    .toggleStyle(.scope)
+                    .usageID("allow-try-in-checkout", label: "Allow trying a task in my checkout")
+                Text("Off by default. On, a task's context menu offers Try in my checkout (and `scope task try` from your own terminal, never an agent's): your base checkout's uncommitted changes are stashed, HEAD is detached onto the task branch — your branch itself never moves — and a banner on the task and on Base offers Put back and Refresh. Put back switches back and applies the stash; it runs on its own when the task is archived or closed and when Scope quits, and finishes at the next launch if interrupted. A stash that conflicts is kept, never dropped. A scope may override the choice in config.json (allowTryInCheckout).")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 SettingsRow("Idle after") {
                     ScopePicker("Idle after", selection: preference(\.dormantAfterDays),
                                 title: Self.idleTitle(model.config.preferences.dormantAfterDays)) {

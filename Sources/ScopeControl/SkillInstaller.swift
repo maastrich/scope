@@ -387,6 +387,11 @@ public struct SkillInstaller: Sendable {
         (`scope_task_rebase`) does it on demand for any task: the clean rebase, or the message to its thread. A task
         the user marked *Don't rebase automatically* is left alone, and the call says so.
 
+        The user may run a task's branch in their own checkout (*Try in my checkout*, `scope task try <slug>`): the
+        base is stashed and detached onto the branch, and put back afterwards. That is the user's move and only
+        theirs: the call is refused to agents whatever the automation settings say, so do not try it, and keep working
+        in the sandbox — the base is a mirror the user runs, never a place to edit.
+
         ## What you may do
 
         The user runs Scope so agents work unattended: create tasks and open threads when the work calls for it,
