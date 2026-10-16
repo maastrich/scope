@@ -77,11 +77,12 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 <p><code>scope list threads</code> ends each row with what its agent did last, and when: the last tool it ran and
 on what — a file (relative to the thread's folder), the first line of a command, a search pattern, a URL — or how
 its turn ended. <code>--json</code> and the MCP tool carry it as <code>activity</code>; a thread whose driver
-reports nothing (a shell) has none.</p>
+reports nothing (a shell) has none. <code>TOKENS</code> is what a Claude Code thread consumed over the last five
+hours (<code>tokens</code> in JSON), read from its transcripts.</p>
 <pre><code>$ scope list threads
-THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  BY    ACTIVITY
-3f9a2c17be04  acme   claude-code  running  acme         user  Edit Sources/Login/Session.swift · 2m ago
-8a18d7476063  ci     claude-code  done     acme         user  finished · 1h ago</code></pre>
+THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  TOKENS    BY    ACTIVITY
+3f9a2c17be04  acme   claude-code  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
+8a18d7476063  ci     claude-code  done     acme         310k · 5h  user  finished · 1h ago</code></pre>
 <p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
@@ -114,7 +115,8 @@ in the period — finished or dropped alike — with an outcome (<i>merged</i>, 
 outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
 week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
 <code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
-<code>--task &lt;slug&gt;</code> prints one task's whole brief. The installed <code>/scope-summary</code> skill has
+<code>--task &lt;slug&gt;</code> prints one task's whole brief. Each task and thread carries the tokens its
+Claude Code threads consumed, all told. The installed <code>/scope-summary</code> skill has
 an agent turn it into an account.</p>
 <p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
 or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;

@@ -59,6 +59,22 @@ deliberately ignored: the turn is already done, nobody is asking anything.</p>
 and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
 session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
 survives a restart, and goes when the thread is closed.</p>
+<h3 id="tokens">Tokens consumed</h3>
+<p>Every 30 seconds Scope reads what each Claude Code thread's transcript gained since the last look — only the
+bytes appended, off the main thread — and sums the <code>usage</code> of each model call: input, output, cache
+writes and cache reads, with the model and the time. A response is written as several lines carrying the same
+message id; it counts once. The transcripts of the subagents a session runs (the Task tool) count towards its
+thread, since they spend the same quota. The transcripts are only read, never written.</p>
+<p>The toolbar meter shows the last five hours across every scope; its popover adds today, the last seven days,
+each scope and the threads that spent most, with what the five hours are made of. A task's total sits beside its
+name in the inspector band and in its hover card. The figures include cache reads, which are most of any total.
+Your plan's limit is not in the transcripts, so the meter shows consumption, never what is left — unless you type a
+budget of your own per five hours (Settings ▸ General ▸ Token usage), which turns it into a gauge. The same pane can
+add what the tokens would have cost at API list prices, labelled as such; it is off by default, since a subscription
+is not billed per token.</p>
+<p>The counts live in <code>~/.scope/usage/tokens.json</code>, with where each transcript was read up to: the
+minute-by-minute detail for eight days, each thread's total for 90 days after its last call, closed threads
+included. Other drivers report no tokens.</p>
 <p>Your own <code>~/.claude/settings.json</code> is not modified: the per-thread file lives under
 <code>~/.scope/threads/</code> and is passed on the command line.</p>
 
@@ -102,7 +118,7 @@ line:</p>
 <pre><code>{"thread":"3f9a2c17be04","kind":"Notification","session_id":"…","payload":{…}}</code></pre>
 <p>Anything that can write a line to a unix socket can drive the state of a thread — a wrapper script, a CI
 watcher, your own tool. <code>scope-hook</code> is only the convenient way to do it.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#pipeline">The pipeline</a><a class="lvl2" href="#claude">Claude Code</a><a class="lvl2" href="#states">What the dot says</a><a class="lvl2" href="#others">Codex and Cursor</a><a class="lvl2" href="#notifications">Notifications and the badge</a><a class="lvl2" href="#socket">The socket</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#pipeline">The pipeline</a><a class="lvl2" href="#claude">Claude Code</a><a class="lvl3" href="#tokens">Tokens consumed</a><a class="lvl2" href="#states">What the dot says</a><a class="lvl2" href="#others">Codex and Cursor</a><a class="lvl2" href="#notifications">Notifications and the badge</a><a class="lvl2" href="#socket">The socket</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
