@@ -201,4 +201,13 @@ import Testing
             == .success(.summary(SummaryParams(period: "last week", scope: "acme"))))
         #expect(Self.call("scope_summary", #"{"task":"auth-refresh"}"#) == .success(.summary(SummaryParams(task: "auth-refresh"))))
     }
+
+    @Test func taskShowIsAReadAndTaskNewTakesADeliverable() throws {
+        #expect(MCPBridge.tools.first { $0.name == "scope_task_show" }?.readOnly == true)
+        #expect(Self.call("scope_task_show", #"{"task":"study"}"#) == .success(.taskShow(TaskShowParams(task: "study"))))
+        guard case .taskNew(let params) = try Self.call("scope_task_new", #"{"prompt":"p","deliverable":"REPORT.md"}"#).get() else {
+            Issue.record("not a task.new"); return
+        }
+        #expect(params.deliverable == "REPORT.md")
+    }
 }

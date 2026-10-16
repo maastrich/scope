@@ -219,7 +219,7 @@ import ScopeGit
         let manager = makeManager(scope)
         let task = try await manager.create(name: "study", branch: "feat/study", in: scope.declaration, repos: ["api"],
                                             deliverable: "docs/study.md")
-        #expect(task.deliverable == "docs/study.md")
+        #expect(await TaskRecordStore(home: scope.home).loadAll().records.first?.deliverable == "docs/study.md")
         let sandbox = task.repos[0].sandboxURL
         try FileManager.default.createDirectory(at: sandbox.appending(path: "docs"), withIntermediateDirectories: true)
         try scope.write(sandbox, "docs/study.md", "# Study\n")

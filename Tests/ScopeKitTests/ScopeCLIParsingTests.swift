@@ -210,4 +210,13 @@ import Testing
     @Test func summaryRefusesAPeriodItCannotRead() {
         #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["summary", "someday"]) }
     }
+
+    @Test func taskShowAndTheDeliverableOfANewTask() throws {
+        #expect(try Self.call(["task", "show", "study"]) == .taskShow(TaskShowParams(task: "study")))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "show"]) }
+        guard case .taskNew(let params) = try Self.call(["task", "new", "study it", "--deliverable", "docs/study.md"]) else {
+            Issue.record("not a task.new"); return
+        }
+        #expect(params.deliverable == "docs/study.md")
+    }
 }

@@ -14,7 +14,8 @@ import Testing
 
     @Test func readingIsAlwaysAllowed() {
         let locked = AutomationSettings(agentsMayDrive: false, depthLimit: 0, threads: .deny, tasks: .deny)
-        for call in [ControlCall.ping, .list(ListParams()), .summary(SummaryParams(period: "last week"))] {
+        for call in [ControlCall.ping, .list(ListParams()), .summary(SummaryParams(period: "last week")),
+                     .taskShow(TaskShowParams(task: "study"))] {
             #expect(Self.policy(locked).decide(call, from: .user) == .allow)
             #expect(Self.policy(locked).decide(call, from: .thread(Self.thread, depth: 9)) == .allow)
             #expect(Self.policy(locked).decide(call, from: .strangerThread("nope")) == .allow)
