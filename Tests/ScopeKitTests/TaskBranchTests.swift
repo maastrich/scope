@@ -21,6 +21,17 @@ import Testing
         #expect(TaskBranch.name(prefix: "/scope/", taskName: "x") == "scope/x")
     }
 
+    @Test func theScopePrefixIsReservedAndTheRefusalSaysWhatToDo() {
+        #expect(TaskBranch.isReserved("scope/x"))
+        #expect(TaskBranch.isReserved(" scope/x"))
+        #expect(!TaskBranch.isReserved("feat/scope-x"))
+        #expect(!TaskBranch.isReserved("scoped/x"))
+        let refusal = TaskBranch.reservedRefusal("scope/x")
+        #expect(refusal.contains("\"scope/x\""))
+        #expect(refusal.contains("omit the branch"))
+        #expect(refusal.contains("feat/"))
+    }
+
     @Test func emptyTaskNameFallsBack() {
         #expect(TaskBranch.name(prefix: "scope", taskName: "") == "scope/task")
         #expect(TaskBranch.name(prefix: "scope", taskName: "!!!") == "scope/task")

@@ -149,7 +149,7 @@ public struct AutomationPolicy: Sendable, Equatable {
                 detail: "Archive the tasks you created that are done (`scope task archive <slug>`, their branches are "
                     + "kept) and ask "
                     + "again, or have the user raise Settings ▸ Automation ▸ Open tasks "
-                    + "(preferences.automation.maxAgentTasks, now \(settings.maxAgentTasks))."
+                    + "(`scope config set automation.maxAgentTasks <n>` from their own terminal, now \(settings.maxAgentTasks))."
             )
         }
         if cost.threads > 0, load.threads + cost.threads > settings.maxAgentThreads {
@@ -157,7 +157,7 @@ public struct AutomationPolicy: Sendable, Equatable {
                 "agents already keep \(load.threads) threads running, the most Scope allows them",
                 detail: "Wait for the threads you opened (`scope thread wait`) and close those that are done "
                     + "(`scope thread close <id>`), or have the user raise Settings ▸ Automation ▸ Running threads "
-                    + "(preferences.automation.maxAgentThreads, now \(settings.maxAgentThreads))."
+                    + "(`scope config set automation.maxAgentThreads <n>` from their own terminal, now \(settings.maxAgentThreads))."
             )
         }
         return nil
@@ -180,14 +180,24 @@ public struct AutomationPolicy: Sendable, Equatable {
 
         case .thread, .externalAgent:
             let depth = AutomationPolicy.childDepth(of: origin) - 1
+            if call.method == .configSet {
+                // The settings are what holds agents in; an agent raising its own budget would make them moot.
+                return .refuse(.denied(
+                    "only the user may change Scope's settings",
+                    detail: "Ask the user to run `scope config set …` in a terminal of their own (not a Scope thread), "
+                        + "or to change it in Settings ▸ Automation."
+                ))
+            }
             guard settings.agentsMayDrive else {
                 return .refuse(.denied("agents may not drive Scope",
                                        detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json."))
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary:
+            case .ping, .list, .summary, .configGet:
                 return .allow
+            case .configSet:
+                return .refuse(.denied("only the user may change Scope's settings"))
             case .taskTopic:
                 // A label: nothing opened, nothing removed, undone by the same call. Gating it behind the task
                 // approval would ask the user about the sidebar's grouping.
@@ -279,7 +289,8 @@ public struct AutomationPolicy: Sendable, Equatable {
     /// One line saying what is being asked for, shown in the confirmation.
     static func subject(of call: ControlCall) -> String {
         switch call {
-        case .ping, .list, .summary: ""
+        case .ping, .list, .summary, .configGet: ""
+        case .configSet(let params): "set \(params.key) to \(params.value)"
         case .threadNew(let params):
             "open a thread" + (params.scope.map { " in \($0)" } ?? "")
         case .taskNew(let params):

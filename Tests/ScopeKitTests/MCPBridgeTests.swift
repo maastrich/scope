@@ -46,6 +46,17 @@ import Testing
         #expect(params.repos == ["api"])
     }
 
+    @Test func aTaskTakesAPullRequestToStartFrom() throws {
+        let expected = ControlCall.taskNew(TaskNewParams(prompt: "review it", startPR: "#42"))
+        #expect(try Self.call("scope_task_new", ##"{"prompt":"review it","start_pr":"#42"}"##).get() == expected)
+        #expect(try Self.call("scope_task_new", ##"{"prompt":"review it","pr":"#42"}"##).get() == expected)
+    }
+
+    /// Changing the settings is the user's: it is no tool, so an agent is not even offered it.
+    @Test func theSettingsAreNotATool() {
+        #expect(!MCPBridge.tools.contains { $0.name.contains("config") })
+    }
+
     @Test func aTaskWithoutAPromptIsRefused() {
         guard case .failure(let error) = Self.call("scope_task_new", #"{"repos":["api"]}"#) else {
             Issue.record("a task needs a prompt")

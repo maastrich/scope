@@ -264,7 +264,7 @@ public struct TaskProposer: Sendable {
         let title = Self.cleanTitle(raw.title ?? "").flatMap { $0.isEmpty ? nil : $0 } ?? fallback.title
 
         var branch = (raw.branch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if branch.hasPrefix("scope/") { branch.removeFirst("scope/".count) }
+        if TaskBranch.isReserved(branch) { branch.removeFirst(TaskBranch.reservedPrefix.count) }
         if branch.isEmpty { branch = fallback.branch }
         var accepted = await validateRef(branch)
         if !accepted {
@@ -341,8 +341,10 @@ public struct TaskProposer: Sendable {
         answer with an empty list rather than guessing.
 
         Rules for "pull_request":
-        - Non-null only when the request is about an EXISTING pull request — named outright, or described \
-        ("the auth refresh PR on front", "my open PR about the sidebar").
+        - Non-null only when the request asks to work ON an EXISTING pull request (review it, fix it, continue it, \
+        take it over) — named outright, or described ("the auth refresh PR on front", "my open PR about the sidebar").
+        - A pull request the request only cites as context or background (related work, a research note, \
+        "follows #37") is not what it is about. Leave it null.
         - Nothing in the request suggests an existing pull request? Answer null and run no command at all: \
         every tool call keeps someone waiting in front of a dialog.
         - If you have `gh`, use it to find the number: `gh pr list --repo <owner/repo> --search <terms> \

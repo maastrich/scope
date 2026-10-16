@@ -25,6 +25,25 @@ import Testing
         #expect(SocketFrame.classify(framed) == .frame(version: 1, body: encoded))
     }
 
+    @Test func theConfigCallsAndAStartPullRequestRoundTrip() throws {
+        for call in [ControlCall.configGet(ConfigGetParams()), .configGet(ConfigGetParams(key: "automation.maxAgentTasks")),
+                     .configSet(ConfigSetParams(key: "automation.maxAgentTasks", value: "30")),
+                     .taskNew(TaskNewParams(prompt: "review it", startPR: "acme/front#42"))] {
+            let request = ControlRequest(id: "abcd1234", caller: Self.caller, call: call)
+            #expect(try ControlRequest.decode(try request.encoded()).get() == request)
+        }
+        let answer = ControlResponse.result(id: "7", .action(ActionResult(message: "automation.maxAgentTasks = 30"), .configSet))
+        #expect(try ControlResponse.decode(try answer.encoded(), method: .configSet) == answer)
+    }
+
+    @Test func aTaskAnswerCarriesItsNote() throws {
+        let result = TaskNewResult(created: true, task: "t", name: "n", slug: "s", branch: "feat/s", scope: "acme",
+                                   scopeSlug: "acme", note: TaskNewResult.ignoredReference("#37", reason: "not a pull request of this scope"))
+        let answer = ControlResponse.result(id: "7", .task(result))
+        #expect(try ControlResponse.decode(try answer.encoded(), method: .taskNew) == answer)
+        #expect(CLIRenderer.text(.task(result)).contains("ignored the reference #37: not a pull request of this scope"))
+    }
+
     @Test func callsWithoutParametersDecodeToTheirDefaults() throws {
         let body = Data(#"{"caller":{"client":"x"},"id":"7","method":"list","rpc":1}"#.utf8)
         let request = try ControlRequest.decode(body).get()

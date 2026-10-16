@@ -21,6 +21,23 @@ import Testing
         }
     }
 
+    /// The settings hold agents in: only the user's own terminal may change them, whatever else agents may do.
+    @Test func onlyTheUserChangesTheSettings() {
+        let raise = ControlCall.configSet(ConfigSetParams(key: "automation.maxAgentTasks", value: "40"))
+        #expect(Self.policy().decide(raise, from: .user) == .allow)
+        for origin in [ControlOrigin.thread(Self.thread, depth: 0), .externalAgent(client: "scope-mcp/1"), .strangerThread("nope")] {
+            guard case .refuse(let error) = Self.policy().decide(raise, from: origin) else {
+                Issue.record("\(origin) may not change the settings")
+                continue
+            }
+            #expect(error.code == .denied)
+            #expect(!(error.detail ?? "").contains("unset SCOPE_THREAD") || origin == .strangerThread("nope"))
+        }
+        let read = ControlCall.configGet(ConfigGetParams())
+        #expect(Self.policy().decide(read, from: .thread(Self.thread, depth: 0)) == .allow)
+        #expect(Self.policy().decide(read, from: .externalAgent(client: "scope-mcp/1")) == .allow)
+    }
+
     @Test func yourOwnTerminalIsYou() {
         let locked = AutomationSettings(agentsMayDrive: false, threads: .deny, tasks: .deny)
         #expect(Self.policy(locked).decide(Self.openThread, from: .user) == .allow)

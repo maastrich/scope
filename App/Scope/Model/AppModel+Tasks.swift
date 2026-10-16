@@ -49,24 +49,35 @@ extension AppModel {
         var pullRequest: PullRequest?
         /// A pull request was named but could not be resolved; the reason is worth showing.
         var unresolved: String?
+        /// The same without the reference's label, for a line that names it itself.
+        var unresolvedReason: String?
+        /// The reference that was resolved, or tried.
+        var reference: PullRequestReference?
         /// A task of this scope is already bound to that pull request.
         var existingTask: TaskID?
     }
 
     /// Reads the prompt and works out what it is about, before anything is created.
     ///
-    /// A pull request named in the prompt wins: its repository comes from the `origin` remote it names (not
+    /// `startPR`, given by the caller, is resolved among `repos` (every repository when empty). Otherwise a pull
+    /// request the prompt asks to work on wins (`PullRequestReference.startPoint`; one merely cited is context): its repository comes from the `origin` remote it names (not
     /// from a folder name — `.../acme-front/pull/6613` lives in the folder `front`), its head becomes the
     /// start point and its number the task's identity. Otherwise repositories and an existing branch are
     /// matched against what the scope already knows. Local and instant except for the one `gh pr view`.
-    func resolveTaskRequest(prompt: String, in scopeID: ScopeID, knownBranches: [String] = []) async -> TaskRequestResolution {
+    func resolveTaskRequest(prompt: String, in scopeID: ScopeID, knownBranches: [String] = [],
+                            startPR: PullRequestReference? = nil, repos: [String] = []) async -> TaskRequestResolution {
         guard let scope = scope(scopeID) else { return TaskRequestResolution() }
         let candidates = repoCandidates(in: scope)
 
         var resolution = TaskRequestResolution()
         resolution.repos = TaskTargets.repos(namedIn: prompt, among: candidates)
 
-        if let reference = PullRequestReference.detect(in: prompt) {
+        if let startPR {
+            let named = repos.map(TaskRepo.normalize)
+            let among = named.isEmpty ? candidates : candidates.filter { named.contains(TaskRepo.normalize($0.path)) }
+            return await resolve(startPR, in: scope, candidates: among, keeping: resolution)
+        }
+        if let reference = PullRequestReference.startPoint(in: prompt) {
             return await resolve(reference, in: scope, candidates: candidates, keeping: resolution)
         }
 
@@ -90,13 +101,21 @@ extension AppModel {
     func resolve(_ reference: PullRequestReference, in scope: ScopeState, candidates: [RepoCandidate],
                  keeping resolution: TaskRequestResolution) async -> TaskRequestResolution {
         var resolution = resolution
-        guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
-            resolution.unresolved = "\(reference.label) is not a pull request of a repository in this scope."
+        resolution.reference = reference
+        func fail(_ text: String, reason: String) -> TaskRequestResolution {
+            resolution.unresolved = text
+            resolution.unresolvedReason = reason
             return resolution
         }
+        guard let candidate = TaskTargets.repo(for: reference, among: candidates) else {
+            let reason = reference.isBare && candidates.count > 1
+                ? "a bare number names no repository, and this scope holds several"
+                : "not a pull request of this scope"
+            return fail("\(reference.label) is not a pull request of a repository in this scope.", reason: reason)
+        }
         guard let gh = GhClient.locate() else {
-            resolution.unresolved = "\(reference.label): gh is not installed, so its branch cannot be looked up."
-            return resolution
+            return fail("\(reference.label): gh is not installed, so its branch cannot be looked up.",
+                        reason: "gh is not installed to look it up")
         }
         let checkout = baseURLs(of: [candidate.path], in: scope).first ?? scope.url
         do {
@@ -106,8 +125,10 @@ extension AppModel {
             resolution.startPoint = .pullRequest(pr)
             resolution.existingTask = tasks(in: scope.id).first { $0.record.pullRequest?.number == pr.number }?.id
             resolution.unresolved = nil
+            resolution.unresolvedReason = nil
         } catch {
-            resolution.unresolved = "\(reference.label) could not be read: \(String(describing: error))"
+            return fail("\(reference.label) could not be read: \(String(describing: error))",
+                        reason: "gh could not read it (\(String(describing: error)))")
         }
         return resolution
     }

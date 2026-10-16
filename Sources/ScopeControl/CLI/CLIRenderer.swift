@@ -72,6 +72,7 @@ public enum CLIRenderer {
                 lines.append("repo        \(repo.repo) → \(repo.worktree)\(repo.branchCreated ? " (branch created)" : "")")
             }
             if let thread = result.thread { lines.append("thread      \(thread)") }
+            if let note = result.note { lines.append("note        \(note)") }
             if !result.created {
                 lines.append("")
                 lines.append("Nothing was written. Run it again without --dry-run to create it.")

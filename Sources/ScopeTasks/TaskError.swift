@@ -21,7 +21,7 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case persistence(String)
     /// `createForPullRequest`: the head of the pull request could not be fetched from `origin`.
     case pullRequestHeadMissing(repo: String, ref: String)
-    /// `create`: the branch name is empty or uses the reserved `scope/` prefix.
+    /// `create`: the branch name is empty or uses the reserved `scope/` prefix (`TaskBranch.reservedPrefix`).
     case invalidBranch(String)
     /// `TaskStartPoint.existingBranch`: no such branch locally or on `origin`.
     case branchNotFound(repo: String, branch: String)
@@ -39,7 +39,7 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .worktree(let repo, let error): "\(repo): \(error.description)"
         case .persistence(let message): message
         case .pullRequestHeadMissing(let repo, let ref): "\(repo): \(ref) is not on origin after fetch"
-        case .invalidBranch(let branch): branch.isEmpty ? "the task needs a branch name" : "\"\(branch)\" is not a valid task branch (the scope/ prefix is reserved)"
+        case .invalidBranch(let branch): branch.isEmpty ? "the task needs a branch name" : TaskBranch.reservedRefusal(branch)
         case .branchNotFound(let repo, let branch): "\(repo): no branch \(branch), locally or on origin"
         case .branchAlreadyCheckedOut(let repo, let branch, let path):
             "\(repo): \(branch) is already checked out at \(path) — a branch can only live in one working tree"

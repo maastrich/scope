@@ -426,12 +426,17 @@ for.</p>
 <p><b>Continue</b> reads the request before anything is created:</p>
 <table>
   <tr><th>In the prompt</th><th>What it becomes</th></tr>
-  <tr><td>a pull request — <code>…/pull/6613</code>, <code>owner/repo#6613</code>, or <code>#6613</code> in a single-repository scope</td><td>its repository, its head branch checked out, and the task bound to it</td></tr>
+  <tr><td>a pull request it asks to work on — <code>…/pull/6613</code>, <code>owner/repo#6613</code>, or <code>#6613</code> in a single-repository scope</td><td>its repository, its head branch checked out, and the task bound to it</td></tr>
   <tr><td>a repository of the scope, by folder name, path or <code>owner/repo</code></td><td>the repositories the task sandboxes</td></tr>
   <tr><td>a branch that already exists</td><td>a start point that continues it instead of branching</td></tr>
 </table>
 <p>Repositories are matched on their <code>origin</code> remote, not on the folder name — a pull request of
 <code>acme-devops/acme-front</code> finds the clone you keep in a folder called <code>front</code>.</p>
+<p>Naming a pull request is not asking to work on it. A pull request becomes the start point when the prompt is
+little more than the reference — <code>#6613</code>, a pasted URL — or when a sentence opens on a verb of working on
+it: <i>review #6613</i>, <i>fix the CI on #6613</i>, <i>take over …/pull/6613</i>, <i>rebase la pr …</i>. One cited
+as context in a longer brief — <i>follows #37</i>, <i>(context: #37)</i> — stays context, and the task gets a new
+branch.</p>
 <div class="note"><p>Everything Scope worked out is shown on the second step and stays editable. A wrong
 branch name is a typo; a wrong repository is a worktree in the wrong place, so nothing is created from a
 guess you were not shown.</p></div>
@@ -458,7 +463,8 @@ updates the caption, never your text.</p>
 the title from the first line of the prompt, the prefix from the dominant prefix among the existing branches, or
 <code>feat/</code> / <code>fix/</code> inferred from the wording. The caption says which one you got and why.
 There is no imposed <code>scope/</code> prefix — a branch Scope creates looks like a branch you would have
-created.</p></div>
+created. The prefix is reserved for Scope's own refs: asking for <code>scope/x</code> is refused with the way
+out — leave the branch to Scope, or pick another prefix such as <code>feat/</code>.</p></div>
 
 <h2 id="continue">Continuing existing work</h2>
 <p>The <b>Start from</b> row decides what the sandbox is based on:</p>
@@ -594,6 +600,11 @@ Tasks</b> turns it off; <code>scope gc --dry-run</code> shows what it would do.<
 (<kbd>⇧⌘P</kbd>), which lists the open pull requests of a repository through <code>gh</code>. Either way the sandbox sits on the PR's
 head branch — including a fork's head — the task is bound to the pull request, and you review and push back
 without touching your own checkout.</p>
+<p>From the command line, <code>scope task new --pr &lt;ref&gt;</code> (<code>start_pr</code> over MCP) names it
+outright — a number, <code>#123</code>, <code>owner/repo#123</code> or its URL — and fails when it cannot be found.
+A pull request Scope only read off the prompt is a guess: when it is not one of the scope's (another repository, a
+number that does not exist), the task is created on a new branch all the same and the answer says, in one line,
+which reference it ignored.</p>
 """
 
 REVIEW = """
@@ -831,6 +842,7 @@ scope task close &lt;id|slug&gt;          <span class="c"># archive it and forge
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
+scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope mcp                           <span class="c"># speak MCP on stdio</span>
 scope ping                          <span class="c"># is Scope listening, and what may agents do</span></code></pre>
@@ -961,7 +973,11 @@ further. What stops a loop of agents starting agents is not how deep the chain g
 task is a worktree per repository, each thread a process. So the budgets count what agents keep open right now,
 across every scope, and refuse the request that would go past them — with the way out in the answer: archive the
 tasks that are done, close the threads that are. Requests still being carried out hold their share, so five
-sent at once cannot all take the last slot. A depth limit remains for whoever wants one. With approvals set to
+sent at once cannot all take the last slot. A depth limit remains for whoever wants one.
+<code>config.json</code> is read at launch and rewritten by the app, so raise a budget from a terminal with
+<code>scope config set automation.maxAgentTasks 20</code> (or <code>automation.maxAgentThreads</code>;
+<code>scope config get</code> lists them): it takes effect at once, as the Settings window would. Agents are
+refused it — from a thread or through <code>scope mcp</code> — and it is not an MCP tool. With approvals set to
 <i>after asking</i>, Scope shows one question at a time; a question left past the approval timeout is refused,
 and so is a request that finds three already waiting.</p>
 <p>Every thread records who opened it, the line of threads above it and its depth, so the chain survives a

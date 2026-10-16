@@ -50,6 +50,8 @@ public struct ControlRequest: Sendable, Equatable {
         case .threadRead(let params): try encoder.encode(wire(params))
         case .threadWait(let params): try encoder.encode(wire(params))
         case .summary(let params): try encoder.encode(wire(params))
+        case .configGet(let params): try encoder.encode(wire(params))
+        case .configSet(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -95,6 +97,8 @@ public struct ControlRequest: Sendable, Equatable {
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             case .threadWait: .threadWait(try required(ThreadWaitParams.self))
             case .summary: .summary(try decoder.decode(Params<SummaryParams>.self, from: data).params ?? SummaryParams())
+            case .configGet: .configGet(try decoder.decode(Params<ConfigGetParams>.self, from: data).params ?? ConfigGetParams())
+            case .configSet: .configSet(try required(ConfigSetParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -201,7 +205,8 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
-            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc:
+            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc,
+                 .configGet, .configSet:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)

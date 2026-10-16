@@ -130,7 +130,8 @@ public enum MCPBridge {
             "prompt":{"type":"string","description":"What the task is about; also the first request handed to its driver."},\
             "scope":{"type":"string","description":"Slug, name, id or path. Defaults to the caller's own scope."},\
             "repos":{"type":"array","items":{"type":"string"},"description":"Repositories relative to the scope root; omitted lets Scope work them out from the prompt."},\
-            "branch":{"type":"string","description":"Branch to create; omitted lets the driver propose one."},\
+            "branch":{"type":"string","description":"Branch to create; omitted lets the driver propose one after the repository's convention. Never under scope/, which Scope reserves: omit it, or use another prefix such as feat/."},\
+            "start_pr":{"type":"string","description":"Pull request to start from (123, #123, owner/repo#123 or its URL): its head is checked out instead of a new branch, and the call fails if it cannot be found. Omitted, only a pull request the prompt asks to work on (\\"review #123\\") is used; one it merely cites is context, and one that cannot be found is ignored with a note."},\
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
             "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
@@ -416,6 +417,7 @@ public enum MCPBridge {
             "scope_task_new": [
                 "no_thread": .negate("open_thread"), "no_setup": .negate("run_setup"), "repo": .wrap("repos"),
                 "message": .rename("prompt"), "name": .rename("title"),
+                "pr": .rename("start_pr"), "pull_request": .rename("start_pr"),
             ],
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
@@ -563,9 +565,11 @@ public enum MCPBridge {
         var openThread: Bool?
         var runSetup: Bool?
         var topic: String?
+        var startPR: String?
 
         private enum CodingKeys: String, CodingKey {
             case prompt, scope, repos, branch, title, slug, driver, topic
+            case startPR = "start_pr"
             case dryRun = "dry_run"
             case openThread = "open_thread"
             case runSetup = "run_setup"
@@ -574,7 +578,7 @@ public enum MCPBridge {
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
-                          runSetup: runSetup ?? true, topic: topic)
+                          runSetup: runSetup ?? true, topic: topic, startPR: startPR)
         }
     }
 }
