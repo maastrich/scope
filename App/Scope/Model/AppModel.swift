@@ -450,29 +450,55 @@ final class AppModel {
             .takesSelection(threadShown: currentThread != nil, sameScope: currentScope?.id == scopeID)
     }
 
-    /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`).
+    /// ⌘T: a thread in `newThreadTarget` with the default driver (or `driverID`, on `model`).
     @discardableResult
-    func newThreadInCurrentContext(driverID: String? = nil) async -> ThreadSession? {
-        await newThread(at: newThreadTarget, driverID: driverID)
+    func newThreadInCurrentContext(driverID: String? = nil, model: String? = nil) async -> ThreadSession? {
+        await newThread(at: newThreadTarget, driverID: driverID, model: model)
     }
 
     /// The sidebar's New Thread button: a loose thread (`looseThreadTarget`), never one inside a task.
     @discardableResult
     func newLooseThread(driverID: String? = nil) async -> ThreadSession? {
-        await newThread(at: looseThreadTarget, driverID: driverID)
+        await newThread(at: looseThreadTarget, driverID: driverID, model: nil)
     }
 
-    private func newThread(at target: NewThreadTarget?, driverID: String?) async -> ThreadSession? {
+    private func newThread(at target: NewThreadTarget?, driverID: String?, model: String?) async -> ThreadSession? {
         switch target {
         case .scopeRoot(let scope):
-            return await newThread(in: scope.id, driverID: driverID)
+            return await newThread(in: scope.id, driverID: driverID, model: model)
         case .repoBase(let scope, let relativePath):
-            return await newThread(in: scope.id, driverID: driverID, cwdKind: .repoBase(relativePath: relativePath))
+            return await newThread(in: scope.id, driverID: driverID, cwdKind: .repoBase(relativePath: relativePath), model: model)
         case .task(let task):
-            return await newThread(in: task.scopeID, driverID: driverID, taskID: task.id)
+            return await newThread(in: task.scopeID, driverID: driverID, taskID: task.id, model: model)
         case nil:
             return nil
         }
+    }
+
+    /// The model a thread of `profile` opens on in `scope` when `requested` is what the caller said (`ModelChoice`):
+    /// the request, then the scope's default, then the driver's from Settings. Nothing for a driver that takes none.
+    func resolvedModel(_ requested: String?, profile: DriverProfile, in scope: ScopeState) -> String? {
+        guard profile.acceptsModel else { return nil }
+        return ModelChoice.resolve(requested: requested, scopeDefault: scope.declaration.model,
+                                   driverDefault: config.preferences.driverModels[profile.id])
+    }
+
+    /// "Other Model…": an alert with a text field, `nil` when cancelled or left empty.
+    func promptModelName(for profile: DriverProfile) -> String? {
+        let alert = NSAlert()
+        alert.messageText = "Model for \(profile.name)"
+        alert.informativeText = "Passed to the driver as \((profile.modelArgs ?? []).joined(separator: " ")). "
+            + "The thread keeps it across relaunches."
+        alert.addButton(withTitle: "Open Thread")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(string: "")
+        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+        field.placeholderString = profile.knownModels.first ?? "model name"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let trimmed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// The tab / row label: duplicates of the same title in a scope are numbered in creation order
@@ -959,6 +985,14 @@ final class AppModel {
 
     /// Saves what the owner wrote about a scope and rewrites the context file of its tasks, so agents already at
     /// work read it on their next turn.
+    /// The scope's default model (`ScopeDeclaration.model`); blank clears it.
+    func setScopeModel(_ id: ScopeID, _ text: String) {
+        guard let scope = scope(id) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (scope.declaration.model ?? "") != trimmed else { return }
+        updateScopeIdentity(id) { $0.model = trimmed.isEmpty ? nil : trimmed }
+    }
+
     func setScopeContext(_ id: ScopeID, _ text: String) {
         guard let scope = scope(id) else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1030,11 +1064,12 @@ final class AppModel {
     }
 
     /// Opens a thread. `initialPrompt` is handed to the driver on this first launch only (the profile's
-    /// `prompt` argv; ignored by profiles without one), never on a relaunch or resume.
+    /// `prompt` argv; ignored by profiles without one), never on a relaunch or resume. `model` is what the caller
+    /// asked for, settled against the scope's and the driver's defaults (`resolvedModel`) and kept on the record.
     @discardableResult
     func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
                    title customTitle: String? = nil, initialPrompt: String? = nil,
-                   origin: ThreadOrigin = .user) async -> ThreadSession? {
+                   origin: ThreadOrigin = .user, model: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -1076,7 +1111,8 @@ final class AppModel {
             cwd: resolvedCwd,
             cwdKind: kind,
             taskID: task?.id.rawValue,
-            origin: origin
+            origin: origin,
+            model: resolvedModel(model, profile: profile, in: scope)
         )
         let session = ThreadSession(record: record, profile: profile)
         register(session)

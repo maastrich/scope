@@ -665,6 +665,27 @@ private struct DriversSettingsView: View {
             }
             .frame(minHeight: 180)
 
+            let withModel = model.drivers.profiles.filter(\.acceptsModel)
+            if !withModel.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionLabel(text: "Default model")
+                    ForEach(withModel) { profile in
+                        HStack(spacing: 8) {
+                            Text(profile.name)
+                                .font(.scopeBody)
+                                .foregroundStyle(Ink.secondary)
+                                .frame(width: 150, alignment: .leading)
+                            DriverModelField(profile: profile)
+                        }
+                    }
+                    Text("What a thread of this driver runs on when neither the request nor the scope names a model "
+                         + "(a scope's own default is in its settings sheet). Empty leaves the driver to its own default.")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             if !model.drivers.problems.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Invalid profiles")
@@ -698,6 +719,51 @@ private struct DriversSettingsView: View {
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Surface.ground)
+    }
+
+    /// One driver's default model: typed freely, with the profile's known models as a menu beside the field, and
+    /// saved on ↩ or when the field loses focus.
+    private struct DriverModelField: View {
+        @Environment(AppModel.self) private var model
+        let profile: DriverProfile
+        @State private var text = ""
+        @FocusState private var focused: Bool
+
+        var body: some View {
+            HStack(spacing: 6) {
+                TextField("Model", text: $text, prompt: Text("driver's own"))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .focused($focused)
+                    .onSubmit(commit)
+                    .scopeFieldBox(focused: focused, height: 22)
+                    .frame(width: 220)
+                    .usageID("driver-model-\(profile.id)", label: "Default model of \(profile.name)")
+                if !profile.knownModels.isEmpty {
+                    Menu {
+                        Button("Driver's own") { text = ""; commit() }
+                        Divider()
+                        ForEach(profile.knownModels, id: \.self) { name in
+                            Button(name) { text = name; commit() }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .usageID("driver-model-pick-\(profile.id)", label: "Pick the default model of \(profile.name)")
+                }
+            }
+            .onAppear { text = model.config.preferences.driverModels[profile.id] ?? "" }
+            .onChange(of: focused) { _, now in if !now { commit() } }
+        }
+
+        private func commit() {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard (model.config.preferences.driverModels[profile.id] ?? "") != trimmed else { return }
+            model.updatePreferences { $0.driverModels[profile.id] = trimmed.isEmpty ? nil : trimmed }
+        }
     }
 
     @ViewBuilder

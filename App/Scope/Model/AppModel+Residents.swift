@@ -39,7 +39,8 @@ extension AppModel {
             cwd: scope.declaration.path,
             cwdKind: .scopeRoot,
             origin: .user,
-            resident: role
+            resident: role,
+            model: resolvedModel(nil, profile: profile, in: scope)
         )
         // Not `newThread`: that one takes the selection, launches, and makes the driver the scope's next ⌘T.
         let session = ThreadSession(record: record, profile: profile)
@@ -74,6 +75,8 @@ extension AppModel {
         var record = session.record
         record.driverID = wanted.id
         record.resumeID = nil
+        // A model belongs to the driver it was chosen for.
+        record.model = scope(record.scopeID).flatMap { resolvedModel(nil, profile: wanted, in: $0) }
         let replacement = ThreadSession(record: record, profile: wanted)
         AdapterInstaller.remove(profile: session.profile, threadID: session.id, home: env.home)
         replace(session, with: replacement)

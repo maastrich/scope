@@ -268,10 +268,8 @@ struct ScopeSwitcher: View {
         }
         .keyboardShortcut("t", modifiers: .command)
         Menu("New Thread With Driver") {
-            ForEach(model.drivers.profiles) { profile in
-                Button(profile.name) {
-                    Task { _ = await model.newThread(in: scope.id, driverID: profile.id) }
-                }
+            DriverMenuItems { driver, chosen in
+                Task { _ = await model.newThread(in: scope.id, driverID: driver, model: chosen) }
             }
         }
         Divider()

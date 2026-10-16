@@ -32,6 +32,20 @@ import Testing
         #expect(try Self.call(["task", "new", "review it", "--pr=42"]) == .taskNew(TaskNewParams(prompt: "review it", startPR: "42")))
     }
 
+    @Test func threadsAndTasksTakeAModel() throws {
+        #expect(try Self.call(["thread", "new", "--driver", "claude-code", "--model", "claude-fable-5-1"])
+            == .threadNew(ThreadNewParams(driver: "claude-code", model: "claude-fable-5-1")))
+        #expect(try Self.call(["task", "new", "fix it", "--model=claude-opus-5-5"])
+            == .taskNew(TaskNewParams(prompt: "fix it", model: "claude-opus-5-5")))
+    }
+
+    @Test func aSlashCommandIsSentVerbatim() throws {
+        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "--command", "/model", "claude-opus-5-5"])
+            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "/model claude-opus-5-5", command: true)))
+        #expect(try Self.call(["thread", "send", "3f9a2c17be04", "hello", "--no-enter"])
+            == .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "hello", submit: false)))
+    }
+
     @Test func nothingIsHelp() throws {
         guard case .help = try ScopeCLI.parse([]) else {
             Issue.record("a bare `scope` should say what it can do")

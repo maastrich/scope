@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import ScopeControl
 import ScopeCore
+import ScopeDrivers
 import ScopeGit
 import ScopeTasks
 
@@ -115,7 +116,9 @@ final class AppControlService: ControlService {
                                                      thread: session.id.rawValue), .threadClose))
             }
         case .threadSend(let params):
-            return act(on: params.thread, from: origin) { session in
+            // A driver command rewrites how another agent works and carries no signature: its own, narrower reach.
+            let reach = params.command ? automation.effectiveCommandReach : automation.threadReach
+            return act(on: params.thread, from: origin, reach: reach) { session in
                 guard session.isAlive else {
                     // A scope's residents start on its first visit; a message is a good reason to start one sooner.
                     if session.record.resident != nil, model.residentHolds[session.id] == nil {
@@ -125,12 +128,14 @@ final class AppControlService: ControlService {
                     }
                     return .failure(.failed("thread \(session.id.rawValue) is not running"))
                 }
-                // A message from an agent says who sent it; keystrokes (no ↩) and the user's own typing go as they are.
-                let sender = params.submit ? sender(of: origin, caller: caller, to: session) : nil
+                // A message from an agent says who sent it; keystrokes (no ↩), a driver command and the user's own
+                // typing go as they are.
+                let sender = params.submit && !params.command ? sender(of: origin, caller: caller, to: session) : nil
                 let text = sender.map { ThreadMessage.envelope(params.text, from: $0) } ?? params.text
                 if params.submit { session.submit(text) } else { session.send(text) }
                 let signed = sender.map { ", signed as \($0.thread?.id ?? $0.client)" } ?? ""
-                return .success(.action(ActionResult(message: "typed \(params.text.count) characters into \(session.id.rawValue)"
+                let what = params.command ? "sent the command \(params.text.prefix(40)) to" : "typed \(params.text.count) characters into"
+                return .success(.action(ActionResult(message: "\(what) \(session.id.rawValue)"
                                                          + (params.submit ? " and pressed ↩" : "") + signed,
                                                      thread: session.id.rawValue), .threadSend))
             }
@@ -365,13 +370,15 @@ final class AppControlService: ControlService {
         return lines.joined(separator: "\n")
     }
 
-    /// The thread `raw` names, when `origin` may act on it (`AutomationPolicy.mayTouch`).
-    private func target(_ raw: String, from origin: ControlOrigin) -> Result<ThreadSession, ControlError> {
+    /// The thread `raw` names, when `origin` may act on it (`AutomationPolicy.mayTouch`) within `reach` — the
+    /// general one unless the caller says otherwise.
+    private func target(_ raw: String, from origin: ControlOrigin,
+                        reach: AutomationSettings.ThreadReach? = nil) -> Result<ThreadSession, ControlError> {
         guard let id = ThreadID(rawValue: raw), let session = model.session(id) else {
             return .failure(.notFound("no thread “\(raw)”", detail: "`scope list threads` shows the ids."))
         }
         if let refusal = AutomationPolicy.mayTouch(session.record.resolvedOrigin, id: session.id, from: origin,
-                                                   reach: automation.threadReach) {
+                                                   reach: reach ?? automation.threadReach) {
             return .failure(refusal)
         }
         return .success(session)
@@ -394,9 +401,9 @@ final class AppControlService: ControlService {
         }
     }
 
-    private func act(on raw: String, from origin: ControlOrigin,
+    private func act(on raw: String, from origin: ControlOrigin, reach: AutomationSettings.ThreadReach? = nil,
                      _ body: (ThreadSession) -> Result<ControlResultPayload, ControlError>) -> Result<ControlResultPayload, ControlError> {
-        switch target(raw, from: origin) {
+        switch target(raw, from: origin, reach: reach) {
         case .failure(let error): .failure(error)
         case .success(let session): body(session)
         }
@@ -479,7 +486,7 @@ final class AppControlService: ControlService {
         let scope = model.scope(session.record.scopeID)
         let origin = session.record.resolvedOrigin
         return ThreadSummary(
-            id: session.id.rawValue, title: session.title, driver: session.record.driverID,
+            id: session.id.rawValue, title: session.title, driver: session.record.driverID, model: session.record.model,
             scope: scope?.name ?? session.record.scopeRoot, scopeSlug: scope?.declaration.slug ?? "",
             task: session.record.taskID, cwd: session.record.cwd,
             state: session.displayState.name, alive: session.isAlive,
@@ -526,6 +533,11 @@ final class AppControlService: ControlService {
             return .failure(.notFound("no driver profile “\(driver)”",
                                       detail: model.drivers.profiles.map(\.id).joined(separator: ", ")))
         }
+        let requestedModel: String?
+        switch modelRequested(params.model, driver: params.driver, from: origin) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): requestedModel = found
+        }
 
         var cwdKind = ThreadCwdKind.scopeRoot
         var taskID: TaskID?
@@ -541,17 +553,32 @@ final class AppControlService: ControlService {
         let threadOrigin = childOrigin(of: origin, caller: caller)
         guard let session = await model.newThread(in: scopeID, driverID: params.driver, cwdKind: cwdKind,
                                                   taskID: taskID, title: params.title, initialPrompt: params.prompt,
-                                                  origin: threadOrigin) else {
+                                                  origin: threadOrigin, model: requestedModel) else {
             return .failure(.failed("Scope could not open the thread",
                                     detail: "The app reported it as a problem; its window says why."))
         }
         // A bounce in the Dock, not a focus steal: an agent opening a thread should be noticed, not obeyed.
         NSApp.requestUserAttention(.informationalRequest)
         return .success(.thread(ThreadNewResult(
-            thread: session.id.rawValue, title: session.title, driver: session.record.driverID,
+            thread: session.id.rawValue, title: session.title, driver: session.record.driverID, model: session.record.model,
             scope: scope.name, scopeSlug: scope.slug, cwd: session.record.cwd,
             task: session.record.taskID, depth: threadOrigin.depth
         )))
+    }
+
+    /// The model a request asks for, or the one its caller passes on: a thread's own model reaches the threads it
+    /// opens with its own driver (`ModelChoice.inherited`). A model named for a driver that takes none is refused —
+    /// silently dropping it would leave the caller believing the thread runs on it.
+    private func modelRequested(_ requested: String?, driver: String?,
+                                from origin: ControlOrigin) -> Result<String?, ControlError> {
+        guard let profile = model.profile(id: driver) else { return .success(nil) }
+        if let requested, !requested.trimmingCharacters(in: .whitespaces).isEmpty, !profile.acceptsModel {
+            return .failure(.badRequest("the driver \(profile.id) takes no model",
+                                        detail: "Its profile has no \"modelArgs\". Pick a driver that does, or drop --model."))
+        }
+        if let requested, !requested.trimmingCharacters(in: .whitespaces).isEmpty { return .success(requested) }
+        guard case .thread(let id, _) = origin, let caller = model.session(id)?.record else { return .success(nil) }
+        return .success(ModelChoice.inherited(callerModel: caller.model, callerDriver: caller.driverID, driver: profile.id))
     }
 
     /// The task `query` names by id or slug. With `scope`, only in that scope; without, in any scope — the
@@ -600,6 +627,11 @@ final class AppControlService: ControlService {
         // Refused before the proposal, which would otherwise keep the caller waiting for nothing.
         if let branch = params.branch, TaskBranch.isReserved(branch) {
             return .failure(.badRequest(TaskBranch.reservedRefusal(branch)))
+        }
+        let requestedModel: String?
+        switch modelRequested(params.model, driver: params.driver, from: origin) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): requestedModel = found
         }
         var startPR: PullRequestReference?
         if let raw = params.startPR {
@@ -688,7 +720,8 @@ final class AppControlService: ControlService {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
                                                runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
-                                               topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable)
+                                               topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable,
+                                               model: requestedModel)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }

@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 14
+    public static let version = 15
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -199,12 +199,12 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--title T] [--topic P] [--deliverable F] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, title, topic, deliverable, open_thread: false, run_setup: false, dry_run}` |
-        | `scope thread new [--task T] [--repo R] [--driver D] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, title, prompt}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--title T] [--topic P] [--deliverable F] [--model M] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, title, topic, deliverable, model, open_thread: false, run_setup: false, dry_run}` |
+        | `scope thread new [--task T] [--repo R] [--driver D] [--model M] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, model, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
         | `scope thread read <id> [-n N] [--cursor C]` | `scope_thread_read` `{thread, lines, cursor}` |
-        | `scope thread send <id> "<text>" [--no-enter]` | `scope_thread_send` `{thread, text, submit: false}` |
+        | `scope thread send <id> "<text>" [--no-enter] [--command]` | `scope_thread_send` `{thread, text, submit: false, command: true}` |
         | `scope thread stop <id>` / `scope thread close <id>` | `scope_thread_stop` / `scope_thread_close` `{thread}` |
         | `scope task show <slug>` | `scope_task_show` `{task}` |
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
@@ -308,6 +308,18 @@ public struct SkillInstaller: Sendable {
         Settings ▸ Automation ▸ Talking to threads may fence you into the threads you opened; `scope list threads`
         shows who opened each one. Another agent's thread is its work: stop or close it only when the user or
         that agent asked.
+
+        A driver's own slash command (`/model claude-opus-5-5`, `/clear`, `/compact`) goes with `--command`
+        (`command: true`): the text is typed verbatim, with no sender line, and submitted — under a sender line it
+        would be read as prose. By default you may command only the threads you opened (and theirs); Settings ▸
+        Automation ▸ Driver commands can open every thread.
+
+        ## Which model
+
+        `--model` (`model`) on `thread new` and `task new` picks the model the driver runs on, through the
+        profile's `modelArgs` (Claude Code, Codex and Cursor take one; a shell does not). Left out, a thread of your
+        own driver inherits your model, else the scope's default, else the driver's default from Settings, else
+        the driver decides. `scope list threads` shows each thread's model.
 
         ## The orchestrator and the terminal
 

@@ -841,6 +841,8 @@ adding a fifth is a text edit, not a rebuild.</p>
                     "--allowedTools", "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"],
   "prompt": ["{prompt}"],
   "addDir": ["--add-dir", "{dir}"],
+  "modelArgs": ["--model", "{model}"],
+  "models": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
   "adapter": { "kind": "claude-hooks" },
   "icon": "sparkles"
 }</code></pre>
@@ -859,6 +861,8 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
   <tr><td><code>addDir</code></td><td>arguments repeated for every other directory the thread should see, <code>{dir}</code> standing for it: each sandbox of a task of several repositories, whose threads start at the task root. <code>["--add-dir", "{dir}"]</code> for Claude Code. They come after the prompt, on a launch and a resume alike, since a variadic flag before the prompt would take it for a directory. Absent, the thread sees its working directory only</td></tr>
+  <tr><td><code>modelArgs</code></td><td>arguments appended when a thread is opened with a model, <code>{model}</code> standing for it: <code>["--model", "{model}"]</code> for Claude Code, Codex and Cursor. After <code>args</code> on a launch and after the <code>resume</code> argv on a resume, before the prompt. Absent, the driver takes no model: <code>--model</code> is refused and the menus offer none</td></tr>
+  <tr><td><code>models</code></td><td>the models the New Thread menus, the palette and Settings offer for this driver; any other name still goes through <i>Other Model…</i> or <code>--model</code></td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
   <tr><td><code>icon</code></td><td>SF Symbol shown on sidebar rows and in menus</td></tr>
   <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
@@ -873,6 +877,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>{cwd}</code>, <code>{scope}</code>, <code>{task}</code>, <code>{home}</code></td><td>working directory, scope root, task slug, <code>SCOPE_HOME</code></td></tr>
   <tr><td><code>{scope_hook}</code></td><td>path of the bundled <code>scope-hook</code> helper</td></tr>
   <tr><td><code>{dir}</code></td><td>one additional directory (<code>addDir</code> only)</td></tr>
+  <tr><td><code>{model}</code></td><td>the model the thread was opened with (<code>modelArgs</code> only)</td></tr>
 </table>
 <p>A profile that uses a placeholder Scope cannot fill is refused at load time rather than at launch time.</p>
 
@@ -882,7 +887,8 @@ adding a fifth is a text edit, not a rebuild.</p>
 shell function works here exactly as it does in your terminal. The mode is a setting: interactive login,
 login only, or no probe at all.</p>
 <p><b>Settings → Drivers</b> lists every profile with the binary it resolves to, and flags the ones it cannot
-find. <b>Reload</b> picks up edits without restarting.</p>
+find. <b>Reload</b> picks up edits without restarting. Under the list, <b>Default model</b> sets, per driver that
+takes one, what its threads run on when neither the request nor the scope names a model.</p>
 
 <h2 id="adding">Adding your own</h2>
 <pre><code>cat &gt; ~/.scope/drivers/aider.json &lt;&lt;'JSON'
@@ -918,7 +924,7 @@ app.</p>
 <h2 id="commands">Commands</h2>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
-scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter)</span>
+scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter, --command)</span>
 scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor), or --reply</span>
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
@@ -939,8 +945,8 @@ scope ping                          <span class="c"># is Scope listening, and wh
 omitted, it is the caller's own scope, then the scope holding the working directory, then the only scope
 there is. <code>--sock</code> and <code>--home</code> say which Scope to talk to — a Debug build listens on
 <code>~/.scope-debug/scope.sock</code>.</p>
-<pre><code>$ scope thread new --scope acme --driver claude-code -p "why is CI red?"
-thread 3f9a2c17be04 — acme [claude-code] in acme
+<pre><code>$ scope thread new --scope acme --driver claude-code --model claude-fable-5-1 -p "why is CI red?"
+thread 3f9a2c17be04 — acme [claude-code · claude-fable-5-1] in acme
 /Users/me/work/acme
 
 $ scope task new "fix the flaky login test" --repo api --dry-run
@@ -955,9 +961,14 @@ its turn ended. <code>--json</code> and the MCP tool carry it as <code>activity<
 reports nothing (a shell) has none. <code>TOKENS</code> is what a Claude Code thread consumed over the last five
 hours (<code>tokens</code> in JSON), read from its transcripts.</p>
 <pre><code>$ scope list threads
-THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  TOKENS    BY    ACTIVITY
-3f9a2c17be04  acme   claude-code  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
-8a18d7476063  ci     claude-code  done     acme         310k · 5h  user  finished · 1h ago</code></pre>
+THREAD        TITLE  DRIVER       MODEL             STATE    SCOPE  TASK  TOKENS    BY    ACTIVITY
+3f9a2c17be04  acme   claude-code  claude-fable-5-1  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
+8a18d7476063  ci     claude-code                    done     acme         310k · 5h  user  finished · 1h ago</code></pre>
+<p><code>--model</code> on <code>thread new</code> and <code>task new</code> (<code>model</code> in MCP) picks what the driver
+runs on, through the profile's <code>modelArgs</code>; the thread keeps it across relaunches and resumes, and the window
+subtitle shows it. Left out, an agent's thread inherits the agent's own model when it runs the same driver, else the
+scope's default (its settings sheet), else the driver's default (<b>Settings ▸ Drivers</b>), else the driver decides.
+A driver whose profile has no <code>modelArgs</code> — the shell — refuses one.</p>
 <p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
@@ -976,6 +987,11 @@ naming its sender (thread id, title, task), so the receiving agent knows whom to
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
 itself. <code>scope thread new --task</code> finds a task in any scope; <code>--scope</code> settles a slug two
 scopes share.</p>
+<p><code>--command</code> (<code>command: true</code>) is for the driver's own slash commands — <code>/model
+claude-opus-5-5</code>, <code>/clear</code>, <code>/compact</code> — which a sender line would turn into prose: the
+text is typed verbatim, with no line saying who sent it, and submitted. From your terminal it reaches any thread;
+an agent may command only the threads it opened and theirs, unless <b>Settings ▸ Automation ▸ Driver commands</b>
+opens every thread.</p>
 <p><code>scope task new --topic &lt;text&gt;</code> files the task under a topic: tasks sharing one sit together in
 the sidebar, under one row. A task created from inside a task gets that task's topic unless another is named — and
 when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
@@ -1068,6 +1084,7 @@ from sessions Scope never launched — is an agent, and goes through <b>Settings
   <tr><td>Running threads</td><td>24</td><td>How many threads agents may keep running at once, every scope together. Stopped threads and yours do not count.</td></tr>
   <tr><td>Depth</td><td>no limit</td><td>A thread you opened is at depth 0; what an agent opens from it is one deeper. Set a limit to fence agents to a few generations; 0 keeps them from opening anything.</td></tr>
   <tr><td>Talking to threads</td><td>any thread</td><td>Which threads an agent may read, type into, stop or close: any, in every task and scope, or only the ones it opened.</td></tr>
+  <tr><td>Driver commands</td><td>only the ones it opened</td><td>Which threads an agent may hand a driver command to (<code>thread send --command</code>: <code>/model</code>, <code>/clear</code>…), typed verbatim with no sender line. Never wider than <i>Talking to threads</i>.</td></tr>
   <tr><td>Opening a thread</td><td>without asking</td><td>Also available: after asking, never.</td></tr>
   <tr><td>Creating a task</td><td>without asking</td><td>A task writes a branch and a worktree per repository, all of it undone by closing the task. Set it to after asking to confirm each one.</td></tr>
 </table>

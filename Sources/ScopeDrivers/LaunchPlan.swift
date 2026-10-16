@@ -105,6 +105,8 @@ public enum LaunchError: Error, Sendable, Equatable {
                 return "The driver profile references {prompt}, which is only available for headless runs and threads started with an initial prompt."
             case .scopeHook:
                 return "The driver profile references {scope_hook} but the scope-hook binary was not found (neither embedded in the app nor on PATH)."
+            case .model:
+                return "The driver profile references {model} outside \"modelArgs\", which is the only place it has a value."
             default:
                 return "The driver profile references {\(placeholder.rawValue)} but it has no value in this context."
             }
@@ -120,7 +122,8 @@ public enum LaunchError: Error, Sendable, Equatable {
 
 /// Turns a profile + context into a `LaunchPlan`, or a readable `LaunchError`.
 public enum LaunchPlanner {
-    /// Steps: pick the argv for `mode`, expand placeholders, append the profile's `addDir` argv once per entry of
+    /// Steps: pick the argv for `mode`, append the profile's `modelArgs` when `values.model` is set, expand
+    /// placeholders, append the profile's `addDir` argv once per entry of
     /// `additionalDirectories`, append `adapterArguments` (what the event
     /// adapter needs on the command line, e.g. `--settings <file>`; the same for a fresh launch and a
     /// resume), append the profile's `prompt` argv on a fresh launch with `values.prompt` set, resolve the
@@ -142,12 +145,12 @@ public enum LaunchPlanner {
         switch mode {
         case .launch:
             let promptArgv = values.prompt != nil ? (profile.prompt ?? []) : []
-            rawArgv = [profile.command] + profile.args + promptArgv
+            rawArgv = profile.argv([profile.command] + profile.args, model: values.model) + promptArgv
         case .resume:
             guard let resume = profile.resume, !resume.isEmpty, values.resumeID != nil else {
                 throw .resumeUnavailable
             }
-            rawArgv = resume
+            rawArgv = profile.argv(resume, model: values.model)
         }
 
         let argv = try values.expand(rawArgv)

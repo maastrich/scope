@@ -191,7 +191,7 @@ extension AppModel {
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
         startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
         threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        deliverable: String? = nil
+        deliverable: String? = nil, model: String? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
@@ -221,7 +221,7 @@ extension AppModel {
         guard openThread else { return state }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         await newThread(in: scopeID, driverID: driverID, taskID: record.id,
-                        initialPrompt: trimmed.isEmpty ? nil : trimmed, origin: threadOrigin)
+                        initialPrompt: trimmed.isEmpty ? nil : trimmed, origin: threadOrigin, model: model)
         return state
     }
 

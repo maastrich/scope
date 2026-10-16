@@ -133,10 +133,11 @@ struct ScopeCommands: Commands {
             .help("New Thread \(model?.newThreadTargetDescription ?? "")".trimmingCharacters(in: .whitespaces))
 
             Menu("New Thread With Driver") {
-                ForEach(model?.drivers.profiles ?? []) { profile in
-                    Button(profile.name) {
-                        if let model { Task { await model.newThreadInCurrentContext(driverID: profile.id) } }
+                if let model {
+                    DriverMenuItems { driver, chosen in
+                        Task { await model.newThreadInCurrentContext(driverID: driver, model: chosen) }
                     }
+                    .environment(model)
                 }
             }
             .disabled(model?.currentScope == nil)

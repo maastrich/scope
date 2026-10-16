@@ -79,6 +79,15 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// `["--add-dir", "{dir}"]` for Claude Code. They go after the prompt (a variadic flag before it would take
     /// the prompt for a directory), on a fresh launch and a resume alike. Nil → the thread only sees its cwd.
     public var addDir: [String]?
+    /// Arguments appended when a thread is given a model, `{model}` standing for it: `["--model", "{model}"]`
+    /// for Claude Code and Cursor, `["-m", "{model}"]` for Codex. They go after `args` on a fresh launch and
+    /// after the `resume` argv on a resume — before the prompt, since the model takes exactly one value — and
+    /// after a `headless` argv when a headless run is given one. Nil → the driver takes no model: a thread opened
+    /// with one is refused by the control protocol and the menus offer none.
+    public var modelArgs: [String]?
+    /// The models the driver is known to take, offered by the New Thread menus and Settings; any other string
+    /// still goes through `modelArgs`. Nil → a free field only.
+    public var models: [String]?
     /// Event adapter.
     public var adapter: Adapter?
     /// `true` on bundled copies. Keep it (with `version`) to receive updates of the bundled profile; drop
@@ -102,6 +111,8 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         headlessLight: [String]? = nil,
         prompt: [String]? = nil,
         addDir: [String]? = nil,
+        modelArgs: [String]? = nil,
+        models: [String]? = nil,
         adapter: Adapter? = nil,
         builtin: Bool? = nil,
         version: Int? = nil,
@@ -119,6 +130,8 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         self.headlessLight = headlessLight
         self.prompt = prompt
         self.addDir = addDir
+        self.modelArgs = modelArgs
+        self.models = models
         self.adapter = adapter
         self.builtin = builtin
         self.version = version
@@ -141,6 +154,8 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         headlessLight = try container.decodeIfPresent([String].self, forKey: .headlessLight)
         prompt = try container.decodeIfPresent([String].self, forKey: .prompt)
         addDir = try container.decodeIfPresent([String].self, forKey: .addDir)
+        modelArgs = try container.decodeIfPresent([String].self, forKey: .modelArgs)
+        models = try container.decodeIfPresent([String].self, forKey: .models)
         adapter = try container.decodeIfPresent(Adapter.self, forKey: .adapter)
         builtin = try container.decodeIfPresent(Bool.self, forKey: .builtin)
         version = try container.decodeIfPresent(Int.self, forKey: .version)
@@ -156,6 +171,23 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// `true` when the profile can take an initial prompt on the command line (`prompt` argv).
     public var acceptsInitialPrompt: Bool { !(prompt ?? []).isEmpty }
 
+    /// `true` when the profile says how a model is passed (`modelArgs`).
+    public var acceptsModel: Bool { !(modelArgs ?? []).isEmpty }
+
+    /// The models the profile lists, trimmed and without blanks or duplicates, in the profile's order.
+    public var knownModels: [String] {
+        var seen: Set<String> = []
+        return (models ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
+    /// `argv` with the profile's `modelArgs` appended when `model` is given and the profile takes one; `argv` as
+    /// it is otherwise. Placeholders are not expanded here.
+    public func argv(_ argv: [String], model: String?) -> [String] {
+        guard let model, !model.isEmpty, acceptsModel else { return argv }
+        return argv + (modelArgs ?? [])
+    }
+
     /// The argv a microsession runs: the light one when the profile declares it, else the headless argv.
     public var microsession: [String]? {
         let light = headlessLight ?? []
@@ -163,7 +195,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`,
-    /// `headlessLight`, `prompt`, `addDir` and `env`.
+    /// `headlessLight`, `prompt`, `addDir`, `modelArgs` and `env`.
     public func validate() throws(DriverProfileError) {
         guard Self.isValidID(id) else { throw .invalidID(id) }
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -176,6 +208,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         try Self.checkPlaceholders(in: headlessLight ?? [], field: "headlessLight")
         try Self.checkPlaceholders(in: prompt ?? [], field: "prompt")
         try Self.checkPlaceholders(in: addDir ?? [], field: "addDir")
+        try Self.checkPlaceholders(in: modelArgs ?? [], field: "modelArgs")
         try Self.checkPlaceholders(in: env.keys.sorted().map { env[$0] ?? "" }, field: "env")
     }
 
@@ -246,6 +279,8 @@ public enum DriverPlaceholder: String, CaseIterable, Sendable {
     case theme = "theme"
     /// One additional directory, in `addDir` (which is repeated for each); no value anywhere else.
     case dir = "dir"
+    /// The model the thread was opened with, in `modelArgs`; no value when none was given.
+    case model = "model"
 
     /// Every `{name}`-shaped token in `string`, in order, including unknown names (for validation).
     public static func referencedNames(in string: String) -> [String] {
@@ -316,6 +351,8 @@ public struct PlaceholderValues: Sendable {
     public var theme: TerminalTheme
     /// `{dir}` — set by `LaunchPlanner` for each repetition of the profile's `addDir` argv.
     public var dir: String?
+    /// `{model}` — the model the thread runs on, when one was chosen (`ThreadRecord.model`).
+    public var model: String?
 
     public init(
         threadID: String,
@@ -327,7 +364,8 @@ public struct PlaceholderValues: Sendable {
         prompt: String? = nil,
         scopeHook: String? = nil,
         theme: TerminalTheme = .dark,
-        dir: String? = nil
+        dir: String? = nil,
+        model: String? = nil
     ) {
         self.threadID = threadID
         self.resumeID = resumeID
@@ -339,6 +377,7 @@ public struct PlaceholderValues: Sendable {
         self.scopeHook = scopeHook
         self.theme = theme
         self.dir = dir
+        self.model = model
     }
 
     /// The value for one placeholder, nil when it has no value in this context.
@@ -354,6 +393,7 @@ public struct PlaceholderValues: Sendable {
         case .scopeHook: return scopeHook
         case .theme: return theme.rawValue
         case .dir: return dir
+        case .model: return model
         }
     }
 

@@ -52,6 +52,16 @@ import Testing
         #expect(try Self.call("scope_task_new", ##"{"prompt":"review it","pr":"#42"}"##).get() == expected)
     }
 
+    @Test func aThreadTakesAModelAndACommand() throws {
+        #expect(try Self.call("scope_thread_new", #"{"driver":"claude-code","model":"claude-fable-5-1"}"#).get()
+            == .threadNew(ThreadNewParams(driver: "claude-code", model: "claude-fable-5-1")))
+        #expect(try Self.call("scope_task_new", #"{"prompt":"fix it","model":"claude-opus-5-5"}"#).get()
+            == .taskNew(TaskNewParams(prompt: "fix it", model: "claude-opus-5-5")))
+        let command = ControlCall.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "/compact", command: true))
+        #expect(try Self.call("scope_thread_send", #"{"thread":"3f9a2c17be04","text":"/compact","command":true}"#).get() == command)
+        #expect(try Self.call("scope_thread_send", #"{"id":"3f9a2c17be04","message":"/compact","slash":true}"#).get() == command)
+    }
+
     /// Changing the settings is the user's: it is no tool, so an agent is not even offered it.
     @Test func theSettingsAreNotATool() {
         #expect(!MCPBridge.tools.contains { $0.name.contains("config") })

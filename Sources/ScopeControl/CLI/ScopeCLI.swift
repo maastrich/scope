@@ -77,6 +77,14 @@ public enum ScopeCLI {
       --repo <relative/path>        open it in that repository
       --title <text>                row label
       -p, --prompt <text>           first thing the driver is asked
+      --model <name>                model the driver runs on (default: yours for the same driver when you are a
+                                    thread, else the scope's default, else the driver's in Settings)
+
+    thread send:
+      --no-enter                    leave the text on the line, without ↩
+      --command                     a command for the driver itself (/model, /clear, /compact): typed verbatim,
+                                    no line saying who sent it; agents may only command the threads they opened
+                                    unless Settings ▸ Automation says otherwise
 
     task new:
       --scope <slug|name|id|path>   which scope
@@ -89,6 +97,7 @@ public enum ScopeCLI {
       --title <text>                task name (default: proposed)
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread
+      --model <name>                model of the first thread (same defaults as thread new)
       --topic <text>                file it under a topic (default: the topic of the caller's own task)
       --deliverable <path>          the file the work ends in, relative to the task root or a sandbox; kept with
                                     the threads' last answers at archive (REPORT.md is kept anyway)
@@ -219,14 +228,18 @@ public enum ScopeCLI {
             case "send":
                 var words: [String] = []
                 var submit = true
+                var command = false
                 let shared = try options(&rest, command: "thread send", positional: { words.append($0) }, specific: { flag, _ in
-                    guard flag == "--no-enter" else { return false }
-                    submit = false
+                    switch flag {
+                    case "--no-enter": submit = false
+                    case "--command": command = true
+                    default: return false
+                    }
                     return true
                 })
                 guard words.count >= 2 else { throw UsageError(message: "thread send takes a thread id and the text to type", usage: usage) }
                 return .call(.threadSend(ThreadSendParams(thread: words[0], text: words.dropFirst().joined(separator: " "),
-                                                          submit: submit)), shared)
+                                                          submit: submit, command: command)), shared)
             case "read":
                 var words: [String] = []
                 var parameters = ThreadReadParams(thread: "")
@@ -268,6 +281,7 @@ public enum ScopeCLI {
                 case "--repo": parameters.repo = try value()
                 case "--title": parameters.title = try value()
                 case "-p", "--prompt": parameters.prompt = try value()
+                case "--model": parameters.model = try value()
                 default: return false
                 }
                 return true
@@ -367,6 +381,7 @@ public enum ScopeCLI {
                 case "--title": parameters.title = try value()
                 case "--slug": parameters.slug = try value()
                 case "--driver": parameters.driver = try value()
+                case "--model": parameters.model = try value()
                 case "--topic": parameters.topic = try value()
                 case "--pr": parameters.startPR = try value()
                 case "--deliverable": parameters.deliverable = try value()

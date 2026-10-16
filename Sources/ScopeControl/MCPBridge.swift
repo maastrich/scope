@@ -145,7 +145,8 @@ public enum MCPBridge {
             "task":{"type":"string","description":"Task id or slug: opens the thread in that task's sandbox."},\
             "repo":{"type":"string","description":"Repository relative to the scope root."},\
             "title":{"type":"string","description":"Row label for the thread."},\
-            "prompt":{"type":"string","description":"First request handed to the driver."}\
+            "prompt":{"type":"string","description":"First request handed to the driver."},\
+            "model":{"type":"string","description":"Model the driver runs on (claude-opus-5-5, claude-fable-5-1…), through the profile's modelArgs. Omitted: your own model when the thread runs your driver, else the scope's default, else the driver's."}\
             },"additionalProperties":false}
             """,
             readOnly: false
@@ -174,6 +175,7 @@ public enum MCPBridge {
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
             "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
+            "model":{"type":"string","description":"Model of the task's first thread; same defaults as scope_thread_new."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
             "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."},\
@@ -192,13 +194,16 @@ public enum MCPBridge {
             Any thread, in any task or scope, except your own: it is how you hand a follow-up to an agent you \
             started, or a request to one you did not. A submitted message arrives under a line naming you as its \
             sender (thread id, title, task), so the receiver knows whom to answer. Follow up with \
-            scope_thread_wait for its answer.
+            scope_thread_wait for its answer. command: true is for the driver's own slash commands (/model, \
+            /clear, /compact): the text is typed verbatim, with no sender line, and submitted — allowed toward \
+            the threads you opened unless the user's settings open every thread.
             """,
             schema: """
             {"type":"object","properties":{\
             "thread":{"type":"string","description":"Thread id, from scope_thread_new or scope_list."},\
             "text":{"type":"string","description":"What to type."},\
-            "submit":{"type":"boolean","description":"Press Return after the text (default true)."}\
+            "submit":{"type":"boolean","description":"Press Return after the text (default true)."},\
+            "command":{"type":"boolean","description":"A command for the driver itself, typed verbatim with no sender line (default false)."}\
             },"required":["thread","text"],"additionalProperties":false}
             """,
             readOnly: false
@@ -451,6 +456,7 @@ public enum MCPBridge {
         return [
             "scope_thread_send": threadID.merging([
                 "message": .rename("text"), "prompt": .rename("text"), "no_enter": .negate("submit"),
+                "slash": .rename("command"), "slash_command": .rename("command"),
             ]) { $1 },
             "scope_thread_read": threadID.merging([
                 "n": .rename("lines"), "count": .rename("lines"),
@@ -607,6 +613,7 @@ public enum MCPBridge {
         var title: String?
         var slug: String?
         var driver: String?
+        var model: String?
         var dryRun: Bool?
         var openThread: Bool?
         var runSetup: Bool?
@@ -615,7 +622,7 @@ public enum MCPBridge {
         var deliverable: String?
 
         private enum CodingKeys: String, CodingKey {
-            case prompt, scope, repos, branch, title, slug, driver, topic, deliverable
+            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable
             case startPR = "start_pr"
             case dryRun = "dry_run"
             case openThread = "open_thread"
@@ -625,7 +632,7 @@ public enum MCPBridge {
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
-                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable)
+                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model)
         }
     }
 }

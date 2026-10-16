@@ -48,6 +48,11 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     /// across tasks, and every message says who sent it. `own` is the old rule, for whoever wants each agent
     /// fenced into the threads it opened and their descendants.
     public var threadReach: ThreadReach
+    /// Which threads an agent may hand a driver command to (`thread.send --command`: `/model`, `/clear`, typed
+    /// verbatim, with no line saying who sent it). `own` by default — a command rewrites how another agent works,
+    /// and one not signed cannot be told from the user's own — and never wider than `threadReach`
+    /// (`effectiveCommandReach`).
+    public var commandReach: ThreadReach
     /// How deep the chain of agents opening agents may go, or `nil` for no limit (the default). A thread the user
     /// opened is at depth 0, its task's thread too; a task an agent creates from inside a task is one deeper. It is
     /// no longer what stops a runaway — `maxAgentTasks` and `maxAgentThreads` are — so it stays only as a fence for
@@ -76,13 +81,15 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     /// What the Settings steppers allow for the two budgets.
     public static let budgetRange = 1...100
 
-    public init(agentsMayDrive: Bool = true, threadReach: ThreadReach = .any, depthLimit: Int? = nil,
+    public init(agentsMayDrive: Bool = true, threadReach: ThreadReach = .any, commandReach: ThreadReach = .own,
+                depthLimit: Int? = nil,
                 maxAgentTasks: Int = AutomationSettings.defaultMaxAgentTasks,
                 maxAgentThreads: Int = AutomationSettings.defaultMaxAgentThreads,
                 threads: Approval = .allow, tasks: Approval = .allow,
                 approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
         self.agentsMayDrive = agentsMayDrive
         self.threadReach = threadReach
+        self.commandReach = commandReach
         self.depthLimit = depthLimit.map { max(0, $0) }
         self.maxAgentTasks = AutomationSettings.clampBudget(maxAgentTasks)
         self.maxAgentThreads = AutomationSettings.clampBudget(maxAgentThreads)
@@ -95,8 +102,13 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         min(max(value, budgetRange.lowerBound), budgetRange.upperBound)
     }
 
+    /// The reach of a driver command: `commandReach`, unless `threadReach` is already the fence.
+    public var effectiveCommandReach: ThreadReach {
+        threadReach == .own ? .own : commandReach
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case agentsMayDrive, threadReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, approvalTimeout
+        case agentsMayDrive, threadReach, commandReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, approvalTimeout
     }
 
     /// `maxDepth` was the ceiling when it was the only guard, 1 by default. Settings wrote the whole block on any
@@ -113,6 +125,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         let defaults = AutomationSettings()
         agentsMayDrive = try container.decodeIfPresent(Bool.self, forKey: .agentsMayDrive) ?? defaults.agentsMayDrive
         threadReach = (try? container.decodeIfPresent(ThreadReach.self, forKey: .threadReach)).flatMap { $0 } ?? defaults.threadReach
+        commandReach = (try? container.decodeIfPresent(ThreadReach.self, forKey: .commandReach)).flatMap { $0 } ?? defaults.commandReach
         if container.contains(.depthLimit) {
             depthLimit = (try? container.decodeIfPresent(Int.self, forKey: .depthLimit)).flatMap { $0 }.map { max(0, $0) }
         } else {

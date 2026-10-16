@@ -27,9 +27,15 @@ enum ThreadTitle {
     /// clock (`Finished · 3m ago`) does not, the window title has none.
     static func detail(_ session: ThreadSession) -> String {
         if let headline = session.activityHeadline, headline.since == nil {
-            return "\(session.profile.name) · \(headline.text)"
+            return "\(runs(session)) · \(headline.text)"
         }
-        return "\(session.profile.name) · \(abbreviatedDirectory(currentDirectory(session)))"
+        return "\(runs(session)) · \(abbreviatedDirectory(currentDirectory(session)))"
+    }
+
+    /// `Claude Code (claude-fable-5-1)`: the driver, and the model when one was chosen for the thread.
+    static func runs(_ session: ThreadSession) -> String {
+        guard let model = session.record.model else { return session.profile.name }
+        return "\(session.profile.name) (\(model))"
     }
 
     /// `@acme · auth-refresh · …/api/auth-refresh`: the scope, the task that owns the thread when one does, the

@@ -27,6 +27,9 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// scope was removed and declared again with a new id.
     public var scopeRoot: String
     public var driverID: String
+    /// The model the thread was opened with, passed through the profile's `modelArgs` on every launch and resume
+    /// so Relaunch keeps it; `nil` leaves the driver to its own default.
+    public var model: String?
     /// Row label, without the driver name: `"acme"`, `"oauth-refresh"`. The icon carries the driver.
     public var title: String
     /// Absolute path used at launch.
@@ -71,13 +74,15 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         taskID: String? = nil,
         createdAt: Date = .now,
         origin: ThreadOrigin? = nil,
-        resident: ResidentRole? = nil
+        resident: ResidentRole? = nil,
+        model: String? = nil
     ) {
         version = ThreadRecord.currentVersion
         self.id = id
         self.scopeID = scopeID
         self.scopeRoot = scopeRoot
         self.driverID = driverID
+        self.model = model
         self.title = title
         self.cwd = cwd
         self.cwdKind = cwdKind
@@ -102,7 +107,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     public var fileName: String { "\(id.rawValue).json" }
 
     private enum CodingKeys: String, CodingKey {
-        case version, id, scopeID, scopeRoot, driverID, title, cwd, cwdKind, taskID, createdAt
+        case version, id, scopeID, scopeRoot, driverID, model, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
         case processAlive, relaunchesAtStartup, resident
     }
@@ -115,6 +120,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         scopeID = try container.decode(ScopeID.self, forKey: .scopeID)
         scopeRoot = try container.decodeIfPresent(String.self, forKey: .scopeRoot) ?? ""
         driverID = try container.decode(String.self, forKey: .driverID)
+        model = try container.decodeIfPresent(String.self, forKey: .model).flatMap { $0.isEmpty ? nil : $0 }
         cwd = try container.decode(String.self, forKey: .cwd)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? driverID
         cwdKind = try container.decodeIfPresent(ThreadCwdKind.self, forKey: .cwdKind) ?? .scopeRoot
