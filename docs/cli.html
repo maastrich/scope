@@ -93,8 +93,9 @@ Codex report it at the end of a turn: what it concluded, without the spinners an
 answer or a permission, or exited — then prints every thread's state and last reply. <code>--any</code> returns at
 the first one, <code>--timeout</code> (600 s by default) answers anyway and names those still at work. A thread
 just handed a prompt counts as at work until its driver reports on it, so a wait right after
-<code>thread send</code> or <code>task new</code> does not return before the work starts. A shell reports no turns
-and never settles.</p>
+<code>thread send</code> or <code>task new</code> does not return before the work starts. An answer that lands
+during the wait ends it, and a thread that still reads running although its last answer is newer than anything
+that started a turn counts as done. A shell reports no turns and never settles.</p>
 <p><code>scope thread send</code> from a thread is a message: it lands in the other terminal under a line
 naming its sender (thread id, title, task), so the receiving agent knows whom to answer and that the request
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into

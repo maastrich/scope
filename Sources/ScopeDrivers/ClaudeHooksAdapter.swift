@@ -13,7 +13,7 @@ import ScopeCore
 /// | `SessionStart`                        | `session.started`       | unchanged (session id)|
 /// | `UserPromptSubmit`                    | `turn.started`          | running               |
 /// | `PreToolUse` (question tools only)    | `input.requested`       | waiting(input)        |
-/// | `PostToolUse`                         | `turn.started`          | running (after a permission was granted, or a question answered) |
+/// | `PostToolUse`                         | `turn.started`          | running (after a permission was granted, or a question answered); unchanged once the turn ended (`ThreadActivity.isLate`) |
 /// | `Notification` (matcher on type)      | `notification` → derived| waiting(permission / input) |
 /// | `Stop`                                | `turn.ended`            | done                  |
 /// | `StopFailure`                         | `turn.failed`           | failed                |

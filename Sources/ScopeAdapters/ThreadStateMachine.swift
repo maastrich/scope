@@ -37,6 +37,14 @@ public enum ThreadStateMachine {
         return next(current, on: event.kind)
     }
 
+    /// Same again, for a thread whose driver has been doing `activity` (before `event`): an event that belongs to a
+    /// turn already over (`ThreadActivity.isLate(_:)`) changes nothing. Without this, a background command's tool
+    /// report, or a hook delivered after `Stop`, put a finished thread back to `running` with nothing left to end it.
+    public static func next(_ current: ThreadState, on event: AdapterEvent, after activity: ThreadActivity,
+                            promptPending: Bool = false) -> ThreadState {
+        activity.isLate(event, promptPending: promptPending) ? current : next(current, on: event)
+    }
+
     /// `true` for the `permission_prompt` notification that follows a question (see `next(_:on:)`): it changes
     /// nothing, and must not replace the question's notification either.
     public static func keepsQuestion(_ current: ThreadState, over event: AdapterEvent) -> Bool {

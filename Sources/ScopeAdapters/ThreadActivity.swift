@@ -78,6 +78,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// The agent's last answer, its end kept within `replyLimit`. `thread.read` keeps answering from the full one.
     public var lastReply: AgentReply?
     public var transcriptPath: String?
+    /// When the driver sent the event that closed the last turn as ended or failed (`AdapterEvent.sentAt`): anything
+    /// it sent before that belongs to that turn, however late it reaches the app (see `isLate(_:)`).
+    public var turnEndSentAt: Date?
 
     public init(lastTool: Tool? = nil, pendingRequest: Tool? = nil, turnStartedAt: Date? = nil, turnTools: Int = 0, turns: [Turn] = [],
                 lastReply: AgentReply? = nil, transcriptPath: String? = nil) {
@@ -94,12 +97,45 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// `true` while a turn is open.
     public var inTurn: Bool { turnStartedAt != nil }
 
-    /// The activity after `event`.
-    public func apply(_ event: AdapterEvent) -> ThreadActivity {
+    /// `true` for an event that arrives after its turn is over and must not reopen it:
+    ///
+    /// - one the driver sent before the end of the last turn, delivered late (each hook is its own process and its
+    ///   own connection, and a background app's queues are throttled);
+    /// - a tool report or a request once the last turn *ended* or *failed* and no prompt opened another: a
+    ///   background command or sub-agent still reporting, a permission notification for a call already decided.
+    ///   Only a prompt (`UserPromptSubmit`, a background task's completion included) starts the next turn.
+    ///
+    /// A turn closed any other way still goes on with its next tool: after a question or a permission (`isWait`),
+    /// after Esc (`interrupted`, which may have been an Esc the driver ignored), or with no history at all. So does
+    /// one Scope just handed a prompt (`promptPending`): should its `UserPromptSubmit` hook be lost, the tools are
+    /// the only sign the work began.
+    public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
+        switch event.kind {
+        case .turnStarted, .inputRequested, .permissionRequested: break
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted: return false
+        }
+        if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
+        guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
+        let isPrompt = event.kind == .turnStarted && (event.payload[HookEvent.toolKey] ?? "").isEmpty
+        return !isPrompt
+    }
+
+    /// The activity after `event`; `promptPending` as in `isLate(_:promptPending:)`.
+    public func apply(_ event: AdapterEvent, promptPending: Bool = false) -> ThreadActivity {
         var next = self
         let at = event.receivedAt
         if let path = event.payload[HookEvent.transcriptKey], !path.isEmpty { next.transcriptPath = path }
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
+        if isLate(event, promptPending: promptPending) {
+            // Still the last thing the agent ran, but no turn of its own.
+            if event.kind == .turnStarted, let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
+                next.lastTool = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
+            }
+            return next
+        }
+        if event.kind == .turnEnded || event.kind == .turnFailed, let sent = event.sentAt {
+            next.turnEndSentAt = max(sent, turnEndSentAt ?? sent)
+        }
         switch event.kind {
         case .inputRequested, .permissionRequested:
             // Claude Code follows a question's `PreToolUse` with a `Notification` that names no tool: that one adds
@@ -160,6 +196,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         next.lastTool = lastTool ?? saved.lastTool
         next.lastReply = lastReply ?? saved.lastReply
         next.transcriptPath = transcriptPath ?? saved.transcriptPath
+        next.turnEndSentAt = turnEndSentAt ?? saved.turnEndSentAt
         return next
     }
 

@@ -60,6 +60,8 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private(set) var expectingTurnSince: Date?
     /// When the thread was last handed a prompt, reported on or not: a reply older than this answers something else.
     @ObservationIgnored private(set) var lastPromptAt: Date?
+    /// When the last `turn.started` was applied (a prompt or a tool report): `ThreadWait`'s safety net under `running`.
+    @ObservationIgnored private(set) var lastTurnStartedAt: Date?
     /// OSC 0/2 title.
     private(set) var terminalTitle: String?
     /// OSC 7 directory, decoded from its `file://` form.
@@ -307,15 +309,30 @@ final class ThreadSession: Identifiable {
     var waitSnapshot: ThreadWait.Snapshot {
         let starting = if case .launching = phase { true } else { false }
         return ThreadWait.Snapshot(state: displayState.name, expectingSince: expectingTurnSince,
-                                   reportsTurnStart: AdapterInstaller.reportsTurnStart(profile), starting: starting)
+                                   reportsTurnStart: AdapterInstaller.reportsTurnStart(profile), starting: starting,
+                                   replyAt: lastReply?.at, turnStartedAt: lastTurnStartedAt, lastPromptAt: lastPromptAt)
     }
 
-    func apply(_ event: AdapterEvent) {
-        guard phase.isAlive else { return }
-        let next = ThreadStateMachine.next(adapterState ?? .initial, on: event)
-        if event.kind.changesState { expectingTurnSince = nil }
+    /// `running`, yet the agent answered after anything that started a turn (`ThreadWait.hasOutlivedItsTurn`): the
+    /// turn is over, whatever put the state back. Settled to `done` so the sidebar and `scope list` agree with the wait.
+    func settleOutlivedTurn() {
+        guard phase.isAlive, adapterState == .running, ThreadWait.hasOutlivedItsTurn(waitSnapshot) else { return }
+        Log.threads.notice("thread \(self.id.rawValue, privacy: .public) still read running after its last answer; now done")
+        setAdapterState(.done)
+    }
+
+    /// Returns `false` when the event was ignored: the process is gone, or the event belongs to a turn already over.
+    @discardableResult
+    func apply(_ event: AdapterEvent) -> Bool {
+        guard phase.isAlive else { return false }
+        // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
+        let promptPending = expectingTurnSince != nil
+        let late = activity.isLate(event, promptPending: promptPending)
+        let next = ThreadStateMachine.next(adapterState ?? .initial, on: event, after: activity, promptPending: promptPending)
+        if event.kind.changesState, !late { expectingTurnSince = nil }
+        if event.kind == .turnStarted, !late { lastTurnStartedAt = event.receivedAt }
         if let reply = AgentReply.from(event) { lastReply = reply }
-        setActivity(activity.apply(event))
+        setActivity(activity.apply(event, promptPending: promptPending))
         // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
         // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
         // state that had not moved.
@@ -332,6 +349,7 @@ final class ThreadSession: Identifiable {
             record.resumeID = session
         }
         onRecordChanged?(record)
+        return !late
     }
 
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.

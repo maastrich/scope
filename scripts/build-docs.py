@@ -949,8 +949,9 @@ Codex report it at the end of a turn: what it concluded, without the spinners an
 answer or a permission, or exited — then prints every thread's state and last reply. <code>--any</code> returns at
 the first one, <code>--timeout</code> (600 s by default) answers anyway and names those still at work. A thread
 just handed a prompt counts as at work until its driver reports on it, so a wait right after
-<code>thread send</code> or <code>task new</code> does not return before the work starts. A shell reports no turns
-and never settles.</p>
+<code>thread send</code> or <code>task new</code> does not return before the work starts. An answer that lands
+during the wait ends it, and a thread that still reads running although its last answer is newer than anything
+that started a turn counts as done. A shell reports no turns and never settles.</p>
 <p><code>scope thread send</code> from a thread is a message: it lands in the other terminal under a line
 naming its sender (thread id, title, task), so the receiving agent knows whom to answer and that the request
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
@@ -1103,7 +1104,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
 <table>
   <tr><th>Hook</th><th>Becomes</th></tr>
   <tr><td><code>SessionStart</code></td><td>no change; the session id is captured, which is what lets <b>Relaunch</b> pick the session back up</td></tr>
-  <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running</td></tr>
+  <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running — after a <code>Stop</code>, only a new prompt starts the next turn: a background command or sub-agent still reporting, or a hook delivered late, leaves the thread done</td></tr>
   <tr><td><code>PreToolUse</code> on <code>AskUserQuestion</code> / <code>ExitPlanMode</code></td><td><span class="dot waiting"></span>waiting — <b>question</b></td></tr>
   <tr><td><code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> once a permission dialog has sat unanswered for about six seconds (an elicitation dialog is a question) — and a macOS notification when Scope is in the background. A permission that auto mode, <code>bypassPermissions</code> or another <code>PermissionRequest</code> hook grants never shows as waiting</td></tr>
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
