@@ -27,14 +27,14 @@ struct RootView: View {
                     .id(theme)
                     .frame(width: model.sidebarWidth)
                     .transition(.move(edge: .leading))
-                ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, label: "Sidebar width")
+                ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, defaultWidth: ColumnLayout.defaultSidebarWidth, label: "Sidebar width")
             }
             SceneView()
                 .usageArea("thread")
             // The diff or base file opened from the inspector reads beside it, the height of the window, rather than
             // under its sections (`InspectorViewerColumn`).
             if inspectorPresented.wrappedValue, model.shownViewer != nil {
-                ColumnResizeHandle(width: viewerWidth, growsWithDrag: false, label: "Viewer width")
+                ColumnResizeHandle(width: viewerWidth, growsWithDrag: false, defaultWidth: defaultViewerWidth, label: "Viewer width")
                 InspectorViewerColumn()
                     .usageSurface("viewer", label: "Reading column")
                     .id(theme)
@@ -42,7 +42,7 @@ struct RootView: View {
                     .transition(.move(edge: .trailing))
             }
             if inspectorPresented.wrappedValue {
-                ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, label: "Inspector width")
+                ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, defaultWidth: ColumnLayout.defaultInspectorWidth, label: "Inspector width")
                 InspectorView()
                     .usageSurface("inspector", label: "Inspector")
                     .id(theme)
@@ -106,26 +106,35 @@ struct RootView: View {
     private var inspectorWidth: Binding<Double> {
         Binding(
             get: { model.inspectorWidth },
-            set: { model.inspectorWidth = min(max($0, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound) }
+            set: { model.inspectorWidth = ColumnLayout.clampInspectorWidth($0) }
         )
     }
 
     /// The viewer column in points, read from and written to its share of the width the terminal and it divide.
     private var viewerWidth: Binding<Double> {
-        let range = InspectorModel.viewerShareRange
-        let shared = max(1, windowWidth
-            - (sidebarPresented ? model.sidebarWidth + 1 : 0)
-            - (inspectorPresented.wrappedValue ? model.inspectorWidth + 1 : 0) - 1)
+        let shared = viewerSharedWidth
         return Binding(
             get: { (model.inspector.viewerShare * shared).rounded() },
-            set: { model.inspector.viewerShare = min(max($0 / shared, range.lowerBound), range.upperBound) }
+            set: { model.inspector.viewerShare = ColumnLayout.clampViewerShare($0 / shared) }
         )
+    }
+
+    /// Half of what the terminal and the viewer divide: what a double-click on their sash goes back to.
+    private var defaultViewerWidth: Double {
+        (ColumnLayout.defaultViewerShare * viewerSharedWidth).rounded()
+    }
+
+    /// The width the terminal and the viewer divide: the window less the other columns and their hairlines.
+    private var viewerSharedWidth: Double {
+        max(1, windowWidth
+            - (sidebarPresented ? model.sidebarWidth + 1 : 0)
+            - (inspectorPresented.wrappedValue ? model.inspectorWidth + 1 : 0) - 1)
     }
 
     private var sidebarWidth: Binding<Double> {
         Binding(
             get: { model.sidebarWidth },
-            set: { model.sidebarWidth = min(max($0, UIState.sidebarWidthRange.lowerBound), UIState.sidebarWidthRange.upperBound) }
+            set: { model.sidebarWidth = ColumnLayout.clampSidebarWidth($0) }
         )
     }
 
@@ -144,33 +153,21 @@ struct RootView: View {
     }
 }
 
-/// A hairline between two columns, draggable over a 9 pt hit area with the resize cursor. `growsWithDrag` says
-/// which side the column is on: dragging right widens the sidebar and narrows the inspector.
+/// A column boundary: `Sash` over the width it moves. `growsWithDrag` says which side the column is on — dragging
+/// right widens the sidebar and narrows the inspector — and a double-click goes back to `defaultWidth`.
 private struct ColumnResizeHandle: View {
     @Binding var width: Double
     var growsWithDrag: Bool
+    var defaultWidth: Double
     var label: String
     @State private var startWidth: Double?
 
     var body: some View {
-        Rectangle()
-            .fill(Surface.stroke)
-            .frame(width: 1)
-            .frame(maxHeight: .infinity)
-            .overlay {
-                Color.clear
-                    .frame(width: 9)
-                    .contentShape(Rectangle())
-                    .cursor(.resizeLeftRight)
-                    .gesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                            .onChanged { value in
-                                if startWidth == nil { startWidth = width }
-                                width = (startWidth ?? width) + (growsWithDrag ? value.translation.width : -value.translation.width)
-                            }
-                            .onEnded { _ in startWidth = nil }
-                    )
-            }
+        Sash(axis: .vertical,
+             began: { startWidth = width },
+             moved: { delta in width = (startWidth ?? width) + (growsWithDrag ? delta : -delta) },
+             ended: { startWidth = nil },
+             reset: { width = defaultWidth })
             .accessibilityLabel(label)
             .accessibilityValue("\(Int(width)) points")
             .accessibilityAdjustableAction { direction in

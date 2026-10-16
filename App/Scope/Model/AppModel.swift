@@ -683,12 +683,11 @@ final class AppModel {
         }
         inspectorShown = state.inspectorVisible
         inspector.weights = state.inspectorWeights
-        inspector.viewerShare = min(max(state.viewerShare, InspectorModel.viewerShareRange.lowerBound),
-                                    InspectorModel.viewerShareRange.upperBound)
+        inspector.viewerShare = ColumnLayout.clampViewerShare(state.viewerShare)
         places = state.places.filter { scope($0.key) != nil }
         base.pins = state.basePins.filter { isLiveBaseContext($0.key) }
-        inspectorWidth = min(max(state.inspectorWidth, UIState.inspectorWidthRange.lowerBound), UIState.inspectorWidthRange.upperBound)
-        sidebarWidth = min(max(state.sidebarWidth, UIState.sidebarWidthRange.lowerBound), UIState.sidebarWidthRange.upperBound)
+        inspectorWidth = ColumnLayout.clampInspectorWidth(state.inspectorWidth)
+        sidebarWidth = ColumnLayout.clampSidebarWidth(state.sidebarWidth)
         lastDriverByScope = state.lastDrivers
         switch state.selectedItem {
         case .scope(let id) where scope(id) != nil:

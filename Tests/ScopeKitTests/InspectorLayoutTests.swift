@@ -108,4 +108,10 @@ import Testing
         #expect(abs((after[.delta] ?? 0) - ((start[.delta] ?? 0) + 40)) < 0.001)
     }
 
+    @Test func aDoubleClickGivesTheTwoListsTheSameHeightAndLeavesTheOthers() {
+        let start: [InspectorSection: Double] = [.delta: 300, .files: 100, .history: 150]
+        let reset = Layout.equalize(heights: start, upper: .delta, lower: .files)
+        #expect(reset == [.delta: 200, .files: 200, .history: 150])
+        #expect(Layout.equalize(heights: start, upper: .delta, lower: .search) == start)
+    }
 }

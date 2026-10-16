@@ -39,7 +39,7 @@ final class InspectorModel {
     var weights: [InspectorSection: Double] = [:]
     /// The viewer column's share of the width the sidebar and the inspector leave, the terminal taking the rest. A share
     /// rather than points, so half stays half when the window or the other columns change; dragged, remembered.
-    var viewerShare: Double = InspectorModel.defaultViewerShare
+    var viewerShare: Double = ColumnLayout.defaultViewerShare
     /// What the viewer shows, `nil` when closed. Only a gesture opens it — a click on a file, `j` / `k`, a search
     /// jump — so a task comes up with its list, not with a diff nobody asked for.
     var viewer: InspectorViewer?
@@ -53,8 +53,7 @@ final class InspectorModel {
     @ObservationIgnored private var focusToken = 0
     @ObservationIgnored var dragStart: [InspectorSection: Double]?
 
-    nonisolated static let defaultViewerShare: Double = 0.5
-    nonisolated static let viewerShareRange: ClosedRange<Double> = 0.2...0.8
+    nonisolated static let defaultViewerShare = ColumnLayout.defaultViewerShare
 
     func show(_ viewer: InspectorViewer) {
         if self.viewer != viewer { previousViewer = self.viewer }

@@ -412,9 +412,9 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 <p>The right-hand panel, all about the selection. A band at the top names the task, then a column of
 collapsible sections, one header each: closed, a section costs one line and its header still says the essential;
 open, it shows the rest. Several can be open at once — the lists share the height, and you drag the line between
-two of them. The sections hold lists only: a diff or a base file opens in a reading column between the terminal
-and the inspector, the height of the window and half the terminal's width by default (drag its edge; ✕ or Esc
-closes it).</p>
+two of them (double-click it to even them out). The sections hold lists only: a diff or a base file opens in a reading column between the terminal
+and the inspector, the height of the window and half the terminal's width by default (drag its edge, double-click
+it to go back to half; ✕ or Esc closes it).</p>
 <table>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply</td><td></td></tr>
@@ -424,8 +424,9 @@ closes it).</p>
   <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
 <p>The inspector remembers which sections are open per scope, with and without a task. Without a task, the task's
-sections stay in place, dimmed, and Base follows the selected repository. Drag the panel's left edge to resize;
-<kbd>⌥⌘I</kbd> hides it.</p>
+sections stay in place, dimmed, and Base follows the selected repository. Drag the panel's left edge to resize — every divider in the window
+catches the pointer a few points on either side of the line, and a double-click puts the column back at its
+default width; <kbd>⌥⌘I</kbd> hides it.</p>
 
 <h2 id="global-views">Inbox, Pull Requests and Graph</h2>
 <p>The views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
@@ -458,7 +459,8 @@ TASKS = """
 names the branch the way your repository already names branches.</p>
 
 <h2 id="create">Creating a task</h2>
-<p><kbd>⇧⌘T</kbd>, or <b>New Task</b> at the bottom of the sidebar. The first step asks for two things: what
+<p><kbd>⇧⌘T</kbd>, <b>New Task…</b> in the palette, or the <b>New Task</b> button under the sidebar once
+<i>Settings › Sidebar</i> shows it (it is hidden by default). The first step asks for two things: what
 you want done, and which driver should do it. Nothing else — the repositories, the branch and the folder come
 from the prompt.</p>
 FIG_PROMPT

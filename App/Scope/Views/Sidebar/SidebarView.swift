@@ -8,7 +8,7 @@ import ScopeTasks
 /// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
 /// of `SidebarItem`s as **one tree** — the scope's orchestrator and terminal, a **Loose threads** group holding the threads that belong to no task, then
 /// the tasks with their own threads nested — followed by **Repositories** (collapsed by default,
-/// `ScopeState.reposShown`), which is a launcher rather than work. The New Thread / New Task footer closes it. Other scopes are reached through the switcher, ⌘K or ⌘O.
+/// `ScopeState.reposShown`), which is a launcher rather than work. The New Thread / New Task footer closes it when the preference shows it. Other scopes are reached through the switcher, ⌘K or ⌘O.
 /// It is the only thread switcher: picking a thread hands the keyboard straight back to its terminal.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
@@ -103,7 +103,11 @@ struct SidebarView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            footer
+            // Off by default (Settings › Sidebar): ⌘T, ⇧⌘T, the palette and the agents open threads and tasks, and the
+            // list is the better use of the height.
+            if model.config.preferences.showSidebarFooter {
+                footer
+            }
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
         // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
