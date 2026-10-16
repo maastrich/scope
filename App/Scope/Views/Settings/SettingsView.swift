@@ -148,6 +148,14 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Ask agents to continue after a restart", isOn: preference(\.resumeInterruptedTurns))
+                    .toggleStyle(.scope)
+                    .disabled(!model.config.preferences.autoRelaunchThreads)
+                    .usageID("resume-interrupted-turns", label: "Ask agents to continue after a restart")
+                Text("A relaunched agent whose turn the restart cut short is told so once its prompt is back, and asked to continue from where its worktree stands. Shells are left alone, and so is a thread you type into first.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 SettingsRow("Orchestrator driver") {
                     ScopePicker("Orchestrator driver", selection: preference(\.orchestratorDriverID), title: orchestratorDriverTitle) {
                         Text("Automatic").tag("")

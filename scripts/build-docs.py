@@ -268,6 +268,12 @@ same directory otherwise. The thread the window opens on goes first; the others 
 Scope Opens</b> in one thread's menu. A thread whose task was closed or whose folder is gone stays stopped, and
 its banner says why. <b>Relaunch</b> brings any stopped thread back; <b>Start Fresh</b> opens a new session
 instead.</p>
+<p>An agent that was in the middle of a turn when Scope went down does not sit at its prompt afterwards: once
+it is back and ready, Scope tells it — in a message signed as Scope's own — when it was interrupted and asks it
+to continue from where the worktree stands, check <code>git status</code> and <code>git log</code>, re-read its
+plan and finish. Once per interruption, never for a shell, and not if you type into the thread first; the
+sidebar caption says <i>Resuming after restart…</i> meanwhile. <b>Ask agents to continue after a restart</b> in
+Settings → Threads turns it off; <kbd>⇧</kbd> at launch skips it along with the relaunch.</p>
 
 <h2 id="first-task">Create your first task</h2>
 <p><kbd>⇧⌘T</kbd>. Describe the work in a sentence, pick the repositories it touches, press <b>Continue</b>.
@@ -320,7 +326,8 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
 <kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
-when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section).</p>
+when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section),
+and an agent brought back mid-turn is asked to continue its work (<b>Ask agents to continue after a restart</b>).</p>
 
 <h3 id="residents">Orchestrator and terminal</h3>
 <p>Every scope keeps two threads at its root that you never open yourself: an <b>Orchestrator</b> — an agent to
