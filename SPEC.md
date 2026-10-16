@@ -185,7 +185,7 @@ Les mécanismes d'événements changent vite : à vérifier contre la doc de cha
   "name": "Claude Code",
   "command": "claude",
   "args": [],
-  "env": {},
+  "env": { "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1" },
   "context": { "file": "CLAUDE.md", "mode": "generate" },
   "resume": ["claude", "--resume", "{thread_id}"],
   "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
@@ -195,7 +195,7 @@ Les mécanismes d'événements changent vite : à vérifier contre la doc de cha
 }
 ```
 
-`addDir` est répété pour chaque répertoire supplémentaire du thread (§4.3), `{dir}` valant ce répertoire ; il vient après l'argv `prompt`, parce qu'un flag variadique comme `--add-dir` placé avant prendrait le prompt pour un répertoire. Absent, le thread ne voit que son cwd. Seuls les profils Claude Code le déclarent pour l'instant ; Codex a un `--add-dir` équivalent, à brancher après vérification de sa reprise.
+`addDir` est répété pour chaque répertoire supplémentaire du thread (§4.3), `{dir}` valant ce répertoire ; il vient après l'argv `prompt`, parce qu'un flag variadique comme `--add-dir` placé avant prendrait le prompt pour un répertoire. Absent, le thread ne voit que son cwd. Seuls les profils Claude Code le déclarent pour l'instant.
 
 Un driver custom = un fichier JSON dans `~/.scope/drivers/`. Contribuer un driver au projet = ouvrir une PR avec ce fichier et, si besoin, un adaptateur.
 
