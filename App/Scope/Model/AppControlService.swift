@@ -929,6 +929,27 @@ final class AppControlService: ControlService {
         let startPoint = request.startPoint
         let sandboxes = model.env.tasks.scopeSandboxesURL(scopeSlug: scope.declaration.slug)
             .appending(path: proposal.slug, directoryHint: .isDirectory)
+        // Several attempts: the plan is checked before anything is written, so a bad list refuses cleanly.
+        var plans: [TaskAttempts.Plan]?
+        if params.attempts > 1 {
+            guard startPoint.requiredBranch == nil else {
+                return .failure(.badRequest("attempts each need a branch of their own",
+                                            detail: "A task that starts from a pull request or an existing branch is one attempt: drop --attempts, or --pr."))
+            }
+            switch TaskAttempts.plan(count: params.attempts, name: proposal.title, slug: proposal.slug, branch: proposal.branch,
+                                     models: params.models, drivers: params.drivers) {
+            case .failure(let refusal): return .failure(.badRequest(refusal.message))
+            case .success(let planned): plans = planned
+            }
+            for plan in plans ?? [] {
+                if let driver = plan.driver, model.profile(id: driver) == nil {
+                    return .failure(.notFound("no driver “\(driver)”", detail: model.drivers.profiles.map(\.id).joined(separator: ", ")))
+                }
+                if let chosen = plan.model, let profile = model.profile(id: plan.driver ?? params.driver), !profile.acceptsModel {
+                    return .failure(.badRequest("the driver \(profile.id) takes no model (asked \(chosen) for attempt \(plan.index))"))
+                }
+            }
+        }
         guard !params.dryRun else {
             // Nothing is written: this is the answer an agent shows before asking for the real thing.
             return .success(.task(TaskNewResult(
@@ -937,7 +958,9 @@ final class AppControlService: ControlService {
                 repos: repos.map { TaskRepoResult(repo: $0, worktree: sandboxes.appending(path: $0).path,
                                                   branch: proposal.branch,
                                                   branchCreated: startPoint.requiredBranch == nil) },
-                note: note, issue: request.issue?.label
+                note: note, issue: request.issue?.label,
+                attempts: plans?.map { TaskAttemptResult(index: $0.index, name: $0.name, slug: $0.slug, branch: $0.branch,
+                                                         model: $0.model ?? requestedModel, driver: $0.driver ?? params.driver) }
             )))
         }
 
@@ -946,6 +969,32 @@ final class AppControlService: ControlService {
         let parentTask: TaskState? = if case .thread(let id, _) = origin {
             model.session(id)?.record.taskID.flatMap { raw in model.tasks.first { $0.record.id.rawValue == raw } }
         } else { nil }
+        if let plans {
+            let states: [TaskState]
+            do {
+                states = try await model.createAttempts(proposal, prompt: prompt, count: params.attempts, models: params.models,
+                                                        drivers: params.drivers, driverID: params.driver, in: scope.id, repos: repos,
+                                                        startPoint: startPoint, openThread: params.openThread, runSetup: params.runSetup,
+                                                        threadOrigin: threadOrigin, createdBy: caller.client, parentTask: parentTask?.id,
+                                                        deliverable: params.deliverable, issue: request.issue, model: requestedModel)
+            } catch {
+                return .failure(.failed("Scope could not create the attempts", detail: String(describing: error)))
+            }
+            NSApp.requestUserAttention(.informationalRequest)
+            let first = states[0].record
+            return .success(.task(TaskNewResult(
+                created: true, task: first.id.rawValue, name: first.name, slug: first.slug, branch: first.branch,
+                scope: summary.name, scopeSlug: summary.slug, root: first.root,
+                repos: first.repos.map { TaskRepoResult(repo: $0.repoRelativePath, worktree: $0.sandboxPath,
+                                                        branch: $0.branch, branchCreated: $0.branchCreated ?? false) },
+                thread: model.threads(in: first.id).first?.id.rawValue, topic: first.topic, note: note, issue: first.issue?.label,
+                attempts: zip(states, plans).map { state, plan in
+                    TaskAttemptResult(index: plan.index, task: state.record.id.rawValue, name: state.record.name,
+                                      slug: state.record.slug, branch: state.record.branch, model: plan.model ?? requestedModel,
+                                      driver: plan.driver ?? params.driver, thread: model.threads(in: state.id).first?.id.rawValue)
+                }
+            )))
+        }
         let topic = TaskTopic.inherit(requested: params.topic, parentTopic: parentTask?.record.topic,
                                       parentName: parentTask?.name)
         let state: TaskState

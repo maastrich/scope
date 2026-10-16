@@ -45,6 +45,8 @@ struct NewTaskSheet: View {
     @State private var proposing: Task<Void, Never>?
     @State private var isCreating = false
     @State private var runSetup = true
+    /// How many ways to run the brief: 1 is a task, more is a family of sibling tasks to compare (`TaskAttempts`).
+    @State private var attempts = 1
     /// The branch Create asked for is checked out in another working tree: which one, said in words.
     @State private var checkedOut: (branch: String, holder: String)?
     @State private var error: String?
@@ -251,6 +253,18 @@ struct NewTaskSheet: View {
                 .font(.scopeBody)
         }
 
+        SheetGroup(caption: attemptsCaption) {
+            SheetRow("Attempts") {
+                HStack(spacing: 8) {
+                    Text("\(attempts)")
+                        .foregroundStyle(Ink.primary)
+                    ScopeStepper(value: attempts, range: 1...TaskAttempts.maxCount) { attempts = $0 }
+                        .disabled(startPoint.continuesExistingWork)
+                        .usageID("attempts", label: "Attempts")
+                }
+            }
+        }
+
         SheetGroup {
             SectionLabel(text: "Prompt")
             Text(prompt.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -295,7 +309,7 @@ struct NewTaskSheet: View {
                 .disabled(!canContinue)
                 .usageID("continue", label: "Continue")
         case .proposal:
-            Button("Create") { create() }
+            Button(attempts > 1 ? "Create \(attempts) Attempts" : "Create") { create() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.scopePrimary)
                 .disabled(!canCreate)
@@ -402,6 +416,15 @@ struct NewTaskSheet: View {
 
     private var canContinue: Bool {
         !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var attemptsCaption: String {
+        if startPoint.continuesExistingWork { return "Work that continues a branch is one attempt." }
+        guard attempts > 1 else {
+            return "More than one runs the same brief that many times, as sibling tasks under a topic named after the title, to compare and keep one."
+        }
+        let branch = branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(attempts) tasks on \(branch)-a1…\(branch)-a\(attempts), each with its own thread, filed under “\(title.trimmingCharacters(in: .whitespacesAndNewlines))”. Compare them from the topic's menu; Keep this one renames the chosen task back and archives the others."
     }
 
     private var canCreate: Bool {
@@ -607,11 +630,18 @@ struct NewTaskSheet: View {
         )
         let request = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let repos = repos
+        let count = startPoint.continuesExistingWork ? 1 : attempts
         Task {
             do {
-                try await model.createTask(proposal, prompt: await model.expandMentions(request), driverID: driverID,
-                                           in: scope.id, repos: repos, startPoint: startPoint, runSetup: runSetup,
-                                           issue: resolution?.issue)
+                if count > 1 {
+                    try await model.createAttempts(proposal, prompt: await model.expandMentions(request), count: count, models: [],
+                                                   drivers: [], driverID: driverID, in: scope.id, repos: repos, startPoint: startPoint,
+                                                   runSetup: runSetup, issue: resolution?.issue)
+                } else {
+                    try await model.createTask(proposal, prompt: await model.expandMentions(request), driverID: driverID,
+                                               in: scope.id, repos: repos, startPoint: startPoint, runSetup: runSetup,
+                                               issue: resolution?.issue)
+                }
                 dismiss()
             } catch TaskError.branchAlreadyCheckedOut(_, let busy, let path) {
                 checkedOut = (busy, holder(of: path))

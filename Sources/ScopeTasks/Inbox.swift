@@ -31,12 +31,14 @@ public enum Inbox {
         case checksFailing
         /// The task was archived because its pull request merged.
         case archivedOnMerge
+        /// The task was kept out of its attempts; the others were archived, their branches kept (`TaskAttempts`).
+        case attemptKept
 
         /// Thread items clear with the thread's state; the others with a dismissal.
         public var isThreadItem: Bool {
             switch self {
             case .question, .permission, .reply, .failure, .stuck: true
-            case .readyToMerge, .checksFailing, .archivedOnMerge: false
+            case .readyToMerge, .checksFailing, .archivedOnMerge, .attemptKept: false
             }
         }
     }
@@ -107,15 +109,18 @@ public enum Inbox {
         public var archivedAt: Date?
         /// Being archived or closed right now: not listed either way until it settles.
         public var isDismantling: Bool
+        /// Set when the task was kept out of N attempts (`TaskRecord.attemptsKept`).
+        public var attemptsKept: TaskAttemptsKept?
 
         public init(id: TaskID, scopeID: ScopeID, name: String, pullRequest: PullRequestInput? = nil,
-                    archivedAt: Date? = nil, isDismantling: Bool = false) {
+                    archivedAt: Date? = nil, isDismantling: Bool = false, attemptsKept: TaskAttemptsKept? = nil) {
             self.id = id
             self.scopeID = scopeID
             self.name = name
             self.pullRequest = pullRequest
             self.archivedAt = archivedAt
             self.isDismantling = isDismantling
+            self.attemptsKept = attemptsKept
         }
     }
 
@@ -213,15 +218,25 @@ public enum Inbox {
     }
 
     static func items(for task: TaskInput, now: Date, archivedWindow: TimeInterval) -> [Item] {
-        guard let pr = task.pullRequest else { return [] }
+        var items: [Item] = []
+        // One item for the choice, as long as the archive notice it replaces would stay: the other attempts are
+        // away, their branches named here in case one is wanted back.
+        if let kept = task.attemptsKept, task.archivedAt == nil, now.timeIntervalSince(kept.at) < archivedWindow {
+            let branches = kept.otherBranches.isEmpty ? "" : " · branches kept: " + kept.otherBranches.joined(separator: ", ")
+            items.append(Item(id: "task:\(task.id.rawValue):kept", kind: .attemptKept, scopeID: task.scopeID, taskID: task.id,
+                              threadID: nil, title: task.name,
+                              detail: "kept out of \(kept.count) attempts · \(kept.count - 1) archived\(branches)",
+                              at: kept.at, fingerprint: "kept@\(kept.at.timeIntervalSinceReferenceDate)"))
+        }
+        guard let pr = task.pullRequest else { return items }
         if let archivedAt = task.archivedAt {
-            guard pr.state == .merged, now.timeIntervalSince(archivedAt) < archivedWindow else { return [] }
-            return [Item(id: "task:\(task.id.rawValue):archived", kind: .archivedOnMerge, scopeID: task.scopeID,
+            guard pr.state == .merged, now.timeIntervalSince(archivedAt) < archivedWindow else { return items }
+            return items + [Item(id: "task:\(task.id.rawValue):archived", kind: .archivedOnMerge, scopeID: task.scopeID,
                          taskID: task.id, threadID: nil, title: task.name, detail: "#\(pr.number) merged · \(pr.title)",
                          at: archivedAt, fingerprint: "archived@\(archivedAt.timeIntervalSinceReferenceDate)",
                          pullRequestURL: pr.url, pullRequestNumber: pr.number)]
         }
-        guard pr.state == .open else { return [] }
+        guard pr.state == .open else { return items }
         let kind: Kind
         let detail: String
         if pr.checks == .failing {
@@ -233,12 +248,13 @@ public enum Inbox {
             kind = .readyToMerge
             detail = "#\(pr.number) ready to merge · \(pr.title)"
         } else {
-            return []
+            return items
         }
-        return [Item(id: "task:\(task.id.rawValue):pr", kind: kind, scopeID: task.scopeID, taskID: task.id, threadID: nil,
-                     title: task.name, detail: detail, at: pr.updatedAt,
-                     fingerprint: "\(kind.rawValue)#\(pr.number)" + (kind == .checksFailing ? ":" + pr.failingChecks.sorted().joined(separator: ",") : ""),
-                     pullRequestURL: pr.url, pullRequestNumber: pr.number)]
+        items.append(Item(id: "task:\(task.id.rawValue):pr", kind: kind, scopeID: task.scopeID, taskID: task.id, threadID: nil,
+                          title: task.name, detail: detail, at: pr.updatedAt,
+                          fingerprint: "\(kind.rawValue)#\(pr.number)" + (kind == .checksFailing ? ":" + pr.failingChecks.sorted().joined(separator: ",") : ""),
+                          pullRequestURL: pr.url, pullRequestNumber: pr.number))
+        return items
     }
 
     private static func newer(_ existing: Item?, _ candidate: Item) -> Item {

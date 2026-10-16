@@ -46,8 +46,18 @@ enum InspectorTab: String, CaseIterable, Sendable, Hashable {
 
 /// The scope-wide views, shown as a sheet over the window from the sidebar's buttons (⇧⌘P, ⌥⌘G, the palette).
 enum GlobalSheet: String, Identifiable, Sendable, Hashable {
-    case pullRequests, graph, inbox
+    case pullRequests, graph, inbox, compareAttempts
     var id: String { rawValue }
+
+    /// The usage surface the sheet is recorded under.
+    var usageSurface: (id: String, label: String) {
+        switch self {
+        case .pullRequests: ("sheet.pull-requests", "Pull Requests")
+        case .graph: ("sheet.graph", "Graph")
+        case .inbox: ("sheet.inbox", "Inbox")
+        case .compareAttempts: ("sheet.compare-attempts", "Compare Attempts")
+        }
+    }
 }
 
 /// Where ⌘T opens the next thread, derived from the sidebar selection (`AppModel.newThreadTarget`).

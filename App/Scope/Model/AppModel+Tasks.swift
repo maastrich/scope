@@ -248,7 +248,7 @@ extension AppModel {
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
         startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
         threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
-        deliverable: String? = nil, model: String? = nil, issue: Issue? = nil
+        deliverable: String? = nil, model: String? = nil, issue: Issue? = nil, attempt: TaskAttempt? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
@@ -264,7 +264,7 @@ extension AppModel {
                 scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
                 createdBy: createdBy, topic: topic, parentTask: parentTask,
                 origin: threadOrigin.author == .control ? threadOrigin : nil, deliverable: deliverable,
-                issue: issue.map(LinkedIssue.init)
+                issue: issue.map(LinkedIssue.init), attempt: attempt
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)

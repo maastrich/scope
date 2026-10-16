@@ -93,6 +93,12 @@ enum PaletteModel {
                 items.append(PaletteItem(id: "new-task", section: .actions, icon: "arrow.triangle.branch", label: "New Task",
                                          hint: "in \(scope.name)", shortcut: "⇧⌘T") { model.presentNewTask(in: scope.id) })
             }
+            for group in model.attemptGroups(in: scope.id) {
+                items.append(PaletteItem(id: "compare-attempts-\(group.id)", section: .actions, icon: "rectangle.split.3x1",
+                                         label: "Compare Attempts of \(group.baseName)", hint: "\(group.count) attempts") {
+                    model.presentCompare(group: group.id)
+                })
+            }
             for task in model.tasks where task.scopeID == scope.id && task.record.isArchived && model.deliverable(of: task) != nil {
                 items.append(PaletteItem(id: "read-deliverable-\(task.id.rawValue)", section: .actions, icon: "doc.richtext",
                                          label: "Read Deliverable of \(task.name)",

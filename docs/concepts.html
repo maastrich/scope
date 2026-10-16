@@ -93,6 +93,26 @@ share its old topic; one filed elsewhere stays. The topic's own menu renames it,
 all. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
 
+<h3 id="attempts">Several attempts at one brief</h3>
+<p>When the best approach is uncertain, run the brief more than once. The <b>Attempts</b> stepper of the New Task
+sheet, <code>scope task new … --attempts 3</code> or the MCP argument <code>attempts</code> create that many sibling
+tasks under one topic named after the title — <i>Refresh tokens · attempt 1</i>, <i>2</i>, <i>3</i> — with the same
+brief, a branch each (<code>feat/refresh-a1</code>…), a thread each, and a model or driver of their own when
+<code>--models</code> / <code>--drivers</code> say so (one value applies to all, or one per attempt). An agent's
+attempts all count against its task budget: the call is refused with the number when N exceeds what is left.</p>
+<p><b>Compare attempts…</b> in the topic's menu (or the palette) opens one column per attempt: status, tokens, agent
+time, files changed (+N −M), what the last reply says about tests, and the opening of its deliverable — the report
+file, or the last answer. Under the columns, the diff of one attempt against another (their branches, as
+committed) or against the base (the task delta, uncommitted work included), drawn by the same renderer as the Delta
+column. <kbd>1</kbd>…<kbd>N</kbd> put an attempt on the left, <kbd>⇧1</kbd>…<kbd>⇧N</kbd> on the right,
+<kbd>0</kbd> the base; a click or a ⇧click on a column does the same. The diff's file list can copy a file from one
+attempt into another (<b>Copy into…</b>): the target is checkpointed first, so
+nothing is lost to the copy.</p>
+<p><b>Keep this one</b> is the end of it: the chosen task takes the brief's name and the plain branch back
+(<code>feat/refresh</code>, its upstream dropped so the next push names where it goes), leaves the topic, and the
+other attempts are archived — branches kept, answers kept, a restore away. The Inbox says so once, naming the branches
+that were kept. Attempts are worth their cost for high-uncertainty briefs; the skill says as much to the orchestrators.</p>
+
 <h3 id="delegation">Tasks started from a task</h3>
 <p>A task an agent creates from inside another task is not nested under it — the two usually share a topic, which
 already keeps them together. In the tree, with detailed rows, a quiet child's second line starts with <b>from</b> and
@@ -206,7 +226,7 @@ you and on Ask otherwise (a setting pins one or the other). A click anywhere els
 what you are looking at. Both shortcuts need no permission: they are registered with the system, not read from
 other apps. macOS does not say when another app holds the same chord; if a press never reaches Scope, pick another
 one in Settings.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

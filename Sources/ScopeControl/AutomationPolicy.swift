@@ -130,12 +130,23 @@ public struct AutomationPolicy: Sendable, Equatable {
     /// What `call` would add to the agents' load if it went ahead. A dry run creates nothing.
     public static func cost(of call: ControlCall) -> AutomationLoad {
         switch call {
-        case .threadNew: AutomationLoad(threads: 1)
-        case .taskNew(let params) where !params.dryRun: AutomationLoad(tasks: 1, threads: params.openThread ? 1 : 0)
+        case .threadNew: return AutomationLoad(threads: 1)
+        case .taskNew(let params) where !params.dryRun:
+            // N attempts are N tasks, each with its own thread: the budget sees them all before any is created.
+            let count = max(1, params.attempts)
+            return AutomationLoad(tasks: count, threads: params.openThread ? count : 0)
         // An archived task holds no budget; brought back, it holds one again, like a new one.
-        case .taskRestore: AutomationLoad(tasks: 1)
-        default: .zero
+        case .taskRestore: return AutomationLoad(tasks: 1)
+        default: return .zero
         }
+    }
+
+    /// The refusal when `count` attempts (`task new --attempts`) would take agents past their task budget, with the
+    /// numbers: the caller can only lower N, or archive something, knowing how far off it is.
+    public static func attemptsRefusal(count: Int, open: Int, limit: Int) -> String? {
+        let left = max(0, limit - open)
+        guard count > left else { return nil }
+        return "\(count) attempts asked, but agents may open \(left) more \(left == 1 ? "task" : "tasks") (\(open) of \(limit) open)"
     }
 
     /// The refusal for `call` when agents already hold `load` and it would take them past a budget, else `nil`.
@@ -143,6 +154,12 @@ public struct AutomationPolicy: Sendable, Equatable {
     public func budgetRefusal(_ call: ControlCall, from origin: ControlOrigin, load: AutomationLoad) -> ControlError? {
         guard origin.isAgent else { return nil }
         let cost = AutomationPolicy.cost(of: call)
+        if cost.tasks > 1, let refusal = AutomationPolicy.attemptsRefusal(count: cost.tasks, open: load.tasks, limit: settings.maxAgentTasks) {
+            // The caller asked for N: the number tells it what N would go through, or what to archive first.
+            return .denied(refusal, detail: "Ask for fewer attempts, or archive the tasks you created that are done "
+                           + "(`scope task archive <slug>`, their branches are kept), or have the user raise "
+                           + "Settings ▸ Automation ▸ Open tasks (now \(settings.maxAgentTasks)).")
+        }
         if cost.tasks > 0, load.tasks + cost.tasks > settings.maxAgentTasks {
             return .denied(
                 "agents already keep \(load.tasks) tasks open, the most Scope allows them",

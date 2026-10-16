@@ -29,6 +29,11 @@ public enum ScopeCLI {
     }
 
     /// A command line that says nothing usable.
+    /// `a,b,c` or `a b c`, as `--models` is typed.
+    static func list(_ raw: String) -> [String] {
+        raw.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init)
+    }
+
     public struct UsageError: Error, Sendable, Equatable, CustomStringConvertible {
         public var message: String
         public var usage: String
@@ -122,6 +127,11 @@ public enum ScopeCLI {
       --topic <text>                file it under a topic (default: the topic of the caller's own task)
       --deliverable <path>          the file the work ends in, relative to the task root or a sandbox; kept with
                                     the threads' last answers at archive (REPORT.md is kept anyway)
+      --attempts <n>                run the brief n ways (2–9): n sibling tasks under one topic, branches
+                                    <branch>-a1..n, to compare in Scope and keep one; each counts against the
+                                    agents' task budget
+      --models <a,b,c>              with --attempts: one model for all, or one per attempt
+      --drivers <x,y,z>             with --attempts: one driver for all, or one per attempt
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
       --no-setup                    skip the repositories' setup commands (.env files are still copied)
@@ -493,6 +503,14 @@ public enum ScopeCLI {
                 case "--pr": parameters.startPR = try value()
                 case "--issue": parameters.issue = try value()
                 case "--deliverable": parameters.deliverable = try value()
+                case "--attempts":
+                    let raw = try value()
+                    guard let count = Int(raw), count >= 1 else {
+                        throw UsageError(message: "--attempts takes a number of attempts, got “\(raw)”", usage: usage)
+                    }
+                    parameters.attempts = count
+                case "--models": parameters.models += Self.list(try value())
+                case "--drivers": parameters.drivers += Self.list(try value())
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false

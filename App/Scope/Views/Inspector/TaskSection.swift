@@ -310,6 +310,7 @@ private struct TaskCheckpointRow: View {
     private var who: String {
         switch checkpoint.reason {
         case .beforeRestore: "Before restore"
+        case .beforeCopy: "Before copy"
         case .turn: checkpoint.threadTitle ?? "Thread"
         }
     }

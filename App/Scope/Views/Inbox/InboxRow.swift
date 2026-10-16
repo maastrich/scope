@@ -112,6 +112,7 @@ struct InboxKindMark: View {
         case .readyToMerge: glyph("arrow.triangle.pull", PullRequestStyle.passing)
         case .checksFailing: glyph("xmark.circle", PullRequestStyle.failing)
         case .archivedOnMerge: glyph("archivebox", Ink.tertiary)
+        case .attemptKept: glyph("checkmark.seal", PullRequestStyle.passing)
         }
     }
 
