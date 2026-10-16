@@ -121,6 +121,12 @@ private struct GeneralSettingsView: View {
             }
             SettingsSection("Notifications") {
                 NotificationStatusRow()
+                Toggle("Show what the agent said", isOn: preference(\.notificationsQuoteAgent))
+                    .toggleStyle(.scope)
+                Text("A notification quotes the agent's question or the start of its answer. Off, it only says that the thread needs you or finished — worth it while sharing your screen.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Confirmations") {
                 Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))

@@ -105,6 +105,10 @@ import Testing
         #expect(ThreadStateMachine.next(.waiting(reason: .input), on: notified) == .waiting(reason: .input))
         #expect(ThreadStateMachine.next(.waiting(reason: .input), on: requested) == .waiting(reason: .permission))
         #expect(ThreadStateMachine.next(.running, on: notified) == .waiting(reason: .permission))
+        // The same test keeps the question's notification on screen.
+        #expect(ThreadStateMachine.keepsQuestion(.waiting(reason: .input), over: notified))
+        #expect(!ThreadStateMachine.keepsQuestion(.waiting(reason: .input), over: requested))
+        #expect(!ThreadStateMachine.keepsQuestion(.running, over: notified))
     }
 
     @Test func typicalAgentTurnSequence() {

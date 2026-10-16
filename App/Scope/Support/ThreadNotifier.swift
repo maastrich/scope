@@ -4,12 +4,14 @@ import UserNotifications
 
 /// macOS notifications about threads (spec §4.7). Authorization is requested the first time something is
 /// worth posting, never at launch. One notification per thread (`identifier` = thread id), so repeats
-/// replace each other; `clear` removes it once the user looks at the thread or it exits.
+/// replace each other; `clear` removes it once the user looks at the thread or it exits. Reply types an answer into
+/// the thread without bringing the app up (`AppModel.reply(_:to:)`).
 @MainActor
 final class ThreadNotifier {
     nonisolated static let category = "thread"
     nonisolated static let goToThreadAction = "goToThread"
     nonisolated static let seeDeltaAction = "seeDelta"
+    nonisolated static let replyAction = "reply"
 
     private var categoryRegistered = false
 
@@ -39,6 +41,7 @@ final class ThreadNotifier {
     private static func request(_ content: ThreadNotificationContent, threadID: ThreadID) -> UNNotificationRequest {
         let body = UNMutableNotificationContent()
         body.title = content.title
+        if let subtitle = content.subtitle { body.subtitle = subtitle }
         body.body = content.body
         body.categoryIdentifier = category
         body.threadIdentifier = threadID.rawValue
@@ -51,7 +54,11 @@ final class ThreadNotifier {
         categoryRegistered = true
         let goTo = UNNotificationAction(identifier: Self.goToThreadAction, title: "Go to Thread", options: [.foreground])
         let delta = UNNotificationAction(identifier: Self.seeDeltaAction, title: "See Delta", options: [.foreground])
-        let category = UNNotificationCategory(identifier: Self.category, actions: [goTo, delta], intentIdentifiers: [])
+        // No `.foreground`: answering from the banner is the point, the app stays where it is.
+        let reply = UNTextInputNotificationAction(identifier: Self.replyAction, title: "Reply", options: [],
+                                                  textInputButtonTitle: "Send", textInputPlaceholder: "Answer the thread")
+        let category = UNNotificationCategory(identifier: Self.category, actions: [reply, goTo, delta],
+                                              intentIdentifiers: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 }

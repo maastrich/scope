@@ -33,11 +33,15 @@ public enum ThreadStateMachine {
         if event.kind == .inputRequested, event.reason == "permission" {
             return next(current, on: .permissionRequested)
         }
-        if event.kind == .permissionRequested, current == .waiting(reason: .input),
-           event.payload[HookEvent.viaKey] == HookEvent.viaNotification {
-            return current
-        }
+        if keepsQuestion(current, over: event) { return current }
         return next(current, on: event.kind)
+    }
+
+    /// `true` for the `permission_prompt` notification that follows a question (see `next(_:on:)`): it changes
+    /// nothing, and must not replace the question's notification either.
+    public static func keepsQuestion(_ current: ThreadState, over event: AdapterEvent) -> Bool {
+        event.kind == .permissionRequested && current == .waiting(reason: .input)
+            && event.payload[HookEvent.viaKey] == HookEvent.viaNotification
     }
 
     /// Next state after the user's own input, or `nil` when it changes nothing.

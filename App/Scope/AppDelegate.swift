@@ -145,11 +145,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: Notifications (spec §4.7)
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// A click on the banner, "Go to Thread" or "See Delta": the app comes up on the thread.
+    /// A click on the banner, "Go to Thread" or "See Delta": the app comes up on the thread. Reply stays in the
+    /// background and types the answer into the thread.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let threadID = ThreadID(rawValue: response.notification.request.identifier)
         let showDelta = response.actionIdentifier == ThreadNotifier.seeDeltaAction
         guard let threadID else { return }
+        if response.actionIdentifier == ThreadNotifier.replyAction {
+            // Only plain values cross to the main actor: the response is not `Sendable`.
+            let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
+            await MainActor.run { AppServices.model?.reply(text, to: threadID) }
+            return
+        }
         await MainActor.run { AppServices.model?.reveal(thread: threadID, showDelta: showDelta) }
     }
 
