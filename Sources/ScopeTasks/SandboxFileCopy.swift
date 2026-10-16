@@ -78,6 +78,54 @@ public enum SandboxFileCopy {
         return plan
     }
 
+    /// Where a repository keeps the skills, slash commands and subagents Claude Code loads for it.
+    public static let driverResourceFolders = [".claude/skills", ".claude/commands", ".claude/agents"]
+
+    /// The entries of `folders` the base checkout has and the sandbox lacks — a skill folder, a command file —
+    /// each copied whole. They are there when a repository keeps them out of git (an ignored `.claude/`): Claude
+    /// Code finds the main checkout's own from a worktree it starts in, but not from one it is handed with
+    /// `--add-dir`, which is how the threads of a task of several repositories see each sandbox. Copied rather
+    /// than linked, so an agent editing a skill edits the sandbox's copy, never the user's checkout. Never
+    /// `settings.local.json` and the like: permission grants stay with the checkout unless `copyFiles` names them.
+    ///
+    /// The same refusals as `plan(globs:)`: a source leading out of the checkout, a sandbox path with a symlink on
+    /// it. A folder holding a link that would still point at the checkout once copied (absolute, or leading out of
+    /// the entry) is refused too.
+    public static func planResources(folders: [String] = driverResourceFolders, base: URL, sandbox: URL) -> Plan {
+        var plan = Plan()
+        let baseRoot = realPath(base) ?? base.standardizedFileURL.path
+        for folder in folders {
+            let sourceFolder = base.appending(path: folder, directoryHint: .isDirectory)
+            guard let resolvedFolder = realPath(sourceFolder) else { continue }
+            guard isInside(resolvedFolder, root: baseRoot) else {
+                plan.refusals.append(Refusal(path: folder, reason: "resolves outside the repository"))
+                continue
+            }
+            guard isDirectory(resolvedFolder) else { continue }
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: resolvedFolder)) ?? []).sorted()
+            for name in names where name != ".DS_Store" {
+                let relative = "\(folder)/\(name)"
+                guard let resolved = realPath(sourceFolder.appending(path: name)), isInside(resolved, root: baseRoot) else {
+                    plan.refusals.append(Refusal(path: relative, reason: "a symlink that leads out of the repository"))
+                    continue
+                }
+                if isDirectory(resolved), let link = linkLeavingEntry(resolved) {
+                    plan.refusals.append(Refusal(path: relative, reason: "holds a symlink (\(link)) that would still lead to the checkout"))
+                    continue
+                }
+                switch destination(for: relative, in: sandbox) {
+                case .copy(let destination):
+                    plan.copies.append(Copy(source: URL(fileURLWithPath: resolved), destination: destination, relativePath: relative))
+                case .refuse(let reason):
+                    plan.refusals.append(Refusal(path: relative, reason: reason))
+                case .skip:
+                    break
+                }
+            }
+        }
+        return plan
+    }
+
     /// Carries the plan out. Returns the relative paths copied, and the ones that failed with why.
     public static func apply(_ plan: Plan) -> (copied: [String], failed: [Refusal]) {
         var copied: [String] = []
@@ -113,7 +161,10 @@ public enum SandboxFileCopy {
         }
         var targetInfo = stat()
         guard stat(resolved, &targetInfo) == 0, (targetInfo.st_mode & S_IFMT) == S_IFREG else { return .skip }
+        return destination(for: relative, in: sandbox)
+    }
 
+    private static func destination(for relative: String, in sandbox: URL) -> Verdict {
         // Every existing component from the sandbox down must be a real directory or file: a symlink there would
         // carry the copy somewhere else.
         let components = relative.split(separator: "/").map(String.init)
@@ -127,6 +178,24 @@ public enum SandboxFileCopy {
             if index == components.count - 1 { return .skip }
         }
         return .copy(sandbox.appending(path: relative, directoryHint: .notDirectory))
+    }
+
+    /// The first link under `directory` that is absolute or resolves outside it, relative to `directory`.
+    private static func linkLeavingEntry(_ directory: String) -> String? {
+        guard let walker = FileManager.default.enumerator(atPath: directory) else { return nil }
+        while let relative = walker.nextObject() as? String {
+            let path = directory + "/" + relative
+            guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: path) else { continue }
+            guard !target.hasPrefix("/"), let resolved = realpath(path, nil) else { return relative }
+            defer { free(resolved) }
+            if !isInside(String(cString: resolved), root: directory) { return relative }
+        }
+        return nil
+    }
+
+    private static func isDirectory(_ path: String) -> Bool {
+        var info = stat()
+        return stat(path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFDIR
     }
 
     private static func isPattern(_ text: String) -> Bool {

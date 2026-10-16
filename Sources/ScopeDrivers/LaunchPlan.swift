@@ -120,7 +120,8 @@ public enum LaunchError: Error, Sendable, Equatable {
 
 /// Turns a profile + context into a `LaunchPlan`, or a readable `LaunchError`.
 public enum LaunchPlanner {
-    /// Steps: pick the argv for `mode`, expand placeholders, append `adapterArguments` (what the event
+    /// Steps: pick the argv for `mode`, expand placeholders, append the profile's `addDir` argv once per entry of
+    /// `additionalDirectories`, append `adapterArguments` (what the event
     /// adapter needs on the command line, e.g. `--settings <file>`; the same for a fresh launch and a
     /// resume), append the profile's `prompt` argv on a fresh launch with `values.prompt` set, resolve the
     /// executable against the login-shell PATH, verify `values.cwd` exists, build the child environment,
@@ -133,6 +134,7 @@ public enum LaunchPlanner {
         scopeVariables: TerminalEnvironment.ScopeVariables,
         appVersion: String,
         adapterArguments: [String] = [],
+        additionalDirectories: [String] = [],
         helpers: String? = nil,
         fileExists: (String) -> Bool = { directoryExists($0) }
     ) throws(LaunchError) -> LaunchPlan {
@@ -152,7 +154,13 @@ public enum LaunchPlanner {
         guard let command = argv.first, !command.isEmpty else {
             throw .commandNotFound(command: profile.command, searchedPATH: shellEnvironment.path, shell: shellEnvironment.shell)
         }
-        let arguments = Array(argv.dropFirst()) + adapterArguments
+        var directoryArguments: [String] = []
+        for directory in additionalDirectories {
+            var perDirectory = values
+            perDirectory.dir = directory
+            directoryArguments += try perDirectory.expand(profile.addDir ?? [])
+        }
+        let arguments = Array(argv.dropFirst()) + directoryArguments + adapterArguments
 
         guard let executable = ExecutableResolver.resolve(command, path: shellEnvironment.path, shell: shellEnvironment.shell) else {
             throw .commandNotFound(command: command, searchedPATH: shellEnvironment.path, shell: shellEnvironment.shell)

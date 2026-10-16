@@ -190,6 +190,39 @@ struct PlaceholderValuesTests {
         #expect(try plan(mode: .resume, prompt: "Add login").arguments == ["--resume", "sess-1", "--settings", "s.json"])
     }
 
+    @Test("the addDir argv is repeated per directory, after the prompt, on launch and resume")
+    func addDirArgvRepeated() throws {
+        let profile = DriverProfile(id: "x", name: "X", command: "/bin/echo", resume: ["/bin/echo", "--resume", "{resume_id}"],
+                                    prompt: ["{prompt}"], addDir: ["--add-dir", "{dir}"])
+        #expect(throws: Never.self) { try profile.validate() }
+        #expect(throws: DriverProfileError.badPlaceholder("path", in: "addDir")) {
+            try DriverProfile(id: "x", name: "X", command: "x", addDir: ["{path}"]).validate()
+        }
+        let shell = ResolvedShellEnvironment(shell: "/bin/zsh", variables: ["PATH": "/usr/bin:/bin"], source: .login)
+        let scope = TerminalEnvironment.ScopeVariables(thread: "3f9a2c17be04", scope: "acme", scopeRoot: "/tmp", sock: "/tmp/s", home: "/tmp")
+        func plan(_ profile: DriverProfile, mode: LaunchMode, directories: [String]) throws -> [String] {
+            var v = values
+            v.cwd = "/tmp"
+            v.prompt = "Add login"
+            return try LaunchPlanner.plan(profile: profile, mode: mode, values: v, shellEnvironment: shell, scopeVariables: scope,
+                                          appVersion: "0.1.0", adapterArguments: ["--settings", "s.json"],
+                                          additionalDirectories: directories).arguments
+        }
+        // `--add-dir` takes every word up to the next flag: placed before the prompt, it would swallow it.
+        #expect(try plan(profile, mode: .launch, directories: ["/t/api", "/t/web"])
+                == ["Add login", "--add-dir", "/t/api", "--add-dir", "/t/web", "--settings", "s.json"])
+        #expect(try plan(profile, mode: .resume, directories: ["/t/api"]) == ["--resume", "sess-1", "--add-dir", "/t/api", "--settings", "s.json"])
+        #expect(try plan(profile, mode: .launch, directories: []) == ["Add login", "--settings", "s.json"])
+        // A profile without `addDir` ignores the directories rather than failing the launch.
+        let bare = DriverProfile(id: "x", name: "X", command: "/bin/echo", prompt: ["{prompt}"])
+        #expect(try plan(bare, mode: .launch, directories: ["/t/api"]) == ["Add login", "--settings", "s.json"])
+    }
+
+    @Test("{dir} has no value outside addDir")
+    func dirOnlyInAddDir() {
+        #expect(throws: LaunchError.placeholderUnavailable(.dir)) { try values.expand("{dir}") }
+    }
+
     @Test("unknown names and stray braces pass through unchanged")
     func unknownNamesPassThrough() throws {
         #expect(try values.expand("{unknown} {} {Foo} {") == "{unknown} {} {Foo} {")

@@ -302,7 +302,10 @@ public actor TaskManager {
             let repoCommands = commands[repo.repoRelativePath] ?? SandboxCommands()
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
             let name = repo.isScopeRoot ? record.scopeName : repo.repoRelativePath
-            let plan = SandboxFileCopy.plan(globs: repoCommands.copyFiles, base: base, sandbox: repo.sandboxURL)
+            var plan = SandboxFileCopy.plan(globs: repoCommands.copyFiles, base: base, sandbox: repo.sandboxURL)
+            let resources = SandboxFileCopy.planResources(base: base, sandbox: repo.sandboxURL)
+            plan.copies += resources.copies
+            plan.refusals += resources.refusals
             let (copied, copyFailures) = SandboxFileCopy.apply(plan)
             for path in copied {
                 log += "[\(name)] copied \(path) from the base checkout\n"

@@ -74,6 +74,11 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// prompt): `["{prompt}"]` for tools that take the prompt as a positional argument. Nil → the prompt
     /// is not passed on the command line.
     public var prompt: [String]?
+    /// Arguments appended once per additional directory a thread should see besides its cwd — every sandbox of
+    /// a task of several repositories, whose threads start at the task root — with `{dir}` standing for it:
+    /// `["--add-dir", "{dir}"]` for Claude Code. They go after the prompt (a variadic flag before it would take
+    /// the prompt for a directory), on a fresh launch and a resume alike. Nil → the thread only sees its cwd.
+    public var addDir: [String]?
     /// Event adapter.
     public var adapter: Adapter?
     /// `true` on bundled copies. Keep it (with `version`) to receive updates of the bundled profile; drop
@@ -96,6 +101,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         headless: [String]? = nil,
         headlessLight: [String]? = nil,
         prompt: [String]? = nil,
+        addDir: [String]? = nil,
         adapter: Adapter? = nil,
         builtin: Bool? = nil,
         version: Int? = nil,
@@ -112,6 +118,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         self.headless = headless
         self.headlessLight = headlessLight
         self.prompt = prompt
+        self.addDir = addDir
         self.adapter = adapter
         self.builtin = builtin
         self.version = version
@@ -133,6 +140,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         headless = try container.decodeIfPresent([String].self, forKey: .headless)
         headlessLight = try container.decodeIfPresent([String].self, forKey: .headlessLight)
         prompt = try container.decodeIfPresent([String].self, forKey: .prompt)
+        addDir = try container.decodeIfPresent([String].self, forKey: .addDir)
         adapter = try container.decodeIfPresent(Adapter.self, forKey: .adapter)
         builtin = try container.decodeIfPresent(Bool.self, forKey: .builtin)
         version = try container.decodeIfPresent(Int.self, forKey: .version)
@@ -155,7 +163,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`,
-    /// `headlessLight`, `prompt` and `env`.
+    /// `headlessLight`, `prompt`, `addDir` and `env`.
     public func validate() throws(DriverProfileError) {
         guard Self.isValidID(id) else { throw .invalidID(id) }
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -167,6 +175,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         try Self.checkPlaceholders(in: headless ?? [], field: "headless")
         try Self.checkPlaceholders(in: headlessLight ?? [], field: "headlessLight")
         try Self.checkPlaceholders(in: prompt ?? [], field: "prompt")
+        try Self.checkPlaceholders(in: addDir ?? [], field: "addDir")
         try Self.checkPlaceholders(in: env.keys.sorted().map { env[$0] ?? "" }, field: "env")
     }
 
@@ -235,6 +244,8 @@ public enum DriverPlaceholder: String, CaseIterable, Sendable {
     /// driver pick the matching theme — Claude Code's `dark-ansi` / `light-ansi`, which colour with the
     /// terminal's 16 ANSI colours, are what makes its output follow the app's appearance.
     case theme = "theme"
+    /// One additional directory, in `addDir` (which is repeated for each); no value anywhere else.
+    case dir = "dir"
 
     /// Every `{name}`-shaped token in `string`, in order, including unknown names (for validation).
     public static func referencedNames(in string: String) -> [String] {
@@ -303,6 +314,8 @@ public struct PlaceholderValues: Sendable {
     public var scopeHook: String?
     /// `{theme}` — the terminal palette at launch; dark unless the caller says otherwise (headless runs).
     public var theme: TerminalTheme
+    /// `{dir}` — set by `LaunchPlanner` for each repetition of the profile's `addDir` argv.
+    public var dir: String?
 
     public init(
         threadID: String,
@@ -313,7 +326,8 @@ public struct PlaceholderValues: Sendable {
         home: String,
         prompt: String? = nil,
         scopeHook: String? = nil,
-        theme: TerminalTheme = .dark
+        theme: TerminalTheme = .dark,
+        dir: String? = nil
     ) {
         self.threadID = threadID
         self.resumeID = resumeID
@@ -324,6 +338,7 @@ public struct PlaceholderValues: Sendable {
         self.prompt = prompt
         self.scopeHook = scopeHook
         self.theme = theme
+        self.dir = dir
     }
 
     /// The value for one placeholder, nil when it has no value in this context.
@@ -338,6 +353,7 @@ public struct PlaceholderValues: Sendable {
         case .prompt: return prompt
         case .scopeHook: return scopeHook
         case .theme: return theme.rawValue
+        case .dir: return dir
         }
     }
 

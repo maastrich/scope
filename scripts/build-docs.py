@@ -526,7 +526,11 @@ it before it starts:</p>
   <li>It copies the files your base checkout keeps out of git, <code>.env*</code> by default. A file already in the
   sandbox is never overwritten, and nothing is followed out of the repository: <code>..</code>, a symlink leading
   outside, a sandbox folder that is a symlink are all refused. A copied file the repository does not ignore is
-  added to <code>.git/info/exclude</code>, so it cannot end up in a commit.</li>
+  added to <code>.git/info/exclude</code>, so it cannot end up in a commit. The skills, commands and agents under
+  <code>.claude/skills</code>, <code>.claude/commands</code> and <code>.claude/agents</code> that the sandbox lacks
+  (a repository that ignores <code>.claude/</code>) are copied too, each whole, with no setting needed. They are
+  copies, not links, so an agent editing a skill never edits your checkout; <code>settings.local.json</code> is
+  left behind unless <code>copyFiles</code> names it.</li>
   <li>It runs the repository's <b>setup</b> command — <code>pnpm install</code>, <code>bundle</code>,
   <code>make deps</code> — in the sandbox, with your login-shell environment.</li>
 </ol>
@@ -586,6 +590,13 @@ the installed drivers read (<code>AGENTS.md</code>, and <code>CLAUDE.md</code> f
 <code>CLAUDE.md</code> stays exactly as it is. For Claude Code the task context then goes to
 <code>CLAUDE.local.md</code>, which Claude reads alongside the repository's file (excluded from git like the
 others); other drivers start from the repository's file and their prompt.</p>
+<h3 id="skills">Every repository's skills</h3>
+<p>A thread at the root of a task of several repositories would see none of their skills, slash commands or
+subagents: Claude Code looks for <code>.claude/</code> in its own folder, and the repositories sit one level down.
+So Scope hands it each sandbox with <code>--add-dir</code> (the profile's <code>addDir</code>), and sets
+<code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> so each repository's <code>CLAUDE.md</code> is read
+from the start rather than only when the agent opens a file there. A thread already running when you add a
+repository sees it the next time it is relaunched or resumed.</p>
 
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
@@ -768,7 +779,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   "name": "Claude Code",
   "command": "claude",
   "args": [],
-  "env": {},
+  "env": { "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1" },
   "context": { "file": "CLAUDE.md", "mode": "generate" },
   "resume": ["claude", "--resume", "{resume_id}"],
   "headless": ["claude", "-p", "{prompt}", "--output-format", "json"],
@@ -776,6 +787,7 @@ adding a fifth is a text edit, not a rebuild.</p>
                     "--tools", "Bash", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence",
                     "--allowedTools", "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"],
   "prompt": ["{prompt}"],
+  "addDir": ["--add-dir", "{dir}"],
   "adapter": { "kind": "claude-hooks" },
   "icon": "sparkles"
 }</code></pre>
@@ -793,6 +805,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>headless</code></td><td>full argv for one-shot runs: graph level 1, task branch proposals</td></tr>
   <tr><td><code>headlessLight</code></td><td>full argv for a <b>microsession</b>: the one short question the New Task sheet asks (branch, folder, repositories, pull request). Meant for the driver's light model and a read-only tool allowlist, so it can look a mentioned pull request up with <code>gh</code>. Falls back to <code>headless</code> when absent. The flags that trim the run matter as much as the model: loading one tool, no settings sources, no MCP and no session file roughly halves both the wall clock and the cost. Keep <code>{prompt}</code> ahead of a variadic flag like <code>--tools</code> or <code>--allowedTools</code>, which would otherwise swallow it</td></tr>
   <tr><td><code>prompt</code></td><td>arguments appended when a thread starts with an initial prompt, e.g. <code>["{prompt}"]</code></td></tr>
+  <tr><td><code>addDir</code></td><td>arguments repeated for every other directory the thread should see, <code>{dir}</code> standing for it: each sandbox of a task of several repositories, whose threads start at the task root. <code>["--add-dir", "{dir}"]</code> for Claude Code. They come after the prompt, on a launch and a resume alike, since a variadic flag before the prompt would take it for a directory. Absent, the thread sees its working directory only</td></tr>
   <tr><td><code>adapter</code></td><td>which event adapter turns the tool's hooks into thread states</td></tr>
   <tr><td><code>icon</code></td><td>SF Symbol shown on sidebar rows and in menus</td></tr>
   <tr><td><code>builtin</code>, <code>version</code></td><td>present on the bundled copies; drop them once you edit the file and Scope will never touch it again</td></tr>
@@ -806,6 +819,7 @@ adding a fifth is a text edit, not a rebuild.</p>
   <tr><td><code>{prompt}</code></td><td>the initial prompt, or the meta-prompt for a headless run</td></tr>
   <tr><td><code>{cwd}</code>, <code>{scope}</code>, <code>{task}</code>, <code>{home}</code></td><td>working directory, scope root, task slug, <code>SCOPE_HOME</code></td></tr>
   <tr><td><code>{scope_hook}</code></td><td>path of the bundled <code>scope-hook</code> helper</td></tr>
+  <tr><td><code>{dir}</code></td><td>one additional directory (<code>addDir</code> only)</td></tr>
 </table>
 <p>A profile that uses a placeholder Scope cannot fill is refused at load time rather than at launch time.</p>
 

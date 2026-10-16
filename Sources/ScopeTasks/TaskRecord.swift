@@ -254,6 +254,17 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         return rootURL
     }
 
+    /// The sandboxes a thread started at `cwd` should see besides it (the driver profile's `addDir`): every
+    /// active sandbox that neither is `cwd` nor contains it. Empty for a one-repository task, whose threads start
+    /// in the sandbox; every sandbox for a thread at the root of a task of several repositories, where the
+    /// repositories' own skills and instructions would otherwise stay one level down, out of the driver's sight.
+    public func additionalDirectories(forCwd cwd: String) -> [String] {
+        let cwd = URL(fileURLWithPath: cwd).standardizedFileURL.path
+        return activeRepos.map(\.sandboxURL.standardizedFileURL.path).filter { sandbox in
+            cwd != sandbox && !cwd.hasPrefix(sandbox + "/")
+        }
+    }
+
     /// The active sandbox `path` is in (or is), so a thread that wandered into a subfolder still names its
     /// checkout. nil at the task root of a task of several repositories, and outside the task.
     public func sandbox(containing path: String) -> TaskRepo? {

@@ -59,6 +59,7 @@ struct ThreadLauncher {
             scopeVariables: variables,
             appVersion: env.appVersion,
             adapterArguments: adapterArguments,
+            additionalDirectories: task?.additionalDirectories(forCwd: record.cwd) ?? [],
             helpers: helpersDirectory
         )
         if let task {
