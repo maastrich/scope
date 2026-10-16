@@ -131,6 +131,27 @@ import Testing
         #expect(ControlCall.ping.timeout < ControlCall.threadNew(ThreadNewParams()).timeout)
         #expect(ControlCall.list(ListParams()).timeout < ControlCall.taskNew(TaskNewParams(prompt: "x")).timeout)
     }
+
+    @Test func schedulesAndMilestonesRoundTrip() throws {
+        for call in [ControlCall.scheduleList(ScheduleListParams(scope: "acme")), .scheduleRun(ScheduleRunParams(name: "morning")),
+                     .milestoneAdd(MilestoneAddParams(task: "m", title: "Token model", validation: "pnpm test", child: "c")),
+                     .milestoneDone(MilestoneDoneParams(milestone: "2")),
+                     .taskNew(TaskNewParams(prompt: "rework auth", mission: true))] {
+            let request = ControlRequest(id: "abcd1234", caller: Self.caller, call: call)
+            #expect(try ControlRequest.decode(try request.encoded()).get() == request)
+        }
+        let summary = ScheduleSummary(id: "0badf00d", name: "Morning", scope: "Acme", scopeSlug: "acme", rule: "daily at 09:00",
+                                      target: "orchestrator", enabled: true, prompt: "p", next: Date(timeIntervalSince1970: 1_800_000_000),
+                                      lastRunAt: Date(timeIntervalSince1970: 1_799_000_000), lastOutcome: "replied", lastSummary: "all green")
+        let answer = ControlResponse.result(id: "7", .schedules(ScheduleListResult(schedules: [summary])))
+        #expect(try ControlResponse.decode(try answer.encoded(), method: .scheduleList) == answer)
+        let text = CLIRenderer.text(.schedules(ScheduleListResult(schedules: [summary])))
+        #expect(text.contains("Morning") && text.contains("daily at 09:00") && text.contains("replied — all green"))
+        #expect(CLIRenderer.text(.schedules(ScheduleListResult(schedules: []))).contains("no schedules"))
+        // A done is answered as an action, like a topic.
+        let done = ControlResponse.result(id: "7", .action(ActionResult(message: "validated"), .milestoneDone))
+        #expect(try ControlResponse.decode(try done.encoded(), method: .milestoneDone) == done)
+    }
 }
 
 /// The calls that act on something existing: stop, close, type, undo a task.

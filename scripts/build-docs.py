@@ -465,7 +465,9 @@ the window: <b>Inbox</b> (<kbd>⇧⌘I</kbd>) lists what needs you, in every sco
 <p>One list of what needs the owner, across every scope: threads waiting for an answer or a permission (with the
 question), turns that finished while you were not looking (the first line of the reply), turns that failed (the
 error), tasks whose pull request is ready to merge or has a failing check, and tasks archived when their pull
-request merged (kept three days, with <b>Restore</b>). Items are grouped by scope, the scope with the newest news
+request merged (kept three days, with <b>Restore</b>), and the runs of <a href="cli.html#schedules">scheduled
+prompts</a> — <i>Schedule &lt;name&gt; ran</i>, with the first line of the reply (kept three days, or until marked
+read). Items are grouped by scope, the scope with the newest news
 first, each with its state, its task and its age. The sidebar button carries the count; it turns to the waiting
 colour while a thread is blocked on you.</p>
 <p>Every action is in place, without moving the selection or the terminal on screen: <b>Reply</b> opens a field
@@ -473,8 +475,8 @@ under the item and sends the way the sidebar's reply does; <b>Open</b> reveals t
 <b>Mark as Read</b> clears a thread item, and dismisses a pull request item until the pull request changes;
 <b>Archive Task</b>, <b>Open Pull Request in Browser</b> and <b>Send the failing checks to the thread</b> do what
 the inspector does. Keys: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>↩</kbd> open, <kbd>r</kbd> reply, <kbd>e</kbd> mark
-read, <kbd>a</kbd> archive, <kbd>o</kbd> open the pull request, <kbd>s</kbd> send the checks; the foot of the sheet
-shows the keys of the selected item.</p>
+read, <kbd>a</kbd> archive, <kbd>o</kbd> open the pull request, <kbd>s</kbd> send the checks, <kbd>v</kbd> read a
+schedule's reply; the foot of the sheet shows the keys of the selected item.</p>
 <p>The menu bar item is the same list, compact, with Reply and Open on each item — so an answer can go out
 without bringing the window up. Its <b>Ask Orchestrator…</b> entry opens the <a href="#quick-panel">quick panel</a>.</p>
 
@@ -691,6 +693,23 @@ So Scope hands it each sandbox with <code>--add-dir</code> (the profile's <code>
 <code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> so each repository's <code>CLAUDE.md</code> is read
 from the start rather than only when the agent opens a file there. A thread already running when you add a
 repository sees it the next time it is relaunched or resumed.</p>
+
+<h2 id="missions">Missions</h2>
+<p>A <b>mission</b> is a task whose prompt is a goal too big for one task: <code>scope task new --mission</code>,
+<code>mission: true</code> in the MCP tool, or the <b>Mission</b> box of the New Task sheet. Its context file tells
+the agent the protocol: split the goal into milestones, each one task's worth and each with a <b>validation</b> — a
+shell command that proves it, the test suite, a build, <code>gh pr checks &lt;branch&gt;</code> — open one milestone
+at a time as a child task, mark it done when the child reports, and open the next only once the previous one is
+validated. Scope stores and validates; the orchestrator plans.</p>
+<pre><code>scope task milestone add rework-auth "Token model" --validate "pnpm test"
+scope task milestone done rework-auth 1 --child token-model</code></pre>
+<p>Marking a milestone done runs its command in the child task's sandbox (the mission's without a child), with the
+task's variables, and records the verdict on the mission: <i>validated</i> on exit 0, <i>failed</i> otherwise with
+the end of the log, which also goes to the milestone's thread so it can fix and mark done again. A milestone
+without a command is reached when marked done. An agent may add or mark milestones from inside the mission or
+any of its tasks, without approval — nothing is opened or removed. The Task section shows the checklist (state,
+command, child task, the log of a failure on hover) and the sidebar row the progress (<code>2/5</code>); the
+context file lists the milestones as they stand.</p>
 
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
@@ -1090,6 +1109,8 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
+scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
@@ -1197,6 +1218,18 @@ per area; those never used in the period; for each command, how often it came fr
 palette or a click; the CLI and MCP calls made by you and by agents; the time spent in each sheet and section; and
 what rose or fell against the period before. It holds ids, never what you type, a path or a name. Settings ▸
 General ▸ Usage turns it off or clears it. The MCP tool is <code>scope_usage</code>.</p>
+<h3 id="schedules">Scheduled prompts</h3>
+<p>Scope can send a prompt on its own — every hour at a minute, every day, on weekdays or once a week at a time —
+to a scope's orchestrator, or into a new task with a driver and model of its own. Schedules live on the scope
+(<b>Settings ▸ Automation ▸ Schedules</b>, or the scope's settings sheet): name, rule, prompt, target, paused or
+not, and the last run. Two examples are offered at creation, paused: a morning look at the pull requests whose
+checks are red, an evening <code>scope summary today</code>. Occurrences come from the calendar, so a daily 09:00
+stays 09:00 across the clock change; at launch a daily, weekday or weekly prompt missed in the last day fires once
+(<b>Catch up at launch</b>, on by default). The reply lands in the <a href="concepts.html#inbox">Inbox</a> as
+<i>Schedule &lt;name&gt; ran — &lt;first line&gt;</i>, with <b>Read reply</b>. <code>scope schedule list</code>
+(<code>scope_schedule_list</code>) shows every schedule with its next fire and last run; <code>scope schedule run
+&lt;name&gt;</code> (<code>scope_schedule_run</code>) fires one now, paused or not — from an agent, with the
+approval set for creating a task.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
@@ -1497,7 +1530,8 @@ FIG_SETTINGS
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive
-  Scope, how deep agents may open agents, and whether opening a thread or creating a task asks you first. See
+  Scope, how deep agents may open agents, and whether opening a thread or creating a task asks you first; the
+  <a href="cli.html#schedules">scheduled prompts</a> of each scope, and whether a missed one fires at launch. See
   <a href="cli.html">Command line and MCP</a>.</li>
   <li><b>Assist</b> — off, the on-device model only, or that model with Haiku as a capped second opinion; what the
   assistant may decide, and what it did today. See <a href="adapters.html#assist">the assistant</a>.</li>

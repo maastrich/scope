@@ -143,6 +143,9 @@ struct InboxView: View {
         case "s":
             guard item.kind == .checksFailing else { return .ignored }
             model.sendInboxCheckFailures(item)
+        case "v":
+            guard item.kind == .scheduleRan, item.threadID != nil else { return .ignored }
+            model.readInboxReply(item)
         default:
             return .ignored
         }
@@ -216,6 +219,7 @@ struct InboxKeyHints: View {
                 if item.kind == .readyToMerge || item.kind == .checksFailing { hint("a", "archive task") }
                 if item.pullRequestURL != nil { hint("o", "open PR") }
                 if item.kind == .checksFailing { hint("s", "send checks to thread") }
+                if item.kind == .scheduleRan, item.threadID != nil { hint("v", "read reply") }
             }
             Spacer()
             hint("esc", "close")

@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 21
+    public static let version = 22
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -199,7 +199,7 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--issue I] [--title T] [--topic P] [--deliverable F] [--model M] [--attempts N] [--models A,B] [--drivers X,Y] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, issue, title, topic, deliverable, model, attempts, models: [A, B], drivers: [X, Y], open_thread: false, run_setup: false, dry_run}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--issue I] [--title T] [--topic P] [--deliverable F] [--model M] [--attempts N] [--models A,B] [--drivers X,Y] [--mission] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, issue, title, topic, deliverable, model, attempts, models: [A, B], drivers: [X, Y], mission: true, open_thread: false, run_setup: false, dry_run}` |
         | `scope thread new [--task T] [--repo R] [--driver D] [--model M] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, model, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
@@ -214,6 +214,9 @@ public struct SkillInstaller: Sendable {
         | `scope task checkpoints [<slug>] [--scope S]` | `scope_task_checkpoints` `{task, scope}` |
         | `scope task restore-checkpoint [<slug>] <n> [--scope S]` | `scope_task_restore_checkpoint` `{task, number, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
+        | `scope task milestone add [<slug>] "<title>" [--validate C] [--child S]` | `scope_task_milestone_add` `{task, title, validation, child}` |
+        | `scope task milestone done [<slug>] <n\\|title> [--child S]` | `scope_task_milestone_done` `{task, milestone, child}` |
+        | `scope schedule list [--scope S]` / `scope schedule run <name>` | `scope_schedule_list` `{scope}` / `scope_schedule_run` `{name, scope}` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope release [X.Y.Z] [--repo R] [--scope S] [--dry-run] [--force]` | `scope_release` `{version, repo, scope, dry_run, force}` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
@@ -441,6 +444,31 @@ public struct SkillInstaller: Sendable {
         A release is the one thing Scope does not let agents do without asking by default: Settings ▸ Automation ▸
         Releases is *after asking me*, because a pushed tag is a shipped version and nothing takes it back. Refused
         or unanswered, report it and stop; do not tag by hand instead.
+
+        ## Missions
+
+        A **mission** is a task whose brief is a goal too big for one task (`scope task new --mission`, `mission: true`,
+        or the New Task sheet). Its context file says so, and its agent is the mission's orchestrator. The protocol:
+
+        1. Split the goal into milestones, in order, each one task's worth, each with a **validation**: a shell command
+           that proves it, run by Scope in the sandbox — the test suite, a build, `gh pr checks <branch>`. Register
+           them: `scope task milestone add "<title>" --validate "<command>"` (from inside the mission, no slug needed).
+        2. Open **one milestone at a time** as a child task (`scope task new`, same topic), with a complete brief, and
+           wait for its thread.
+        3. When it reports, `scope task milestone done <n> --child <slug>`: Scope runs the validation in the child's
+           sandbox and records the verdict. `validated` — open the next milestone. `failed` — the log went to the
+           child's thread; let it fix, then mark done again.
+        4. Never open the next milestone before the previous one is validated. Report when every milestone is.
+
+        Scope stores and validates; you plan. The user sees the checklist in the Task section and `3/5` in the sidebar.
+
+        ## Schedules
+
+        The user can have Scope send a prompt on its own — hourly, daily, on weekdays, weekly — to a scope's
+        orchestrator or into a new task (Settings ▸ Automation ▸ Schedules). `scope schedule list` shows them with
+        their next fire and last run; `scope schedule run <name>` fires one now. A run's reply lands in the user's
+        Inbox. If you are the orchestrator and a prompt arrives under a `[Scope: scheduled prompt …]` line, answer it
+        completely: the first line of your answer is what the user reads in the Inbox.
 
         ## What you may do
 

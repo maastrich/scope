@@ -226,4 +226,20 @@ import Testing
         }
         #expect(params.deliverable == "REPORT.md")
     }
+
+    @Test func schedulesAndMilestonesMapOntoTheirCalls() throws {
+        #expect(Self.call("scope_schedule_list", "{}") == .success(.scheduleList(ScheduleListParams())))
+        #expect(Self.call("scope_schedule_run", #"{"schedule":"morning","scope":"acme"}"#)
+            == .success(.scheduleRun(ScheduleRunParams(name: "morning", scope: "acme"))))
+        #expect(Self.call("scope_task_milestone_add", #"{"title":"Token model","validate":"pnpm test","slug":"rework-auth"}"#)
+            == .success(.milestoneAdd(MilestoneAddParams(task: "rework-auth", title: "Token model", validation: "pnpm test"))))
+        #expect(Self.call("scope_task_milestone_done", #"{"number":"2","child_task":"token-model"}"#)
+            == .success(.milestoneDone(MilestoneDoneParams(milestone: "2", child: "token-model"))))
+        guard case .taskNew(let params) = try Self.call("scope_task_new", #"{"prompt":"rework auth","mission":true}"#).get() else {
+            Issue.record("a mission is a task"); return
+        }
+        #expect(params.mission)
+        let names = Set(MCPBridge.tools.map(\.name))
+        #expect(names.isSuperset(of: ["scope_schedule_list", "scope_schedule_run", "scope_task_milestone_add", "scope_task_milestone_done"]))
+    }
 }

@@ -186,7 +186,8 @@ public enum MCPBridge {
             "deliverable":{"type":"string","description":"For a study whose result is a document: the file it ends in, relative to the task root or a sandbox (docs/study.md). Kept with the threads' last answers when the task is archived; REPORT.md is kept anyway."},\
             "attempts":{"type":"integer","minimum":1,"maximum":9,"description":"Run the brief this many ways: N sibling tasks under one topic named after the brief, branches <branch>-a1..N, same prompt, which the user compares in Scope and keeps one of (the others are archived, branches kept). Worth it for a brief whose best approach is uncertain; each attempt counts against the agents' task budget, and the call is refused with the number when N exceeds what is left. Default 1."},\
             "models":{"type":"array","items":{"type":"string"},"description":"With attempts: the model of each attempt — one for all, or one per attempt."},\
-            "drivers":{"type":"array","items":{"type":"string"},"description":"With attempts: the driver of each attempt — one for all, or one per attempt."}\
+            "drivers":{"type":"array","items":{"type":"string"},"description":"With attempts: the driver of each attempt — one for all, or one per attempt."},\
+            "mission":{"type":"boolean","description":"A mission: the prompt is a goal too big for one task. Its agent is told to split it into milestones (scope_task_milestone_add), open one child task at a time and mark each done (scope_task_milestone_done) so Scope validates it before the next opens."}\
             },"required":["prompt"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -437,6 +438,72 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_task_milestone_add",
+            title: "Name a milestone on a mission",
+            description: """
+            Adds a milestone to a mission (a task created with mission: true): a title and a validation, the shell \
+            command Scope runs in the milestone's sandbox when it is marked done — the test suite, a build, `gh pr \
+            checks <branch>` for green checks. Milestones are numbered in the order added. Omit task from inside the \
+            mission or one of its child tasks.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"The mission, by id or slug; omitted means the mission you work in."},\
+            "title":{"type":"string","description":"What the milestone delivers."},\
+            "validation":{"type":"string","description":"Shell command that proves it, run in the sandbox when the milestone is marked done; must exit 0."},\
+            "child":{"type":"string","description":"The child task doing it, by id or slug, when it already exists."}\
+            },"required":["title"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_task_milestone_done",
+            title: "Mark a milestone done",
+            description: """
+            Marks a milestone of a mission done. Scope then runs its validation command in the child task's sandbox \
+            (the mission's when no child is named) and records the verdict: validated, or failed with the end of the \
+            log, which also goes to the milestone's thread. The answer waits for the validation. Open the next \
+            milestone only once this one is validated.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"The mission, by id or slug; omitted means the mission you work in."},\
+            "milestone":{"type":"string","description":"The milestone's number (1-based), id or title."},\
+            "child":{"type":"string","description":"The child task that did it, by id or slug; its sandbox runs the validation and its thread gets a failure."}\
+            },"required":["milestone"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_schedule_list",
+            title: "List the scheduled prompts",
+            description: """
+            The prompts Scope sends on its own (Settings ▸ Automation ▸ Schedules): for each, its rule, where it goes \
+            (the scope's orchestrator or a new task), when it fires next, and what its last run answered.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "scope":{"type":"string","description":"Slug, name, id or path; omitted lists every scope."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
+            name: "scope_schedule_run",
+            title: "Run a scheduled prompt now",
+            description: """
+            Fires a schedule now, whatever its rule says: the prompt goes to the scope's orchestrator or opens its task, \
+            and the reply lands in the user's Inbox as the schedule's run. Paused schedules run too.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "name":{"type":"string","description":"The schedule's name or id."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the name exists in several."}\
+            },"required":["name"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
             name: "scope_ping",
             title: "Check Scope",
             description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying.",
@@ -500,6 +567,14 @@ public enum MCPBridge {
                 return .success(.release(try decoder.decode(ReleaseArguments.self, from: arguments).call))
             case "scope_usage":
                 return .success(.usage(try decoder.decode(UsageParams.self, from: arguments)))
+            case "scope_task_milestone_add":
+                return .success(.milestoneAdd(try decoder.decode(MilestoneAddParams.self, from: arguments)))
+            case "scope_task_milestone_done":
+                return .success(.milestoneDone(try decoder.decode(MilestoneDoneParams.self, from: arguments)))
+            case "scope_schedule_list":
+                return .success(.scheduleList(try decoder.decode(ScheduleListParams.self, from: arguments)))
+            case "scope_schedule_run":
+                return .success(.scheduleRun(try decoder.decode(ScheduleRunParams.self, from: arguments)))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -530,6 +605,7 @@ public enum MCPBridge {
         case .taskCheckpoints(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
+        case .schedules(let result): try encoder.encode(result)
         }
     }
 
@@ -579,6 +655,11 @@ public enum MCPBridge {
             "scope_task_restore_checkpoint": taskID.merging(["n": .rename("number"), "checkpoint": .rename("number")]) { $1 },
             // Not `name` for the topic: on a task, the name is the task's own.
             "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
+            "scope_task_milestone_add": taskID.merging(["validate": .rename("validation"), "command": .rename("validation"),
+                                                       "name": .rename("title"), "child_task": .rename("child")]) { $1 },
+            "scope_task_milestone_done": taskID.merging(["n": .rename("milestone"), "number": .rename("milestone"),
+                                                        "title": .rename("milestone"), "child_task": .rename("child")]) { $1 },
+            "scope_schedule_run": ["schedule": .rename("name"), "id": .rename("name")],
         ]
     }()
 
@@ -746,9 +827,10 @@ public enum MCPBridge {
         var attempts: Int?
         var models: [String]?
         var drivers: [String]?
+        var mission: Bool?
 
         private enum CodingKeys: String, CodingKey {
-            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable, issue, attempts, models, drivers
+            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable, issue, attempts, models, drivers, mission
             case startPR = "start_pr"
             case dryRun = "dry_run"
             case openThread = "open_thread"
@@ -759,7 +841,7 @@ public enum MCPBridge {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
                           runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model, issue: issue,
-                          attempts: attempts ?? 1, models: models ?? [], drivers: drivers ?? [])
+                          attempts: attempts ?? 1, models: models ?? [], drivers: drivers ?? [], mission: mission ?? false)
         }
     }
 }

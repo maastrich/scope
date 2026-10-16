@@ -58,6 +58,12 @@ public enum TaskProjection {
             lines.append(prompt)
             lines.append("")
         }
+        if let mission = task.mission {
+            lines.append("## Mission")
+            lines.append("")
+            lines += missionProtocol(task: task, mission: mission)
+            lines.append("")
+        }
         if let context = scopeContext?.trimmingCharacters(in: .whitespacesAndNewlines), !context.isEmpty {
             lines.append("## About \(scopeName)")
             lines.append("")
@@ -104,6 +110,29 @@ public enum TaskProjection {
         lines.append("- Commit as you go; the user reviews and pushes from Scope.")
         lines.append("")
         return lines.joined(separator: "\n")
+    }
+
+    /// What a mission's agent is told (spec §4.3): the goal is reached through milestones, one child task at a time,
+    /// each validated before the next opens. Scope keeps the list and runs the validation; the agent plans.
+    static func missionProtocol(task: TaskRecord, mission: Mission) -> [String] {
+        var lines = [
+            "This task is a **mission**: the goal above is too big for one task. You are its orchestrator.",
+            "",
+            #"1. Split the goal into milestones, in order, each small enough for one task and each with a **validation**: a shell command that proves it (the test suite, a build, `gh pr checks <branch>` for green checks). Register them: `scope task milestone add \#(task.slug) "<title>" --validate "<command>"`."#,
+            #"2. Open **one milestone at a time** as a child task (`scope task new "<brief>" --topic "\#(task.topic ?? task.name)"`), with a complete brief. Wait for its thread (`scope thread wait`)."#,
+            #"3. When the child reports, mark the milestone done and name the child: `scope task milestone done \#(task.slug) <n> --child <slug>`. Scope runs the validation in the child's sandbox: `validated` opens the next milestone; `failed` sends the log to the child's thread, which fixes, and you mark done again."#,
+            #"4. Open the next milestone only once the previous one is validated. The mission is reached when every milestone is. Then report: what each milestone delivered, its pull request, what is left."#,
+        ]
+        if !mission.milestones.isEmpty {
+            lines.append("")
+            lines.append("Milestones so far (\(mission.caption)):")
+            for (index, milestone) in mission.milestones.enumerated() {
+                var line = "\(index + 1). [\(milestone.state.rawValue)] \(milestone.title)"
+                if let validation = milestone.validation { line += " — validate: `\(validation)`" }
+                lines.append(line)
+            }
+        }
+        return lines
     }
 
     /// `<slug>.code-workspace` content: one folder per active sandbox, named after the repo.

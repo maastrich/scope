@@ -113,6 +113,7 @@ struct InboxKindMark: View {
         case .checksFailing: glyph("xmark.circle", PullRequestStyle.failing)
         case .archivedOnMerge: glyph("archivebox", Ink.tertiary)
         case .attemptKept: glyph("checkmark.seal", PullRequestStyle.passing)
+        case .scheduleRan: glyph("clock.badge.checkmark", Ink.secondary)
         }
     }
 
@@ -173,6 +174,10 @@ struct InboxActions: View {
                     action("archivebox", "Archive Task (a)", id: "archive") { model.archiveInboxTask(item) }
                 case .archivedOnMerge:
                     pullRequestButton
+                case .scheduleRan:
+                    if item.threadID != nil {
+                        action("doc.text", "Read the reply (v)", id: "read-reply") { model.readInboxReply(item) }
+                    }
                 default:
                     EmptyView()
                 }

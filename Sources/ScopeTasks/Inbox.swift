@@ -33,15 +33,39 @@ public enum Inbox {
         case archivedOnMerge
         /// The task was kept out of its attempts; the others were archived, their branches kept (`TaskAttempts`).
         case attemptKept
+        /// A scheduled prompt ran (spec §4.11): the first line of the reply, with the thread to read it in.
+        case scheduleRan
 
         /// Thread items clear with the thread's state; the others with a dismissal.
         public var isThreadItem: Bool {
             switch self {
             case .question, .permission, .reply, .failure, .stuck: true
-            case .readyToMerge, .checksFailing, .archivedOnMerge, .attemptKept: false
+            case .readyToMerge, .checksFailing, .archivedOnMerge, .attemptKept, .scheduleRan: false
             }
         }
     }
+
+    /// One schedule's last run, as the app reads it off the config (`Schedule.lastRun`).
+    public struct ScheduleInput: Sendable, Equatable {
+        public var id: String
+        public var scopeID: ScopeID
+        public var name: String
+        public var run: ScheduleRun
+        public var taskID: TaskID?
+        public var threadID: ThreadID?
+
+        public init(id: String, scopeID: ScopeID, name: String, run: ScheduleRun, taskID: TaskID? = nil, threadID: ThreadID? = nil) {
+            self.id = id
+            self.scopeID = scopeID
+            self.name = name
+            self.run = run
+            self.taskID = taskID
+            self.threadID = threadID
+        }
+    }
+
+    /// How long a schedule's run stays listed once nobody marked it read.
+    public static let scheduleWindow: TimeInterval = 3 * 86_400
 
     /// One thread as the app sees it.
     public struct ThreadInput: Sendable, Equatable {
@@ -150,7 +174,8 @@ public enum Inbox {
     }
 
     /// Every item, newest first, one per key.
-    public static func items(threads: [ThreadInput], tasks: [TaskInput], dismissed: Dismissals = Dismissals(),
+    public static func items(threads: [ThreadInput], tasks: [TaskInput], schedules: [ScheduleInput] = [],
+                             dismissed: Dismissals = Dismissals(),
                              now: Date = .now, archivedWindow: TimeInterval = archivedWindow) -> [Item] {
         var byID: [String: Item] = [:]
         for thread in threads {
@@ -161,6 +186,10 @@ public enum Inbox {
             for item in items(for: task, now: now, archivedWindow: archivedWindow) where !dismissed.hides(item) {
                 byID[item.id] = newer(byID[item.id], item)
             }
+        }
+        for schedule in schedules {
+            guard let item = item(for: schedule, now: now), !dismissed.hides(item) else { continue }
+            byID[item.id] = newer(byID[item.id], item)
         }
         return byID.values.sorted(by: order)
     }
@@ -255,6 +284,21 @@ public enum Inbox {
                           fingerprint: "\(kind.rawValue)#\(pr.number)" + (kind == .checksFailing ? ":" + pr.failingChecks.sorted().joined(separator: ",") : ""),
                           pullRequestURL: pr.url, pullRequestNumber: pr.number))
         return items
+    }
+
+    /// "Schedule <name> ran — <first line>": listed for `scheduleWindow` after the run, until marked read. A run that
+    /// never went says why instead of a reply.
+    static func item(for schedule: ScheduleInput, now: Date) -> Item? {
+        let run = schedule.run
+        guard now.timeIntervalSince(run.at) < scheduleWindow else { return nil }
+        let detail: String? = switch run.outcome {
+        case .replied: headline(run.summary)
+        case .noReply: "no reply yet" + (run.thread.map { _ in " — open the thread" } ?? "")
+        case .failed: "did not run" + (run.summary.map { ": \($0)" } ?? "")
+        }
+        return Item(id: "schedule:\(schedule.id)", kind: .scheduleRan, scopeID: schedule.scopeID, taskID: schedule.taskID,
+                    threadID: schedule.threadID, title: "Schedule \(schedule.name) ran", detail: detail, at: run.at,
+                    fingerprint: "ran@\(run.at.timeIntervalSinceReferenceDate)")
     }
 
     private static func newer(_ existing: Item?, _ candidate: Item) -> Item {

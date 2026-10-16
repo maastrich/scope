@@ -117,7 +117,7 @@ public actor TaskManager {
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
         contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
         origin: ThreadOrigin? = nil, deliverable: String? = nil, issue: LinkedIssue? = nil,
-        attempt: TaskAttempt? = nil
+        attempt: TaskAttempt? = nil, mission: Bool = false
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -146,7 +146,7 @@ public actor TaskManager {
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
             portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
             deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue,
-            attempt: attempt
+            attempt: attempt, mission: mission ? Mission() : nil
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -232,6 +232,30 @@ public actor TaskManager {
 
     /// "Don't rebase automatically": the branch is held, or released, when main moves (`TaskRecord.holdBranch`).
     @discardableResult
+    /// Replaces the milestones of a mission (`Mission`): the add, the done and the validation's verdict all land here.
+    public func setMission(_ mission: Mission, for id: TaskID) async throws -> TaskRecord {
+        try await mutate(id) { $0.mission = mission }
+    }
+
+    /// Applies `change` to the task's record and saves it. The write suspends this actor; a change that lands on the
+    /// record meanwhile (a setup finishing, a milestone added) is kept, and `change` applied again on top of it, so
+    /// neither write loses the other.
+    private func mutate(_ id: TaskID, _ change: (inout TaskRecord) -> Void) async throws -> TaskRecord {
+        guard var before = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        for _ in 0..<4 {
+            var record = before
+            change(&record)
+            try await persist(record)
+            guard let fresh = records[id] else { throw TaskError.persistence("task \(id) went away while it was saved") }
+            if fresh == before {
+                records[id] = record
+                return record
+            }
+            before = fresh
+        }
+        throw TaskError.persistence("task \(id) kept changing while it was saved")
+    }
+
     public func setHoldBranch(_ hold: Bool, for id: TaskID) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard record.holdBranch != hold else { return record }
@@ -357,9 +381,8 @@ public actor TaskManager {
         guard !record.isArchived else { throw TaskError.taskArchived }
         let repos = record.activeRepos.filter { only?.map(TaskRepo.normalize).contains($0.repoRelativePath) ?? true }
         let willRun = runCommands && repos.contains { commands[$0.repoRelativePath]?.setup != nil }
-        record.setup = TaskSetupRecord(state: willRun ? .running : .skipped, startedAt: TaskRecord.roundedToMilliseconds(.now))
-        try await persist(record)
-        records[id] = record
+        let started = TaskSetupRecord(state: willRun ? .running : .skipped, startedAt: TaskRecord.roundedToMilliseconds(.now))
+        record = try await mutate(id) { $0.setup = started }
         await onChange(record)
 
         var log = ""
@@ -401,13 +424,12 @@ public actor TaskManager {
         }
 
         // The task may have been closed or archived while the commands ran.
-        guard var current = records[id] else { throw TaskError.persistence("task \(id) went away during its setup") }
-        current.setup = TaskSetupRecord(
+        guard records[id] != nil else { throw TaskError.persistence("task \(id) went away during its setup") }
+        let finished = TaskSetupRecord(
             state: !ran ? .skipped : (failed ? .failed : .succeeded), log: SetupLog.bounded(log),
             startedAt: record.setup?.startedAt, finishedAt: TaskRecord.roundedToMilliseconds(.now)
         )
-        try await persist(current)
-        records[id] = current
+        let current = try await mutate(id) { $0.setup = finished }
         await onChange(current)
         return current
     }

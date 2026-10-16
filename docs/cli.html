@@ -59,6 +59,8 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
+scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
@@ -166,6 +168,18 @@ per area; those never used in the period; for each command, how often it came fr
 palette or a click; the CLI and MCP calls made by you and by agents; the time spent in each sheet and section; and
 what rose or fell against the period before. It holds ids, never what you type, a path or a name. Settings ▸
 General ▸ Usage turns it off or clears it. The MCP tool is <code>scope_usage</code>.</p>
+<h3 id="schedules">Scheduled prompts</h3>
+<p>Scope can send a prompt on its own — every hour at a minute, every day, on weekdays or once a week at a time —
+to a scope's orchestrator, or into a new task with a driver and model of its own. Schedules live on the scope
+(<b>Settings ▸ Automation ▸ Schedules</b>, or the scope's settings sheet): name, rule, prompt, target, paused or
+not, and the last run. Two examples are offered at creation, paused: a morning look at the pull requests whose
+checks are red, an evening <code>scope summary today</code>. Occurrences come from the calendar, so a daily 09:00
+stays 09:00 across the clock change; at launch a daily, weekday or weekly prompt missed in the last day fires once
+(<b>Catch up at launch</b>, on by default). The reply lands in the <a href="concepts.html#inbox">Inbox</a> as
+<i>Schedule &lt;name&gt; ran — &lt;first line&gt;</i>, with <b>Read reply</b>. <code>scope schedule list</code>
+(<code>scope_schedule_list</code>) shows every schedule with its next fire and last run; <code>scope schedule run
+&lt;name&gt;</code> (<code>scope_schedule_run</code>) fires one now, paused or not — from an agent, with the
+approval set for creating a task.</p>
 <p>Exit codes: <code>0</code>, <code>64</code> for a usage error, <code>77</code> when Scope refused,
 <code>1</code> for anything else.</p>
 
@@ -268,7 +282,7 @@ method or a newer <code>rpc</code> answers <code>unsupported</code> rather than 
 <code>scope</code> binary that outlives its app says so instead of hanging. Error codes:
 <code>bad_request</code>, <code>unsupported</code>, <code>denied</code>, <code>not_found</code>,
 <code>failed</code>, <code>timeout</code>.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl3" href="#deliverable">What a task leaves behind</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl3" href="#skill">The Scope skill</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl3" href="#deliverable">What a task leaves behind</a><a class="lvl3" href="#schedules">Scheduled prompts</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl3" href="#skill">The Scope skill</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

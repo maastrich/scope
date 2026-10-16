@@ -172,4 +172,29 @@ private func task(_ id: String, scope: ScopeID = acme, state: PullRequest.State 
         await store.save(Inbox.Dismissals(fingerprints: ["task:x:pr": "readyToMerge#12"]))
         #expect(await store.load().fingerprints == ["task:x:pr": "readyToMerge#12"])
     }
+
+    @Test func aScheduleRunIsListedUntilReadOrThreeDays() {
+        let run = ScheduleRun(at: t0, outcome: .replied, summary: "\n## Red checks\n\n**api** #12 fails lint.", thread: "ccccccccccc1")
+        let input = Inbox.ScheduleInput(id: "0badf00d", scopeID: acme, name: "Morning", run: run,
+                                        threadID: ThreadID(rawValue: "ccccccccccc1"))
+        let items = Inbox.items(threads: [], tasks: [], schedules: [input], now: t0.addingTimeInterval(60))
+        #expect(items.map(\.kind) == [.scheduleRan])
+        #expect(items[0].title == "Schedule Morning ran" && items[0].detail == "Red checks")
+        #expect(items[0].threadID?.rawValue == "ccccccccccc1" && items[0].id == "schedule:0badf00d")
+        // Marked read: gone until the next run; gone anyway after the window.
+        var dismissed = Inbox.Dismissals()
+        dismissed.dismiss(items[0])
+        #expect(Inbox.items(threads: [], tasks: [], schedules: [input], dismissed: dismissed, now: t0.addingTimeInterval(60)).isEmpty)
+        var later = input
+        later.run.at = t0.addingTimeInterval(3600)
+        #expect(Inbox.items(threads: [], tasks: [], schedules: [later], dismissed: dismissed, now: t0.addingTimeInterval(3700)).count == 1)
+        #expect(Inbox.items(threads: [], tasks: [], schedules: [input], now: t0.addingTimeInterval(Inbox.scheduleWindow + 1)).isEmpty)
+        // A run that never went says why; one without a reply yet says so.
+        var failed = input
+        failed.run = ScheduleRun(at: t0, outcome: .failed, summary: "no orchestrator")
+        #expect(Inbox.items(threads: [], tasks: [], schedules: [failed], now: t0).first?.detail == "did not run: no orchestrator")
+        var silent = input
+        silent.run = ScheduleRun(at: t0, outcome: .noReply, thread: "ccccccccccc1")
+        #expect(Inbox.items(threads: [], tasks: [], schedules: [silent], now: t0).first?.detail == "no reply yet — open the thread")
+    }
 }
