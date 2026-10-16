@@ -53,6 +53,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskArchive = "task.archive"
     /// File a task under a topic, or out of any: the sidebar regroups, nothing else about the task moves.
     case taskTopic = "task.topic"
+    /// Bring an archived task back: its sandboxes rebuilt on its branches, the uncommitted work saved at archive put back.
+    case taskRestore = "task.restore"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
@@ -66,7 +68,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     public var isMutating: Bool {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .gc: true
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc: true
         }
     }
 
@@ -173,6 +175,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskClose(TaskCloseParams)
     case taskArchive(TaskArchiveParams)
     case taskTopic(TaskTopicParams)
+    case taskRestore(TaskRestoreParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
@@ -190,6 +193,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskClose: .taskClose
         case .taskArchive: .taskArchive
         case .taskTopic: .taskTopic
+        case .taskRestore: .taskRestore
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
@@ -208,7 +212,7 @@ public enum ControlCall: Sendable, Equatable {
         case .list, .threadRead, .summary: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
-        case .taskNew, .taskClose, .taskArchive, .gc: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .gc: .seconds(300)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -331,6 +335,20 @@ public struct TaskArchiveParams: Codable, Sendable, Equatable {
 
     public init(task: String) {
         self.task = task
+    }
+}
+
+/// `scope task restore <id|slug>` — an archived task back where it was: worktrees on its branches, the uncommitted
+/// changes saved at archive restored into them.
+public struct TaskRestoreParams: Codable, Sendable, Equatable {
+    /// Task id or slug, of an archived task.
+    public var task: String
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
+
+    public init(task: String, scope: String? = nil) {
+        self.task = task
+        self.scope = scope
     }
 }
 
@@ -595,9 +613,12 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var topic: String?
     /// The task whose agent created this one, if any.
     public var parentTask: String?
+    /// When it was archived; `nil` for a live task. An archived task has no sandbox until `task.restore` brings it back.
+    public var archivedAt: Date?
 
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
-                root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil) {
+                root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil,
+                archivedAt: Date? = nil) {
         self.id = id
         self.name = name
         self.slug = slug
@@ -609,6 +630,7 @@ public struct TaskSummary: Codable, Sendable, Equatable {
         self.threads = threads
         self.topic = topic
         self.parentTask = parentTask
+        self.archivedAt = archivedAt
     }
 }
 

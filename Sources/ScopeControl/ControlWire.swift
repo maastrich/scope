@@ -45,6 +45,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskClose(let params): try encoder.encode(wire(params))
         case .taskArchive(let params): try encoder.encode(wire(params))
         case .taskTopic(let params): try encoder.encode(wire(params))
+        case .taskRestore(let params): try encoder.encode(wire(params))
         case .gc(let params): try encoder.encode(wire(params))
         case .threadRead(let params): try encoder.encode(wire(params))
         case .threadWait(let params): try encoder.encode(wire(params))
@@ -89,6 +90,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskClose: .taskClose(try required(TaskCloseParams.self))
             case .taskArchive: .taskArchive(try required(TaskArchiveParams.self))
             case .taskTopic: .taskTopic(try required(TaskTopicParams.self))
+            case .taskRestore: .taskRestore(try required(TaskRestoreParams.self))
             case .gc: .gc(try decoder.decode(Params<GCParams>.self, from: data).params ?? GCParams())
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             case .threadWait: .threadWait(try required(ThreadWaitParams.self))
@@ -199,7 +201,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
-            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .gc:
+            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)

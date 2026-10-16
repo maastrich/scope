@@ -166,6 +166,8 @@ final class AppControlService: ControlService {
                                    done: "archived the task %@; its branch is kept")
         case .taskTopic(let params):
             return await fileTask(params, from: origin)
+        case .taskRestore(let params):
+            return await restore(params, from: origin, caller: caller)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -251,6 +253,39 @@ final class AppControlService: ControlService {
         let followers = changed.filter { $0.id != task.id }.map(\.slug)
         if !followers.isEmpty { lines.append("along with the tasks it started: " + followers.joined(separator: ", ")) }
         return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskTopic))
+    }
+
+    /// `task.restore`: the Restore of an archive notice (`AppModel.restoreTask`), the user's selection left alone.
+    private func restore(_ params: TaskRestoreParams, from origin: ControlOrigin,
+                         caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
+        let task: TaskState
+        switch resolveTask(params.task, scope: params.scope, callerScopeID: callerScopeID, callerCwd: caller.cwd) {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        guard task.record.isArchived else {
+            return .failure(.badRequest("\(slug) is not archived", detail: "It is open already: `scope list tasks` shows its sandboxes."))
+        }
+        // The task manager would answer with the record as it is: say why instead of reporting a restore that did nothing.
+        guard task.record.cleanup == nil, !task.isDismantling else {
+            return .failure(.failed("\(slug) is still being archived",
+                                    detail: "Its last archive did not finish. `scope task archive \(slug)` runs it again; restore it after."))
+        }
+        // Read before: the restore clears them.
+        let salvaged = task.record.repos.filter { $0.salvageRef != nil }.map(\.repoRelativePath)
+        do {
+            try await model.restoreTask(task.id)
+        } catch {
+            return .failure(.failed("could not restore the task \(slug)", detail: String(describing: error)))
+        }
+        var lines = ["restored the task \(slug) on its branch \(task.branch)"]
+        for repo in salvaged {
+            lines.append("\(repo.isEmpty ? "." : repo): uncommitted changes saved at archive put back")
+        }
+        lines.append("no thread was opened: `scope thread new --task \(slug)` starts one")
+        return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskRestore))
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.
@@ -412,7 +447,7 @@ final class AppControlService: ControlService {
             scope: scope?.name ?? task.record.scopeName, scopeSlug: task.record.scopeSlug,
             root: task.record.root, repos: task.activeRepos.map(\.repoRelativePath),
             threads: model.threads(in: task.record.id).map(\.id.rawValue),
-            topic: task.record.topic, parentTask: task.record.parentTask?.rawValue
+            topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt
         )
     }
 

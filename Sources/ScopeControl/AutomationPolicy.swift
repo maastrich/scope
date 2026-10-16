@@ -132,6 +132,8 @@ public struct AutomationPolicy: Sendable, Equatable {
         switch call {
         case .threadNew: AutomationLoad(threads: 1)
         case .taskNew(let params) where !params.dryRun: AutomationLoad(tasks: 1, threads: params.openThread ? 1 : 0)
+        // An archived task holds no budget; brought back, it holds one again, like a new one.
+        case .taskRestore: AutomationLoad(tasks: 1)
         default: .zero
         }
     }
@@ -196,6 +198,11 @@ public struct AutomationPolicy: Sendable, Equatable {
                 return .allow
             case .taskClose, .taskArchive:
                 // Undoing a task removes worktrees and can delete a branch: the same approval as creating one.
+                approval = settings.tasks
+            case .taskRestore:
+                // A task opened again, sandboxes and all: the budget and the approval of a new one. No depth to
+                // check — the task keeps the place in the chain it had, and opens no thread.
+                if let refusal = budgetRefusal(call, from: origin, load: load) { return .refuse(refusal) }
                 approval = settings.tasks
             case .gc:
                 // A preview reads; the real pass stops processes and removes folders no task owns.
@@ -280,6 +287,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .taskClose(let params):
             "close the task “\(params.task)”" + (params.deleteBranch ? " and delete its branch" : "")
         case .taskArchive(let params): "archive the task “\(params.task)”"
+        case .taskRestore(let params): "restore the archived task “\(params.task)”"
         case .taskTopic(let params):
             "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")

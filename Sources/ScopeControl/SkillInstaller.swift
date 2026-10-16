@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 9
+    public static let version = 10
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -208,6 +208,7 @@ public struct SkillInstaller: Sendable {
         | `scope thread stop <id>` / `scope thread close <id>` | `scope_thread_stop` / `scope_thread_close` `{thread}` |
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
+        | `scope task restore <slug> [--scope S]` | `scope_task_restore` `{task, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
@@ -319,6 +320,10 @@ public struct SkillInstaller: Sendable {
         branch. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:
         uncommitted changes and an unmerged branch's last commit are kept under `refs/scope/salvage/`, and the
         answer names the ref. `scope gc --dry-run` shows what Scope's own cleanup would remove.
+
+        To pick archived work back up, `scope task restore <slug>` rebuilds its worktrees on the branch it kept and
+        puts back the uncommitted changes saved at archive; then open a thread in it (`scope thread new --task`).
+        `scope list tasks` marks archived tasks `(archived)`. A restored task counts against the budget again.
 
         ## What you may do
 
