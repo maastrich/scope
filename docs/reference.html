@@ -47,6 +47,15 @@ left alone, never overwritten; a corrupt file is quarantined next to it rather t
 <p><kbd>⌘K</kbd> opens one field over everything: the actions of the current context, the files of the
 selection, the repositories of the scope and the open threads. <kbd>⌘P</kbd> opens it straight in file mode.</p>
 <figure class="shot"><img src="assets/img/palette.png" alt="The command palette: actions, files, repositories and threads in one field." loading="lazy"><figcaption>The command palette: actions, files, repositories and threads in one field.</figcaption></figure>
+<p><b>Ask Orchestrator…</b> (<kbd>⇧⌘K</kbd>) turns the palette into a message field addressed to the scope's
+orchestrator: <kbd>↩</kbd> sends, <kbd>⇧↩</kbd> starts a new line. <b>Send to Thread…</b> does the same for any
+thread, picked from the Go to Thread list. The message is typed into the thread as if you had typed it there; a
+stopped thread is started for it. Nothing moves on screen: a toast says where the message went, and <b>Show</b>
+goes there. A search that matches nothing, or reads as a sentence, offers <b>Ask Orchestrator: …</b> as its last
+row, so <kbd>⌘K</kbd>, type, <kbd>↩</kbd> is enough.</p>
+<p>To answer a waiting thread without switching to it, right-click its row in the sidebar and pick
+<b>Reply…</b> (or press <kbd>⌥↩</kbd> while the sidebar list has the keyboard). A field opens under the row with
+the end of the agent's last answer above it; <kbd>↩</kbd> sends, <kbd>Esc</kbd> closes.</p>
 <div class="note warn"><p>While a terminal has keyboard focus it keeps <kbd>⌘K</kbd> for itself. Click outside
 the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p></div>
 
@@ -67,6 +76,8 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘←</kbd> / <kbd>⌘→</kbd>, <kbd>⌘⌫</kbd> / <kbd>⌘⌦</kbd></td><td>Start / end of the line, delete back to its start / to its end (sent as <code>^A</code> <code>^E</code> <code>^U</code> <code>^K</code>)</td></tr>
   <tr><td><kbd>⌥←</kbd> / <kbd>⌥→</kbd>, <kbd>⌥⌫</kbd> / <kbd>⌥⌦</kbd></td><td>Move and delete by word; every other <kbd>⌥</kbd> key types your layout's character</td></tr>
   <tr><td><kbd>⌘K</kbd></td><td>Command palette</td></tr>
+  <tr><td><kbd>⇧⌘K</kbd></td><td>Ask the scope's orchestrator, without leaving the thread on screen</td></tr>
+  <tr><td><kbd>⌥↩</kbd></td><td>In the sidebar: reply to the selected row's thread in place</td></tr>
   <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
   <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
