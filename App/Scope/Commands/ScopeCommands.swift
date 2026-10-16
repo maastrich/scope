@@ -173,6 +173,13 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(currentThread == nil || currentThread?.isAlive == true)
 
+            Button("Read Reply") {
+                model?.readCurrentReply()
+            }
+            // ⌘R is Refresh Scope, ⌥⌘R Relaunch, ⌃⌘R Show Repositories.
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(currentThread == nil && model?.currentTask == nil)
+
             // Relaunch already resumes when it can; this is the way out of that.
             Button("Start Fresh Session") {
                 if let model, let id = model.selectedThreadID {

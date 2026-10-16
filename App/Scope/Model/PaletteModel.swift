@@ -78,6 +78,13 @@ enum PaletteModel {
                 items.append(PaletteItem(id: "new-task", section: .actions, icon: "arrow.triangle.branch", label: "New Task",
                                          hint: "in \(scope.name)", shortcut: "⇧⌘T") { model.presentNewTask(in: scope.id) })
             }
+            for task in model.tasks where task.scopeID == scope.id && task.record.isArchived && model.deliverable(of: task) != nil {
+                items.append(PaletteItem(id: "read-deliverable-\(task.id.rawValue)", section: .actions, icon: "doc.richtext",
+                                         label: "Read Deliverable of \(task.name)",
+                                         hint: task.record.archivedAt.map { "archived " + $0.formatted(.relative(presentation: .named)) }) {
+                    model.readDeliverable(of: task)
+                })
+            }
             if !restorableTasks(model, in: scope.id).isEmpty {
                 items.append(PaletteItem(id: "restore-task", section: .actions, icon: "arrow.uturn.backward",
                                          label: "Restore Archived Task…", hint: "in \(scope.name)") {

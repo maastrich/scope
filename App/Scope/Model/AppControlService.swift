@@ -160,6 +160,8 @@ final class AppControlService: ControlService {
             return await wait(params, from: origin)
         case .summary(let params):
             return await summary(params)
+        case .taskShow(let params):
+            return await show(params)
         case .configGet(let params):
             return ConfigKey.get(params, in: automation)
         case .configSet(let params):
@@ -444,18 +446,33 @@ final class AppControlService: ControlService {
         for record in await model.env.tasks.allTasks { tasks.append(await model.summarySnapshot(of: record)) }
         let threads = model.threads.map(\.record.snapshot)
         let home = model.env.home
-        let history = await Task.detached { ActivityHistory.load(home: home) }.value
+        let (history, deliverables) = await Task.detached { (ActivityHistory.load(home: home), TaskDeliverableStore.loadAll(home: home)) }.value
         let tokens = model.tokenTotalsByThread
         if let name = params.task {
             guard let result = ActivitySummary.detail(of: name, timeZone: timeZone, period: period, scopes: scopes,
-                                                      tasks: tasks, threads: threads, history: history, tokens: tokens) else {
+                                                      tasks: tasks, threads: threads, history: history, deliverables: deliverables,
+                                                      tokens: tokens) else {
                 return .failure(.notFound("no task “\(name)”, open, archived or closed since the history began"))
             }
             return .success(.summary(result))
         }
         return .success(.summary(ActivitySummary.build(period: period, timeZone: timeZone, scopes: scopes, tasks: tasks,
-                                                       threads: threads, history: history, scopeFilter: params.scope,
-                                                       tokens: tokens)))
+                                                       threads: threads, history: history, deliverables: deliverables,
+                                                       scopeFilter: params.scope, tokens: tokens)))
+    }
+
+    /// `scope task show`: the same snapshots, one task.
+    private func show(_ params: TaskShowParams) async -> Result<ControlResultPayload, ControlError> {
+        let scopes = scopeSummaries.map { ActivitySummary.ScopeRef(id: $0.id, slug: $0.slug, name: $0.name, root: $0.path) }
+        let tasks = await model.env.tasks.allTasks.map(\.snapshot)
+        let threads = model.threads.map(\.record.snapshot)
+        let home = model.env.home
+        let (history, deliverables) = await Task.detached { (ActivityHistory.load(home: home), TaskDeliverableStore.loadAll(home: home)) }.value
+        guard let result = ActivitySummary.show(params.task, scopes: scopes, tasks: tasks, threads: threads, history: history,
+                                                deliverables: deliverables) else {
+            return .failure(.notFound("no task “\(params.task)”, open, archived or closed since the history began"))
+        }
+        return .success(.taskShow(result))
     }
 
     private func summary(_ session: ThreadSession) -> ThreadSummary {
@@ -671,7 +688,7 @@ final class AppControlService: ControlService {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
                                                runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
-                                               topic: topic.child, parentTask: parentTask?.id)
+                                               topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }

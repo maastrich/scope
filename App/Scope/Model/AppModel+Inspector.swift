@@ -66,6 +66,8 @@ extension AppModel {
             return base.content != nil
         case .path:
             return inspector.pathPreview != nil
+        case .reading:
+            return inspector.reading != nil
         }
     }
 
@@ -76,10 +78,17 @@ extension AppModel {
     /// the link to the system (a web URL, a path that names nothing on disk).
     func openFileLink(_ link: String, from session: ThreadSession) -> Bool {
         Usage.click("thread.open-link", label: "⌘-click a link in the terminal")
-        guard let scope = scope(session.record.scopeID) else { return false }
+        let directory = session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd
+        return openFileLink(link, scope: session.record.scopeID,
+                            task: session.record.taskID.flatMap { TaskID(rawValue: $0) }.flatMap(task), directory: directory)
+    }
+
+    /// The same, for a link read outside a terminal (the reading column): the task's sandboxes when it has any,
+    /// the scope's base checkouts, relative paths from `directory`.
+    func openFileLink(_ link: String, scope scopeID: ScopeID, task taskState: TaskState?, directory: String?) -> Bool {
+        guard let scope = scope(scopeID) else { return false }
         var roots: [FileLinkResolver.Root] = []
         var names: [String: String] = [:]
-        let taskState = session.record.taskID.flatMap { TaskID(rawValue: $0) }.flatMap(task)
         if let taskState {
             for repo in taskState.activeRepos {
                 let base = repo.isScopeRoot ? scope.url.path : scope.url.appending(path: repo.repoRelativePath).path
@@ -92,7 +101,6 @@ extension AppModel {
             roots.append(.init(name: repo.id, sandbox: nil, base: repo.url.path))
             names[repo.id] = repo.shortName
         }
-        let directory = session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd
         guard let resolution = FileLinkResolver.resolve(link, threadDirectory: directory, roots: roots,
                                                         fileExists: { FileManager.default.fileExists(atPath: $0) }),
               !resolution.candidates.isEmpty else { return false }

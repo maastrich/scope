@@ -190,7 +190,8 @@ extension AppModel {
     func createTask(
         _ proposal: TaskProposal, prompt: String, driverID: String?, in scopeID: ScopeID, repos: [String],
         startPoint: TaskStartPoint = .defaultBranch, openThread: Bool = true, runSetup: Bool = true,
-        threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil
+        threadOrigin: ThreadOrigin = .user, createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
+        deliverable: String? = nil
     ) async throws -> TaskState {
         guard let scope = scope(scopeID) else { throw TaskError.persistence("scope not found") }
         let scopeRepos = scope.repos.map(\.id)
@@ -203,7 +204,7 @@ extension AppModel {
                 pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
                 scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
                 createdBy: createdBy, topic: topic, parentTask: parentTask,
-                origin: threadOrigin.author == .control ? threadOrigin : nil
+                origin: threadOrigin.author == .control ? threadOrigin : nil, deliverable: deliverable
             )
         } catch {
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
@@ -484,7 +485,9 @@ extension AppModel {
         await settlePullRequest(of: task)
         let outcome: DismantleOutcome
         do {
-            outcome = try await env.tasks.dismantle(task.id, mode, teardown: await teardown(for: task), prepare: hangUp(task.id))
+            // Read before `prepare` hangs the threads up: a closed session's last answer goes with it.
+            outcome = try await env.tasks.dismantle(task.id, mode, teardown: await teardown(for: task),
+                                                    replies: keptReplies(of: task.id), prepare: hangUp(task.id))
         } catch {
             // The record says how far the run got; `cleanup` keeps the row out of the live list until a retry.
             task.isDismantling = false
@@ -582,6 +585,16 @@ extension AppModel {
             problems.report(Problem(severity: .info, title: "Cleaned up " + done.joined(separator: ", "), detail: detail))
         }
         return report
+    }
+
+    /// What each of the task's threads last answered, for `TaskDeliverable`: the activity's copy (kept across
+    /// restarts) or the session's own, whichever is there.
+    func keptReplies(of taskID: TaskID) -> [TaskDeliverable.Reply] {
+        threads(in: taskID).compactMap { session in
+            guard let reply = session.activity.lastReply ?? session.lastReply else { return nil }
+            return TaskDeliverable.Reply(threadID: session.id.rawValue, title: session.title, driver: session.record.driverID,
+                                         text: reply.text, at: reply.at)
+        }
     }
 
     /// `prepare` for `TaskManager.dismantle`: runs inside the task's lock, before the teardown and the sweep.

@@ -81,6 +81,18 @@ struct SceneView: View {
                 AttentionToolbarButton()
             }
             TokenMeterToolbarButton()
+            if let session = model.currentThread, session.deliversEvents {
+                Button {
+                    model.readReply(of: session)
+                } label: {
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.icon)
+                .help("Read the agent's last reply (⇧⌘R)")
+                .accessibilityLabel("Read Reply")
+                .usageID("toolbar.read-reply", label: "Read reply (toolbar)")
+            }
             if model.currentThread != nil || model.currentScope != nil {
                 Button {
                     if NSEvent.modifierFlags.contains(.option), let path = model.currentEditorPath {

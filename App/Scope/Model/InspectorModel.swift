@@ -7,6 +7,8 @@ enum InspectorViewer: Hashable, Sendable {
     case diff, file
     /// A file a thread printed and the user clicked (`PathPreview`).
     case path
+    /// Markdown to read: an agent's answer, a task's deliverable or brief (`ReadingContent`).
+    case reading
 }
 
 /// A file opened from a link in a terminal: every file the link can mean (`FileLinkResolver`), which one is shown,
@@ -45,6 +47,8 @@ final class InspectorModel {
     var viewer: InspectorViewer?
     /// The file a terminal link opened, for the `.path` viewer.
     var pathPreview: PathPreview?
+    /// What the `.reading` viewer shows.
+    var reading: ReadingContent?
     /// What the viewer showed before, for its back button.
     private(set) var previousViewer: InspectorViewer?
     /// A section that should take the keyboard (⌘D, opening Search), with a counter so asking twice asks again.
