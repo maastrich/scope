@@ -1243,6 +1243,23 @@ thread and presses <kbd>↩</kbd>, exactly as <code>scope thread send</code> doe
 notification goes once it is sent. <b>Settings › General › Notifications › Show what the agent said</b> (on by
 default) turns the quote off, for when your screen is shared.</p>
 
+<h2 id="assist">The assistant</h2>
+<p>On events only — a turn that ends, a question, a thread running for more than four minutes, a task being
+created — Scope can hand the end of the terminal to a small model and get <i>labels</i> back: what the agent is
+doing, whether it seems stuck and why, whether a finished turn is worth a notification, whether a task without a
+pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it.</p>
+<p>The first model is Apple's on-device one (macOS 26, Apple Intelligence on): free, local, about a second per
+answer, good at exactly this kind of structured classification. <b>Settings › Assist › On-device + Haiku</b> adds
+Claude Code's light model as a second opinion on a stuck verdict, and as the fallback when the on-device model is
+unavailable — through <code>claude -p</code> with <b>no tools at all</b>, since what it reads is untrusted terminal
+output, under a daily cap you set (40 by default). Each call counts against your subscription like any other.</p>
+<p>What you see: the activity line under a running thread takes the model's words; a thread read as stuck says
+<i>Seems stuck — reason</i> in the sidebar, in the Inbox and as a notification, with a <b>Not stuck</b> answer that
+is remembered as a false positive; a finished turn the model reads as informational stays silent (a question or a
+failure always notifies); a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
+its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
+one fits. Every decision goes to the <a href="reference.html#usage">usage log</a> by its id and tier only.</p>
+
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too
 deep for a unix socket path, at <code>$TMPDIR/scope-&lt;uid&gt;-&lt;hash of the home&gt;.sock</code>. One JSON object per
@@ -1266,6 +1283,7 @@ REFERENCE = """
 ├── sandboxes/            <span class="c"># the task worktrees</span>
 ├── ui-state.json         <span class="c"># selection, expansion, panel widths</span>
 ├── scope-visits.json     <span class="c"># when each scope was last looked at</span>
+├── assist.json           <span class="c"># the assistant's calls today, per tier</span>
 └── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
@@ -1333,6 +1351,8 @@ FIG_SETTINGS
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive
   Scope, how deep agents may open agents, and whether opening a thread or creating a task asks you first. See
   <a href="cli.html">Command line and MCP</a>.</li>
+  <li><b>Assist</b> — off, the on-device model only, or that model with Haiku as a capped second opinion; what the
+  assistant may decide, and what it did today. See <a href="adapters.html#assist">the assistant</a>.</li>
 </ul>
 <p>The editor command is a template: <code>["code", "-g", "{file}:{line}"]</code>. <code>{path}</code>,
 <code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>

@@ -40,6 +40,7 @@
 ├── sandboxes/            <span class="c"># the task worktrees</span>
 ├── ui-state.json         <span class="c"># selection, expansion, panel widths</span>
 ├── scope-visits.json     <span class="c"># when each scope was last looked at</span>
+├── assist.json           <span class="c"># the assistant's calls today, per tier</span>
 └── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
@@ -107,6 +108,8 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive
   Scope, how deep agents may open agents, and whether opening a thread or creating a task asks you first. See
   <a href="cli.html">Command line and MCP</a>.</li>
+  <li><b>Assist</b> — off, the on-device model only, or that model with Haiku as a capped second opinion; what the
+  assistant may decide, and what it did today. See <a href="adapters.html#assist">the assistant</a>.</li>
 </ul>
 <p>The editor command is a template: <code>["code", "-g", "{file}:{line}"]</code>. <code>{path}</code>,
 <code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>
