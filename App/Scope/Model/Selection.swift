@@ -46,7 +46,7 @@ enum InspectorTab: String, CaseIterable, Sendable, Hashable {
 
 /// The scope-wide views, shown as a sheet over the window from the sidebar's buttons (⇧⌘P, ⌥⌘G, the palette).
 enum GlobalSheet: String, Identifiable, Sendable, Hashable {
-    case pullRequests, graph
+    case pullRequests, graph, inbox
     var id: String { rawValue }
 }
 

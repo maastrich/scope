@@ -65,6 +65,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⇧⌘E", title: "Open Task in Editor"),
             ShortcutEntry(keys: "⌘D", title: "Delta"),
             ShortcutEntry(keys: "⇧⌘B", title: "Base"),
+            ShortcutEntry(keys: "⇧⌘I", title: "Inbox", note: "what needs you, in every scope"),
             ShortcutEntry(keys: "⇧⌘P", title: "Pull Requests"),
             ShortcutEntry(keys: "⌥⌘I", title: "Toggle Inspector"),
             ShortcutEntry(keys: "⌃⌘S", title: "Toggle Sidebar"),
@@ -73,6 +74,15 @@ enum ShortcutCatalog {
         ShortcutGroup(title: "Delta", entries: [
             ShortcutEntry(keys: "j / k", title: "Next / previous file", note: "the Delta list or the diff must have focus"),
             ShortcutEntry(keys: "] / [", title: "Next / previous hunk"),
+        ]),
+        ShortcutGroup(title: "Inbox", entries: [
+            ShortcutEntry(keys: "j / k", title: "Next / previous item", note: "also ↓ / ↑"),
+            ShortcutEntry(keys: "↩", title: "Open", note: "the thread or the task; restores a task archived on merge"),
+            ShortcutEntry(keys: "r", title: "Reply", note: "a field under the item; ↩ sends, esc closes"),
+            ShortcutEntry(keys: "e", title: "Mark as Read / Done", note: "a pull request item comes back when it changes"),
+            ShortcutEntry(keys: "a", title: "Archive Task", note: "on a pull request item"),
+            ShortcutEntry(keys: "o", title: "Open Pull Request in Browser"),
+            ShortcutEntry(keys: "s", title: "Send Failing Checks to the Thread"),
         ]),
         ShortcutGroup(title: "Help", entries: [
             ShortcutEntry(keys: "⌘/", title: "Keyboard Shortcuts…"),

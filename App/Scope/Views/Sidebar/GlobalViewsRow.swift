@@ -1,18 +1,22 @@
 import SwiftUI
 
-/// The two scope-wide views, as a row of equal-width buttons under the scope switcher: **Pull Requests** — with
-/// the count of open ones when the list is loaded — and **Graph**. Each opens a sheet over the window. They sit
-/// in the sidebar because the sidebar is the view of the whole scope; the inspector is about the selected task.
+/// The global views, as a row of buttons under the scope switcher: the **Inbox** of every scope (`InboxButton`),
+/// **Pull Requests** — with the count of open ones when the list is loaded — and **Graph**. Each opens a sheet over
+/// the window. They sit in the sidebar because the sidebar is the view of the whole scope; the inspector is about the
+/// selected task.
 struct GlobalViewsRow: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
     @State private var width: CGFloat = 0
 
     /// Below this width the buttons drop their titles, like the footer does.
-    private static let titleThreshold: CGFloat = 230
+    private static let titleThreshold: CGFloat = 300
 
     var body: some View {
         HStack(spacing: 6) {
+            // Icon and count only: the row's width goes to the two scope views, and the count says enough.
+            InboxButton()
+            Group {
             Button {
                 model.showPullRequests()
             } label: {
@@ -47,9 +51,10 @@ struct GlobalViewsRow: View {
             }
             .help("Repository cards of the scope (⌥⌘G)")
             .accessibilityLabel("Graph")
+            }
+            .disabled(scope.repos.isEmpty)
         }
         .buttonStyle(.scopeSecondary)
-        .disabled(scope.repos.isEmpty)
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 4, trailing: 10))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
