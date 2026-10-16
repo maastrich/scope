@@ -259,26 +259,7 @@ final class DeltaModel {
     // MARK: Patch text
 
     /// Unified patch of the selected file, rebuilt from the parsed hunks.
-    func patchText(_ file: DiffFile) -> String {
-        var lines: [String] = []
-        let old = file.status == .added ? "/dev/null" : "a/\(file.oldPath ?? file.path)"
-        let new = file.status == .deleted ? "/dev/null" : "b/\(file.path)"
-        lines.append("diff --git a/\(file.oldPath ?? file.path) b/\(file.path)")
-        lines.append("--- \(old)")
-        lines.append("+++ \(new)")
-        for hunk in file.hunks {
-            lines.append(hunk.header)
-            for line in hunk.lines {
-                switch line.kind {
-                case .context: lines.append(" " + line.text)
-                case .addition: lines.append("+" + line.text)
-                case .deletion: lines.append("-" + line.text)
-                case .noNewline: lines.append("\\ No newline at end of file")
-                }
-            }
-        }
-        return lines.joined(separator: "\n") + "\n"
-    }
+    func patchText(_ file: DiffFile) -> String { file.unifiedPatch }
 
     func copyPatch() {
         guard let file = selectedDiffFile else { return }

@@ -54,6 +54,9 @@ final class TaskState: Identifiable {
     }
     /// What the timeline keeps of closed threads and of the checks (`AppModel+Timeline`); loaded on first show.
     var timelineLog: TaskTimelineLog?
+    /// The task's checkpoints, oldest first (`AppModel+Checkpoints`); loaded with the timeline, kept fresh by each turn.
+    var checkpoints: [TaskCheckpoint] = []
+    var checkpointsLoaded = false
     /// The ports of the task's block something listens on, ascending (`AppModel+Ports`): the servers it is running.
     var listeningPorts: [Int] = []
     /// What the task's sandboxes take on disk, when last measured (`AppModel+DiskUsage`).
@@ -94,6 +97,15 @@ final class TaskState: Identifiable {
     }
 
     func summary(for repo: TaskRepo) -> RepoDeltaSummary? { summaries[repo.repoRelativePath] }
+
+    /// The checkpoint a turn of `threadID` left, if one did. Matched on the turn's end, to the millisecond: the
+    /// activity in memory carries microseconds, the checkpoint and the reloaded activity do not.
+    func checkpoint(ofTurnEndedAt endedAt: Date, thread threadID: String) -> TaskCheckpoint? {
+        checkpoints.first { checkpoint in
+            guard checkpoint.threadID == threadID, let turnEndedAt = checkpoint.turnEndedAt else { return false }
+            return abs(turnEndedAt.timeIntervalSince(endedAt)) < 0.002
+        }
+    }
 
     var totalAdditions: Int { summaries.values.reduce(0) { $0 + $1.additions } }
     var totalDeletions: Int { summaries.values.reduce(0) { $0 + $1.deletions } }

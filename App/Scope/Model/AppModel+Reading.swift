@@ -11,7 +11,7 @@ extension AppModel {
         let reply = session.activity.lastReply ?? session.lastReply
         let taskState = task(of: session)
         let markdown = reply?.text ?? Self.noReplyText(session)
-        show(ReadingContent(
+        showReading(ReadingContent(
             kind: .reply(session.id), title: "\(displayTitle(for: session)) · \(session.profile.name)", at: reply?.at,
             markdown: markdown, directory: session.agentDirectory ?? session.reportedDirectory ?? session.record.cwd,
             taskID: taskState?.id, scopeID: session.record.scopeID
@@ -33,7 +33,7 @@ extension AppModel {
     func readDeliverable(of task: TaskState) {
         guard let kept = deliverable(of: task) else { return }
         Usage.click("task.read-deliverable", label: "Read a task's deliverable")
-        show(ReadingContent(
+        showReading(ReadingContent(
             kind: .deliverable(task.id), title: "\(task.name) · deliverable", at: kept.lastReply?.at ?? kept.savedAt,
             markdown: kept.markdown, directory: task.record.threadCwd.path, taskID: task.id, scopeID: task.scopeID
         ))
@@ -43,13 +43,13 @@ extension AppModel {
     func readBrief(of task: TaskState) {
         guard let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else { return }
         Usage.click("task.read-brief", label: "Read a task's brief in full")
-        show(ReadingContent(
+        showReading(ReadingContent(
             kind: .brief(task.id), title: "\(task.name) · brief", at: task.record.createdAt, markdown: prompt,
             directory: task.record.threadCwd.path, taskID: task.id, scopeID: task.scopeID
         ))
     }
 
-    private func show(_ content: ReadingContent) {
+    func showReading(_ content: ReadingContent) {
         inspector.reading = content
         inspector.show(.reading)
         inspectorShown = true

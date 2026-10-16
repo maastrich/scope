@@ -13,6 +13,8 @@ public actor TaskManager {
     public nonisolated let home: URL
     private let registry: GitClientRegistry
     private let store: TaskRecordStore
+    /// The checkpoints of every task (`TaskCheckpoints`): taken by the app at each turn's end, pruned here at archive.
+    public nonisolated let checkpoints: TaskCheckpoints
     private let ports: Range<Int>
     /// Stops the processes left under a task's folders (`ProcessSweep.stop`); a stub in tests that must not kill.
     private let sweep: @Sendable ([URL]) async -> ProcessSweep.Result
@@ -38,6 +40,7 @@ public actor TaskManager {
         self.home = home
         self.registry = registry
         self.store = store
+        self.checkpoints = TaskCheckpoints(home: home, registry: registry)
     }
 
 
@@ -492,6 +495,9 @@ public actor TaskManager {
                 record.repos[index].state = .archived
                 try await save(record)
             }
+            // The refs live in the repository, so they outlive the sandboxes: a few stay with an archived record,
+            // none with a closed one.
+            if mode.isClose { await checkpoints.forget(record) } else { await checkpoints.prune(record, keep: TaskCheckpoints.keepArchived) }
             try removeRoot(record)
             emptyTrashInBackground()
 
@@ -568,37 +574,16 @@ public actor TaskManager {
         }
     }
 
-    /// Untracked files bigger than this stay out of a salvage commit: a dump or a build output an agent left behind
-    /// would otherwise sit in the user's repository for as long as the ref lives.
-    static let salvageFileLimit = 50 * 1024 * 1024
+    /// See `WorkingTreeSnapshot.fileLimit`.
+    static let salvageFileLimit = WorkingTreeSnapshot.fileLimit
 
     private func salvage(sandbox: URL, ref: String, message: String) async throws -> (ref: String, skipped: [String])? {
         guard FileManager.default.fileExists(atPath: sandbox.path) else { return nil }
         let client = await registry.client(for: sandbox)
-        let path = sandbox.filesystemPath
         guard try await client.hasUncommittedChanges(at: sandbox) else { return nil }
-        let index = FileManager.default.temporaryDirectory.appending(path: "scope-salvage-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: index) }
-        let environment = ["GIT_INDEX_FILE": index.path,
-                           "GIT_AUTHOR_NAME": "Scope", "GIT_AUTHOR_EMAIL": "scope@localhost",
-                           "GIT_COMMITTER_NAME": "Scope", "GIT_COMMITTER_EMAIL": "scope@localhost"]
-        try await client.run(["-C", path, "read-tree", "HEAD"], environment: environment)
-        let untracked = try await client.run(["-C", path, "ls-files", "-o", "--exclude-standard", "-z"])
-            .stdoutText.split(separator: "\0").map(String.init)
-        let tooBig = untracked.filter { name in
-            let size = (try? FileManager.default.attributesOfItem(atPath: sandbox.appending(path: name).path)[.size] as? Int) ?? 0
-            return size > Self.salvageFileLimit
-        }
-        try await client.run(["-C", path, "add", "-A"], environment: environment, timeout: .seconds(600))
-        if !tooBig.isEmpty {
-            try await client.run(["-C", path, "rm", "--cached", "-q", "--"] + tooBig, environment: environment)
-        }
-        let tree = try await client.run(["-C", path, "write-tree"], environment: environment)
-            .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let commit = try await client.run(["-C", path, "commit-tree", tree, "-p", "HEAD", "-m", message], environment: environment)
-            .stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
-        try await client.run(["-C", path, "update-ref", ref, commit])
-        return (ref, tooBig)
+        let tree = try await WorkingTreeSnapshot.writeTree(of: sandbox, using: client)
+        try await WorkingTreeSnapshot.commit(tree: tree.hash, message: message, ref: ref, in: sandbox, using: client)
+        return (ref, tree.skipped)
     }
 
     /// The worktrees in a folder no record owns: the folder itself, or its direct subfolders (one per repository).
@@ -655,7 +640,7 @@ public actor TaskManager {
     ///   no live task (archived, closed, unknown, or in the trash) — stopped like `dismantle` stops a task's;
     /// - folders under `sandboxes/<scope>/` no live task owns — moved to the trash, then the trash is emptied;
     /// - stale worktree records in every base checkout tasks used (and `extraBases`) — `git worktree prune`;
-    /// - salvage refs older than `retention` that no record points to.
+    /// - salvage refs older than `retention` that no record points to, and checkpoint refs as old of tasks no record names.
     ///
     /// A folder younger than `grace` is left alone, with whatever runs in it: a task being created has its folder
     /// before its record. Tasks whose archive or close never finished are listed, not resumed — the app resumes
@@ -730,6 +715,7 @@ public actor TaskManager {
         if !dryRun { emptyTrashInBackground() }
 
         let referenced = Set(records.values.flatMap { $0.repos.compactMap(\.salvageRef) })
+        let knownTasks = Set(records.keys.map(\.rawValue))
         for base in baseCheckouts(extra: extraBases) {
             let client = await registry.client(for: base)
             let stale = await staleSandboxWorktrees(in: client)
@@ -740,6 +726,10 @@ public actor TaskManager {
             let refs = (try? await client.output(["for-each-ref", "--format=%(refname)", Self.salvageNamespace])) ?? ""
             for ref in refs.split(separator: "\n").map(String.init) where !referenced.contains(ref) {
                 guard let date = Self.salvageDate(of: ref), now.timeIntervalSince(date) > retention else { continue }
+                report.deletedRefs.append("\(base.lastPathComponent): \(ref)")
+                if !dryRun { _ = try? await client.run(["update-ref", "-d", ref]) }
+            }
+            for ref in await TaskCheckpoints.orphanRefs(in: client, knownTasks: knownTasks, olderThan: retention, now: now) {
                 report.deletedRefs.append("\(base.lastPathComponent): \(ref)")
                 if !dryRun { _ = try? await client.run(["update-ref", "-d", ref]) }
             }

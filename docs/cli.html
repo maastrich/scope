@@ -55,6 +55,9 @@ scope task archive &lt;id|slug&gt;        <span class="c"># put it away: process
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
+scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: one snapshot of the sandboxes per turn that changed a file</span>
+scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
+                                    <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
@@ -173,7 +176,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_checkpoints</code>,
+<code>scope_task_restore_checkpoint</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
 <code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same

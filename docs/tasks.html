@@ -244,6 +244,23 @@ way. Saved changes no task points to are deleted after 30 days.</p>
 <p>If a step fails, the task stays out of the sidebar, the Problem Center says why with <b>Retry</b>, and the
 next launch finishes the job.</p>
 
+<h3 id="checkpoints">Every turn leaves a checkpoint</h3>
+<p>Each time a turn ends in one of a task's threads and a file changed, Scope snapshots every sandbox of the task —
+tracked and untracked files, ignored ones aside, the same private-index commit as the saved changes above — under
+<code>refs/scope/checkpoints/&lt;task&gt;/&lt;n&gt;</code> in the repository. The branch does not move, the sandbox's
+index is not touched, and a turn that changed nothing leaves nothing. Turns ending seconds apart share one
+checkpoint. Fifty are kept on an open task, five with an archived one, none after a close.</p>
+<p>In the Task section, a turn that left a checkpoint has a dot under its bar in the timeline, and the
+<b>Checkpoints</b> list under it says when, which thread and turn, the first words of the reply and
+<code>+N −M</code> against the checkpoint before. Hover one for three actions, none of which asks:
+<b>Show diff</b> opens the checkpoint against the sandbox as it is now in the reading column; <b>Restore files</b>
+writes the checkpoint's files back into every sandbox (files it had restored, files that appeared since removed) —
+never a branch reset, never a commit touched — after taking a checkpoint of the files as they are, which the notice
+names as the undo; <b>Branch from here</b> creates <code>&lt;branch&gt;-cp&lt;n&gt;</code> at the checkpoint's commit
+without checking it out. <code>scope task checkpoints &lt;task&gt;</code> lists them and
+<code>scope task restore-checkpoint &lt;task&gt; &lt;n&gt;</code> restores one; an agent may restore within its own
+task only.</p>
+
 <h2 id="cleanup">Automatic cleanup</h2>
 <p>Scope tidies up after tasks on its own: when it opens, every 30 minutes, and after each archive or close. It
 stops the processes left by archived or closed tasks, moves to the trash the sandbox folders no task owns (their
@@ -284,7 +301,7 @@ answer kept when it was archived (or its report file). Archived and closed tasks
 that implements it without anyone pasting. <code>@thread:&lt;id&gt;</code> does the same for a thread: title, task,
 last answer. In the app, typing <code>@</code> in a message field offers the tasks of the scope, recent first; Tab
 or ↩ completes one. A mention nothing answers to stays as typed, with a note.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl3" href="#checkpoints">Every turn leaves a checkpoint</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

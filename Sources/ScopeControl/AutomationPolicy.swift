@@ -202,7 +202,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary, .taskShow, .configGet, .usage:
+            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage:
                 return .allow
             case .configSet:
                 return .refuse(.denied("only the user may change Scope's settings"))
@@ -215,6 +215,10 @@ public struct AutomationPolicy: Sendable, Equatable {
             case .threadStop, .threadClose, .threadSend, .threadRead, .threadWait:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
+                return .allow
+            case .taskRestoreCheckpoint:
+                // Files of a sandbox, with the undo taken first: an agent may do it within its own task, which the
+                // app checks once it has found the task (`mayRestoreCheckpoint`). Nothing opened, nothing deleted.
                 return .allow
             case .taskClose, .taskArchive, .taskRebase:
                 // Undoing a task removes worktrees and can delete a branch; a rebase rewrites one and may open a
@@ -294,6 +298,26 @@ public struct AutomationPolicy: Sendable, Equatable {
         }
     }
 
+    /// Whether `origin` may restore a checkpoint of the task `taskID`, whose threads are `taskThreads`: you may, and so
+    /// may an agent whose own thread runs in that task — not another task's, not an agent outside Scope.
+    public static func mayRestoreCheckpoint(of taskID: String, taskThreads: [ThreadID], from origin: ControlOrigin) -> ControlError? {
+        switch origin {
+        case .user:
+            return nil
+        case .strangerThread(let raw):
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+        case .thread(let own, _):
+            guard taskThreads.contains(own) else {
+                return .denied("an agent may only restore a checkpoint of its own task",
+                               detail: "The task \(taskID) is not the one your thread runs in. Ask the user, or its own thread.")
+            }
+            return nil
+        case .externalAgent:
+            return .denied("an agent outside Scope may not restore a checkpoint",
+                           detail: "Restoring rewrites a sandbox's files; only the user or the task's own thread may.")
+        }
+    }
+
     /// Who is asking, in the words of a refusal.
     static func describe(_ origin: ControlOrigin, depth: Int) -> String {
         switch origin {
@@ -321,6 +345,9 @@ public struct AutomationPolicy: Sendable, Equatable {
             params.end ? "put your checkout back from the task “\(params.task)”"
                 : params.refresh ? "move your checkout to the head of the task “\(params.task)”"
                 : "try the task “\(params.task)” in your checkout"
+        case .taskCheckpoints(let params): "list the checkpoints of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+        case .taskRestoreCheckpoint(let params):
+            "restore checkpoint \(params.number) of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
         case .taskTopic(let params):
             "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")

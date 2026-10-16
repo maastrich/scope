@@ -27,6 +27,8 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case branchNotFound(repo: String, branch: String)
     /// The branch is checked out in another working tree; git refuses a second worktree on it.
     case branchAlreadyCheckedOut(repo: String, branch: String, path: String)
+    /// `TaskCheckpoints`: the task has no checkpoint with that number (pruned, or never taken).
+    case checkpointNotFound(Int)
 
     public var description: String {
         switch self {
@@ -43,6 +45,7 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .branchNotFound(let repo, let branch): "\(repo): no branch \(branch), locally or on origin"
         case .branchAlreadyCheckedOut(let repo, let branch, let path):
             "\(repo): \(branch) is already checked out at \(path) — a branch can only live in one working tree"
+        case .checkpointNotFound(let number): "the task has no checkpoint \(number)"
         }
     }
 }

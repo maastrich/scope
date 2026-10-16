@@ -157,6 +157,8 @@ struct TaskSection: View {
                     TaskTimelineView(task: task)
                         .padding(.top, 8)
                         .usageID("timeline", label: "Task timeline")
+                    TaskCheckpointsList(task: task)
+                        .usageID("task-checkpoints", label: "Task checkpoints")
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -186,6 +188,139 @@ private struct TaskServersRow: View {
             .padding(.top, 4)
             .usageID("task-servers", label: "Task servers and disk")
         }
+    }
+}
+
+/// The task's checkpoints under the timeline, newest first: when, which thread and turn, the reply's first words,
+/// `+N −M` against the one before; on hover, Show diff / Restore files / Branch from here. Nothing asks: a restore
+/// checkpoints what it replaces, so the list itself is the undo.
+private struct TaskCheckpointsList: View {
+    let task: TaskState
+    @State private var showAll = false
+
+    static let shortCount = 6
+
+    var body: some View {
+        let all = Array(task.checkpoints.reversed())
+        if !all.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text("Checkpoints")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Ink.tertiary)
+                    Text("\(all.count)")
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(Ink.tertiary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.bottom, 2)
+                ForEach(showAll ? all : Array(all.prefix(Self.shortCount))) { checkpoint in
+                    TaskCheckpointRow(task: task, checkpoint: checkpoint)
+                }
+                if all.count > Self.shortCount {
+                    Button(showAll ? "Show fewer" : "Show all \(all.count)") { showAll.toggle() }
+                        .buttonStyle(.plain)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .padding(.top, 2)
+                        .usageID("task.checkpoints-show-all", label: "Show every checkpoint")
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+}
+
+private struct TaskCheckpointRow: View {
+    @Environment(AppModel.self) private var model
+    let task: TaskState
+    let checkpoint: TaskCheckpoint
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(when)
+                .font(.system(size: 10.5).monospacedDigit())
+                .foregroundStyle(Ink.tertiary)
+                .fixedSize()
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(who)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                    if let turn = checkpoint.turn {
+                        Text("turn \(turn)")
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
+                    }
+                }
+                Text(checkpoint.headline)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
+            // Always in the hierarchy (keyboard focus and VoiceOver reach them); revealed on hover.
+            HStack(spacing: 8) {
+                Button {
+                    Task { await model.readCheckpointDiff(checkpoint, of: task) }
+                } label: {
+                    Image(systemName: "plus.forwardslash.minus").font(.system(size: 12))
+                }
+                .help("Show diff — this checkpoint against the sandbox now, in the reading column")
+                .accessibilityLabel("Show the diff of checkpoint \(checkpoint.number)")
+                .usageID("task.checkpoint-diff", label: "Show a checkpoint's diff")
+                Button {
+                    Task { await model.restoreCheckpointFromUI(checkpoint, of: task) }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward").font(.system(size: 12))
+                }
+                .help("Restore files — the sandbox files as this checkpoint had them; the branch stays, and the files as they are now become a checkpoint first")
+                .accessibilityLabel("Restore the files of checkpoint \(checkpoint.number)")
+                .usageID("task.checkpoint-restore", label: "Restore a checkpoint's files")
+                Button {
+                    Task { await model.branchFromCheckpoint(checkpoint, of: task) }
+                } label: {
+                    Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
+                }
+                .help("Branch from here — creates \(task.branch)-cp\(checkpoint.number) at this checkpoint, without checking it out")
+                .accessibilityLabel("Branch from checkpoint \(checkpoint.number)")
+                .usageID("task.checkpoint-branch", label: "Branch from a checkpoint")
+            }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.secondary)
+            .opacity(hovering ? 1 : 0)
+            DeltaCounts(additions: checkpoint.additions, deletions: checkpoint.deletions)
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 30)
+        .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .padding(.horizontal, -6)
+        .onHover { hovering = $0 }
+        .help(tooltip)
+    }
+
+    private var when: String {
+        Calendar.current.isDateInToday(checkpoint.at)
+            ? checkpoint.at.formatted(date: .omitted, time: .shortened)
+            : checkpoint.at.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    }
+
+    private var who: String {
+        switch checkpoint.reason {
+        case .beforeRestore: "Before restore"
+        case .turn: checkpoint.threadTitle ?? "Thread"
+        }
+    }
+
+    private var tooltip: String {
+        var text = "Checkpoint \(checkpoint.number) · " + checkpoint.at.formatted(date: .abbreviated, time: .shortened)
+        text += "\n" + checkpoint.repos.map { repo in
+            let name = repo.repoRelativePath == "." ? task.record.scopeName : repo.repoRelativePath
+            return "\(name) @ \(repo.commit.prefix(7))" + (repo.skipped.isEmpty ? "" : " (left out: \(repo.skipped.joined(separator: ", ")))")
+        }.joined(separator: "\n")
+        return text
     }
 }
 

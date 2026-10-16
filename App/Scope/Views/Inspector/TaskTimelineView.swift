@@ -19,6 +19,7 @@ struct TaskTimelineView: View {
         // waits, and the periodic tick keeps a running bar and the "now" edge growing.
         let _ = model.threads(in: task.id).map { ($0.turnRevision, $0.displayState) }
         let _ = task.timelineLog
+        let checkpoints = task.checkpoints
         TimelineView(.periodic(from: .now, by: compact ? 60 : 20)) { context in
             let timeline = model.timeline(of: task, now: context.date)
             VStack(alignment: .leading, spacing: compact ? 6 : 8) {
@@ -30,13 +31,14 @@ struct TaskTimelineView: View {
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.tertiary)
                 } else {
-                    TimelineLanes(timeline: timeline, live: task.record.archivedAt == nil)
-                    TimelineLegend()
+                    TimelineLanes(timeline: timeline, live: task.record.archivedAt == nil, checkpoints: checkpoints)
+                    TimelineLegend(hasCheckpoints: !checkpoints.isEmpty)
                 }
             }
         }
         .task(id: task.id) {
             if task.timelineLog == nil { await model.reloadTimelineLog(of: task.id) }
+            if !task.checkpointsLoaded { await model.reloadCheckpoints(of: task.id) }
         }
     }
 }
@@ -171,6 +173,11 @@ enum TimelineStyle {
         }
     }
 
+    /// The mark of a checkpoint under the end of its turn's bar: a small dot in the accent colour.
+    static func drawCheckpoint(at x: Double, laneBottom y: Double, context: inout GraphicsContext) {
+        context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 2.5, width: 4, height: 4)), with: .color(Color.accentColor))
+    }
+
     /// A fold: a quiet band with two slanted cuts, the way a broken axis is drawn.
     static func drawFold(_ x0: Double, _ x1: Double, height: Double, context: inout GraphicsContext) {
         let rect = CGRect(x: x0, y: 0, width: x1 - x0, height: height)
@@ -189,6 +196,8 @@ enum TimelineStyle {
 private struct TimelineLanes: View {
     let timeline: TaskTimeline
     let live: Bool
+    /// The task's checkpoints: a turn bar whose end matches one gets a mark.
+    var checkpoints: [TaskCheckpoint] = []
     @State private var hover: CGPoint?
 
     static let labelWidth: Double = 64
@@ -249,6 +258,10 @@ private struct TimelineLanes: View {
                         ? scale.extent(from: span.start, to: span.end, minimumWidth: Self.minimumBar)
                         : scale.x(span.start)...max(scale.x(span.start), scale.x(span.end))
                     TimelineStyle.draw(span, in: laneRect(index, extent), context: &context)
+                    if let turn = span.turn, checkpoint(of: turn, lane: lane) != nil {
+                        TimelineStyle.drawCheckpoint(at: extent.upperBound, laneBottom: Self.tickBand + Double(index + 1) * Self.laneHeight,
+                                                     context: &context)
+                    }
                 }
             }
             for tick in timeline.ticks {
@@ -285,6 +298,13 @@ private struct TimelineLanes: View {
         .font(.system(size: 9.5).monospacedDigit())
         .foregroundStyle(Ink.tertiary)
         .frame(width: width, height: 12)
+    }
+
+    private func checkpoint(of turn: ThreadActivity.Turn, lane: TaskTimeline.Lane) -> TaskCheckpoint? {
+        checkpoints.first { checkpoint in
+            guard checkpoint.threadID == lane.id, let endedAt = checkpoint.turnEndedAt else { return false }
+            return abs(endedAt.timeIntervalSince(turn.endedAt)) < 0.002
+        }
     }
 
     static func when(_ date: Date, relativeTo other: Date) -> String {
@@ -328,6 +348,9 @@ private struct TimelineLanes: View {
             if turn.tools > 0 { outcome += " · \(turn.tools) tool call\(turn.tools == 1 ? "" : "s")" }
             lines.append(outcome)
             if turn.startedAt == nil { lines.append("Its start was not reported") }
+            if let checkpoint = checkpoint(of: turn, lane: lane) {
+                lines.append("Checkpoint \(checkpoint.number) · +\(checkpoint.additions) −\(checkpoint.deletions)")
+            }
         }
         let title = span.running ? "\(lane.title) — working" : "\(lane.title) — \(TimelineStyle.label(span.kind).lowercased())"
         return Hit(title: title, lines: lines, said: span.turn?.said)
@@ -360,12 +383,20 @@ private struct TimelineLanes: View {
 // MARK: Legend
 
 private struct TimelineLegend: View {
+    var hasCheckpoints = false
+
     var body: some View {
         HStack(spacing: 10) {
             item(.working)
             item(.waitingAnswer, "answer")
             item(.waitingPermission, "permission")
             item(.unreadResult, "unread result")
+            if hasCheckpoints {
+                HStack(spacing: 3) {
+                    Circle().fill(Color.accentColor).frame(width: 4, height: 4)
+                    Text("checkpoint")
+                }
+            }
         }
         .font(.system(size: 9.5))
         .foregroundStyle(Ink.tertiary)

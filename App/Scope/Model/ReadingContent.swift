@@ -11,6 +11,8 @@ struct ReadingContent: Equatable {
         case deliverable(TaskID)
         /// The prompt a task was created from.
         case brief(TaskID)
+        /// A checkpoint of a task against its sandboxes now (`AppModel+Checkpoints`).
+        case checkpoint(TaskID, Int)
     }
 
     var kind: Kind
@@ -30,6 +32,7 @@ struct ReadingContent: Equatable {
         case .reply: "text.bubble"
         case .deliverable: "doc.richtext"
         case .brief: "text.quote"
+        case .checkpoint: "clock.arrow.circlepath"
         }
     }
 }

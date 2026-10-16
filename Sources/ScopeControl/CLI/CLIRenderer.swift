@@ -20,6 +20,7 @@ public enum CLIRenderer {
         case .wait(let result): try encoder.encode(result)
         case .summary(let result): try encoder.encode(result)
         case .taskShow(let result): try encoder.encode(result)
+        case .taskCheckpoints(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
         }
@@ -120,6 +121,8 @@ public enum CLIRenderer {
             return summary(result)
         case .taskShow(let result):
             return taskShow(result)
+        case .taskCheckpoints(let result):
+            return checkpoints(result)
         case .usage(let result):
             return usage(result)
         case .release(let result):
@@ -148,6 +151,21 @@ public enum CLIRenderer {
             lines.append(result.output.trimmingCharacters(in: .newlines))
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// `scope task checkpoints`: one line per checkpoint, newest last, with the undo ones marked.
+    static func checkpoints(_ result: TaskCheckpointsResult) -> String {
+        guard !result.checkpoints.isEmpty else { return "no checkpoint yet for \(result.slug): one is taken when a turn changes a file" }
+        let rows = result.checkpoints.map { entry -> [String] in
+            let who = entry.reason == "before_restore" ? "before restore" : (entry.threadTitle ?? entry.thread ?? "")
+            let turn = entry.turn.map(String.init) ?? ""
+            var delta = ""
+            if entry.additions > 0 { delta += "+\(entry.additions)" }
+            if entry.deletions > 0 { delta += (delta.isEmpty ? "" : " ") + "-\(entry.deletions)" }
+            return [String(entry.number), time(entry.at), who, turn, delta, entry.said ?? ""]
+        }
+        return table(["N", "AT", "THREAD", "TURN", "DELTA", "SAID"], rows)
+            + "\n\nscope task restore-checkpoint \(result.slug) <N> puts one back; the state replaced is checkpointed first."
     }
 
     /// One block per scope, a line per task with the start of its brief under it, the threads outside tasks, then what
