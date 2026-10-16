@@ -65,6 +65,7 @@ final class AppModel {
     var selection: SidebarItem? {
         didSet {
             guard !isRestoringUIState else { return }
+            if selection != oldValue { noteSelectionClick() }
             if let scopeID = scopeID(of: selection), scopeID != currentScopeID {
                 currentScopeID = scopeID
             }
@@ -538,6 +539,7 @@ final class AppModel {
 
         let (loadedConfig, configProblem) = await configLoad
         config = loadedConfig
+        startUsage()
         switch configProblem {
         case .corrupt(let backup, let underlying):
             problems.error("config.json was unreadable and has been moved aside",
@@ -772,6 +774,7 @@ final class AppModel {
         let before = config.preferences
         change(&config.preferences)
         guard config.preferences != before else { return }
+        noteSettingsChanged(from: before)
         saveConfig()
         if config.preferences.shellProbe != before.shellProbe {
             reprobeShell()
@@ -1367,6 +1370,7 @@ final class AppModel {
     /// ⌥⌘→ / ⌥⌘←: the next or previous scope around the ring.
     func selectAdjacentScope(_ delta: Int) {
         guard let target = adjacentScope(delta) else { return }
+        noteScopeSwipe()
         scopeStepForward = delta > 0
         defer { scopeStepForward = nil }
         selectScope(target)
@@ -1471,6 +1475,8 @@ final class AppModel {
         }
         env.uiState.flush()
         await env.config.flush()
+        Usage.closeAll()
+        await env.usage.flush()
         env.hooks?.stop()
         // Give the children a moment to hang up before the PTY masters close with the process.
         let deadline = ContinuousClock.now + .milliseconds(600)

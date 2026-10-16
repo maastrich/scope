@@ -265,7 +265,10 @@ struct CommandPalette: View {
     private func choose(_ item: PaletteItem) {
         model.searchUI.noteChosen(item.id)
         close()
-        item.run()
+        let usageID = UsageID.palette(itemID: item.id, section: item.section.rawValue, actionSection: item.section == .actions)
+        Usage.register(usageID, label: item.section == .actions ? item.label : item.section.rawValue)
+        Usage.record(.palette, usageID, source: .palette)
+        Usage.attributed { item.run() }
     }
 
     private func close() {

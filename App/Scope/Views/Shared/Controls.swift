@@ -1,3 +1,4 @@
+import ScopeCore
 import SwiftUI
 
 // The app's own controls. Every one of these exists because the AppKit control it replaces is drawn by the
@@ -50,6 +51,7 @@ struct ScopeButtonStyle: ButtonStyle {
                 .contentShape(Rectangle())
                 .onHover { hovering = $0 }
                 .onChange(of: isEnabled) { _, enabled in if !enabled { hovering = false } }
+                .usageClicks(pressed: configuration.isPressed, hovering: hovering)
         }
 
         private var stroked: Bool {
@@ -169,9 +171,14 @@ extension View {
 /// used to get switches — the grouped form was doing it. Taking the form away took the switches with it, so
 /// this puts them back and stops them depending on their container.
 struct ScopeToggleStyle: ToggleStyle {
+    @Environment(\.usageArea) private var usageArea
+    @Environment(\.usageTag) private var usageTag
+
     func makeBody(configuration: Configuration) -> some View {
         Button {
             configuration.isOn.toggle()
+            let (id, label) = Usage.id(area: usageArea, tag: usageTag, fallback: "toggle")
+            Usage.click(id, label: label)
         } label: {
             HStack(spacing: 9) {
                 configuration.label
@@ -351,6 +358,8 @@ struct ScopePicker<Value: Hashable, Content: View>: View {
         self.content = content()
     }
 
+    @Environment(\.usageArea) private var usageArea
+
     var body: some View {
         ScopeMenu(title, systemImage: systemImage) {
             Picker(label, selection: $selection) { content }
@@ -359,7 +368,12 @@ struct ScopePicker<Value: Hashable, Content: View>: View {
         }
         .accessibilityLabel(label)
         .accessibilityValue(title)
+        // The label is what is chosen ("Driver"), never the value, which can be a branch or a path.
+        .onAppear { Usage.register(usageID, label: label) }
+        .onChange(of: selection) { Usage.click(usageID, label: label) }
     }
+
+    private var usageID: String { UsageID.join(usageArea, UsageID.slug(label)) }
 }
 
 /// An action that reads as text: "Reveal", "Edit", a file path that jumps to its diff. In place of
@@ -382,6 +396,7 @@ struct ScopeLinkButtonStyle: ButtonStyle {
             .opacity(isEnabled ? 1 : 0.4)
             .onHover { hovering = $0 }
             .onChange(of: isEnabled) { _, enabled in if !enabled { hovering = false } }
+            .usageClicks(pressed: configuration.isPressed, hovering: hovering, fallback: "link")
         }
     }
 }
@@ -417,7 +432,9 @@ struct ScopeStepper: View {
     var body: some View {
         HStack(spacing: 2) {
             button("minus", enabled: value > range.lowerBound) { onChange(value - 1) }
+                .usageID("stepper", label: "Stepper")
             button("plus", enabled: value < range.upperBound) { onChange(value + 1) }
+                .usageID("stepper", label: "Stepper")
         }
     }
 

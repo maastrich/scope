@@ -143,6 +143,7 @@ extension AppModel {
     /// Renders the task's comments against the files as they are now and delivers them to `thread`. The comments
     /// are cleared once the text reached the thread.
     func sendReview(for task: TaskState, to thread: ThreadID) async -> DeliveryOutcome {
+        Usage.click("inspector.delta.send-review", label: "Send review comments")
         await review.show(task: task.id)
         let comments = review.comments
         guard !comments.isEmpty else { return .failed("there is no comment to send") }

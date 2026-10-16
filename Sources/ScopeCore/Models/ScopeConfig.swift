@@ -447,6 +447,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// A notification quotes the agent — its question, the opening of its answer — rather than only saying what
     /// happened. On by default; off keeps the words off screen while sharing it.
     public var notificationsQuoteAgent: Bool
+    /// Keep a log of which controls, commands and panels are used, under `SCOPE_HOME/usage` and nowhere else (`scope
+    /// usage` reads it). On by default.
+    public var recordUsage: Bool
 
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
@@ -483,7 +486,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         showGitActions: Bool = false,
         automation: AutomationSettings? = nil,
         cleanUpAutomatically: Bool = true,
-        notificationsQuoteAgent: Bool = true
+        notificationsQuoteAgent: Bool = true,
+        recordUsage: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -512,6 +516,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.automation = automation
         self.cleanUpAutomatically = cleanUpAutomatically
         self.notificationsQuoteAgent = notificationsQuoteAgent
+        self.recordUsage = recordUsage
     }
 
     public static let `default` = Preferences()
@@ -520,7 +525,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage
     }
 
     public init(from decoder: any Decoder) throws {
@@ -569,6 +574,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.cleanUpAutomatically
         notificationsQuoteAgent = (try? container.decodeIfPresent(Bool.self, forKey: .notificationsQuoteAgent))
             ?? defaults.notificationsQuoteAgent
+        recordUsage = (try? container.decodeIfPresent(Bool.self, forKey: .recordUsage)) ?? defaults.recordUsage
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

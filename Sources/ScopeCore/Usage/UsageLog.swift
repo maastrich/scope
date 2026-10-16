@@ -62,6 +62,17 @@ public struct UsageLog: Sendable {
         return events
     }
 
+    /// The date of the oldest event on disk: when recording began, as far as what is left can tell.
+    public func firstEventDate(fileManager: FileManager = .default) -> Date? {
+        for url in files(fileManager: fileManager) {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            if let first = data.split(separator: UInt8(ascii: "\n")).lazy.compactMap({ UsageEvent.decode(line: $0) }).first {
+                return first.at
+            }
+        }
+        return nil
+    }
+
     public func readRegistry() -> UsageRegistry {
         guard let data = try? Data(contentsOf: registryURL),
               let registry = try? JSONDecoder().decode(UsageRegistry.self, from: data) else { return UsageRegistry() }

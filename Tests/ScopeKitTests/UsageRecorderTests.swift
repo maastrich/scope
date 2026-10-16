@@ -54,6 +54,7 @@ import Testing
         recorder.record(Self.event("a.two"))
         await recorder.flush()
         #expect(log.files().map(\.lastPathComponent) == ["usage-2026-09.jsonl", "usage-2026-10.jsonl"])
+        #expect(log.firstEventDate() == september)
         let firstOfOctober = DateComponents(calendar: UsageLog.utc, year: 2026, month: 10, day: 1).date!
         #expect(log.read(since: firstOfOctober, until: .distantFuture).map(\.id) == ["a.two"])
     }

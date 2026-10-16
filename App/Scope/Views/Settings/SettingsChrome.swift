@@ -1,3 +1,4 @@
+import ScopeCore
 import SwiftUI
 
 // The settings window's own chrome, in place of `Form` / `.formStyle(.grouped)` / `Section` /
@@ -47,6 +48,7 @@ struct SettingsSection<Content: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .usageArea(UsageID.join("settings", UsageID.slug(title)))
     }
 }
 

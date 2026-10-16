@@ -23,17 +23,20 @@ struct RootView: View {
         HStack(spacing: 0) {
             if sidebarPresented {
                 SidebarView()
+                    .usageArea("sidebar")
                     .id(theme)
                     .frame(width: model.sidebarWidth)
                     .transition(.move(edge: .leading))
                 ColumnResizeHandle(width: sidebarWidth, growsWithDrag: true, label: "Sidebar width")
             }
             SceneView()
+                .usageArea("thread")
             // The diff or base file opened from the inspector reads beside it, the height of the window, rather than
             // under its sections (`InspectorViewerColumn`).
             if inspectorPresented.wrappedValue, model.shownViewer != nil {
                 ColumnResizeHandle(width: viewerWidth, growsWithDrag: false, label: "Viewer width")
                 InspectorViewerColumn()
+                    .usageSurface("viewer", label: "Reading column")
                     .id(theme)
                     .frame(width: viewerWidth.wrappedValue)
                     .transition(.move(edge: .trailing))
@@ -41,6 +44,7 @@ struct RootView: View {
             if inspectorPresented.wrappedValue {
                 ColumnResizeHandle(width: inspectorWidth, growsWithDrag: false, label: "Inspector width")
                 InspectorView()
+                    .usageSurface("inspector", label: "Inspector")
                     .id(theme)
                     .frame(width: model.inspectorWidth)
                     .transition(.move(edge: .trailing))
@@ -57,16 +61,19 @@ struct RootView: View {
         .overlay {
             if model.paletteShown {
                 CommandPalette()
+                    .usageSurface("palette", label: "Command palette")
             }
         }
         .sheet(item: $model.globalSheet) { sheet in
             GlobalSheetView(sheet: sheet)
+                .usageSurface(sheet == .graph ? "sheet.graph" : "sheet.pull-requests", label: sheet == .graph ? "Graph" : "Pull Requests")
                 .environment(model)
         }
         .sheet(item: newTaskScope) { scope in
             // The resolved driver, never the raw preference: "" means automatic, and an empty picker would
             // leave the sheet without a driver to ask for a proposal.
             NewTaskSheet(scope: scope, defaultDriverID: model.preferredDriverID ?? "")
+                .usageSurface("sheet.new-task", label: "New Task")
                 .environment(model)
         }
         .sheet(item: scopeSettings, onDismiss: {
@@ -75,6 +82,7 @@ struct RootView: View {
             model.presentGraph()
         }) { scope in
             ScopeSettingsSheet(scope: scope)
+                .usageSurface("sheet.scope-settings", label: "Scope settings")
                 .environment(model)
         }
         .focusedSceneValue(\.appModel, model)

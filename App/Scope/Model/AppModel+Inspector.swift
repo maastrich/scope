@@ -40,7 +40,13 @@ extension AppModel {
     func showDiff(_ ref: DeltaFileRef?) {
         delta.selectedFile = ref
         delta.focusedHunk = nil
-        if ref != nil { inspector.show(.diff) }
+        if ref != nil {
+            inspector.show(.diff)
+            if let input = Usage.currentInput {
+                Usage.register("inspector.delta.open-file", label: "Open a changed file")
+                Usage.record(.click, "inspector.delta.open-file", source: input)
+            }
+        }
     }
 
     /// The viewer asked for, if it still has something to show: a diff needs the selected file of the selected task in
@@ -69,6 +75,7 @@ extension AppModel {
     /// thread belongs to a task, the base checkout otherwise, the file itself when it lies elsewhere. `false` leaves
     /// the link to the system (a web URL, a path that names nothing on disk).
     func openFileLink(_ link: String, from session: ThreadSession) -> Bool {
+        Usage.click("thread.open-link", label: "⌘-click a link in the terminal")
         guard let scope = scope(session.record.scopeID) else { return false }
         var roots: [FileLinkResolver.Root] = []
         var names: [String: String] = [:]
