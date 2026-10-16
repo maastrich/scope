@@ -11,6 +11,24 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.22.0](https://github.com/maastrich/scope/releases/tag/v0.22.0) - 2026-10-16
+
+### Added
+
+- **usage:** see how many tokens the agents consumed ([#49](https://github.com/maastrich/scope/pull/49)) by @maastrich
+- **inbox:** what needs you, in every scope, with the action at hand ([#52](https://github.com/maastrich/scope/pull/52)) by @maastrich
+- **sidebar:** say what moved in a scope since your last visit ([#51](https://github.com/maastrich/scope/pull/51)) by @maastrich
+- a timeline of the task, at a glance ([#53](https://github.com/maastrich/scope/pull/53)) by @maastrich
+- **ui:** hide the sidebar footer by default, make every sash easier to grab and reset on double-click ([#55](https://github.com/maastrich/scope/pull/55)) by @maastrich
+- read the agent's reply as Markdown, keep the deliverable at archive, show the brief in the inspector ([#54](https://github.com/maastrich/scope/pull/54)) by @maastrich
+
+### Fixed
+
+- **threads:** permissions granted by auto mode or another hook no longer show as waiting ([#48](https://github.com/maastrich/scope/pull/48)) by @maastrich
+- **threads:** a finished turn stays finished, and thread wait returns when it ends ([#50](https://github.com/maastrich/scope/pull/50)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.21.0...v0.22.0
+
 ## [0.21.0](https://github.com/maastrich/scope/releases/tag/v0.21.0) - 2026-10-16
 
 ### Added
