@@ -118,7 +118,23 @@ lists its checks, refreshed every minute: state, name, and a link to each check'
   <li><b>Fix Conflicts</b> stays on the header when the pull request conflicts with its base: the thread is asked to merge
   the base into the branch, resolve, run the tests and push.</li>
 </ul>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#links">Files an agent mentions</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl2" href="#prs">Pull requests</a><a class="lvl2" href="#pr-lifecycle">A task's pull request, to the merge</a></aside></div>
+
+<h3 id="pr-background">Every task, not only the one on screen</h3>
+<p>The task on screen is refreshed every minute; every other open task is read from GitHub every 5 minutes in the
+background, two <code>gh</code> calls at a time and spread over the interval. A task with nothing committed yet is
+skipped until it has a commit; one whose fetch fails is asked less and less often, up to once an hour; a merged or
+closed pull request every half hour. Nothing runs in Low Power Mode. The checks say how old they are —
+<code>✓ checks passed · 4 min ago</code> — on the Pull Request header and in the task's hover card, and turn grey
+once older than 15 minutes: a green that old may no longer be true.</p>
+<p>When a refresh sees the pull request <b>merged</b> and no thread of the task is running, Scope archives the task
+the way the sidebar's Archive does and leaves one quiet notice, <i>Archived &lt;task&gt;: pull request merged</i>,
+with <b>Restore</b>. A running thread postpones it to the next refresh. A pull request closed without merging
+never archives anything, and a task you restore after its merge stays open. Turn it off in <b>Settings ▸ General ▸
+Tasks ▸ Archive a task when its pull request merges</b>. Agents no longer need to wait for the merge to archive.</p>
+<p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
+pull request was closed without merging, says so at the end of its row — <code>idle 4d</code>, <code>PR closed</code>
+— and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#links">Files an agent mentions</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl2" href="#prs">Pull requests</a><a class="lvl2" href="#pr-lifecycle">A task's pull request, to the merge</a><a class="lvl3" href="#pr-background">Every task, not only the one on screen</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
