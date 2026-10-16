@@ -40,7 +40,7 @@ struct ThreadRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if detailed, let headline {
-                    ThreadActivityCaption(headline: headline)
+                    ThreadActivityCaption(headline: headline, readReply: headline.opensReply ? { model.readReply(of: session) } : nil)
                 } else if detailed {
                     Text([session.displayState.displayLabel, caption].compactMap { $0 }.joined(separator: " · "))
                         .font(.scopeCaption)
@@ -181,6 +181,10 @@ struct ThreadMenuItems: View {
             model.beginReply(to: session.id)
         }
         .disabled(!model.canReply(to: session))
+        Button("Read Reply") {
+            model.readReply(of: session)
+        }
+        .keyboardShortcut("r", modifiers: [.command, .shift])
         Button("Mark as Read") {
             model.markRead(session.id)
         }

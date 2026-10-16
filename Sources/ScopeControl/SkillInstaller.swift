@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 13
+    public static let version = 14
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -199,13 +199,14 @@ public struct SkillInstaller: Sendable {
         | Command line | MCP tool and arguments |
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
-        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--title T] [--topic P] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, title, topic, open_thread: false, run_setup: false, dry_run}` |
+        | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--title T] [--topic P] [--deliverable F] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, title, topic, deliverable, open_thread: false, run_setup: false, dry_run}` |
         | `scope thread new [--task T] [--repo R] [--driver D] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
         | `scope thread read <id> [-n N] [--cursor C]` | `scope_thread_read` `{thread, lines, cursor}` |
         | `scope thread send <id> "<text>" [--no-enter]` | `scope_thread_send` `{thread, text, submit: false}` |
         | `scope thread stop <id>` / `scope thread close <id>` | `scope_thread_stop` / `scope_thread_close` `{thread}` |
+        | `scope task show <slug>` | `scope_task_show` `{task}` |
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
         | `scope task restore <slug> [--scope S]` | `scope_task_restore` `{task, scope}` |
@@ -334,7 +335,10 @@ public struct SkillInstaller: Sendable {
         handed back): an open task holds a worktree per repository and a share of the agents' budget (below).
 
         `scope task archive <slug>` stops the task's threads and processes, removes the worktrees and keeps the
-        branch. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:
+        branch. It also keeps each thread's last answer and the task's `REPORT.md` (or the file given with
+        `--deliverable` at creation): the final answer of a study is its deliverable, and it survives the archive —
+        `scope task show <slug>` (`scope_task_show`) prints the brief and what was kept, for open, archived and closed
+        tasks alike. So end a study with a complete answer, or write it to `REPORT.md` in the task root. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:
         uncommitted changes and an unmerged branch's last commit are kept under `refs/scope/salvage/`, and the
         answer names the ref. `scope gc --dry-run` shows what Scope's own cleanup would remove.
 
@@ -412,8 +416,11 @@ public struct SkillInstaller: Sendable {
         one-line description. `threads` are the agents that worked in it. `scopes[].threads` are threads opened
         outside any task. A scope with `declared: false` was removed since.
 
-        For one task's whole brief, ask with `task`. Do not fetch every task's detail: the summary already holds
-        what an account needs.
+        `answer`, when present, is the opening of the last answer the task's threads gave before it was archived or
+        closed, and `reports` the report files kept with it: for an `archived` task without a pull request, that
+        is what it came to — use it to say "done" or "set aside". For one task's whole brief and those answers, ask
+        with `task`, or `scope task show <slug>`. Do not fetch every task's detail: the summary already holds what
+        an account needs.
 
         ## 3. Write the account
 
@@ -422,9 +429,9 @@ public struct SkillInstaller: Sendable {
         - one line per topic or per task: what it was for (from its name, PR title, brief), and how it ended;
         - shipped first, then delivered, still open, dropped; group a topic's tasks under it;
         - counts are fine, task ids and slugs are noise unless asked;
-        - end with what the facts cannot say (`limits`): Scope keeps nothing of what was said in a thread, and the
-          history of closed tasks starts at `historySince` — work closed before that left no trace. Say it in one
-          line, not a paragraph.
+        - end with what the facts cannot say (`limits`): Scope keeps only each thread's last answer, from the moment
+          its task is put away, and the history of closed tasks starts at `historySince` — work closed before that
+          left no trace. Say it in one line, not a paragraph.
 
         Never invent progress the facts do not show: no "mostly done" for an `active` task without a pull request.
 

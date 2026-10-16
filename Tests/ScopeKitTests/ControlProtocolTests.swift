@@ -142,6 +142,8 @@ import Testing
             .threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "run the tests\nplease", submit: false)),
             .taskClose(TaskCloseParams(task: "rework-auth", deleteBranch: true, force: false)),
             .taskArchive(TaskArchiveParams(task: "rework-auth")),
+            .taskShow(TaskShowParams(task: "rework-auth")),
+            .taskNew(TaskNewParams(prompt: "study it", deliverable: "docs/study.md")),
             .gc(GCParams(dryRun: true)),
         ]
         for call in calls {

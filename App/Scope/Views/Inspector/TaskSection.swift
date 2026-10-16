@@ -102,17 +102,8 @@ struct TaskSection: View {
         } content: {
             if let task {
                 VStack(alignment: .leading, spacing: 0) {
+                    TaskBriefExcerpt(task: task)
                     TaskVersionStrip(task: task)
-                    if let prompt = task.record.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
-                        Text(prompt)
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(4)
-                            .truncationMode(.tail)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.vertical, 4)
-                            .help(prompt)
-                    }
                     ForEach(task.activeRepos) { repo in
                         TaskRepoRow(task: task, repo: repo)
                     }

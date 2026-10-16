@@ -9,6 +9,9 @@ import ScopeCore
 /// the row or the sidebar around it.
 struct ThreadActivityCaption: View {
     let headline: ThreadActivityHeadline
+    /// Set for a finished turn: a click on the caption opens the answer in the reading column.
+    var readReply: (() -> Void)?
+    @State private var hovering = false
 
     /// Minutes are the finest unit worth reading after the first one.
     private static let tick: TimeInterval = 30
@@ -23,13 +26,31 @@ struct ThreadActivityCaption: View {
         }
     }
 
+    @ViewBuilder
     private func caption(_ text: String) -> some View {
-        Text(text)
+        let label = Text(text)
             .font(.scopeCaption)
             .foregroundStyle(Ink.tertiary)
             .lineLimit(1)
             .truncationMode(.tail)
+        if let readReply {
+            label
+                .underline(hovering, color: Ink.tertiary)
+                .contentShape(Rectangle())
+                .onHover { hovering = $0 }
+                .onTapGesture(perform: readReply)
+                .help("Read the reply (⇧⌘R)")
+                .usageID("sidebar.thread.read-reply", label: "Read reply from the sidebar caption")
+        } else {
+            label
+        }
     }
+}
+
+extension ThreadActivityHeadline {
+    /// A line about a turn that ended with an answer: the answer is one click away. Lines about a turn in progress,
+    /// a request or a failure are not.
+    var opensReply: Bool { since != nil && reply != nil }
 }
 
 extension ThreadSession {

@@ -63,6 +63,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case threadWait = "thread.wait"
     /// What was done over a period, scope by scope, from the records and the history of closed ones.
     case summary
+    /// One task's whole brief and what was kept of it at archive: its threads' last answers, its report file.
+    case taskShow = "task.show"
     /// The preferences `ConfigKey` lists, as the app holds them right now.
     case configGet = "config.get"
     /// Changes one of them live, as the Settings window would. The user's own terminal only.
@@ -73,7 +75,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .configGet, .usage: false
+        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .configGet, .usage: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc,
              .configSet: true
         }
@@ -187,6 +189,7 @@ public enum ControlCall: Sendable, Equatable {
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
     case summary(SummaryParams)
+    case taskShow(TaskShowParams)
     case configGet(ConfigGetParams)
     case configSet(ConfigSetParams)
     case usage(UsageParams)
@@ -208,6 +211,7 @@ public enum ControlCall: Sendable, Equatable {
         case .threadRead: .threadRead
         case .threadWait: .threadWait
         case .summary: .summary
+        case .taskShow: .taskShow
         case .configGet: .configGet
         case .configSet: .configSet
         case .usage: .usage
@@ -222,7 +226,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .configGet, .configSet, .usage: .seconds(15)
+        case .list, .threadRead, .summary, .taskShow, .configGet, .configSet, .usage: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .gc: .seconds(300)
@@ -502,6 +506,8 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public var branch: String?
     /// Task title; `nil` = proposed.
     public var title: String?
+    /// The file the task's work ends in, relative to its root or a sandbox (`TaskRecord.deliverable`).
+    public var deliverable: String?
     /// Sandbox folder name; `nil` = derived from the title.
     public var slug: String?
     public var driver: String?
@@ -522,8 +528,9 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
                 dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
-                startPR: String? = nil) {
+                startPR: String? = nil, deliverable: String? = nil) {
         self.prompt = prompt
+        self.deliverable = deliverable
         self.scope = scope
         self.repos = repos
         self.branch = branch
@@ -552,6 +559,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         runSetup = try container.decodeIfPresent(Bool.self, forKey: .runSetup) ?? true
         topic = try container.decodeIfPresent(String.self, forKey: .topic)
         startPR = try container.decodeIfPresent(String.self, forKey: .startPR)
+        deliverable = try container.decodeIfPresent(String.self, forKey: .deliverable)
     }
 }
 
@@ -901,6 +909,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case read(ThreadReadResult)
     case wait(ThreadWaitResult)
     case summary(SummaryResult)
+    case taskShow(TaskShowResult)
     case usage(UsageResult)
 
     public var method: ControlMethod {
@@ -913,6 +922,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .read: .threadRead
         case .wait: .threadWait
         case .summary: .summary
+        case .taskShow: .taskShow
         case .usage: .usage
         }
     }

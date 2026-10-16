@@ -218,7 +218,7 @@ import Testing
         #expect(text.contains("merged    Auth Refresh [auth-refresh] · #42 merged · created 2026-10-06, archived 2026-10-08"))
         #expect(text.contains("Refresh tokens on 401."))
         #expect(text.contains("#43 (state unknown)"))
-        #expect(text.contains("note: Nothing said in a thread is kept by Scope"))
+        #expect(text.contains("note: Of what was said in a task's threads, Scope keeps only each thread's last answer"))
     }
 
     @Test func eachTaskSaysHowLongItsAgentsWorkedAndHowLongItWaitedOnYou() {
@@ -255,5 +255,73 @@ import Testing
         let response = ControlResponse.result(id: "abcd", .summary(result))
         let decoded = try ControlResponse.decode(try response.encoded(), method: .summary)
         #expect(decoded.payload == .summary(result))
+    }
+
+    // MARK: Kept answers
+
+    static func kept(_ task: String, _ text: String, files: [String] = []) -> TaskDeliverable {
+        // Whole seconds: the control wire keeps none of the fraction.
+        TaskDeliverable(taskID: task, savedAt: date(10, 8), replies: [.init(threadID: "th-\(task)", title: "Claude", driver: "claude-code",
+                                                      text: text, at: date(10, 8))],
+                        files: files.map { .init(name: $0, text: "report") })
+    }
+
+    @Test func aTaskLineCarriesTheOpeningOfItsKeptAnswer() {
+        let study = Self.task("t1", slug: "study", created: Self.date(10, 6), archived: Self.date(10, 8))
+        let open = Self.task("t2", slug: "open", created: Self.date(10, 6))
+        let result = ActivitySummary.build(period: Self.week, timeZone: Self.zone, scopes: [Self.acme], tasks: [study, open],
+                                           threads: [], history: [],
+                                           deliverables: ["t1": Self.kept("t1", "## Findings\n\nThe cache is never hit.\n\nDetails…",
+                                                                         files: ["REPORT.md"])])
+        let tasks = result.scopes[0].tasks
+        #expect(tasks[0].answer == "The cache is never hit.")
+        #expect(tasks[0].reports == ["REPORT.md"])
+        #expect(tasks[1].answer == nil && tasks[1].reports == nil)
+        let text = CLIRenderer.text(.summary(result))
+        #expect(text.contains("→ The cache is never hit."))
+        #expect(text.contains("kept: REPORT.md"))
+    }
+
+    @Test func theDetailHasTheKeptAnswersTrimmedFromTheirStart() {
+        let long = String(repeating: "x", count: ActivitySummary.detailReplyLimit) + "CONCLUSION"
+        let task = Self.task("t1", slug: "study", created: Self.date(10, 6), archived: Self.date(10, 8))
+        let result = ActivitySummary.detail(of: "study", timeZone: Self.zone, period: Self.week, scopes: [Self.acme],
+                                            tasks: [task], threads: [], history: [], deliverables: ["t1": Self.kept("t1", long)])
+        let reply = try? #require(result?.detail?.replies?.first)
+        #expect(reply?.text.hasSuffix("CONCLUSION") == true && reply?.text.hasPrefix("…") == true)
+        #expect(reply?.text.count == ActivitySummary.detailReplyLimit + 1)
+        let text = CLIRenderer.text(.summary(result!))
+        #expect(text.contains("last answer of Claude [claude-code]"))
+        #expect(text.contains(ThreadTranscript.openMarker))
+    }
+
+    @Test func showFindsAClosedTaskAndItsDeliverable() throws {
+        let closed = Self.task("t9", slug: "gone", created: Self.date(10, 5), archived: Self.date(10, 7), prompt: "Study the cache.")
+        let history = [HistoryEntry.taskClosed(closed, at: Self.date(10, 8))]
+        let deliverable = Self.kept("t9", "Never hit.", files: ["REPORT.md"])
+        let shown = try #require(ActivitySummary.show("gone", scopes: [Self.acme], tasks: [], threads: [], history: history,
+                                                      deliverables: ["t9": deliverable]))
+        #expect(shown.scope == "acme" && shown.prompt == "Study the cache." && shown.deliverable == deliverable)
+        #expect(shown.task.closedAt == Self.date(10, 8) && shown.notes.isEmpty && shown.untrusted)
+        let text = CLIRenderer.text(.taskShow(shown))
+        #expect(text.hasPrefix("task gone — Gone (acme)"))
+        #expect(text.contains("brief:\nStudy the cache."))
+        #expect(text.contains("REPORT.md:\n" + ThreadTranscript.untrustedNotice))
+        #expect(text.contains("Never hit."))
+
+        let response = ControlResponse.result(id: "abcd", .taskShow(shown))
+        #expect(try ControlResponse.decode(try response.encoded(), method: .taskShow).payload == .taskShow(shown))
+    }
+
+    @Test func showSaysWhenNothingIsKeptYet() throws {
+        let open = Self.task("t1", slug: "live", created: Self.date(10, 6), prompt: "Do it.")
+        let shown = try #require(ActivitySummary.show("live", scopes: [Self.acme], tasks: [open], threads: [], history: [],
+                                                      deliverables: [:]))
+        #expect(shown.deliverable == nil && shown.notes.first?.contains("kept when it is archived") == true)
+        let archived = Self.task("t2", slug: "old", created: Self.date(10, 6), archived: Self.date(10, 7))
+        let none = try #require(ActivitySummary.show("old", scopes: [Self.acme], tasks: [archived], threads: [], history: [],
+                                                     deliverables: [:]))
+        #expect(none.notes.first?.hasPrefix("Nothing was kept") == true)
+        #expect(ActivitySummary.show("nope", scopes: [], tasks: [], threads: [], history: [], deliverables: [:]) == nil)
     }
 }
