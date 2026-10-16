@@ -42,6 +42,11 @@ struct MenuBarInbox: View {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .usageID("open-inbox", label: "Open Inbox")
+                Button("Ask Orchestrator…") {
+                    dismiss()
+                    model.showQuickPanel(tab: .ask)
+                }
+                .usageID("ask-orchestrator", label: "Ask Orchestrator…")
                 Spacer()
                 Button("Open Scope") { bringUp() }
                     .usageID("open-scope", label: "Open Scope")

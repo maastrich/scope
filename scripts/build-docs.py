@@ -449,7 +449,21 @@ the inspector does. Keys: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>↩</kbd> open, <
 read, <kbd>a</kbd> archive, <kbd>o</kbd> open the pull request, <kbd>s</kbd> send the checks; the foot of the sheet
 shows the keys of the selected item.</p>
 <p>The menu bar item is the same list, compact, with Reply and Open on each item — so an answer can go out
-without bringing the window up.</p>
+without bringing the window up. Its <b>Ask Orchestrator…</b> entry opens the <a href="#quick-panel">quick panel</a>.</p>
+
+<h2 id="quick-panel">The quick panel, from anywhere</h2>
+<p>A system-wide shortcut — <kbd>⌥Space</kbd> by default, changed with the recorder in Settings › General ›
+Anywhere — opens a small floating panel over whatever app is in front, without activating Scope, centred on the
+screen the pointer is on. It has two tabs. <b>Ask</b> is a field addressed to a scope's orchestrator — the current
+scope unless a tile or <kbd>⌃1</kbd>…<kbd>⌃9</kbd> picks another — sent the way <b>Ask Orchestrator…</b> sends:
+<kbd>↩</kbd> sends, <kbd>⇧↩</kbd> starts a new line, <kbd>Esc</kbd> closes. <b>Inbox</b> is the same list as the
+sheet, questions and permissions first, with Reply and Open in place and <kbd>j</kbd>/<kbd>k</kbd>, <kbd>r</kbd>,
+<kbd>e</kbd>, <kbd>↩</kbd>; <kbd>⇧⌘I</kbd> opens the full sheet. The panel opens on Inbox while a thread waits for
+you and on Ask otherwise (a setting pins one or the other). A click anywhere else closes it.</p>
+<p>A second shortcut, <kbd>⌥⇧Space</kbd> by default, brings the window up — or hides Scope when it is already
+what you are looking at. Both shortcuts need no permission: they are registered with the system, not read from
+other apps. macOS does not say when another app holds the same chord; if a press never reaches Scope, pick another
+one in Settings.</p>
 """
 
 TASKS = """
@@ -1327,6 +1341,8 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
   <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
   <tr><td><kbd>⇧⌘I</kbd></td><td>Inbox: what needs you, in every scope (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>↩</kbd>, <kbd>r</kbd>, <kbd>e</kbd> inside)</td></tr>
+  <tr><td><kbd>⌥Space</kbd></td><td>From any app: the <a href="concepts.html#quick-panel">quick panel</a> — Ask a scope's orchestrator (<kbd>⌃1</kbd>–<kbd>⌃9</kbd> picks the scope) or the Inbox; configurable</td></tr>
+  <tr><td><kbd>⌥⇧Space</kbd></td><td>From any app: show the window, or hide Scope when it is in front; configurable</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
   <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>
@@ -1345,7 +1361,9 @@ FIG_SETTINGS
   (follow the system, or always dark, which is what agent TUIs assume) and cursor shape — underline, bar or
   block, steady or blinking; a blinking caret fades in and out rather than switching on and off, and a program
   can still ask for its own shape — whether <kbd>⌥</kbd> types the character your layout puts there (the
-  default, so a French keyboard still gets its braces) or acts as Meta, plus notification status and whether notifications quote the agent.</li>
+  default, so a French keyboard still gets its braces) or acts as Meta, plus notification status and whether notifications quote the agent,
+  and under <b>Anywhere</b> the two system-wide shortcuts (click the field, press the keys; <kbd>⌫</kbd> removes one) and
+  which tab the quick panel opens on.</li>
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive

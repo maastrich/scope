@@ -84,6 +84,12 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "o", title: "Open Pull Request in Browser"),
             ShortcutEntry(keys: "s", title: "Send Failing Checks to the Thread"),
         ]),
+        ShortcutGroup(title: "Anywhere", entries: [
+            ShortcutEntry(keys: "⌥Space", title: "Quick Panel", note: "over any app: Ask a scope's orchestrator, or the Inbox; Settings › General changes it"),
+            ShortcutEntry(keys: "⌥⇧Space", title: "Show / Hide Scope", note: "the window comes up, or the app hides"),
+            ShortcutEntry(keys: "⌃1 … ⌃9", title: "Address Scope 1 … 9", note: "in the panel's Ask tab"),
+            ShortcutEntry(keys: "↩ / ⇧↩", title: "Send / new line", note: "Esc closes the panel"),
+        ]),
         ShortcutGroup(title: "Help", entries: [
             ShortcutEntry(keys: "⌘/", title: "Keyboard Shortcuts…"),
         ]),

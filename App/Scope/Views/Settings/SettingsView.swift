@@ -342,6 +342,7 @@ private struct GeneralSettingsView: View {
                 Toggle("Show waiting threads in the menu bar", isOn: preference(\.showMenuBarExtra))
                     .toggleStyle(.scope)
             }
+            QuickPanelSettingsSection()
             SettingsSection("Usage") {
                 Toggle("Record how I use Scope (stays on this Mac)", isOn: preference(\.recordUsage))
                     .toggleStyle(.scope)

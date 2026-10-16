@@ -247,7 +247,7 @@ public enum Inbox {
     }
 
     /// Newest first; the id keeps two items of the same instant in a stable order.
-    private static func order(_ lhs: Item, _ rhs: Item) -> Bool {
+    static func order(_ lhs: Item, _ rhs: Item) -> Bool {
         lhs.at != rhs.at ? lhs.at > rhs.at : lhs.id < rhs.id
     }
 

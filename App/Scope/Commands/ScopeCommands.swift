@@ -271,6 +271,11 @@ struct ScopeCommands: Commands {
             .keyboardShortcut("k", modifiers: [.command, .shift])
             .disabled(model?.currentOrchestrator == nil)
 
+            // The floating panel the system-wide chord opens (Settings › General › Anywhere); here so it can be found.
+            Button("Quick Panel…") {
+                AppServices.model?.showQuickPanel()
+            }
+
             Button("Go to File…") {
                 model?.showPalette(mode: .files)
             }

@@ -529,6 +529,12 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var showReturnDigest: Bool
     /// How long the app must have been in the background for coming back to it to count as a return. 20 by default.
     public var returnDigestAwayMinutes: Int
+    /// The system-wide chord that opens the quick panel (spec §7); `nil` registers none. ⌥Space by default.
+    public var quickPanelHotkey: KeyChord?
+    /// The system-wide chord that brings the main window up or hides the app; `nil` registers none. ⌥⇧Space by default.
+    public var toggleWindowHotkey: KeyChord?
+    /// Which tab the quick panel opens on. Inbox while a thread waits, Ask otherwise, by default.
+    public var quickPanelLanding: QuickPanel.Landing
 
     /// The assistant that reads threads on events (spec §4.10): off, the on-device model only, or that model with the
     /// driver's light model as a capped second opinion. On-device only by default.
@@ -599,7 +605,10 @@ public struct Preferences: Codable, Sendable, Equatable {
         assistDailyCap: Int = 40,
         assistQuietsInformational: Bool = true,
         assistPicksTopic: Bool = true,
-        assistSuggestsArchive: Bool = true
+        assistSuggestsArchive: Bool = true,
+        quickPanelHotkey: KeyChord? = .optionSpace,
+        toggleWindowHotkey: KeyChord? = .optionShiftSpace,
+        quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -645,6 +654,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.assistQuietsInformational = assistQuietsInformational
         self.assistPicksTopic = assistPicksTopic
         self.assistSuggestsArchive = assistSuggestsArchive
+        self.quickPanelHotkey = quickPanelHotkey
+        self.toggleWindowHotkey = toggleWindowHotkey
+        self.quickPanelLanding = quickPanelLanding
     }
 
     public static let `default` = Preferences()
@@ -655,7 +667,8 @@ public struct Preferences: Codable, Sendable, Equatable {
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
-             assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive
+             assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
+             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding
     }
 
     public init(from decoder: any Decoder) throws {
@@ -725,6 +738,16 @@ public struct Preferences: Codable, Sendable, Equatable {
         assistPicksTopic = (try? container.decodeIfPresent(Bool.self, forKey: .assistPicksTopic)) ?? defaults.assistPicksTopic
         assistSuggestsArchive = (try? container.decodeIfPresent(Bool.self, forKey: .assistSuggestsArchive))
             ?? defaults.assistSuggestsArchive
+        // A chord is a key the user may have turned off: an explicit `null` stays `nil`, a missing key is the default,
+        // and a chord that does not decode is dropped rather than failing the whole document.
+        quickPanelHotkey = container.contains(.quickPanelHotkey)
+            ? (try? container.decodeIfPresent(KeyChord.self, forKey: .quickPanelHotkey)) ?? nil
+            : defaults.quickPanelHotkey
+        toggleWindowHotkey = container.contains(.toggleWindowHotkey)
+            ? (try? container.decodeIfPresent(KeyChord.self, forKey: .toggleWindowHotkey)) ?? nil
+            : defaults.toggleWindowHotkey
+        quickPanelLanding = (try? container.decodeIfPresent(QuickPanel.Landing.self, forKey: .quickPanelLanding))
+            ?? defaults.quickPanelLanding
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.
