@@ -361,6 +361,9 @@ final class ThreadSession: Identifiable {
     /// a prompt submitted to a driver that never reports a turn start moves the state (`TerminalInputSignal`).
     func handleUserInput(_ bytes: ArraySlice<UInt8>) {
         guard phase.isAlive, deliversEvents, let signal = inputTracker.feed(bytes) else { return }
+        if signal == .interrupt, adapterState == .running {
+            setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        }
         guard let next = ThreadStateMachine.next(adapterState ?? .initial, onUserInput: signal,
                                                  adapterReportsTurnStart: AdapterInstaller.reportsTurnStart(profile))
         else { return }

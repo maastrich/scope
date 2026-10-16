@@ -104,8 +104,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
                 if next.turnStartedAt == nil { next.turnStartedAt = at }
                 next.turnTools += 1
             } else {
-                // `UserPromptSubmit`: a new prompt. One still open was interrupted.
-                next.close(.interrupted, at: at)
+                // `UserPromptSubmit`: a new prompt. One still open was interrupted without the keystroke being
+                // seen (`closingOpenTurn`), at some point after the last thing it reported.
+                next = next.closingOpenTurn(as: .interrupted, at: next.turnStartedAt ?? at)
                 next.turnStartedAt = at
             }
         case .turnEnded:
@@ -124,10 +125,12 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         return next
     }
 
-    /// Closes the open turn, if any, as `.exited`: the process is gone, or the app was not running to see the end.
-    public func closingOpenTurn(at date: Date) -> ThreadActivity {
+    /// Closes the open turn, if any, at `date` or at its last tool if that came later: `.exited` when the process
+    /// is gone or the app was not running to see the end, `.interrupted` when the user stopped it (Esc and Ctrl-C
+    /// have no hook; the app sees the keystroke).
+    public func closingOpenTurn(as outcome: Turn.Outcome = .exited, at date: Date) -> ThreadActivity {
         var next = self
-        next.close(.exited, at: max(date, lastTool?.at ?? date), onlyIfOpen: true)
+        next.close(outcome, at: max(date, lastTool?.at ?? date), onlyIfOpen: true)
         return next
     }
 
@@ -148,7 +151,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// `PermissionRequest` and then a `Notification` for the same prompt), so it is skipped. An end with no turn
     /// open is still a turn: the driver never reported its start (Codex), or it went on after a wait, from that wait.
     private mutating func close(_ outcome: Turn.Outcome, at date: Date, error: String? = nil, onlyIfOpen: Bool = false) {
-        guard inTurn || (!onlyIfOpen && outcome != .interrupted) else { return }
+        guard inTurn || !onlyIfOpen else { return }
         let start = turnStartedAt ?? turns.last.flatMap { $0.outcome.isWait ? $0.endedAt : nil }
         turns.append(Turn(startedAt: start, endedAt: date, outcome: outcome, tools: turnTools,
                           error: error.flatMap { $0.isEmpty ? nil : $0 }))

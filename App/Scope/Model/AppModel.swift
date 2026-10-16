@@ -1163,6 +1163,8 @@ final class AppModel {
         takeExitNotice(id)
         let restoreSelection = selection
         detach(session)
+        // A process that outlived the wait still exits later, and its closing turn would write the file back.
+        session.onActivityChanged = nil
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
         rememberClosed(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
                                     selection: restoreSelection))

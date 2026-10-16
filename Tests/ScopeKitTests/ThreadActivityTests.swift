@@ -91,16 +91,31 @@ import Testing
         ])
     }
 
-    /// Esc has no hook: the next prompt is the only sign the turn before it was cut.
+    /// Esc has no hook. The app closes the turn when it sees the keystroke; a turn still open at the next prompt
+    /// was cut without it, and ends at the last thing it reported rather than when the user came back.
     @Test func aPromptOverAnOpenTurnInterruptsIt() {
         let activity = Self.fold([
             Self.event(.turnStarted, 1),
             Self.tool("Read", "/w/a.swift", 2),
-            Self.event(.turnStarted, 5),
+            Self.event(.turnStarted, 3_600),
         ])
-        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(5), outcome: .interrupted, tools: 1)])
-        #expect(activity.turnStartedAt == Self.at(5))
+        #expect(activity.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(2), outcome: .interrupted, tools: 1)])
+        #expect(activity.turnStartedAt == Self.at(3_600))
         #expect(activity.turnTools == 0)
+    }
+
+    @Test func anInterruptKeystrokeClosesTheTurnThere() {
+        let open = Self.fold([Self.event(.turnStarted, 1), Self.tool("Bash", "make", 2)])
+        let stopped = open.closingOpenTurn(as: .interrupted, at: Self.at(4))
+        #expect(stopped.turns == [.init(startedAt: Self.at(1), endedAt: Self.at(4), outcome: .interrupted, tools: 1)])
+        #expect(!stopped.inTurn)
+        #expect(Self.fold([Self.event(.turnStarted, 9)], from: stopped).turns.count == 1, "the next prompt adds nothing")
+    }
+
+    @Test func aPromptWithNothingOpenOnlyOpensATurn() {
+        let activity = Self.fold([Self.event(.turnStarted, 5)])
+        #expect(activity.turns.isEmpty)
+        #expect(activity.turnStartedAt == Self.at(5))
     }
 
     /// Codex `notify` only ever says a turn ended.
