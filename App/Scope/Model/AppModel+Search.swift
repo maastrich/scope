@@ -9,6 +9,8 @@ import ScopeTasks
 enum PaletteMode: Equatable {
     case all
     case files
+    /// *Restore Archived Task…*: the current scope's archived tasks alone.
+    case archivedTasks
 }
 
 /// One root the file finder lists: a base checkout or a task sandbox.

@@ -52,6 +52,8 @@ public enum ScopeCLI {
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
                                           uncommitted work saved, worktrees removed; branch kept
       scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
+      scope task restore <id|slug>        bring an archived task back: worktrees rebuilt on its branches, the
+                                          uncommitted work saved at archive put back (--scope for a shared slug)
       scope task topic [<id|slug>] <topic>
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
@@ -253,6 +255,17 @@ public enum ScopeCLI {
                 parameters.task = words[0]
                 return .call(.taskClose(parameters), shared)
             }
+            if sub == "restore" {
+                var words: [String] = []
+                var scope: String?
+                let shared = try options(&rest, command: "task restore", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "task restore takes one task id or slug", usage: usage) }
+                return .call(.taskRestore(TaskRestoreParams(task: words[0], scope: scope)), shared)
+            }
             if sub == "topic" {
                 var words: [String] = []
                 var clear = false
@@ -280,7 +293,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, archive, close, topic", usage: usage)
+                throw UsageError(message: "task commands: new, archive, close, restore, topic", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

@@ -434,15 +434,23 @@ extension AppModel {
     func reopenTask(_ taskID: TaskID) async {
         guard let task = task(taskID), task.record.isArchived else { return }
         do {
-            let record = try await env.tasks.reopen(taskID)
-            task.update(record: record)
-            task.startWatching()
-            if let scope = scope(task.scopeID) { await refreshContextFiles(of: scope) }
+            try await restoreTask(taskID)
             selection = .task(taskID)
-            scope(task.scopeID)?.refreshFacts()
         } catch {
             problems.error("Could not restore \(task.name)", detail: String(describing: error), scope: task.scopeID)
         }
+    }
+
+    /// `reopenTask` for a caller that reports the failure itself and leaves the selection alone (`task.restore`).
+    @discardableResult
+    func restoreTask(_ taskID: TaskID) async throws -> TaskRecord {
+        guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
+        let record = try await env.tasks.reopen(taskID)
+        task.update(record: record)
+        task.startWatching()
+        if let scope = scope(task.scopeID) { await refreshContextFiles(of: scope) }
+        scope(task.scopeID)?.refreshFacts()
+        return record
     }
 
     /// Archive and close: the row leaves the live list at once, the task manager does the rest (threads hung up

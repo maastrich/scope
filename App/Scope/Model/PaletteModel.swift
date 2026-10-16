@@ -13,6 +13,7 @@ struct PaletteItem: Identifiable {
         case editor = "Open in Editor"
         case pullRequests = "Pull Requests"
         case scopes = "Scopes"
+        case archivedTasks = "Restore Archived Task"
     }
 
     let id: String
@@ -43,9 +44,15 @@ enum PaletteModel {
     /// Everything the palette can show for `mode`, ranked for `query`.
     static func results(_ model: AppModel, query: String, mode: PaletteMode) -> [PaletteItem] {
         let query = query.trimmingCharacters(in: .whitespaces)
-        let files = fileItems(model, query: query, limit: mode == .files ? fileLimitFinder : (query.isEmpty ? 0 : fileLimitMixed))
-        guard mode == .all else { return files }
-        return rank(items(model), query: query, recents: model.searchUI) + files
+        switch mode {
+        case .archivedTasks:
+            return rank(archivedTaskItems(model), query: query, recents: model.searchUI)
+        case .files:
+            return fileItems(model, query: query, limit: fileLimitFinder)
+        case .all:
+            let files = fileItems(model, query: query, limit: query.isEmpty ? 0 : fileLimitMixed)
+            return rank(items(model), query: query, recents: model.searchUI) + files
+        }
     }
 
     static func items(_ model: AppModel) -> [PaletteItem] {
@@ -64,7 +71,14 @@ enum PaletteModel {
                 items.append(PaletteItem(id: "new-task", section: .actions, icon: "arrow.triangle.branch", label: "New Task",
                                          hint: "in \(scope.name)", shortcut: "⇧⌘T") { model.presentNewTask(in: scope.id) })
             }
+            if !restorableTasks(model, in: scope.id).isEmpty {
+                items.append(PaletteItem(id: "restore-task", section: .actions, icon: "arrow.uturn.backward",
+                                         label: "Restore Archived Task…", hint: "in \(scope.name)") {
+                    model.showPalette(mode: .archivedTasks)
+                })
+            }
             if let task {
+                items += taskActions(model, task: task)
                 for repo in model.candidateRepos(for: task) {
                     items.append(PaletteItem(id: "add-repo-\(repo.id)", section: .actions, icon: "plus.square.on.square",
                                              label: "Add \(repo.shortName) to \(task.name)", hint: repo.id) {

@@ -46,7 +46,7 @@ public enum CLIRenderer {
             }
             if !result.tasks.isEmpty {
                 blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "ROOT"], result.tasks.map {
-                    [$0.slug, $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch, $0.root]
+                    [$0.slug + ($0.archivedAt == nil ? "" : " (archived)"), $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch, $0.root]
                 }))
             }
             if !result.threads.isEmpty {

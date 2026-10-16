@@ -76,8 +76,8 @@ public enum MCPBridge {
             title: "List scopes, threads and tasks",
             description: """
             What Scope is holding right now: the declared scopes (folders), the running threads and the \
-            tasks with their branches and sandboxes. Start here to find the scope slug or task id the other \
-            tools need.
+            tasks with their branches and sandboxes — archived ones too, marked so, which \
+            scope_task_restore brings back. Start here to find the scope slug or task id the other tools need.
             """,
             schema: """
             {"type":"object","properties":{\
@@ -232,6 +232,23 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_task_restore",
+            title: "Restore an archived task",
+            description: """
+            Brings an archived task back to work on: rebuilds its sandboxes (one git worktree per repository) on \
+            the branches it kept, and puts back the uncommitted changes saved at archive. No thread is opened: \
+            start one with scope_thread_new and its task. scope_list marks archived tasks (archived). \
+            Counts against the agents' task budget like a new task.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Id or slug of the archived task."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"required":["task"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
             name: "scope_task_topic",
             title: "File a task under a topic",
             description: """
@@ -327,6 +344,8 @@ public enum MCPBridge {
                 return .success(.taskClose(try decoder.decode(TaskCloseArguments.self, from: arguments).call))
             case "scope_task_archive":
                 return .success(.taskArchive(try decoder.decode(TaskArchiveParams.self, from: arguments)))
+            case "scope_task_restore":
+                return .success(.taskRestore(try decoder.decode(TaskRestoreParams.self, from: arguments)))
             case "scope_task_topic":
                 return try decoder.decode(TaskTopicArguments.self, from: arguments).call.map(ControlCall.taskTopic)
             case "scope_gc":
@@ -398,6 +417,7 @@ public enum MCPBridge {
             ],
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
+            "scope_task_restore": taskID,
             // Not `name` for the topic: on a task, the name is the task's own.
             "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
         ]

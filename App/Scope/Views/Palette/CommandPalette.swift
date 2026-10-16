@@ -50,7 +50,7 @@ struct CommandPalette: View {
                 }
                 return .handled
             }
-            .accessibilityLabel(mode == .files ? "Go to File" : "Command Palette")
+            .accessibilityLabel(chrome.title)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: mode)
         .onExitCommand { close() }
@@ -67,15 +67,15 @@ struct CommandPalette: View {
 
     private var inputRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: mode == .files ? "doc.text.magnifyingglass" : "magnifyingglass")
+            Image(systemName: chrome.icon)
                 .font(.system(size: 16))
                 .foregroundStyle(Ink.tertiary)
                 .accessibilityHidden(true)
-            TextField(mode == .files ? FileFinderChrome.placeholder : "Type a command, a file, a repo or a thread…", text: $query)
+            TextField(chrome.placeholder, text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 17))
                 .focused($focused)
-                .accessibilityLabel(mode == .files ? "File name" : "Command or search")
+                .accessibilityLabel(chrome.field)
             if let context = contextLabel {
                 Text(context)
                     .font(.scopeCaption)
@@ -100,7 +100,7 @@ struct CommandPalette: View {
                         if mode == .files {
                             FileFinderEmptyView(query: query, hasRoots: !model.fileRoots.isEmpty)
                         } else {
-                            Text("No match")
+                            Text(mode == .archivedTasks && query.isEmpty ? "No archived task to restore" : "No match")
                                 .font(.scopeBody)
                                 .foregroundStyle(Ink.tertiary)
                                 .frame(maxWidth: .infinity)
@@ -157,7 +157,7 @@ struct CommandPalette: View {
     private var footer: some View {
         HStack(spacing: 16) {
             Text("↑↓ navigate")
-            Text(mode == .files ? "↩ open" : "↩ run")
+            Text(chrome.run)
             Text("⌥↩ copy path")
             if mode == .files {
                 Text("⌘K everything")
@@ -171,6 +171,15 @@ struct CommandPalette: View {
         .foregroundStyle(Ink.tertiary)
         .padding(.horizontal, 16)
         .frame(height: 30)
+    }
+
+    /// The words that change with the mode: panel title, field icon, placeholder and label, what ↩ does.
+    private var chrome: (title: String, icon: String, placeholder: String, field: String, run: String) {
+        switch mode {
+        case .files: ("Go to File", "doc.text.magnifyingglass", FileFinderChrome.placeholder, "File name", "↩ open")
+        case .archivedTasks: ("Restore Archived Task", "archivebox", "Restore an archived task…", "Task name", "↩ restore")
+        case .all: ("Command Palette", "magnifyingglass", "Type a command, a file, a repo or a thread…", "Command or search", "↩ run")
+        }
     }
 
     private var contextLabel: String? {
