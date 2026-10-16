@@ -92,6 +92,22 @@ import ScopeGit
         #expect(report.removedFolders.isEmpty && scope.exists(task.rootURL))
     }
 
+    @Test func aDryRunWeighsTheLiveSandboxes() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        let manager = makeManager(scope)
+        let heavy = try await manager.create(name: "heavy", branch: "feat/heavy", in: scope.declaration, repos: ["api"])
+        let light = try await manager.create(name: "light", branch: "feat/light", in: scope.declaration, repos: ["api"])
+        try Data(repeating: 7, count: 300_000).write(to: heavy.repos[0].sandboxURL.appending(path: "blob.bin"))
+        _ = try await manager.archive(light.id)
+
+        let report = await manager.collectGarbage(dryRun: true)
+        #expect(report.sandboxSizes.count == 1 && report.sandboxBytes >= 300_000)
+        #expect(report.largestSandboxes.count == 1 && report.largestSandboxes[0].hasPrefix("\(heavy.scopeSlug)/heavy: "))
+        let real = await manager.collectGarbage()
+        #expect(real.sandboxSizes.isEmpty)
+    }
+
     @Test func salvageRefsExpireUnlessARecordNeedsThem() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")

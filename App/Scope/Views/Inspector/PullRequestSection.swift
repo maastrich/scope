@@ -51,9 +51,45 @@ struct PullRequestSection: View {
                     PullRequestChecksLabel(checks: checks, checkedAt: model.pullRequestCheckedAt(for: task))
                 }
             }
+        } else if let issue = task.record.issue {
+            HStack(spacing: 6) {
+                Text("none yet")
+                    .foregroundStyle(Ink.tertiary)
+                Text("for issue \(issue.label)")
+                    .foregroundStyle(Ink.tertiary)
+            }
         } else {
             Text("none yet")
                 .foregroundStyle(Ink.tertiary)
+        }
+    }
+
+    /// The issue the task works on, over the pull request (or over its absence): a link to its page.
+    @ViewBuilder
+    private func issueRow(_ issue: LinkedIssue) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "smallcircle.filled.circle")
+                .font(.system(size: 10))
+                .foregroundStyle(Ink.tertiary)
+            Text("Issue \(issue.label)")
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundStyle(Ink.secondary)
+            Text(issue.title)
+                .font(.scopeCaption)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button {
+                model.openOnGitHub(issue.url)
+            } label: {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.secondary)
+            .help("Open issue \(issue.label) on GitHub — \(issue.url.absoluteString)")
+            .accessibilityLabel("Open issue \(issue.label) on GitHub")
+            .usageID("open-issue", label: "Open the task's issue")
         }
     }
 
@@ -107,6 +143,7 @@ struct PullRequestSection: View {
         if let linked = task.record.pullRequest {
             let live = model.livePullRequest(for: task)
             VStack(alignment: .leading, spacing: 6) {
+                if let issue = task.record.issue { issueRow(issue) }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(linked.label)
                         .font(.system(size: 11.5, design: .monospaced))
@@ -172,7 +209,10 @@ struct PullRequestSection: View {
             .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text("No pull request yet. Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it.")
+                if let issue = task.record.issue { issueRow(issue) }
+                Text(task.record.issue == nil
+                     ? "No pull request yet. Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it."
+                     : "No pull request yet. The one that closes the issue should say so (Closes \(task.record.issue?.label ?? "")); Scope binds the task to it.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

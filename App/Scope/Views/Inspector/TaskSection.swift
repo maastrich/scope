@@ -149,6 +149,7 @@ struct TaskSection: View {
                     ForEach(task.activeRepos) { repo in
                         TaskRepoRow(task: task, repo: repo)
                     }
+                    TaskServersRow(task: task)
                     TaskTimelineView(task: task)
                         .padding(.top, 8)
                         .usageID("timeline", label: "Task timeline")
@@ -160,6 +161,28 @@ struct TaskSection: View {
     }
 
     static let pullRequestRefreshInterval: Duration = .seconds(60)
+}
+
+/// The servers the task is running and what its sandboxes weigh, under the repository rows: the port chips
+/// (`AppModel+Ports`) and the disk caption (`AppModel+DiskUsage`). Nothing is drawn until one of them has something.
+private struct TaskServersRow: View {
+    let task: TaskState
+
+    var body: some View {
+        if !task.listeningPorts.isEmpty || task.diskUsage != nil {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                TaskPortChips(task: task)
+                Spacer(minLength: 0)
+                TaskDiskCaption(task: task)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .padding(.top, 4)
+            .usageID("task-servers", label: "Task servers and disk")
+        }
+    }
 }
 
 /// What every task-wide number reads: the first summarised repository for the base and fork commit, the sum of the

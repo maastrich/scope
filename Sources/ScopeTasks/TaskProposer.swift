@@ -143,15 +143,18 @@ public struct TaskProposal: Sendable, Equatable {
     /// A pull request the driver recognised in the request (through `gh`, or from the prompt's own words).
     /// Only the reference: the caller resolves it, so a model's claim never becomes a checkout on its own.
     public var pullRequest: PullRequestReference?
+    /// An issue the request asks to work on, the same way (`isIssue` set): the caller reads it with `gh`.
+    public var issue: PullRequestReference?
     public var source: Source
 
     public init(title: String, slug: String, branch: String, repos: [String] = [],
-                pullRequest: PullRequestReference? = nil, source: Source) {
+                pullRequest: PullRequestReference? = nil, issue: PullRequestReference? = nil, source: Source) {
         self.title = title
         self.slug = slug
         self.branch = branch
         self.repos = repos
         self.pullRequest = pullRequest
+        self.issue = issue
         self.source = source
     }
 
@@ -279,6 +282,7 @@ public struct TaskProposer: Sendable {
         return TaskProposal(title: title, slug: slug, branch: branch,
                             repos: Self.knownRepos(raw.repos ?? [], among: candidates),
                             pullRequest: Self.reference(from: raw.pullRequest),
+                            issue: Self.reference(from: raw.issue).map { var issue = $0; issue.isIssue = true; return issue },
                             source: .driver(name: driverName))
     }
 
@@ -325,7 +329,8 @@ public struct TaskProposer: Sendable {
         "slug": "string, kebab-case, at most 48 characters: the worktree folder name", \
         "branch": "string: the branch name", \
         "repos": ["the paths, copied exactly from the repository list below, that the task touches"], \
-        "pull_request": {"number": 123, "repo": "owner/repo"} or null}
+        "pull_request": {"number": 123, "repo": "owner/repo"} or null, \
+        "issue": {"number": 123, "repo": "owner/repo"} or null}
 
         Rules for "branch":
         - Follow the SAME convention as the existing branch names below: prefixes (feat/, fix/, chore/, <user>/ …), \
@@ -354,6 +359,14 @@ public struct TaskProposer: Sendable {
         report the branch: the caller resolves the pull request itself.
         - A request to open new work is not a pull request. Leave it null.
 
+        Rules for "issue":
+        - Non-null only when the request asks to work ON an EXISTING GitHub issue (fix it, implement it, look into \
+        it) — by number, URL, or described ("the flaky login issue"). The caller reads the issue itself and opens \
+        the brief on it; you only name it. `gh issue view <number> --repo <owner/repo> --json number,title` and \
+        `gh issue list --repo <owner/repo> --search <terms> --json number,title` are the read-only commands for it.
+        - An issue cited as background is not what the task is about. A pull request is never an issue. Leave it \
+        null when nothing in the request names one, and run no command then.
+
         Task request:
         \(request.trimmingCharacters(in: .whitespacesAndNewlines))
 
@@ -377,9 +390,10 @@ public struct TaskProposer: Sendable {
         public var branch: String?
         public var repos: [String]?
         public var pullRequest: RawPullRequest?
+        public var issue: RawPullRequest?
 
         enum CodingKeys: String, CodingKey {
-            case title, slug, branch, repos
+            case title, slug, branch, repos, issue
             case pullRequest = "pull_request"
         }
     }

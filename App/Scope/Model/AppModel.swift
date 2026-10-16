@@ -212,6 +212,11 @@ final class AppModel {
     @ObservationIgnored var garbageCollector: Task<Void, Never>?
     /// The background pull request refresh (`startPullRequestRefresh`) and when each task is next due.
     @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
+    /// The loop behind `AppModel+Ports`.
+    @ObservationIgnored var portScanner: Task<Void, Never>?
+    /// The loop behind `AppModel+DiskUsage`, and the one-off measurements in flight, per task.
+    @ObservationIgnored var diskUsageRefresher: Task<Void, Never>?
+    @ObservationIgnored var diskUsageRuns: [TaskID: Task<Void, Never>] = [:]
     @ObservationIgnored var pullRequestSchedule = PullRequestRefreshSchedule()
     /// Resident threads Scope will not start again on its own, and why (`ResidentHold`). Cleared by the next launch.
     var residentHolds: [ThreadID: ResidentHold] = [:]
@@ -657,6 +662,8 @@ final class AppModel {
         startFollowingVibeIsland()
         startGarbageCollection()
         startPullRequestRefresh()
+        startPortScanning()
+        startDiskUsageRefresh()
         isBootstrapped = true
         startReturnTracking()
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")

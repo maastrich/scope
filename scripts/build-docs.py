@@ -590,7 +590,13 @@ one scope, or to change the copied files, edit the scope in <code>~/.scope/confi
   <tr><td><code>SCOPE_PORT</code></td><td>the first of ten ports that belong to this task alone</td></tr>
 </table>
 <p>Every task gets its own block of ten ports, kept across restarts and never shared by two live tasks, so two
-sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too.</p>
+sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too. While a thread of
+the task is alive, Scope looks every twenty seconds at which ports of the block its processes listen on, and the
+Task section and the task's hover card show each as a <code>localhost:41003 ↗</code> chip: a click opens the
+browser on it.</p>
+<p>The same places say what the task's sandboxes take on disk, measured after each setup and every ten minutes;
+the scope's settings sheet adds the total over its open tasks and the three heaviest, and <code>scope gc
+--dry-run</code> prints the same figures. Archiving a task is what frees the space.</p>
 <p>The task row shows a gear while the setup runs and a warning triangle if it failed; the failure lands in the
 Problem Center with the end of the log and <b>Run Setup Again</b>. Untick <b>Run setup</b> in the New Task
 sheet — or pass <code>--no-setup</code> to <code>scope task new</code>, <code>run_setup: false</code> over MCP —
@@ -676,6 +682,27 @@ outright — a number, <code>#123</code>, <code>owner/repo#123</code> or its URL
 A pull request Scope only read off the prompt is a guess: when it is not one of the scope's (another repository, a
 number that does not exist), the task is created on a new branch all the same and the answer says, in one line,
 which reference it ignored.</p>
+
+<h2 id="from-issue">Starting from an issue</h2>
+<p>A GitHub issue opens a task the same way, minus the branch: <code>scope task new --issue 123</code>
+(<code>issue</code> over MCP; also <code>#123</code>, <code>owner/repo#123</code> or the issue's URL) reads it with
+<code>gh issue view</code> and puts its title, body and labels at the top of the brief, so the first thread reads
+the issue before anything else. The task records the issue, the Pull Request section shows it, and the task's
+context file asks the agent to reference it from the pull request (<code>Closes #123</code>). Without the flag,
+an issue the prompt asks to work on counts — an issue URL, or <code>fix #123</code>, which is tried as a pull
+request first and then as an issue — while one the brief merely cites stays context. The microsession that names a
+task may read issues too (<code>gh issue view</code> is on its allowlist), so "fix the flaky login issue" finds
+it without a number.</p>
+
+<h2 id="mentions">Mentioning a past task</h2>
+<p><code>@task:&lt;slug-or-id&gt;</code> anywhere in a prompt — a new task, a new thread, a message sent to a thread,
+from the command line, over MCP, from the palette's <b>Ask Orchestrator…</b> or the sidebar's reply field — is
+replaced, before it reaches the agent, by a compact block between <code>[Scope: context of task … — begin]</code>
+and <code>… — end]</code>: the task's name, brief, branch, pull request and its state, topic, and the opening of the
+answer kept when it was archived (or its report file). Archived and closed tasks count, so a study feeds the task
+that implements it without anyone pasting. <code>@thread:&lt;id&gt;</code> does the same for a thread: title, task,
+last answer. In the app, typing <code>@</code> in a message field offers the tasks of the scope, recent first; Tab
+or ↩ completes one. A mention nothing answers to stays as typed, with a note.</p>
 """
 
 REVIEW = """
@@ -967,14 +994,14 @@ scope thread read &lt;id&gt;              <span class="c"># the last lines of it
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
-scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
+scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread (--pr, --issue, --topic, --deliverable)</span>
 scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what was kept at archive: last answers, REPORT.md</span>
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
-scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
+scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>
 scope usage [period]                <span class="c"># how Scope itself was used: controls, commands, what never is</span>
@@ -1031,6 +1058,11 @@ claude-opus-5-5</code>, <code>/clear</code>, <code>/compact</code> — which a s
 text is typed verbatim, with no line saying who sent it, and submitted. From your terminal it reaches any thread;
 an agent may command only the threads it opened and theirs, unless <b>Settings ▸ Automation ▸ Driver commands</b>
 opens every thread.</p>
+<p><code>scope task new --issue 123</code> (<code>issue</code> over MCP) works on a GitHub issue: its title, body
+and labels open the brief, the task records it, and the context file asks for <code>Closes #123</code> in the pull
+request. <code>@task:&lt;slug&gt;</code> and <code>@thread:&lt;id&gt;</code> in any prompt or message are replaced by
+that task's or thread's context — brief, branch, pull request, last answer kept — between markers; see
+<a href="tasks.html#mentions">Mentioning a past task</a>.</p>
 <p><code>scope task new --topic &lt;text&gt;</code> files the task under a topic: tasks sharing one sit together in
 the sidebar, under one row. A task created from inside a task gets that task's topic unless another is named — and
 when that task has none, both are filed under its name — so what an agent splits off lands next to it. An

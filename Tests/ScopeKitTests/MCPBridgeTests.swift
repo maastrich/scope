@@ -62,6 +62,12 @@ import Testing
         #expect(try Self.call("scope_thread_send", #"{"id":"3f9a2c17be04","message":"/compact","slash":true}"#).get() == command)
     }
 
+    @Test func aTaskTakesAnIssueToWorkOn() throws {
+        let expected = ControlCall.taskNew(TaskNewParams(prompt: "fix it", issue: "#12"))
+        #expect(try Self.call("scope_task_new", ##"{"prompt":"fix it","issue":"#12"}"##).get() == expected)
+        #expect(try Self.call("scope_task_new", ##"{"prompt":"fix it","issue_number":"#12"}"##).get() == expected)
+    }
+
     /// Changing the settings is the user's: it is no tool, so an agent is not even offered it.
     @Test func theSettingsAreNotATool() {
         #expect(!MCPBridge.tools.contains { $0.name.contains("config") })

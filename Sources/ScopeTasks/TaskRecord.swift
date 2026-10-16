@@ -194,6 +194,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// The head of the default branch Scope last acted on for this task — asked the agent, or rebased — so one move
     /// of main gets one action, whatever the refreshes in between (`FollowMain.decide`).
     public var followedMainHead: String?
+    /// The GitHub issue the task was opened from, if any: its brief opens on it, and the pull request should close it.
+    public var issue: LinkedIssue?
 
     public init(
         id: TaskID = .generate(),
@@ -217,7 +219,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         topic: String? = nil,
         parentTask: TaskID? = nil,
         origin: ThreadOrigin? = nil,
-        deliverable: String? = nil
+        deliverable: String? = nil,
+        issue: LinkedIssue? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -242,6 +245,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.parentTask = parentTask
         self.origin = origin
         self.deliverable = deliverable
+        self.issue = issue
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -355,6 +359,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         [deliverable, TaskDeliverable.defaultFileName].compactMap { $0 }
     }
 
+    /// The task's block of ports, once one was allocated.
+    public var portBlock: PortBlock? { portBase.map { PortBlock(base: $0, size: PortAllocator.blockSize) } }
+
     /// `notRun` for a record that never ran a setup.
     public var setupState: SetupState { setup?.state ?? .notRun }
 
@@ -365,7 +372,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
-        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable
+        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
         case holdBranch, followedMainHead
     }
 
@@ -398,5 +405,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         deliverable = (try? container.decodeIfPresent(String.self, forKey: .deliverable)) ?? nil
         holdBranch = (try? container.decodeIfPresent(Bool.self, forKey: .holdBranch)) ?? false
         followedMainHead = (try? container.decodeIfPresent(String.self, forKey: .followedMainHead)) ?? nil
+        issue = (try? container.decodeIfPresent(LinkedIssue.self, forKey: .issue)) ?? nil
     }
 }

@@ -48,7 +48,9 @@ public enum ScopeCLI {
                                           --reply for the agent's last answer alone
       scope thread wait <id>...           block until the threads finish their turn or need someone, then print
                                           their state and last answer (--any for the first one, --timeout <s>)
-      scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread
+      scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread;
+                                          @task:<slug> / @thread:<id> in a prompt or a message is replaced by
+                                          that task's or thread's context (brief, branch, PR, last answer)
       scope task show <id|slug>           its whole brief, and what was kept when it was archived or closed: each
                                           thread's last answer and its report file (REPORT.md or --deliverable)
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
@@ -97,6 +99,9 @@ public enum ScopeCLI {
       --pr <ref>                    start from that pull request's head: 123, #123, owner/repo#123 or its URL
                                     (default: a pull request the prompt asks to work on — "review #123" —
                                     never one it only cites; an unresolvable one is then ignored)
+      --issue <ref>                 work on that GitHub issue: 123, #123, owner/repo#123 or its URL; its title,
+                                    body and labels open the brief, the task records it (default: an issue the
+                                    prompt asks to work on — "fix #123", an issue URL — never one it only cites)
       --title <text>                task name (default: proposed)
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread
@@ -398,6 +403,7 @@ public enum ScopeCLI {
                 case "--model": parameters.model = try value()
                 case "--topic": parameters.topic = try value()
                 case "--pr": parameters.startPR = try value()
+                case "--issue": parameters.issue = try value()
                 case "--deliverable": parameters.deliverable = try value()
                 case "-p", "--prompt": prompt.append(try value())
                 case "--dry-run": parameters.dryRun = true

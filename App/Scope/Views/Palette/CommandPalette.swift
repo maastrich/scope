@@ -126,7 +126,8 @@ struct CommandPalette: View {
                 }
             }
             MessageComposer(text: $draft, placeholder: placeholder(for: target, name: name),
-                            font: .system(size: 15), height: 96) {
+                            font: .system(size: 15), height: 96,
+                            mentions: model.mentionCandidates(in: model.session(target)?.record.scopeID)) {
                 guard model.sendMessage(draft, to: target) else { return }
                 close()
             } onCancel: {

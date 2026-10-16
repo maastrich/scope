@@ -60,6 +60,7 @@ struct ScopeSettingsSheet: View {
             tile
             contextGroup
             repositories
+            disk
         } notice: {
             EmptyView()
         } actions: {
@@ -216,6 +217,54 @@ struct ScopeSettingsSheet: View {
                         .font(.scopeCaption)
                         .foregroundStyle(Ink.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    // MARK: Disk
+
+    /// What the scope's open tasks take on disk, from the measurements `AppModel+DiskUsage` keeps: the total and the
+    /// three heaviest, so a `node_modules` per worktree is a number rather than a surprise.
+    @ViewBuilder private var disk: some View {
+        let usage = model.diskUsage(in: scope.id)
+        let open = model.tasks(in: scope.id).count
+        SheetGroup(caption: "The sandboxes of the open tasks, measured every ten minutes and after each setup. "
+            + "Archiving a task frees its sandboxes; `scope gc --dry-run` prints the same figures.") {
+            SectionLabel(text: "Disk")
+            SheetRow("Sandboxes") {
+                HStack(spacing: 8) {
+                    if open == 0 {
+                        Text("no open task")
+                            .foregroundStyle(Ink.tertiary)
+                    } else if usage.measured == 0 {
+                        Text("measuring…")
+                            .foregroundStyle(Ink.tertiary)
+                    } else {
+                        Text(SandboxSize.text(usage.total))
+                            .font(.scopeValue)
+                        Text("across \(usage.measured) \(usage.measured == 1 ? "task" : "tasks")"
+                             + (usage.measured < open ? ", \(open - usage.measured) not measured yet" : ""))
+                            .foregroundStyle(Ink.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Button("Measure Now") { Task { await model.refreshDiskUsage() } }
+                        .buttonStyle(.scopeSecondary)
+                        .disabled(open == 0)
+                        .usageID("disk-measure", label: "Measure the sandboxes now")
+                }
+            }
+            ForEach(usage.largest, id: \.task.id) { entry in
+                HStack(spacing: 8) {
+                    Text(entry.task.name)
+                        .font(.scopeValue)
+                        .foregroundStyle(Ink.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(SandboxSize.text(entry.bytes))
+                        .font(.scopeValue)
+                        .foregroundStyle(Ink.secondary)
                 }
             }
         }

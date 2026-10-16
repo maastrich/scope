@@ -76,6 +76,7 @@ public enum CLIRenderer {
                 lines.append("repo        \(repo.repo) → \(repo.worktree)\(repo.branchCreated ? " (branch created)" : "")")
             }
             if let thread = result.thread { lines.append("thread      \(thread)") }
+            if let issue = result.issue { lines.append("issue       \(issue)") }
             if let note = result.note { lines.append("note        \(note)") }
             if !result.created {
                 lines.append("")

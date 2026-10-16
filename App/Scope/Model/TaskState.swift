@@ -54,6 +54,10 @@ final class TaskState: Identifiable {
     }
     /// What the timeline keeps of closed threads and of the checks (`AppModel+Timeline`); loaded on first show.
     var timelineLog: TaskTimelineLog?
+    /// The ports of the task's block something listens on, ascending (`AppModel+Ports`): the servers it is running.
+    var listeningPorts: [Int] = []
+    /// What the task's sandboxes take on disk, when last measured (`AppModel+DiskUsage`).
+    var diskUsage: SandboxSize.Measurement?
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private var watcher: FSEventsWatcher?

@@ -163,15 +163,18 @@ public enum MCPBridge {
             around. The answer names the task and its first thread: follow that with scope_thread_wait. Works \
             from inside a task too. Tasks sharing a topic sit together in the user's sidebar: when you start \
             several for one piece of work, give them the same topic; from inside a task, yours is passed on \
-            unless you name another.
+            unless you name another. @task:<slug> or @thread:<id> anywhere in the prompt is replaced by that task's \
+            or thread's context (brief, branch, pull request, last answer kept), so a study feeds the task that \
+            implements it without pasting.
             """,
             schema: """
             {"type":"object","properties":{\
-            "prompt":{"type":"string","description":"What the task is about; also the first request handed to its driver."},\
+            "prompt":{"type":"string","description":"What the task is about; also the first request handed to its driver. @task:<slug> and @thread:<id> are expanded."},\
             "scope":{"type":"string","description":"Slug, name, id or path. Defaults to the caller's own scope."},\
             "repos":{"type":"array","items":{"type":"string"},"description":"Repositories relative to the scope root; omitted lets Scope work them out from the prompt."},\
             "branch":{"type":"string","description":"Branch to create; omitted lets the driver propose one after the repository's convention. Never under scope/, which Scope reserves: omit it, or use another prefix such as feat/."},\
             "start_pr":{"type":"string","description":"Pull request to start from (123, #123, owner/repo#123 or its URL): its head is checked out instead of a new branch, and the call fails if it cannot be found. Omitted, only a pull request the prompt asks to work on (\\"review #123\\") is used; one it merely cites is context, and one that cannot be found is ignored with a note."},\
+            "issue":{"type":"string","description":"GitHub issue to work on (123, #123, owner/repo#123 or its URL): its title, body and labels open the brief and the task records it; the call fails if it cannot be read. Omitted, only an issue the prompt asks to work on (\\"fix #123\\", an issue URL) is used; one it merely cites is context."},\
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
             "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
             "driver":{"type":"string","description":"Driver for the task's first thread."},\
@@ -201,7 +204,7 @@ public enum MCPBridge {
             schema: """
             {"type":"object","properties":{\
             "thread":{"type":"string","description":"Thread id, from scope_thread_new or scope_list."},\
-            "text":{"type":"string","description":"What to type."},\
+            "text":{"type":"string","description":"What to type. @task:<slug> and @thread:<id> are replaced by that task's or thread's context."},\
             "submit":{"type":"boolean","description":"Press Return after the text (default true)."},\
             "command":{"type":"boolean","description":"A command for the driver itself, typed verbatim with no sender line (default false)."}\
             },"required":["thread","text"],"additionalProperties":false}
@@ -491,6 +494,7 @@ public enum MCPBridge {
                 "no_thread": .negate("open_thread"), "no_setup": .negate("run_setup"), "repo": .wrap("repos"),
                 "message": .rename("prompt"), "name": .rename("title"),
                 "pr": .rename("start_pr"), "pull_request": .rename("start_pr"),
+                "issue_number": .rename("issue"), "github_issue": .rename("issue"),
             ],
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
@@ -642,9 +646,10 @@ public enum MCPBridge {
         var topic: String?
         var startPR: String?
         var deliverable: String?
+        var issue: String?
 
         private enum CodingKeys: String, CodingKey {
-            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable
+            case prompt, scope, repos, branch, title, slug, driver, model, topic, deliverable, issue
             case startPR = "start_pr"
             case dryRun = "dry_run"
             case openThread = "open_thread"
@@ -654,7 +659,7 @@ public enum MCPBridge {
         var call: TaskNewParams {
             TaskNewParams(prompt: prompt, scope: scope, repos: repos ?? [], branch: branch, title: title,
                           slug: slug, driver: driver, dryRun: dryRun ?? false, openThread: openThread ?? true,
-                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model)
+                          runSetup: runSetup ?? true, topic: topic, startPR: startPR, deliverable: deliverable, model: model, issue: issue)
         }
     }
 }

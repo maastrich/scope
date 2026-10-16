@@ -45,6 +45,9 @@ public enum TaskProjection {
         lines.append("- Scope: \(scopeName)")
         lines.append("- Branch: `\(task.branch)`")
         lines.append("- Task root: `\(task.root)`")
+        if let issue = task.issue {
+            lines.append("- Issue: \(issue.label) \(issue.url.absoluteString) — the pull request that closes it must reference it (`Closes \(issue.label)` in its body)")
+        }
         if let deliverable = task.deliverable {
             lines.append("- Deliverable: `\(deliverable)` (in the task root or a sandbox) — write the result of the task there; Scope keeps it when the task is archived")
         }

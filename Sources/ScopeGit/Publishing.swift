@@ -139,6 +139,14 @@ public struct GhClient: Sendable {
         return try await runJSON(arguments, in: checkout, parse: PullRequest.parseOne(json:))
     }
 
+    /// `gh issue view <number> --json …`: the issue, or a failure when the number is a pull request or nothing
+    /// (`gh` says so in its message).
+    public func issueView(number: Int, in checkout: URL, repo: String? = nil) async throws -> Issue {
+        var arguments = ["issue", "view", String(number), "--json", Issue.jsonFields]
+        if let repo { arguments += ["--repo", repo] }
+        return try await runJSON(arguments, in: checkout, parse: Issue.parseOne(json:))
+    }
+
     /// The open pull request whose head is `branch`, `nil` when there is none (`gh pr list --head <branch>`).
     public func prForBranch(_ branch: String, in checkout: URL, repo: String? = nil) async throws -> PullRequest? {
         var arguments = ["pr", "list", "--state", "open", "--head", branch, "--limit", "1", "--json", PullRequest.jsonFields]

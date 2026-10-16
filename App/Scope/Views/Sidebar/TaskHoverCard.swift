@@ -64,6 +64,25 @@ struct TaskHoverCard: View {
                         .foregroundStyle(lag.hasConflicts ? PullRequestStyle.failing : Ink.secondary)
                 }
             }
+            if !task.listeningPorts.isEmpty {
+                row("Serving") {
+                    TaskPortChips(task: task, compact: true)
+                }
+            }
+            if task.diskUsage != nil {
+                row("Disk") {
+                    TaskDiskCaption(task: task)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            if let issue = task.record.issue {
+                row(issue.label) {
+                    Text(issue.title)
+                        .font(.scopeCaption)
+                        .lineLimit(2)
+                }
+            }
             if let setup = setupCaption {
                 row("Setup") {
                     Text(setup)

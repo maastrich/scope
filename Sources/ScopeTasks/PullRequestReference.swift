@@ -16,12 +16,16 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     public var owner: String?
     /// Repository name from the URL or from `owner/repo#123`; `nil` for a bare `#123`.
     public var repo: String?
+    /// The reference came from an issue URL (`/issues/123`): there is no head to check out, the task starts on a new
+    /// branch and its brief opens on the issue. A bare `#123` says nothing either way: `gh` decides.
+    public var isIssue: Bool
 
-    public init(number: Int, host: String? = nil, owner: String? = nil, repo: String? = nil) {
+    public init(number: Int, host: String? = nil, owner: String? = nil, repo: String? = nil, isIssue: Bool = false) {
         self.number = number
         self.host = host
         self.owner = owner
         self.repo = repo
+        self.isIssue = isIssue
     }
 
     /// `#123`, with no repository to disambiguate it. Only usable when a single repository is in play.
@@ -43,7 +47,8 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     /// - `owner/repo#123`
     /// - `#123` (bare, `isBare`)
     ///
-    /// `/issues/123` and `/discussions/123` never match: a task on an issue has no branch to check out.
+    /// `/issues/123` and `/discussions/123` never match here: a task on an issue has no branch to check out
+    /// (`startPoint` reads issue URLs, and marks them `isIssue`).
     public static func detect(in text: String) -> PullRequestReference? {
         if let match = firstMatch(of: urlPattern, in: text) {
             let number = Int(match[3]) ?? 0
@@ -71,6 +76,20 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
         return detect(in: trimmed)
     }
 
+    /// An issue given on purpose (`scope task new --issue`): `123`, `#123`, `owner/repo#123` or an issue URL. A
+    /// pull request URL is refused: it is not an issue.
+    public static func parseIssue(_ text: String) -> PullRequestReference? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let number = Int(trimmed) { return number > 0 ? PullRequestReference(number: number, isIssue: true) : nil }
+        if let match = firstMatch(of: issueURLPattern, in: trimmed), let number = Int(match[3]), number > 0 {
+            return PullRequestReference(number: number, host: match[0].isEmpty ? nil : match[0].lowercased(),
+                                        owner: match[1], repo: strippingGitSuffix(match[2]), isIssue: true)
+        }
+        guard firstMatch(of: urlPattern, in: trimmed) == nil, var reference = detect(in: trimmed) else { return nil }
+        reference.isIssue = true
+        return reference
+    }
+
     // MARK: - Start point
 
     /// The pull request `prompt` asks to work on — the one a task created from it checks out — or `nil`.
@@ -84,7 +103,9 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     /// - or a sentence opens on a verb of working on it and reaches the reference through a few words that only
     ///   say what of it ("review #4211", "rebase la pr <url> stp", "please fix the CI on acme/front#88").
     ///
-    /// The first reference that qualifies wins; the others stay context. `detect` is still what finds them.
+    /// The first reference that qualifies wins; the others stay context. `detect` is still what finds them, plus
+    /// issue URLs: an issue the prompt asks to work on (`isIssue`) is no start point branch, but it is what the
+    /// task is about, and the caller opens the brief on it.
     public static func startPoint(in prompt: String) -> PullRequestReference? {
         let found = references(in: prompt)
         guard !found.isEmpty else { return nil }
@@ -240,6 +261,11 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
             add(number > 0 ? PullRequestReference(number: number, host: groups[0].isEmpty ? nil : groups[0].lowercased(),
                                                   owner: groups[1], repo: strippingGitSuffix(groups[2])) : nil, range)
         }
+        for (groups, range) in allMatches(of: issueURLPattern, in: text) {
+            let number = Int(groups[3]) ?? 0
+            add(number > 0 ? PullRequestReference(number: number, host: groups[0].isEmpty ? nil : groups[0].lowercased(),
+                                                  owner: groups[1], repo: strippingGitSuffix(groups[2]), isIssue: true) : nil, range)
+        }
         for (groups, range) in allMatches(of: shorthandPattern, in: text) {
             let number = Int(groups[2]) ?? 0
             add(number > 0 ? PullRequestReference(number: number, owner: groups[0], repo: strippingGitSuffix(groups[1])) : nil, range)
@@ -270,6 +296,9 @@ public struct PullRequestReference: Sendable, Equatable, Hashable {
     // [host] / owner / repo / pull / number
     private static let urlPattern =
         #"(?:https?://)?(?:www\.)?([A-Za-z0-9.-]+\.[A-Za-z]{2,})/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/pulls?/(\d+)"#
+    // [host] / owner / repo / issues / number
+    private static let issueURLPattern =
+        #"(?:https?://)?(?:www\.)?([A-Za-z0-9.-]+\.[A-Za-z]{2,})/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/issues/(\d+)"#
     // owner / repo # number
     private static let shorthandPattern = #"(?<![A-Za-z0-9._/-])([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)#(\d+)"#
     // # number

@@ -74,8 +74,15 @@ public struct GarbageReport: Sendable, Equatable {
     public var keptFolders: [String] = []
     /// Another pass was already running; this one did nothing.
     public var skipped = false
+    /// Dry run only: what each live task's sandboxes take on disk, in bytes (`scope gc --dry-run` prints the total).
+    public var sandboxSizes: [Int64] = []
+    /// Dry run only: the three heaviest tasks, `scope/slug: 1.2 GB`.
+    public var largestSandboxes: [String] = []
 
     public init() {}
+
+    /// Bytes under every live task's sandboxes, when measured.
+    public var sandboxBytes: Int64 { sandboxSizes.reduce(0, +) }
 
     /// Nothing was found to clean.
     public var isEmpty: Bool {
