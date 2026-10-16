@@ -28,6 +28,7 @@ struct InspectorSubjectBand: View {
                     .foregroundStyle(Ink.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                TaskTokenBadge(task: task)
                 Spacer(minLength: 4)
                 HStack(spacing: 2) {
                     // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.

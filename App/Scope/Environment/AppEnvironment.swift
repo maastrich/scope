@@ -30,6 +30,8 @@ final class AppEnvironment {
     let threadRecords: ThreadRecordStore
     /// `<home>/threads/<id>.activity.json`, beside each record.
     let threadActivity: ThreadActivityStore
+    /// `<home>/tokens.json`: what each thread's Claude Code transcripts reported.
+    let tokenLedger: TokenLedgerStore
     let drivers: DriverRegistry
     let shell: ShellEnvironmentResolver
     /// Replaced once `GitLocator` has found the right git (bootstrap); `/usr/bin/git` until then.
@@ -73,6 +75,7 @@ final class AppEnvironment {
         self.config = config
         self.threadRecords = threadRecords
         self.threadActivity = ThreadActivityStore(home: home)
+        self.tokenLedger = TokenLedgerStore(home: home)
         self.drivers = drivers
         self.shell = shell
         self.git = git

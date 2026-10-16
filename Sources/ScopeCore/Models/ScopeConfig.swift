@@ -456,6 +456,15 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Days without thread activity after which an open task is called idle (`TaskDormancy`); 0 never. 3 by default.
     public var dormantAfterDays: Int
 
+    /// The token meter in the toolbar: what Claude Code threads consumed over five hours and seven days. On by default.
+    public var showTokenMeter: Bool
+    /// Tokens the user expects to spend per five hours; above 0 the meter becomes a gauge against it. Scope cannot know
+    /// a plan's real limit, so it is the user's own figure. 0 by default: consumption only.
+    public var tokenBudgetPer5h: Int
+    /// The meter's breakdown adds what the tokens would have cost on the API. Off by default: a subscription is not
+    /// billed per token.
+    public var showAPICost: Bool
+
     /// Allowed terminal font sizes.
     public static let terminalFontSizeRange = 10...20
 
@@ -494,7 +503,10 @@ public struct Preferences: Codable, Sendable, Equatable {
         notificationsQuoteAgent: Bool = true,
         recordUsage: Bool = true,
         archiveMergedTasks: Bool = true,
-        dormantAfterDays: Int = 3
+        dormantAfterDays: Int = 3,
+        showTokenMeter: Bool = true,
+        tokenBudgetPer5h: Int = 0,
+        showAPICost: Bool = false
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -526,6 +538,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.recordUsage = recordUsage
         self.archiveMergedTasks = archiveMergedTasks
         self.dormantAfterDays = max(0, dormantAfterDays)
+        self.showTokenMeter = showTokenMeter
+        self.tokenBudgetPer5h = max(0, tokenBudgetPer5h)
+        self.showAPICost = showAPICost
     }
 
     public static let `default` = Preferences()
@@ -534,7 +549,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays
+             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
+             showTokenMeter, tokenBudgetPer5h, showAPICost
     }
 
     public init(from decoder: any Decoder) throws {
@@ -586,6 +602,9 @@ public struct Preferences: Codable, Sendable, Equatable {
         recordUsage = (try? container.decodeIfPresent(Bool.self, forKey: .recordUsage)) ?? defaults.recordUsage
         archiveMergedTasks = (try? container.decodeIfPresent(Bool.self, forKey: .archiveMergedTasks)) ?? defaults.archiveMergedTasks
         dormantAfterDays = max(0, (try? container.decodeIfPresent(Int.self, forKey: .dormantAfterDays)) ?? defaults.dormantAfterDays)
+        showTokenMeter = (try? container.decodeIfPresent(Bool.self, forKey: .showTokenMeter)) ?? defaults.showTokenMeter
+        tokenBudgetPer5h = max(0, (try? container.decodeIfPresent(Int.self, forKey: .tokenBudgetPer5h)) ?? defaults.tokenBudgetPer5h)
+        showAPICost = (try? container.decodeIfPresent(Bool.self, forKey: .showAPICost)) ?? defaults.showAPICost
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

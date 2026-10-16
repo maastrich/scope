@@ -42,6 +42,8 @@ final class AppModel {
     let review: ReviewModel
     /// Which inspector sections are open, how they share the height, what the viewer shows.
     let inspector = InspectorModel()
+    /// Tokens Claude Code threads consumed (`AppModel+TokenUsage`).
+    let tokenUsage = TokenUsageModel()
     /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
     var pendingDeliveries: [ThreadID: [PendingDelivery]] = [:]
     /// Scope the New Task sheet is open for (`nil` = closed).
@@ -527,6 +529,7 @@ final class AppModel {
 
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
         startShellProbe()
+        startTokenMeter()
         let driverTask = Task { [env] () -> LoadedDrivers in
             do {
                 try await env.drivers.installBuiltins()

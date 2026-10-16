@@ -915,11 +915,12 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 <p><code>scope list threads</code> ends each row with what its agent did last, and when: the last tool it ran and
 on what — a file (relative to the thread's folder), the first line of a command, a search pattern, a URL — or how
 its turn ended. <code>--json</code> and the MCP tool carry it as <code>activity</code>; a thread whose driver
-reports nothing (a shell) has none.</p>
+reports nothing (a shell) has none. <code>TOKENS</code> is what a Claude Code thread consumed over the last five
+hours (<code>tokens</code> in JSON), read from its transcripts.</p>
 <pre><code>$ scope list threads
-THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  BY    ACTIVITY
-3f9a2c17be04  acme   claude-code  running  acme         user  Edit Sources/Login/Session.swift · 2m ago
-8a18d7476063  ci     claude-code  done     acme         user  finished · 1h ago</code></pre>
+THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  TOKENS    BY    ACTIVITY
+3f9a2c17be04  acme   claude-code  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
+8a18d7476063  ci     claude-code  done     acme         310k · 5h  user  finished · 1h ago</code></pre>
 <p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
@@ -952,7 +953,8 @@ in the period — finished or dropped alike — with an outcome (<i>merged</i>, 
 outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
 week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
 <code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
-<code>--task &lt;slug&gt;</code> prints one task's whole brief. The installed <code>/scope-summary</code> skill has
+<code>--task &lt;slug&gt;</code> prints one task's whole brief. Each task and thread carries the tokens its
+Claude Code threads consumed, all told. The installed <code>/scope-summary</code> skill has
 an agent turn it into an account.</p>
 <p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
 or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;
@@ -1097,6 +1099,22 @@ deliberately ignored: the turn is already done, nobody is asking anything.</p>
 and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
 session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
 survives a restart, and goes when the thread is closed.</p>
+<h3 id="tokens">Tokens consumed</h3>
+<p>Every 30 seconds Scope reads what each Claude Code thread's transcript gained since the last look — only the
+bytes appended, off the main thread — and sums the <code>usage</code> of each model call: input, output, cache
+writes and cache reads, with the model and the time. A response is written as several lines carrying the same
+message id; it counts once. The transcripts of the subagents a session runs (the Task tool) count towards its
+thread, since they spend the same quota. The transcripts are only read, never written.</p>
+<p>The toolbar meter shows the last five hours across every scope; its popover adds today, the last seven days,
+each scope and the threads that spent most, with what the five hours are made of. A task's total sits beside its
+name in the inspector band and in its hover card. The figures include cache reads, which are most of any total.
+Your plan's limit is not in the transcripts, so the meter shows consumption, never what is left — unless you type a
+budget of your own per five hours (Settings ▸ General ▸ Token usage), which turns it into a gauge. The same pane can
+add what the tokens would have cost at API list prices, labelled as such; it is off by default, since a subscription
+is not billed per token.</p>
+<p>The counts live in <code>~/.scope/tokens.json</code>, with where each transcript was read up to: the
+minute-by-minute detail for eight days, each thread's total for 90 days after its last call, closed threads
+included. Other drivers report no tokens.</p>
 <p>Your own <code>~/.claude/settings.json</code> is not modified: the per-thread file lives under
 <code>~/.scope/threads/</code> and is passed on the command line.</p>
 

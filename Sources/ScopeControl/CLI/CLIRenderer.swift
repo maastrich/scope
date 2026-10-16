@@ -51,8 +51,8 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "BY", "ACTIVITY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", openedBy($0), $0.activity ?? ""]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "TOKENS", "BY", "ACTIVITY"], result.threads.map {
+                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", $0.tokens ?? "", openedBy($0), $0.activity ?? ""]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -138,6 +138,7 @@ public enum CLIRenderer {
             else { when += ", last active \(day(task.lastActivity))" }
             parts.append(when)
             if !task.threads.isEmpty { parts.append("\(task.threads.count) thread\(task.threads.count == 1 ? "" : "s")") }
+            if let tokens = task.tokens { parts.append("\(TokenUsageText.compact(tokens)) tokens all told") }
             if task.createdByAgent { parts.append("by an agent") }
             var out = [indent + task.outcome.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0) + parts.joined(separator: " · ")]
             if let brief = task.brief { out.append(indent + String(repeating: " ", count: 10) + brief) }
@@ -147,6 +148,7 @@ public enum CLIRenderer {
             var line = "\(thread.id)  \(thread.title) [\(thread.driver)] · opened \(day(thread.createdAt))"
             if let closed = thread.closedAt { line += ", closed \(day(closed))" }
             else if let launched = thread.lastLaunchedAt { line += ", last launched \(day(launched))" }
+            if let tokens = thread.tokens { line += " · \(TokenUsageText.compact(tokens)) tokens all told" }
             return line
         }
 
@@ -158,6 +160,7 @@ public enum CLIRenderer {
             if let topic = task.topic { lines.append("topic       \(topic)") }
             if let pr = task.pullRequest { lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)") }
             lines.append("created     \(day(task.createdAt))" + (task.createdByAgent ? " by an agent" : ""))
+            if let tokens = task.tokens { lines.append("tokens      \(TokenUsageText.compact(tokens))") }
             if let archived = task.archivedAt { lines.append("archived    \(day(archived))") }
             if let closed = task.closedAt { lines.append("closed      \(day(closed))") }
             for thread in task.threads { lines.append("thread      " + threadLine(thread)) }
