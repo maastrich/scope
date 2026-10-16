@@ -50,9 +50,10 @@ extension AppModel {
         let keys = UsageID.changedKeys(before, config.preferences)
         for key in keys {
             Usage.register("setting.\(key)", label: key)
-            Usage.record(.setting, "setting.\(key)", source: Usage.currentInput ?? .mouse)
+            Usage.record(.setting, "setting.\(key)", source: Usage.currentInput ?? .app)
         }
-        // After the event, so turning recording off is the last thing recorded and turning it on the first.
+        // After the event, so turning recording off is the last thing recorded; turning it on is not recorded, since
+        // the event went to a recorder still off.
         if before.recordUsage != config.preferences.recordUsage {
             env.usage.setEnabled(config.preferences.recordUsage)
         }

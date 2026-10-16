@@ -42,7 +42,7 @@ extension AppModel {
         delta.focusedHunk = nil
         if ref != nil {
             inspector.show(.diff)
-            if let input = Usage.currentInput {
+            if !Usage.attributing, let input = Usage.currentInput {
                 Usage.register("inspector.delta.open-file", label: "Open a changed file")
                 Usage.record(.click, "inspector.delta.open-file", source: input)
             }

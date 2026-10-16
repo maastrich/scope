@@ -59,7 +59,7 @@ import Testing
         #expect(log.read(since: firstOfOctober, until: .distantFuture).map(\.id) == ["a.two"])
     }
 
-    @Test func offDropsWhatWaitsAndWhatComesAfter() async throws {
+    @Test func offKeepsWhatCameBeforeAndDropsWhatComesAfter() async throws {
         let log = UsageLog(directory: Self.directory())
         let recorder = UsageRecorder(log: log, limits: Self.slow)
         recorder.record(Self.event("a.before"))
@@ -68,7 +68,7 @@ import Testing
         recorder.setEnabled(true)
         recorder.record(Self.event("a.after"))
         await recorder.flush()
-        #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["a.after"])
+        #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["a.before", "a.after"])
     }
 
     @Test func aFullMonthStopsGrowing() async throws {
@@ -92,9 +92,13 @@ import Testing
         recorder.record(Self.event("a.april", at: april))
         recorder.record(Self.event("a.october"))
         await recorder.flush()
-        // 180 days before 15 October is 18 April: March is gone, April straddles the cutoff and stays.
+        let earlyApril = DateComponents(calendar: UsageLog.utc, year: 2026, month: 4, day: 2).date!
+        recorder.record(Self.event("a.early-april", at: earlyApril))
+        await recorder.flush()
+        // 180 days before 15 October is 18 April: March goes whole, April keeps only what came after the cutoff.
         await recorder.prune(now: Self.october)
         #expect(log.files().map(\.lastPathComponent) == ["usage-2026-04.jsonl", "usage-2026-10.jsonl"])
+        #expect(log.read(since: .distantPast, until: .distantFuture).map(\.id) == ["a.april", "a.october"])
     }
 
     @Test func clearingDeletesTheHistoryButKeepsTheRegistry() async throws {

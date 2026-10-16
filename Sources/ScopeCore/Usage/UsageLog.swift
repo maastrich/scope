@@ -79,12 +79,25 @@ public struct UsageLog: Sendable {
         return registry
     }
 
-    /// Removes the month files that ended before `cutoff`. A month that straddles it stays whole: the report reads by
-    /// date, so the older half of it costs disk, not correctness.
+    /// Removes the events from before `cutoff`: the months that ended before it go whole, the one it falls in is
+    /// rewritten without its older lines.
     @discardableResult
     public func prune(before cutoff: Date, fileManager: FileManager = .default) -> [URL] {
-        let expired = files(fileManager: fileManager).filter { url in Self.month(of: url).map { $0.1 <= cutoff } ?? false }
-        for url in expired { try? fileManager.removeItem(at: url) }
+        var expired: [URL] = []
+        for url in files(fileManager: fileManager) {
+            guard let (start, end) = Self.month(of: url) else { continue }
+            if end <= cutoff {
+                try? fileManager.removeItem(at: url)
+                expired.append(url)
+            } else if start < cutoff, let data = try? Data(contentsOf: url) {
+                let lines = data.split(separator: UInt8(ascii: "\n"))
+                let kept = lines.filter { UsageEvent.decode(line: $0).map { $0.at >= cutoff } ?? false }
+                guard kept.count < lines.count else { continue }
+                var rewritten = Data()
+                for line in kept { rewritten.append(contentsOf: line); rewritten.append(UInt8(ascii: "\n")) }
+                try? rewritten.write(to: url, options: .atomic)
+            }
+        }
         return expired
     }
 
@@ -183,7 +196,7 @@ public actor UsageRecorder {
         continuation.yield(.register(elements))
     }
 
-    /// Turns recording on or off. Off drops what is still waiting to be written.
+    /// Turns recording on or off. Off writes what was recorded before it, then drops whatever comes after.
     public nonisolated func setEnabled(_ on: Bool) {
         continuation.yield(.enable(on))
     }
@@ -215,8 +228,8 @@ public actor UsageRecorder {
         case .register(let elements):
             if registry.merge(elements) { registryDirty = true }
         case .enable(let on):
+            if !on { write() }
             enabled = on
-            if !on { buffer.removeAll() }
         case .flush(let waiter):
             write()
             waiter?.resume()

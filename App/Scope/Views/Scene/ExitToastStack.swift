@@ -37,9 +37,11 @@ private struct ExitToast: View {
                 Button("Relaunch") {
                     Task { await model.relaunchExitNotice(notice.id) }
                 }
+                .usageID("exit-toast.relaunch", label: "Relaunch (exit toast)")
                 Button("Details") {
                     showsDetails.toggle()
                 }
+                .usageID("exit-toast.details", label: "Details (exit toast)")
                 .popover(isPresented: $showsDetails, arrowEdge: .top) {
                     ExitDetails(notice: notice, isPresented: $showsDetails)
                 }
@@ -101,11 +103,13 @@ private struct ExitDetails: View {
                     isPresented = false
                     Task { await model.closeExitedThread(notice.id) }
                 }
+                .usageID("exit-toast.close-thread", label: "Close Thread (exit details)")
                 Button("Relaunch") {
                     isPresented = false
                     Task { await model.relaunchExitNotice(notice.id) }
                 }
                 .keyboardShortcut(.defaultAction)
+                .usageID("exit-toast.details-relaunch", label: "Relaunch (exit details)")
                 .buttonStyle(.scopePrimary)
             }
             .buttonStyle(.scopeSecondary)

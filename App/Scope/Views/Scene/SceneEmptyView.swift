@@ -36,6 +36,7 @@ struct SceneEmptyView: View {
             }
             .buttonStyle(.scopePrimary)
             .keyboardShortcut("o", modifiers: .command)
+            .usageID("empty.choose-folder", label: "Choose Folder (no scope yet)")
             // One line when it fits, otherwise two centred lines (never a ragged wrap).
             ViewThatFits {
                 HStack(spacing: 8) {

@@ -18,8 +18,13 @@ enum Usage {
     private static var registered: Set<String> = []
     /// Views on screen, by id, with when they appeared.
     private static var shown: [String: Date] = [:]
-    /// Set while a palette row or a notification runs its action: the selection it changes is theirs, not a click.
-    static var attributing = false
+    /// Until when a palette row's or a notification's action owns what changes: the selection it makes is theirs, not
+    /// a click. A window rather than a flag, since most actions run in a `Task` that finishes after they return.
+    private static var attributedUntil: TimeInterval = 0
+    static var attributing: Bool { ProcessInfo.processInfo.systemUptime < attributedUntil }
+    /// How old the event AppKit last handled may be and still be the gesture behind a change. `currentEvent` stays
+    /// set long after it was handled, and a socket or a timer must not pass for the user's last click.
+    static let gestureWindow: TimeInterval = 0.5
 
     static func record(_ kind: UsageEvent.Kind, _ id: String, source: UsageEvent.Source, context: String? = nil,
                        duration: Double? = nil) {
@@ -65,18 +70,19 @@ enum Usage {
 
     /// What the event AppKit is handling says about the gesture: a key, the pointer, or neither (a timer, a socket).
     static var currentInput: UsageEvent.Source? {
-        switch NSApp.currentEvent?.type {
+        guard let event = NSApp.currentEvent,
+              ProcessInfo.processInfo.systemUptime - event.timestamp < gestureWindow else { return nil }
+        return switch event.type {
         case .keyDown, .keyUp: .keyboard
         case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseUp: .mouse
         default: nil
         }
     }
 
-    /// Runs `action` with `attributing` set, so the selection it changes is not counted a second time as a click.
+    /// Runs `action` with `attributing` set for a moment, so the selection it changes is not counted a second time as
+    /// a click.
     static func attributed(_ action: () -> Void) {
-        let before = attributing
-        attributing = true
-        defer { attributing = before }
+        attributedUntil = ProcessInfo.processInfo.systemUptime + gestureWindow
         action()
     }
 }

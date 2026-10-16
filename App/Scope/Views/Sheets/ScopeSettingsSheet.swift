@@ -57,10 +57,12 @@ struct ScopeSettingsSheet: View {
                 Task { await ScopeActions.remove(scope, model: model) }
             }
             .buttonStyle(.scopeDanger)
+            .usageID("remove-scope", label: "Remove Scope")
             Spacer()
             Button("Done") { dismiss() }
                 .buttonStyle(.scopePrimary)
                 .keyboardShortcut(.defaultAction)
+                .usageID("done", label: "Done")
         }
         .frame(width: 520)
         .frame(minHeight: 300, maxHeight: 760)
@@ -176,8 +178,10 @@ struct ScopeSettingsSheet: View {
                     } else {
                         Button("Analyze") { Task { await model.analyzeGraph(scope: scope, withAI: false) } }
                             .buttonStyle(.scopeSecondary)
+                            .usageID("graph-analyze", label: "Analyze")
                         Button("Analyze with AI") { Task { await model.analyzeGraph(scope: scope, withAI: true) } }
                             .buttonStyle(.scopeSecondary)
+                            .usageID("graph-analyze-ai", label: "Analyze with AI")
                     }
                     Button("Open") {
                         model.selectScope(scope.id)
@@ -186,6 +190,7 @@ struct ScopeSettingsSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.scopeSecondary)
+                    .usageID("graph-open", label: "Open the graph")
                 }
                 .disabled(scope.repos.isEmpty)
             }

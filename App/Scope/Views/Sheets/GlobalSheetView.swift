@@ -24,6 +24,7 @@ struct GlobalSheetView: View {
                 Button("Close") { model.globalSheet = nil }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(.scopeSecondary)
+                    .usageID("close", label: "Close")
             }
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
             .background(Surface.panel)

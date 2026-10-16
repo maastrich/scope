@@ -266,7 +266,9 @@ struct CommandPalette: View {
         model.searchUI.noteChosen(item.id)
         close()
         let usageID = UsageID.palette(itemID: item.id, section: item.section.rawValue, actionSection: item.section == .actions)
-        Usage.register(usageID, label: item.section == .actions ? item.label : item.section.rawValue)
+        // Never the row's label: "Add api to Fix login" names a repository and a task. A command's name comes from
+        // the menu bar, which registers the same id.
+        Usage.register(usageID, label: item.section == .actions ? nil : item.section.rawValue)
         Usage.record(.palette, usageID, source: .palette)
         Usage.attributed { item.run() }
     }

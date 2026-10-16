@@ -58,6 +58,7 @@ struct ScopeEmptyView: View {
                     .fixedSize()
                     .disabled(scope.kind == .missing)
                     .help("Open a \(preferred.name) thread here (⌘T)")
+                    .usageID("empty.new-thread", label: "New thread, usual driver (empty scope)")
                 }
                 ForEach(others) { profile in
                     Button {
@@ -71,6 +72,7 @@ struct ScopeEmptyView: View {
                     .fixedSize()
                     .disabled(scope.kind == .missing)
                     .help("Open a \(profile.name) thread here")
+                    .usageID("empty.new-thread-other-driver", label: "New thread, another driver (empty scope)")
                 }
             }
         }

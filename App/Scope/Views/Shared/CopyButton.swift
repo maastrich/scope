@@ -25,5 +25,6 @@ struct CopyButton: View {
         }
         .buttonStyle(.iconTight)
         .accessibilityLabel(copied ? "Copied" : label)
+        .usageID("copy", label: "Copy")
     }
 }
