@@ -47,6 +47,7 @@ struct NewTaskSheet: View {
     @State private var runSetup = true
     /// How many ways to run the brief: 1 is a task, more is a family of sibling tasks to compare (`TaskAttempts`).
     @State private var attempts = 1
+    @State private var mission = false
     /// The branch Create asked for is checked out in another working tree: which one, said in words.
     @State private var checkedOut: (branch: String, holder: String)?
     @State private var error: String?
@@ -263,6 +264,12 @@ struct NewTaskSheet: View {
                         .usageID("attempts", label: "Attempts")
                 }
             }
+        }
+        SheetGroup(caption: "A mission's prompt is a goal too big for one task. Its agent is asked to split it into milestones, open one child task at a time, and mark each done so Scope validates it (a command run in the sandbox) before the next opens.") {
+            Toggle("Mission", isOn: $mission)
+                .toggleStyle(.checkbox)
+                .font(.scopeBody)
+                .usageID("mission", label: "Create a mission")
         }
 
         SheetGroup {
@@ -640,7 +647,7 @@ struct NewTaskSheet: View {
                 } else {
                     try await model.createTask(proposal, prompt: await model.expandMentions(request), driverID: driverID,
                                                in: scope.id, repos: repos, startPoint: startPoint, runSetup: runSetup,
-                                               issue: resolution?.issue)
+                                               issue: resolution?.issue, mission: mission)
                 }
                 dismiss()
             } catch TaskError.branchAlreadyCheckedOut(_, let busy, let path) {

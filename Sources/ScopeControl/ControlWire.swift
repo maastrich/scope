@@ -59,6 +59,10 @@ public struct ControlRequest: Sendable, Equatable {
         case .configSet(let params): try encoder.encode(wire(params))
         case .usage(let params): try encoder.encode(wire(params))
         case .release(let params): try encoder.encode(wire(params))
+        case .scheduleList(let params): try encoder.encode(wire(params))
+        case .scheduleRun(let params): try encoder.encode(wire(params))
+        case .milestoneAdd(let params): try encoder.encode(wire(params))
+        case .milestoneDone(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -113,6 +117,10 @@ public struct ControlRequest: Sendable, Equatable {
             case .configSet: .configSet(try required(ConfigSetParams.self))
             case .usage: .usage(try decoder.decode(Params<UsageParams>.self, from: data).params ?? UsageParams())
             case .release: .release(try decoder.decode(Params<ReleaseParams>.self, from: data).params ?? ReleaseParams())
+            case .scheduleList: .scheduleList(try decoder.decode(Params<ScheduleListParams>.self, from: data).params ?? ScheduleListParams())
+            case .scheduleRun: .scheduleRun(try required(ScheduleRunParams.self))
+            case .milestoneAdd: .milestoneAdd(try required(MilestoneAddParams.self))
+            case .milestoneDone: .milestoneDone(try required(MilestoneDoneParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -204,6 +212,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .taskCheckpoints(let result): try encoder.encode(wire(result))
         case .usage(let result): try encoder.encode(wire(result))
         case .release(let result): try encoder.encode(wire(result))
+        case .schedules(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -224,8 +233,9 @@ public struct ControlResponse: Sendable, Equatable {
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
             case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
-                 .taskRestoreCheckpoint, .gc, .configGet, .configSet:
+                 .taskRestoreCheckpoint, .gc, .configGet, .configSet, .scheduleRun, .milestoneAdd, .milestoneDone:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
+            case .scheduleList: .schedules(try decoder.decode(Wrapped<ScheduleListResult>.self, from: data).result)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)
             case .summary: .summary(try decoder.decode(Wrapped<SummaryResult>.self, from: data).result)

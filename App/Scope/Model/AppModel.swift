@@ -223,6 +223,10 @@ final class AppModel {
     @ObservationIgnored var diskUsageRefresher: Task<Void, Never>?
     @ObservationIgnored var diskUsageRuns: [TaskID: Task<Void, Never>] = [:]
     @ObservationIgnored var pullRequestSchedule = PullRequestRefreshSchedule()
+    /// The minute loop behind `AppModel+Schedules`, when it started watching, and the schedules whose run is in flight.
+    @ObservationIgnored var scheduler: Task<Void, Never>?
+    @ObservationIgnored var scheduleWatchedSince = Date.now
+    @ObservationIgnored var runningSchedules: Set<String> = []
     /// Resident threads Scope will not start again on its own, and why (`ResidentHold`). Cleared by the next launch.
     var residentHolds: [ThreadID: ResidentHold] = [:]
     /// Resident threads whose process died and that are about to start again; the banner says so.
@@ -668,6 +672,7 @@ final class AppModel {
         startFollowingVibeIsland()
         startGarbageCollection()
         startPullRequestRefresh()
+        startSchedules()
         startPortScanning()
         startDiskUsageRefresh()
         isBootstrapped = true

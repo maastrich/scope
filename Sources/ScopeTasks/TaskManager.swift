@@ -117,7 +117,7 @@ public actor TaskManager {
         pullRequest: LinkedPullRequest? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
         contextFiles: [String] = [], createdBy: String? = nil, topic: String? = nil, parentTask: TaskID? = nil,
         origin: ThreadOrigin? = nil, deliverable: String? = nil, issue: LinkedIssue? = nil,
-        attempt: TaskAttempt? = nil
+        attempt: TaskAttempt? = nil, mission: Bool = false
     ) async throws -> TaskRecord {
         let requested = repos.map(TaskRepo.normalize)
         guard !requested.isEmpty else { throw TaskError.invalidRepoSelection("a task needs at least one repository") }
@@ -146,7 +146,7 @@ public actor TaskManager {
             pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
             portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
             deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue,
-            attempt: attempt
+            attempt: attempt, mission: mission ? Mission() : nil
         )
 
         var created: [(TaskRepo, branchWasNew: Bool)] = []
@@ -232,6 +232,14 @@ public actor TaskManager {
 
     /// "Don't rebase automatically": the branch is held, or released, when main moves (`TaskRecord.holdBranch`).
     @discardableResult
+    /// Replaces the milestones of a mission (`Mission`): the add, the done and the validation's verdict all land here.
+    public func setMission(_ mission: Mission, for id: TaskID) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        record.mission = mission
+        try await save(record)
+        return record
+    }
+
     public func setHoldBranch(_ hold: Bool, for id: TaskID) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard record.holdBranch != hold else { return record }

@@ -83,13 +83,21 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     /// Cut a release of a repository: the app clones its default branch into its own home and runs the release
     /// script there, outside any sandbox and its hooks.
     case release
+    /// The schedules of a scope (spec §4.11): rule, target, next fire, last run.
+    case scheduleList = "schedule.list"
+    /// Fires a schedule now, whatever its rule says.
+    case scheduleRun = "schedule.run"
+    /// Names a milestone on a mission (`Mission`).
+    case milestoneAdd = "task.milestone.add"
+    /// Marks a milestone done; Scope runs its validation.
+    case milestoneDone = "task.milestone.done"
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage: false
+        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release: true
+             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone: true
         }
     }
 
@@ -210,6 +218,10 @@ public enum ControlCall: Sendable, Equatable {
     case configSet(ConfigSetParams)
     case usage(UsageParams)
     case release(ReleaseParams)
+    case scheduleList(ScheduleListParams)
+    case scheduleRun(ScheduleRunParams)
+    case milestoneAdd(MilestoneAddParams)
+    case milestoneDone(MilestoneDoneParams)
 
     public var method: ControlMethod {
         switch self {
@@ -237,6 +249,10 @@ public enum ControlCall: Sendable, Equatable {
         case .configSet: .configSet
         case .usage: .usage
         case .release: .release
+        case .scheduleList: .scheduleList
+        case .scheduleRun: .scheduleRun
+        case .milestoneAdd: .milestoneAdd
+        case .milestoneDone: .milestoneDone
         }
     }
 
@@ -248,12 +264,14 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage: .seconds(15)
+        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList: .seconds(15)
         case .threadNew: .seconds(60)
-        case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc: .seconds(300)
+        case .threadStop, .threadClose, .threadSend, .taskTopic, .milestoneAdd: .seconds(30)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .scheduleRun: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
+        // Marking done starts the validation; the answer waits for it, up to its own limit.
+        case .milestoneDone: .seconds(1900)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -718,17 +736,20 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
     public var models: [String]
     /// The driver of each attempt, likewise. Empty = `driver` for every attempt.
     public var drivers: [String]
+    /// A mission (`Mission`): the brief is a goal to reach through milestones, each a child task with a validation.
+    public var mission: Bool
 
     public init(prompt: String, scope: String? = nil, repos: [String] = [], branch: String? = nil,
                 title: String? = nil, slug: String? = nil, driver: String? = nil,
                 dryRun: Bool = false, openThread: Bool = true, runSetup: Bool = true, topic: String? = nil,
                 startPR: String? = nil, deliverable: String? = nil, model: String? = nil, issue: String? = nil,
-                attempts: Int = 1, models: [String] = [], drivers: [String] = []) {
+                attempts: Int = 1, models: [String] = [], drivers: [String] = [], mission: Bool = false) {
         self.prompt = prompt
         self.issue = issue
         self.attempts = attempts
         self.models = models
         self.drivers = drivers
+        self.mission = mission
         self.deliverable = deliverable
         self.scope = scope
         self.repos = repos
@@ -765,6 +786,7 @@ public struct TaskNewParams: Codable, Sendable, Equatable {
         attempts = try container.decodeIfPresent(Int.self, forKey: .attempts) ?? 1
         models = try container.decodeIfPresent([String].self, forKey: .models) ?? []
         drivers = try container.decodeIfPresent([String].self, forKey: .drivers) ?? []
+        mission = try container.decodeIfPresent(Bool.self, forKey: .mission) ?? false
     }
 }
 
@@ -1207,6 +1229,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case taskCheckpoints(TaskCheckpointsResult)
     case usage(UsageResult)
     case release(ReleaseResult)
+    case schedules(ScheduleListResult)
 
     public var method: ControlMethod {
         switch self {
@@ -1222,6 +1245,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .taskCheckpoints: .taskCheckpoints
         case .usage: .usage
         case .release: .release
+        case .schedules: .scheduleList
         }
     }
 }

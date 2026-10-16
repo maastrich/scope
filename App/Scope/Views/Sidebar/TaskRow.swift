@@ -52,6 +52,12 @@ struct TaskRow: View {
                 if detailed {
                     HStack(spacing: 0) {
                         TaskDormancyCaption(task: task, separated: true)
+                        if let mission = task.record.mission, !mission.milestones.isEmpty {
+                            Text("\(mission.progress.reached)/\(mission.progress.total) · ")
+                                .font(.scopeCaption.monospacedDigit())
+                                .foregroundStyle(Ink.tertiary)
+                                .help(mission.caption)
+                        }
                         if let parent = linkedParent(threads) {
                             ParentTaskLink(parent: parent)
                             Text(" · ")
@@ -75,6 +81,13 @@ struct TaskRow: View {
             Spacer(minLength: 4)
 
             if !detailed {
+                if let mission = task.record.mission, !mission.milestones.isEmpty {
+                    Text("\(mission.progress.reached)/\(mission.progress.total)")
+                        .font(.scopeCaption.monospacedDigit())
+                        .foregroundStyle(Ink.tertiary)
+                        .help(mission.caption)
+                        .opacity(isHovered ? 0 : 1)
+                }
                 TaskDormancyCaption(task: task)
                     .opacity(isHovered ? 0 : 1)
             }

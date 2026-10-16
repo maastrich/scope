@@ -322,6 +322,8 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     /// Whether a task of this scope may be tried in the user's own checkout, when it differs from the preference
     /// (`Preferences.allowTryInCheckout`). Edited by hand in `config.json`; `nil` follows the preference.
     public var allowTryInCheckout: Bool?
+    /// The prompts Scope sends on its own to this scope (spec §4.11), with their rule, target and last run.
+    public var schedules: [Schedule]
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -342,10 +344,12 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         context: String? = nil,
         model: String? = nil,
         followMain: FollowMainMode? = nil,
-        allowTryInCheckout: Bool? = nil
+        allowTryInCheckout: Bool? = nil,
+        schedules: [Schedule] = []
     ) {
         self.followMain = followMain
         self.allowTryInCheckout = allowTryInCheckout
+        self.schedules = schedules
         self.repoCommands = repoCommands
         self.icon = icon
         self.tint = tint
@@ -386,7 +390,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context, model,
-             followMain, allowTryInCheckout
+             followMain, allowTryInCheckout, schedules
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -409,6 +413,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         model = ((try? container.decodeIfPresent(String.self, forKey: .model)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
         followMain = try? container.decodeIfPresent(FollowMainMode.self, forKey: .followMain)
         allowTryInCheckout = try? container.decodeIfPresent(Bool.self, forKey: .allowTryInCheckout)
+        schedules = ((try? container.decodeIfPresent([Schedule].self, forKey: .schedules)) ?? nil) ?? []
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.
@@ -561,6 +566,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var assistPicksTopic: Bool
     /// A task whose last reply reads as final shows "Looks finished — archive?" in its band. On by default.
     public var assistSuggestsArchive: Bool
+    /// At launch, a daily, weekday or weekly schedule missed in the last day fires once (spec §4.11). On by default.
+    public var catchUpSchedules: Bool
 
     /// Allowed values of `assistDailyCap`.
     public static let assistDailyCapRange = 1...500
@@ -624,7 +631,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         assistSuggestsArchive: Bool = true,
         quickPanelHotkey: KeyChord? = .optionSpace,
         toggleWindowHotkey: KeyChord? = .optionShiftSpace,
-        quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting
+        quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting,
+        catchUpSchedules: Bool = true
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -675,6 +683,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.quickPanelHotkey = quickPanelHotkey
         self.toggleWindowHotkey = toggleWindowHotkey
         self.quickPanelLanding = quickPanelLanding
+        self.catchUpSchedules = catchUpSchedules
     }
 
     public static let `default` = Preferences()
@@ -686,7 +695,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
-             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding
+             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules
     }
 
     public init(from decoder: any Decoder) throws {
@@ -769,6 +778,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             : defaults.toggleWindowHotkey
         quickPanelLanding = (try? container.decodeIfPresent(QuickPanel.Landing.self, forKey: .quickPanelLanding))
             ?? defaults.quickPanelLanding
+        catchUpSchedules = (try? container.decodeIfPresent(Bool.self, forKey: .catchUpSchedules)) ?? defaults.catchUpSchedules
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

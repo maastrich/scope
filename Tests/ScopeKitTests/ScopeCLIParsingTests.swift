@@ -248,4 +248,28 @@ import Testing
         }
         #expect(params.deliverable == "docs/study.md")
     }
+
+    @Test func schedulesAreListedAndRun() throws {
+        #expect(try Self.call(["schedule", "list"]) == .scheduleList(ScheduleListParams()))
+        #expect(try Self.call(["schedule", "list", "--scope", "acme"]) == .scheduleList(ScheduleListParams(scope: "acme")))
+        #expect(try Self.call(["schedule", "run", "Morning: PRs with red checks"])
+            == .scheduleRun(ScheduleRunParams(name: "Morning: PRs with red checks")))
+        #expect(try Self.call(["schedule", "run", "morning", "--scope", "acme"]) == .scheduleRun(ScheduleRunParams(name: "morning", scope: "acme")))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["schedule", "run"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["schedule", "pause", "x"]) }
+    }
+
+    @Test func missionsAndMilestones() throws {
+        #expect(try Self.call(["task", "new", "rework auth", "--mission"]) == .taskNew(TaskNewParams(prompt: "rework auth", mission: true)))
+        #expect(try Self.call(["task", "milestone", "add", "Token model", "--validate", "pnpm test"])
+            == .milestoneAdd(MilestoneAddParams(title: "Token model", validation: "pnpm test")))
+        #expect(try Self.call(["task", "milestone", "add", "rework-auth", "Token model", "--child", "token-model"])
+            == .milestoneAdd(MilestoneAddParams(task: "rework-auth", title: "Token model", child: "token-model")))
+        #expect(try Self.call(["task", "milestone", "done", "2"]) == .milestoneDone(MilestoneDoneParams(milestone: "2")))
+        #expect(try Self.call(["task", "milestone", "done", "rework-auth", "Token model", "--child=token-model"])
+            == .milestoneDone(MilestoneDoneParams(task: "rework-auth", milestone: "Token model", child: "token-model")))
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "milestone", "done", "2", "--validate", "x"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "milestone", "add"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["task", "milestone", "skip", "2"]) }
+    }
 }

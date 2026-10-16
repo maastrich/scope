@@ -18,6 +18,8 @@ struct AutomationSettingsView: View {
     @State private var mcpFailure: String?
     @State private var skillStates: [SkillInstaller.Client: SkillInstaller.State] = [:]
     @State private var skillFailure: String?
+    /// The scope whose schedules the Schedules section shows; the current one at first.
+    @State private var scheduleScope: ScopeID?
 
     var body: some View {
         SettingsPage {
@@ -233,6 +235,42 @@ struct AutomationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            SettingsSection("Schedules") {
+                Text("""
+                    Prompts Scope sends on its own — every hour, every day, on weekdays or once a week — to a scope's \
+                    orchestrator or into a new task. The reply lands in the Inbox. `scope schedule list` and \
+                    `scope schedule run <name>` reach them too.
+                    """)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.scopes.count > 1 {
+                    SettingsRow("Scope") {
+                        ScopePicker("Scope", selection: scheduleScopeBinding, title: scheduleScopeTitle) {
+                            ForEach(model.scopes) { scope in Text(scope.name).tag(Optional(scope.id)) }
+                        }
+                        .usageID("schedule-scope", label: "Scope of the schedules shown")
+                    }
+                }
+                if let scopeID = scheduleScope ?? model.currentScope?.id ?? model.scopes.first?.id {
+                    ScheduleListEditor(scopeID: scopeID)
+                } else {
+                    Text("Declare a scope first.")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                }
+                Toggle("Catch up at launch", isOn: Binding(
+                    get: { model.config.preferences.catchUpSchedules },
+                    set: { value in model.updatePreferences { $0.catchUpSchedules = value } }))
+                    .toggleStyle(.scope)
+                    .usageID("schedule-catch-up", label: "Catch up missed schedules at launch")
+                Text("A daily, weekday or weekly prompt missed in the last day — the Mac was asleep at 09:00 — fires once "
+                     + "when Scope opens. Hourly ones wait for the next hour.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             SettingsSection("Socket") {
                 SettingsRow("Path") {
                     Text(model.env.socketPath)
@@ -251,6 +289,15 @@ struct AutomationSettingsView: View {
     }
 
     // MARK: Bindings
+
+    private var scheduleScopeBinding: Binding<ScopeID?> {
+        Binding(get: { scheduleScope ?? model.currentScope?.id ?? model.scopes.first?.id }, set: { scheduleScope = $0 })
+    }
+
+    private var scheduleScopeTitle: String {
+        let id = scheduleScope ?? model.currentScope?.id ?? model.scopes.first?.id
+        return id.flatMap(model.scope)?.name ?? "Scope"
+    }
 
     private func automation<Value>(_ keyPath: WritableKeyPath<AutomationSettings, Value>) -> Binding<Value> {
         Binding(

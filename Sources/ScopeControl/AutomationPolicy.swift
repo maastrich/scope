@@ -219,7 +219,11 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage:
+            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList:
+                return .allow
+            case .milestoneAdd, .milestoneDone:
+                // Bookkeeping on a mission the agent is part of: nothing opened, nothing removed. The service checks
+                // that the caller works in that mission or in one of its tasks.
                 return .allow
             case .configSet:
                 return .refuse(.denied("only the user may change Scope's settings"))
@@ -237,9 +241,9 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // Files of a sandbox, with the undo taken first: an agent may do it within its own task, which the
                 // app checks once it has found the task (`mayRestoreCheckpoint`). Nothing opened, nothing deleted.
                 return .allow
-            case .taskClose, .taskArchive, .taskRebase:
+            case .taskClose, .taskArchive, .taskRebase, .scheduleRun:
                 // Undoing a task removes worktrees and can delete a branch; a rebase rewrites one and may open a
-                // thread: the same approval as creating a task.
+                // thread; a schedule may create a task: the same approval as creating one.
                 approval = settings.tasks
             case .taskRestore:
                 // A task opened again, sandboxes and all: the budget and the approval of a new one. No depth to
@@ -377,6 +381,10 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .threadSend(let params): (params.command ? "run a driver command in the thread " : "type into the thread ") + params.thread
         case .threadRead(let params): "read the thread \(params.thread)"
         case .threadWait(let params): "wait for " + params.threads.joined(separator: ", ")
+        case .scheduleList: ""
+        case .scheduleRun(let params): "run the schedule “\(params.name)” now"
+        case .milestoneAdd(let params): "add the milestone “\(params.title)”" + (params.task.map { " to \($0)" } ?? "")
+        case .milestoneDone(let params): "mark the milestone \(params.milestone) done" + (params.task.map { " on \($0)" } ?? "")
         }
     }
 }

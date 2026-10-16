@@ -238,6 +238,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var attempt: TaskAttempt?
     /// Set on the task kept out of its attempts: the others were archived, this one took the brief's name back.
     public var attemptsKept: TaskAttemptsKept?
+    /// A mission: the brief is a goal, reached through milestones the orchestrator names and Scope validates
+    /// (`Mission`). `nil` for an ordinary task.
+    public var mission: Mission?
 
     public init(
         id: TaskID = .generate(),
@@ -263,7 +266,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         origin: ThreadOrigin? = nil,
         deliverable: String? = nil,
         issue: LinkedIssue? = nil,
-        attempt: TaskAttempt? = nil
+        attempt: TaskAttempt? = nil,
+        mission: Mission? = nil
     ) {
         version = TaskRecord.currentVersion
         self.id = id
@@ -290,6 +294,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.deliverable = deliverable
         self.issue = issue
         self.attempt = attempt
+        self.mission = mission
     }
 
     public var fileName: String { "\(id.rawValue).json" }
@@ -411,6 +416,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         let key = TaskRepo.normalize(repoRelativePath)
         return trying.first { $0.repoRelativePath == key }
     }
+    /// Whether the task is a mission (`Mission`).
+    public var isMission: Bool { mission != nil }
 
     /// `notRun` for a record that never ran a setup.
     public var setupState: SetupState { setup?.state ?? .notRun }
@@ -423,7 +430,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
         case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
-        case holdBranch, followedMainHead, trying, attempt, attemptsKept
+        case holdBranch, followedMainHead, trying, attempt, attemptsKept, mission
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -459,5 +466,6 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         trying = (try? container.decodeIfPresent([TrySession].self, forKey: .trying)) ?? []
         attempt = (try? container.decodeIfPresent(TaskAttempt.self, forKey: .attempt)) ?? nil
         attemptsKept = (try? container.decodeIfPresent(TaskAttemptsKept.self, forKey: .attemptsKept)) ?? nil
+        mission = (try? container.decodeIfPresent(Mission.self, forKey: .mission)) ?? nil
     }
 }

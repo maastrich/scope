@@ -59,6 +59,7 @@ struct ScopeSettingsSheet: View {
             }
             tile
             contextGroup
+            schedules
             repositories
             disk
         } notice: {
@@ -166,6 +167,16 @@ struct ScopeSettingsSheet: View {
                 .frame(minHeight: 72, maxHeight: 144)
                 .focused($focus, equals: .context)
                 .scopeTextBox(focused: focus == .context, inset: 2)
+        }
+    }
+
+    // MARK: Schedules
+
+    @ViewBuilder private var schedules: some View {
+        SheetGroup(caption: "Prompts Scope sends to this scope on its own — to its orchestrator, or into a new task — on a rule. "
+            + "The reply lands in the Inbox.") {
+            SectionLabel(text: "Schedules")
+            ScheduleListEditor(scopeID: scope.id)
         }
     }
 

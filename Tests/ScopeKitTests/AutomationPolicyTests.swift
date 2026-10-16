@@ -418,6 +418,19 @@ import Testing
             return
         }
     }
+
+    @Test func runningAScheduleAsksLikeATaskAndMilestonesAreBookkeeping() {
+        let ask = AutomationPolicy(settings: AutomationSettings(tasks: .ask))
+        guard case .ask(let subject) = ask.decide(.scheduleRun(ScheduleRunParams(name: "morning")), from: Self.external) else {
+            Issue.record("firing a schedule from an agent asks the user"); return
+        }
+        #expect(subject.contains("morning"))
+        #expect(ask.decide(.scheduleList(ScheduleListParams()), from: Self.external) == .allow)
+        #expect(ask.decide(.milestoneAdd(MilestoneAddParams(title: "t")), from: Self.external) == .allow)
+        #expect(ask.decide(.milestoneDone(MilestoneDoneParams(milestone: "1")), from: Self.external) == .allow)
+        #expect(AutomationPolicy(settings: AutomationSettings(agentsMayDrive: false))
+            .decide(.milestoneDone(MilestoneDoneParams(milestone: "1")), from: Self.external) != .allow)
+    }
 }
 
 /// What the receiving agent reads above a message another agent sent.

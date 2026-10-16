@@ -49,7 +49,8 @@ extension AppModel {
     /// Every item, newest first. Recomputed from observed state (thread states, task records, pull requests): what
     /// is read from a thread's activity only words an item that a state change already put there.
     var inboxItems: [Inbox.Item] {
-        Inbox.items(threads: threads.compactMap(inboxInput), tasks: tasks.map(inboxInput), dismissed: inbox.dismissals)
+        Inbox.items(threads: threads.compactMap(inboxInput), tasks: tasks.map(inboxInput), schedules: inboxScheduleInputs,
+                    dismissed: inbox.dismissals)
     }
 
     var inboxGroups: [Inbox.Group] {
@@ -140,6 +141,13 @@ extension AppModel {
         return sendMessage(text, to: thread)
     }
 
+    /// A schedule's run: the thread's last reply in the reading column.
+    func readInboxReply(_ item: Inbox.Item) {
+        guard let thread = item.threadID, let session = session(thread) else { return }
+        globalSheet = nil
+        readReply(of: session)
+    }
+
     func archiveInboxTask(_ item: Inbox.Item) {
         guard let task = item.taskID else { return }
         Task { await archiveTask(task) }
@@ -178,7 +186,7 @@ extension AppModel {
 
     /// Dismissals that no longer hide anything go, so the same failure after a green run is news again.
     func pruneInboxDismissals() {
-        let candidates = Inbox.items(threads: [], tasks: tasks.map(inboxInput))
+        let candidates = Inbox.items(threads: [], tasks: tasks.map(inboxInput), schedules: inboxScheduleInputs)
         // An open task whose pull request was not read since launch has no item for want of knowing.
         let unread = Set(tasks.filter { !$0.record.isArchived && $0.record.pullRequest != nil && livePullRequest(for: $0) == nil }
             .map { "task:\($0.id.rawValue):pr" })

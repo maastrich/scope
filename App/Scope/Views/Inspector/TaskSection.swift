@@ -149,6 +149,9 @@ struct TaskSection: View {
                             .padding(.bottom, 8)
                     }
                     TaskBriefExcerpt(task: task)
+                    if let mission = task.record.mission {
+                        MissionChecklist(task: task, mission: mission)
+                    }
                     TaskVersionStrip(task: task)
                     ForEach(task.activeRepos) { repo in
                         TaskRepoRow(task: task, repo: repo)

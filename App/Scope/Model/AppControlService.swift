@@ -203,6 +203,166 @@ final class AppControlService: ControlService {
                 return .failure(.failed("the cleanup did not run"))
             }
             return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
+        case .scheduleList(let params):
+            return listSchedules(params, from: origin, caller: caller)
+        case .scheduleRun(let params):
+            return runSchedule(params, from: origin, caller: caller)
+        case .milestoneAdd(let params):
+            return await addMilestone(params, from: origin, caller: caller)
+        case .milestoneDone(let params):
+            return await markMilestoneDone(params, from: origin, caller: caller)
+        }
+    }
+
+    // MARK: Schedules
+
+    private func callerScopeID(_ origin: ControlOrigin) -> String? {
+        if case .thread(let id, _) = origin { return model.session(id)?.record.scopeID.rawValue }
+        return nil
+    }
+
+    private func resolveScope(_ query: String?, from origin: ControlOrigin, caller: ControlCaller) -> Result<ScopeID?, ControlError> {
+        guard let query else { return .success(nil) }
+        let resolved = ScopeResolver.resolve(query, in: scopeSummaries, callerScopeID: callerScopeID(origin), callerCwd: caller.cwd)
+        guard case .success(let summary) = resolved else { return .failure(resolved.failureError) }
+        return .success(ScopeID(rawValue: summary.id))
+    }
+
+    private func listSchedules(_ params: ScheduleListParams, from origin: ControlOrigin,
+                               caller: ControlCaller) -> Result<ControlResultPayload, ControlError> {
+        switch resolveScope(params.scope, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let scopeID): return .success(.schedules(ScheduleListResult(schedules: model.scheduleSummaries(in: scopeID))))
+        }
+    }
+
+    /// `schedule.run`: fires now and answers with what went out; the reply lands in the Inbox, not here.
+    private func runSchedule(_ params: ScheduleRunParams, from origin: ControlOrigin,
+                             caller: ControlCaller) -> Result<ControlResultPayload, ControlError> {
+        let scopeID: ScopeID?
+        switch resolveScope(params.scope, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): scopeID = found
+        }
+        let schedule: Schedule
+        let home: ScopeID
+        switch model.findSchedule(params.name, in: scopeID) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): (schedule, home) = found
+        }
+        guard let run = model.fireSchedule(schedule, in: home) else {
+            return .failure(.failed("the schedule “\(schedule.name)” is already running",
+                                    detail: "Its reply will land in the Inbox; `scope thread wait` on its thread to read it sooner."))
+        }
+        guard run.outcome != .failed else { return .failure(.failed("the schedule “\(schedule.name)” did not run", detail: run.summary)) }
+        let where_ = switch schedule.target.kind {
+        case .orchestrator: "sent to the \(model.scope(home)?.name ?? "scope") orchestrator" + (run.thread.map { " (thread \($0))" } ?? "")
+        case .newTask: "opening a task"
+        }
+        return .success(.action(ActionResult(message: "fired “\(schedule.name)”: \(where_); the reply lands in the Inbox",
+                                             thread: run.thread, task: run.task), .scheduleRun))
+    }
+
+    // MARK: Missions
+
+    /// The mission a milestone call is about, and whether the caller may touch it: the named task's mission, or the
+    /// caller's own; an agent must work in that mission or in one of its tasks.
+    private func mission(_ named: String?, from origin: ControlOrigin, caller: ControlCaller) -> Result<(mission: TaskState, own: TaskState?), ControlError> {
+        let own: TaskState? = if case .thread(let id, _) = origin {
+            model.session(id)?.record.taskID.flatMap { raw in model.tasks.first { $0.record.id.rawValue == raw } }
+        } else { nil }
+        let subject: TaskState
+        if let named {
+            switch resolveTask(named, scope: nil, callerScopeID: callerScopeID(origin), callerCwd: caller.cwd) {
+            case .failure(let error): return .failure(error)
+            case .success(let found): subject = found
+            }
+        } else if let own {
+            subject = own
+        } else {
+            return .failure(.badRequest("which mission?", detail: "You are not in a task: name one by id or slug (`scope list tasks`)."))
+        }
+        guard let mission = model.mission(of: subject) else {
+            return .failure(.badRequest("\(subject.record.slug) is not a mission and belongs to none",
+                                        detail: "A mission is a task created with --mission (mission: true)."))
+        }
+        if origin.isAgent, let own, model.mission(of: own)?.id != mission.id {
+            return .failure(.denied("an agent may only mark milestones of the mission it works in",
+                                    detail: "You work in \(own.record.slug); the mission is \(mission.record.slug)."))
+        }
+        return .success((mission, own))
+    }
+
+    private func childTask(_ named: String?, own: TaskState?, mission: TaskState, from origin: ControlOrigin,
+                           caller: ControlCaller) -> Result<TaskID?, ControlError> {
+        guard let named else {
+            // From a child task, the caller is the child.
+            return .success(own.flatMap { $0.id == mission.id ? nil : $0.id })
+        }
+        switch resolveTask(named, scope: nil, callerScopeID: callerScopeID(origin), callerCwd: caller.cwd) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): return .success(found.id)
+        }
+    }
+
+    private func addMilestone(_ params: MilestoneAddParams, from origin: ControlOrigin,
+                              caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let mission: TaskState, own: TaskState?
+        switch self.mission(params.task, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): (mission, own) = found
+        }
+        let child: TaskID?
+        switch childTask(params.child, own: own, mission: mission, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): child = found
+        }
+        switch await model.addMilestone(to: mission, title: params.title, validation: params.validation, child: child) {
+        case .failure(let error): return .failure(error)
+        case .success(let milestone):
+            let number = mission.record.mission?.milestones.count ?? 0
+            var message = "added milestone \(number) “\(milestone.title)” to \(mission.record.slug)"
+            message += milestone.validation.map { " — validated by `\($0)`" } ?? " — no validation: done is enough"
+            message += "\n\(mission.record.mission?.caption ?? "")"
+            return .success(.action(ActionResult(message: message, task: mission.record.id.rawValue), .milestoneAdd))
+        }
+    }
+
+    private func markMilestoneDone(_ params: MilestoneDoneParams, from origin: ControlOrigin,
+                                   caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let mission: TaskState, own: TaskState?
+        switch self.mission(params.task, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): (mission, own) = found
+        }
+        let child: TaskID?
+        switch childTask(params.child, own: own, mission: mission, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let found): child = found
+        }
+        switch await model.markMilestoneDone(mission, reference: params.milestone, child: child) {
+        case .failure(let error): return .failure(error)
+        case .success(let milestone):
+            var lines: [String]
+            switch milestone.state {
+            case .validated:
+                lines = ["validated “\(milestone.title)” (\(milestone.exit ?? "exit 0"))"]
+            case .failed:
+                lines = ["the validation of “\(milestone.title)” failed (\(milestone.exit ?? "failed")); its log went to the milestone's thread"]
+                if let log = milestone.log { lines.append(log) }
+            case .done:
+                lines = ["marked “\(milestone.title)” done; nothing to validate"]
+            case .open:
+                lines = ["“\(milestone.title)” is open"]
+            }
+            let record = model.task(mission.id)?.record.mission ?? mission.record.mission
+            lines.append(record?.caption ?? "")
+            if let next = record?.next, milestone.state.isComplete {
+                lines.append("next milestone: \(next.title)")
+            } else if milestone.state.isComplete {
+                lines.append("every milestone is reached: report on the mission")
+            }
+            return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: mission.record.id.rawValue), .milestoneDone))
         }
     }
 
@@ -1003,7 +1163,7 @@ final class AppControlService: ControlService {
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
                                                runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
                                                topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable,
-                                               model: requestedModel, issue: request.issue)
+                                               model: requestedModel, issue: request.issue, mission: params.mission)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
         }

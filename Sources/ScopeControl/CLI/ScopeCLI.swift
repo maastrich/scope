@@ -78,6 +78,16 @@ public enum ScopeCLI {
       scope task topic [<id|slug>] <topic>
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
+      scope task milestone add [<id|slug>] <title>
+                                          name a milestone on a mission (default: the caller's own task);
+                                          --validate <command> is run in its sandbox when it is marked done,
+                                          --child <id|slug> names the task doing it
+      scope task milestone done [<id|slug>] <n|title>
+                                          mark a milestone done: Scope runs its validation and records the
+                                          verdict; a failure goes to the milestone's thread (--child <id|slug>)
+      scope schedule list                 the scheduled prompts of every scope (--scope for one): rule, target,
+                                          next fire, last run
+      scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
       scope release [X.Y.Z]               cut a release of a repository: Scope clones its default branch under its
                                           own home and runs scripts/release.sh there (else tags and pushes), with
@@ -132,6 +142,8 @@ public enum ScopeCLI {
                                     agents' task budget
       --models <a,b,c>              with --attempts: one model for all, or one per attempt
       --drivers <x,y,z>             with --attempts: one driver for all, or one per attempt
+      --mission                     a mission: the prompt is a goal; the context file asks the agent to split it
+                                    into milestones, one child task at a time, each validated before the next
       --dry-run                     print the proposal, create nothing
       --no-thread                   create the task without opening a thread
       --no-setup                    skip the repositories' setup commands (.env files are still copied)
@@ -362,9 +374,63 @@ public enum ScopeCLI {
             default:
                 throw UsageError(message: "config commands: get, set", usage: usage)
             }
+        case "schedule":
+            let sub = rest.first
+            rest = rest.dropFirst()
+            switch sub {
+            case "list":
+                var scope: String?
+                let shared = try options(&rest, command: "schedule list", specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                return .call(.scheduleList(ScheduleListParams(scope: scope)), shared)
+            case "run":
+                var words: [String] = []
+                var scope: String?
+                let shared = try options(&rest, command: "schedule run", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "schedule run takes one schedule name", usage: usage) }
+                return .call(.scheduleRun(ScheduleRunParams(name: words[0], scope: scope)), shared)
+            default:
+                throw UsageError(message: "schedule commands: list, run", usage: usage)
+            }
         case "task":
             let sub = rest.first
             rest = rest.dropFirst()
+            if sub == "milestone" {
+                let verb = rest.first
+                rest = rest.dropFirst()
+                var words: [String] = []
+                var validation: String?
+                var child: String?
+                let shared = try options(&rest, command: "task milestone", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--validate", "--validation": validation = try value()
+                    case "--child": child = try value()
+                    default: return false
+                    }
+                    return true
+                })
+                // The last word is the milestone, the one before it the task; without a task, the caller's own.
+                guard (1...2).contains(words.count), let last = words.last, last.contains(where: { !$0.isWhitespace }) else {
+                    throw UsageError(message: "task milestone \(verb ?? "") takes a milestone, after the task id or slug", usage: usage)
+                }
+                let task = words.count == 2 ? words[0] : nil
+                switch verb {
+                case "add":
+                    return .call(.milestoneAdd(MilestoneAddParams(task: task, title: last, validation: validation, child: child)), shared)
+                case "done":
+                    guard validation == nil else { throw UsageError(message: "task milestone done takes no --validate", usage: usage) }
+                    return .call(.milestoneDone(MilestoneDoneParams(task: task, milestone: last, child: child)), shared)
+                default:
+                    throw UsageError(message: "task milestone commands: add, done", usage: usage)
+                }
+            }
             if sub == "show" {
                 var words: [String] = []
                 let shared = try options(&rest, command: "task show", positional: { words.append($0) })
@@ -486,7 +552,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, checkpoints, restore-checkpoint, topic", usage: usage)
+                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, checkpoints, restore-checkpoint, topic, milestone", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")
@@ -515,6 +581,7 @@ public enum ScopeCLI {
                 case "--dry-run": parameters.dryRun = true
                 case "--no-thread": parameters.openThread = false
                 case "--no-setup": parameters.runSetup = false
+                case "--mission": parameters.mission = true
                 default: return false
                 }
                 return true

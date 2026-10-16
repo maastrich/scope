@@ -23,6 +23,7 @@ public enum CLIRenderer {
         case .taskCheckpoints(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
+        case .schedules(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -138,7 +139,24 @@ public enum CLIRenderer {
             return usage(result)
         case .release(let result):
             return release(result)
+        case .schedules(let result):
+            return schedules(result)
         }
+    }
+
+    /// One row per schedule: where it fires next, and what its last run said.
+    static func schedules(_ result: ScheduleListResult) -> String {
+        guard !result.schedules.isEmpty else { return "no schedules; add one in Settings ▸ Automation ▸ Schedules" }
+        return table(["SCHEDULE", "SCOPE", "RULE", "TARGET", "NEXT", "LAST RUN"], result.schedules.map { schedule in
+            let last: String
+            if let at = schedule.lastRunAt {
+                last = time(at) + (schedule.lastOutcome.map { " · \($0)" } ?? "") + (schedule.lastSummary.map { " — \($0.prefix(60))" } ?? "")
+            } else {
+                last = "never"
+            }
+            return [schedule.name + (schedule.enabled ? "" : " (paused)"), schedule.scopeSlug, schedule.rule, schedule.target,
+                    schedule.next.map(time) ?? "", last]
+        })
     }
 
     /// What happened, then the script's own words: it already says what it fetched, planned and pushed.
