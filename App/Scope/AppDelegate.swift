@@ -42,6 +42,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         UNUserNotificationCenter.current().delegate = self
         TerminalKeyBindings.install()
+        AppServices.model?.startGlobalHotkeys()
+        #if DEBUG
+        // `SCOPE_QUICK_PANEL=ask|inbox` opens the quick panel shortly after launch: a throwaway instance driven from a
+        // terminal has no hand on the keyboard to press the hotkey.
+        if let tab = ProcessInfo.processInfo.environment["SCOPE_QUICK_PANEL"].flatMap(QuickPanel.Tab.init(rawValue:)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { AppServices.model?.showQuickPanel(tab: tab) }
+        }
+        // `SCOPE_APPEARANCE=dark|light` pins the instance's appearance, for screenshots of both without touching the system.
+        if let name = ProcessInfo.processInfo.environment["SCOPE_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
+        }
+        #endif
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
