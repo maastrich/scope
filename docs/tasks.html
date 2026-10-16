@@ -225,6 +225,23 @@ So Scope hands it each sandbox with <code>--add-dir</code> (the profile's <code>
 from the start rather than only when the agent opens a file there. A thread already running when you add a
 repository sees it the next time it is relaunched or resumed.</p>
 
+<h2 id="missions">Missions</h2>
+<p>A <b>mission</b> is a task whose prompt is a goal too big for one task: <code>scope task new --mission</code>,
+<code>mission: true</code> in the MCP tool, or the <b>Mission</b> box of the New Task sheet. Its context file tells
+the agent the protocol: split the goal into milestones, each one task's worth and each with a <b>validation</b> — a
+shell command that proves it, the test suite, a build, <code>gh pr checks &lt;branch&gt;</code> — open one milestone
+at a time as a child task, mark it done when the child reports, and open the next only once the previous one is
+validated. Scope stores and validates; the orchestrator plans.</p>
+<pre><code>scope task milestone add rework-auth "Token model" --validate "pnpm test"
+scope task milestone done rework-auth 1 --child token-model</code></pre>
+<p>Marking a milestone done runs its command in the child task's sandbox (the mission's without a child), with the
+task's variables, and records the verdict on the mission: <i>validated</i> on exit 0, <i>failed</i> otherwise with
+the end of the log, which also goes to the milestone's thread so it can fix and mark done again. A milestone
+without a command is reached when marked done. An agent may add or mark milestones from inside the mission or
+any of its tasks, without approval — nothing is opened or removed. The Task section shows the checklist (state,
+command, child task, the log of a failure on hover) and the sidebar row the progress (<code>2/5</code>); the
+context file lists the milestones as they stand.</p>
+
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
@@ -301,7 +318,7 @@ answer kept when it was archived (or its report file). Archived and closed tasks
 that implements it without anyone pasting. <code>@thread:&lt;id&gt;</code> does the same for a thread: title, task,
 last answer. In the app, typing <code>@</code> in a message field offers the tasks of the scope, recent first; Tab
 or ↩ completes one. A mention nothing answers to stays as typed, with a note.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl3" href="#checkpoints">Every turn leaves a checkpoint</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl2" href="#missions">Missions</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl3" href="#checkpoints">Every turn leaves a checkpoint</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
