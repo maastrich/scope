@@ -437,7 +437,8 @@ final class AppControlService: ControlService {
             task: session.record.taskID, cwd: session.record.cwd,
             state: session.displayState.name, alive: session.isAlive,
             openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent,
-            resident: session.record.resident?.rawValue
+            resident: session.record.resident?.rawValue,
+            activity: ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now)
         )
     }
 

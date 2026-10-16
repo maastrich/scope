@@ -848,6 +848,14 @@ branch      fix/flaky-login-test
 slug        fix-flaky-login-test
 sandbox     ~/.scope/sandboxes/acme/fix-flaky-login-test
 repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch created)</code></pre>
+<p><code>scope list threads</code> ends each row with what its agent did last, and when: the last tool it ran and
+on what — a file (relative to the thread's folder), the first line of a command, a search pattern, a URL — or how
+its turn ended. <code>--json</code> and the MCP tool carry it as <code>activity</code>; a thread whose driver
+reports nothing (a shell) has none.</p>
+<pre><code>$ scope list threads
+THREAD        TITLE  DRIVER       STATE    SCOPE  TASK  BY    ACTIVITY
+3f9a2c17be04  acme   claude-code  running  acme         user  Edit Sources/Login/Session.swift · 2m ago
+8a18d7476063  ci     claude-code  done     acme         user  finished · 1h ago</code></pre>
 <p><code>scope thread read</code> prints the last 200 lines of a thread's terminal — scrollback included, up to
 2000 with <code>-n</code> — between two markers, under a line saying the text is untrusted terminal output. Line
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
@@ -1011,6 +1019,10 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
 <b>Ctrl-C</b> during a turn ends it (idle), and <b>Return</b> on a permission prompt resumes it (running).
 Claude Code's <code>idle_prompt</code> notification, sent a minute after any answer you have not replied to, is
 deliberately ignored: the turn is already done, nobody is asking anything.</p>
+<p>Scope also keeps what the hooks say about the work itself: the tool each <code>PostToolUse</code> reports
+and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
+session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
+survives a restart, and goes when the thread is closed.</p>
 <p>Your own <code>~/.claude/settings.json</code> is not modified: the per-thread file lives under
 <code>~/.scope/threads/</code> and is passed on the command line.</p>
 

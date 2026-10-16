@@ -28,6 +28,8 @@ final class AppEnvironment {
     let appVersion: String
     let config: ConfigStore
     let threadRecords: ThreadRecordStore
+    /// `<home>/threads/<id>.activity.json`, beside each record.
+    let threadActivity: ThreadActivityStore
     let drivers: DriverRegistry
     let shell: ShellEnvironmentResolver
     /// Replaced once `GitLocator` has found the right git (bootstrap); `/usr/bin/git` until then.
@@ -67,6 +69,7 @@ final class AppEnvironment {
         self.appVersion = appVersion
         self.config = config
         self.threadRecords = threadRecords
+        self.threadActivity = ThreadActivityStore(home: home)
         self.drivers = drivers
         self.shell = shell
         self.git = git

@@ -985,8 +985,8 @@ final class AppModel {
 
     // MARK: Threads
 
-    func register(_ session: ThreadSession) {
-        wire(session)
+    func register(_ session: ThreadSession, activity: ThreadActivity? = nil) {
+        wire(session, activity: activity)
         threads.append(session)
         env.knownThreads.insert(session.id)
     }
@@ -996,11 +996,13 @@ final class AppModel {
         guard let index = threads.firstIndex(where: { $0 === old }), !old.isAlive else { return }
         old.onRecordChanged = nil
         old.onExit = nil
-        wire(new)
+        old.onActivityChanged = nil
+        wire(new, activity: old.activity)
         threads[index] = new
     }
 
-    private func wire(_ session: ThreadSession) {
+    private func wire(_ session: ThreadSession, activity: ThreadActivity?) {
+        wireActivity(session, carrying: activity)
         session.onRecordChanged = { [weak self] record in
             // The exits a quit causes would clear `processAlive`; `terminateNow` wrote the records it needs already.
             guard let self, !self.isTerminating else { return }
@@ -1161,8 +1163,11 @@ final class AppModel {
         takeExitNotice(id)
         let restoreSelection = selection
         detach(session)
+        // A process that outlived the wait still exits later, and its closing turn would write the file back.
+        session.onActivityChanged = nil
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
-        rememberClosed(ClosedThread(record: session.record, profile: session.profile, selection: restoreSelection))
+        rememberClosed(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
+                                    selection: restoreSelection))
         return true
     }
 
@@ -1196,7 +1201,7 @@ final class AppModel {
         undoTimers[closed.id] = nil
         guard scope(closed.record.scopeID) != nil, session(closed.id) == nil else { return }
         let session = ThreadSession(record: closed.record, profile: closed.profile)
-        register(session)
+        register(session, activity: closed.activity)
         await env.threadRecords.save(closed.record)
         selection = .thread(closed.id)
         selectedThreadID = closed.id
@@ -1235,6 +1240,7 @@ final class AppModel {
         AdapterInstaller.remove(profile: profile, threadID: id, home: env.home)
         problems.dismissAll(thread: id)
         await env.threadRecords.delete(id)
+        await forgetActivity(id)
     }
 
     private func confirmClose(_ session: ThreadSession) async -> Bool {

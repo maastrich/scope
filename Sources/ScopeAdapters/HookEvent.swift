@@ -74,6 +74,13 @@ extension HookEvent {
     /// The agent's last answer, lifted out of stdin only when `raw` had to be truncated and would no longer parse.
     public static let replyKey = "reply"
 
+    /// Payload keys under which `scope-hook` forwards the tool a hook is about (`HookStdin.toolName`) and what that
+    /// call was about (`HookStdin.toolTarget`). On `turn.started` they say the agent just ran that tool.
+    public static let toolKey = "tool"
+    public static let targetKey = "target"
+    /// Payload key under which `scope-hook` forwards the driver's transcript file (`HookStdin.transcriptPath`).
+    public static let transcriptKey = "transcript"
+
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {
         try JSONStore.makeEncoder(fractionalSeconds: true).encode(self)

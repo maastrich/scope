@@ -157,6 +157,12 @@ enum HookCLI {
         if payload[HookEvent.directoryKey] == nil, let directory = stdin.directory {
             payload[HookEvent.directoryKey] = directory
         }
+        // Every value lifted here is bounded (`HookStdin.toolTargetLimit`, a path), so the payload stays small.
+        let lifted = [(HookEvent.toolKey, stdin.toolName), (HookEvent.targetKey, stdin.toolTarget),
+                      (HookEvent.transcriptKey, stdin.transcriptPath)]
+        for case let (key, value?) in lifted where payload[key] == nil && !value.isEmpty {
+            payload[key] = value
+        }
         // A cut `raw` no longer parses, and a long answer is what gets it cut: the answer travels on its own then.
         if rawTruncated, kind == .turnEnded, let reply = stdin.lastAssistantMessage {
             payload[HookEvent.replyKey] = String(reply.prefix(maxRawBytes / 2))

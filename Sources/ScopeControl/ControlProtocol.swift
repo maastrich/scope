@@ -579,10 +579,13 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     /// `orchestrator` or `terminal` for the two threads Scope keeps in every scope, which can be stopped but not
     /// closed; absent for the others. The orchestrator is the agent that drives its scope.
     public var resident: String?
+    /// The latest thing its agent did, and when (`ThreadActivityLine`): `Edit Sources/App.swift · 2m ago`. Absent
+    /// until its driver reports something, and for good without an adapter.
+    public var activity: String?
 
     public init(id: String, title: String, driver: String, scope: String, scopeSlug: String, task: String?,
                 cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
-                resident: String? = nil) {
+                resident: String? = nil, activity: String? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -596,6 +599,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.depth = depth
         self.parent = parent
         self.resident = resident
+        self.activity = activity
     }
 }
 

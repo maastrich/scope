@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAdapters
 import ScopeCore
 import ScopeDrivers
 import ScopeTasks
@@ -60,6 +61,8 @@ enum NewThreadTarget {
 struct ClosedThread: Identifiable {
     let record: ThreadRecord
     let profile: DriverProfile
+    /// Its activity file is deleted with the record; an undo writes this back.
+    let activity: ThreadActivity
     /// Sidebar item selected before the close (informational; the undo selects the thread).
     let selection: SidebarItem?
     var id: ThreadID { record.id }
