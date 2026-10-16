@@ -1536,6 +1536,8 @@ final class AppModel {
         // The user's checkouts come back first, before anything is hung up: no confirmation, no base left on a task.
         await putBackAll(reason: "Scope quit")
         for session in threads where session.isAlive {
+            // A turn in progress is cut short here: the relaunch asks the agent to go on (`InterruptedTurn`).
+            session.markInterruptedTurn()
             await env.threadRecords.save(session.record)
         }
         for session in threads where session.isAlive {

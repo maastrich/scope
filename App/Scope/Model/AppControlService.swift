@@ -700,7 +700,9 @@ final class AppControlService: ControlService {
             state: session.displayState.name, alive: session.isAlive,
             openedBy: origin.client ?? origin.author.rawValue, depth: origin.depth, parent: origin.parent,
             resident: session.record.resident?.rawValue,
-            activity: ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
+            activity: session.resumingAfterRestart
+                ? InterruptedTurn.activityLine
+                : ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
             tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue])
         )
     }

@@ -471,6 +471,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Threads whose process was running when the app went down (quit, update, crash) start again when it opens,
     /// resuming the driver session when they can. On by default; holding ⇧ while the app opens skips it once.
     public var autoRelaunchThreads: Bool
+    /// A relaunched thread whose turn the restart cut short is asked to go on from where its worktree stands
+    /// (`InterruptedTurn`), once its driver is back at its prompt. On by default; ⇧ at launch skips it with the
+    /// relaunch.
+    public var resumeInterruptedTurns: Bool
     /// Driver of the orchestrator every scope keeps at its root (`ResidentRole.orchestrator`). Empty — the default —
     /// means *automatic*: `defaultDriverID` unless that is the shell, else the first agent profile installed. A running
     /// orchestrator keeps its driver until it next starts.
@@ -587,6 +591,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         claudeUsesTerminalPalette: Bool = true,
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
+        resumeInterruptedTurns: Bool = true,
         orchestratorDriverID: String = "",
         driverModels: [String: String] = [:],
         attentionCounter: AttentionCounterPlacement = .sidebar,
@@ -635,6 +640,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.claudeUsesTerminalPalette = claudeUsesTerminalPalette
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
+        self.resumeInterruptedTurns = resumeInterruptedTurns
         self.orchestratorDriverID = orchestratorDriverID
         self.driverModels = driverModels
         self.attentionCounter = attentionCounter
@@ -677,7 +683,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
-             automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
+             automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
              quickPanelHotkey, toggleWindowHotkey, quickPanelLanding
@@ -709,6 +715,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.autoCloseExitedThreads
         autoRelaunchThreads = try container.decodeIfPresent(Bool.self, forKey: .autoRelaunchThreads)
             ?? defaults.autoRelaunchThreads
+        resumeInterruptedTurns = try container.decodeIfPresent(Bool.self, forKey: .resumeInterruptedTurns)
+            ?? defaults.resumeInterruptedTurns
         orchestratorDriverID = (try? container.decodeIfPresent(String.self, forKey: .orchestratorDriverID))
             ?? defaults.orchestratorDriverID
         driverModels = ((try? container.decodeIfPresent([String: String].self, forKey: .driverModels)) ?? nil) ?? defaults.driverModels

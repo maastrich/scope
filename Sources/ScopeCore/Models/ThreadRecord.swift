@@ -62,6 +62,10 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// Set on the two threads Scope keeps in every scope (`ResidentRole`); `nil` for a thread someone opened.
     /// An unknown value — a role a newer build added — decodes as `nil`, so the thread becomes an ordinary one.
     public var resident: ResidentRole?
+    /// When the app went down with this thread's turn in progress (`InterruptedTurn`): stamped while quitting, or
+    /// at the next load when the record still says a process was alive and mid-turn. Cleared once the relaunched
+    /// thread has been asked to go on — or not, for a reason — so one interruption asks once.
+    public var interruptedTurn: Date?
 
     public init(
         id: ThreadID = .generate(),
@@ -98,6 +102,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         processAlive = false
         relaunchesAtStartup = true
         self.resident = resident
+        interruptedTurn = nil
     }
 
     /// The origin to reason about, defaulting to the user for records that predate the field.
@@ -109,7 +114,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, driverID, model, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
-        case processAlive, relaunchesAtStartup, resident
+        case processAlive, relaunchesAtStartup, resident, interruptedTurn
     }
 
     // Lenient decoding: only identity, driver and cwd are required.
@@ -136,5 +141,6 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         processAlive = try container.decodeIfPresent(Bool.self, forKey: .processAlive) ?? (lastState.map(\.isAlive) ?? false)
         relaunchesAtStartup = try container.decodeIfPresent(Bool.self, forKey: .relaunchesAtStartup) ?? true
         resident = (try? container.decodeIfPresent(ResidentRole.self, forKey: .resident)) ?? nil
+        interruptedTurn = try container.decodeIfPresent(Date.self, forKey: .interruptedTurn)
     }
 }

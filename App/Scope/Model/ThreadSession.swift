@@ -83,6 +83,15 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private var layoutFallback: Task<Void, Never>?
     /// Divider printed by the next start instead of "relaunched …" (the auto-relaunch says why it started).
     @ObservationIgnored var nextLaunchNotice: String?
+    /// The relaunched thread is being asked to go on with the turn the restart cut short (`InterruptedTurn`): the
+    /// caption says so until the message is typed or dropped.
+    private(set) var resumingAfterRestart = false
+    /// When the user last submitted a prompt or an interrupt at the terminal of a driver that reports turns
+    /// (`TerminalInputSignal`; raw bytes would count the terminal's own replies to the driver's queries). What
+    /// the restart message yields to: a user already talking to the thread does not want Scope's prompt under theirs.
+    @ObservationIgnored private(set) var lastUserInputAt: Date?
+    /// When the driver last said a session of it started (`sessionStarted`): its prompt is up from there on.
+    @ObservationIgnored private(set) var lastSessionStartedAt: Date?
 
     /// Called on every record change so `AppModel` persists it.
     @ObservationIgnored var onRecordChanged: (@MainActor (ThreadRecord) -> Void)?
@@ -133,6 +142,26 @@ final class ThreadSession: Identifiable {
         guard record.processAlive else { return }
         record.processAlive = false
         onRecordChanged?(record)
+    }
+
+    // MARK: Interrupted turn
+
+    /// The app is going down with this thread's turn in progress: stamped on the record, which the caller writes.
+    func markInterruptedTurn(at date: Date = .now) {
+        record = InterruptedTurn.marking(record, state: isAlive ? adapterState : nil, at: date)
+    }
+
+    /// The interruption was considered (asked about, or not for a reason): a later launch must not ask again.
+    func consumeInterruptedTurn() {
+        guard record.interruptedTurn != nil else { return }
+        record = InterruptedTurn.consumed(record)
+        onRecordChanged?(record)
+    }
+
+    func setResumingAfterRestart(_ resuming: Bool) {
+        guard resuming != resumingAfterRestart else { return }
+        resumingAfterRestart = resuming
+        refreshActivityHeadline()
     }
 
     // MARK: Derived
@@ -335,6 +364,7 @@ final class ThreadSession: Identifiable {
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event, after: activity, promptPending: promptPending)
         if event.kind.changesState, !late { expectingTurnSince = nil }
         if event.kind == .turnStarted, !late { lastTurnStartedAt = event.receivedAt }
+        if event.kind == .sessionStarted { lastSessionStartedAt = event.receivedAt }
         if let reply = AgentReply.from(event) { lastReply = reply }
         setActivity(activity.apply(event, promptPending: promptPending))
         // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
@@ -370,6 +400,10 @@ final class ThreadSession: Identifiable {
 
     private func refreshActivityHeadline() {
         var next = ThreadActivityHeadline.make(activity, state: displayState)
+        // Between the relaunch and the message that asks it to go on, "stopped mid-turn" is not what is happening.
+        if resumingAfterRestart, phase.isAlive, displayState != .running {
+            next = ThreadActivityHeadline(text: InterruptedTurn.headline)
+        }
         // While the turn runs, the assistant's words beat the tool's: "Retrying the same test" says more than
         // "Running swift test", and a stuck verdict is the one thing the caption must show.
         if displayState == .running, let note = assistNote {
@@ -412,6 +446,7 @@ final class ThreadSession: Identifiable {
     /// a prompt submitted to a driver that never reports a turn start moves the state (`TerminalInputSignal`).
     func handleUserInput(_ bytes: ArraySlice<UInt8>) {
         guard phase.isAlive, deliversEvents, let signal = inputTracker.feed(bytes) else { return }
+        if signal != .submit(hadText: false) { lastUserInputAt = .now }
         if signal == .interrupt, adapterState == .running {
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
         }
@@ -445,6 +480,7 @@ final class ThreadSession: Identifiable {
         phase = .exited(status)
         adapterState = nil
         assistNote = nil
+        resumingAfterRestart = false
         setActivity(activity.closingOpenTurn(at: .now))
         record.lastExit = status
         record.lastState = .exited

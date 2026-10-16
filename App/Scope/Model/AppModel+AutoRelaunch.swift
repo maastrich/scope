@@ -25,8 +25,10 @@ extension AppModel {
         for skipped in plan.skipped {
             if let session = session(skipped.id) {
                 session.forgetProcessAlive()
+                session.consumeInterruptedTurn()
             } else if var record = orphans.first(where: { $0.id == skipped.id }) {
                 record.processAlive = false
+                record = InterruptedTurn.consumed(record)
                 await env.threadRecords.save(record)
             }
         }
@@ -42,14 +44,16 @@ extension AppModel {
                 // running, so they come back at the next launch.
                 guard let self, !self.isTerminating else { return }
                 // The user may have relaunched, stopped or closed it in the meantime.
-                guard let session = self.session(id), !session.isAlive else { continue }
-                if case .launching = session.phase { continue }
+                guard let session = self.session(id) else { continue }
+                if session.isAlive { session.consumeInterruptedTurn(); continue }
+                if case .launching = session.phase { session.consumeInterruptedTurn(); continue }
                 let mode = LaunchMode.relaunch(profile: session.profile, resumeID: session.record.resumeID)
                 let time = Date.now.formatted(date: .omitted, time: .standard)
                 session.nextLaunchNotice = mode == .resume
                     ? "Scope reopened · \(session.profile.name) session resumed automatically · \(time)"
                     : "Scope reopened · restarted automatically in \(session.record.cwd) · \(time)"
                 await self.launch(session, mode: mode)
+                self.resumeInterruptedTurn(of: session, resumed: mode == .resume, skippedOnce: skippedOnce)
             }
         }
     }

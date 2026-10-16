@@ -77,6 +77,8 @@ public actor ThreadRecordStore {
                     problems.append(StoreProblem(file: file, message: "record id \(record.id) does not match the file name; not loaded"))
                     continue
                 }
+                // Before the state is normalised: a record still mid-turn here was not written by a quit.
+                record = InterruptedTurn.noting(record, now: .now)
                 record.lastState = record.lastState?.normalizedAfterRestart
                 records.append(record)
             } catch {
