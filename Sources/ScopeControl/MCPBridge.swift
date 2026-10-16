@@ -398,7 +398,8 @@ public enum MCPBridge {
             ],
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
-            "scope_task_topic": taskID.merging(["name": .rename("topic"), "remove": .rename("clear")]) { $1 },
+            // Not `name` for the topic: on a task, the name is the task's own.
+            "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
         ]
     }()
 

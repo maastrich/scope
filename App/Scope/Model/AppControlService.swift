@@ -228,6 +228,13 @@ final class AppControlService: ControlService {
         if params.topic != nil, topic == nil {
             return .failure(.badRequest("the topic is empty", detail: "Name one, or clear the task's topic instead."))
         }
+        // `scope task topic auth-refresh` meant a task and forgot the topic; filing the caller's work under a slug
+        // would scatter it.
+        if params.task == nil, let topic,
+           let named = model.tasks.first(where: { $0.record.slug == topic || $0.record.id.rawValue == topic }) {
+            return .failure(.badRequest("“\(topic)” is a task, not a topic",
+                                        detail: "Give both: `scope task topic \(named.record.slug) \"<topic>\"`, or --clear to take it out."))
+        }
         let slug = task.record.slug
         let changed: [TaskRecord]
         do {
