@@ -50,14 +50,17 @@ struct PullRequestReadAge: View {
     }
 }
 
-/// `idle 4d` or `PR closed` at the end of a forgotten task's row (`TaskDormancy`); nothing otherwise.
+/// `idle 4d` or `PR closed` for a forgotten task (`TaskDormancy`); nothing otherwise. A detailed row puts it first
+/// on its second line, ahead of what the agent last did — that line is days old, and this says so — followed by
+/// ` · ` (`separated`); a compact row, which has no second line, at the end of the row.
 struct TaskDormancyCaption: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
+    var separated = false
 
     var body: some View {
         if let caption = model.dormancy(of: task).caption {
-            Text(caption)
+            Text(separated ? "\(caption) · " : caption)
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)

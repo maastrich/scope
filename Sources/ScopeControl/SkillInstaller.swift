@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 12
+    public static let version = 13
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {

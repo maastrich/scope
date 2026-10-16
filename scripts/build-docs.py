@@ -734,8 +734,8 @@ never archives anything, and a task with a pull request that you restore stays o
 Tasks ▸ Archive a task when its pull request merges</b>. A task with a pull request therefore stays open until the
 merge: agents no longer poll GitHub for it, and only archive themselves work that has no pull request.</p>
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
-pull request was closed without merging, says so at the end of its row — <code>idle 4d</code>, <code>PR closed</code>
-— and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
+pull request was closed without merging, says so in its row — <code>idle 4d</code>, <code>PR closed</code>, ahead of
+what its agent last did, or at the end of a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
 """
 
 GRAPH = """

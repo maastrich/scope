@@ -51,6 +51,7 @@ struct TaskRow: View {
                     .truncationMode(.tail)
                 if detailed {
                     HStack(spacing: 0) {
+                        TaskDormancyCaption(task: task, separated: true)
                         if let parent = linkedParent(threads) {
                             ParentTaskLink(parent: parent)
                             Text(" · ")
@@ -73,8 +74,10 @@ struct TaskRow: View {
 
             Spacer(minLength: 4)
 
-            TaskDormancyCaption(task: task)
-                .opacity(isHovered ? 0 : 1)
+            if !detailed {
+                TaskDormancyCaption(task: task)
+                    .opacity(isHovered ? 0 : 1)
+            }
 
             // Whole or not at all: the name gives way first, and the controls cover the counts outright.
             DeltaCounts(additions: task.totalAdditions, deletions: task.totalDeletions)
