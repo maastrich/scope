@@ -65,6 +65,11 @@ public enum ScopeCLI {
                                           HEAD detached onto the branch (--refresh to follow the branch's new head,
                                           --end to put the checkout back; --scope for a shared slug). Your own
                                           terminal only, never an agent's; Settings › Tasks must allow it
+      scope task checkpoints [<id|slug>]  the task's checkpoints: one snapshot of its sandboxes per turn that
+                                          changed a file (default: the caller's own task; --scope for a shared slug)
+      scope task restore-checkpoint [<id|slug>] <n>
+                                          put checkpoint <n>'s files back into the sandboxes; branch and commits
+                                          stay, the state replaced is checkpointed first (agents: own task only)
       scope task topic [<id|slug>] <topic>
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
@@ -418,6 +423,32 @@ public enum ScopeCLI {
                 guard !(end && refresh) else { throw UsageError(message: "task try takes --end or --refresh, not both", usage: usage) }
                 return .call(.taskTry(TaskTryParams(task: words[0], scope: scope, end: end, refresh: refresh)), shared)
             }
+            if sub == "checkpoints" {
+                var words: [String] = []
+                var scope: String?
+                let shared = try options(&rest, command: "task checkpoints", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                guard words.count <= 1 else { throw UsageError(message: "task checkpoints takes at most one task id or slug", usage: usage) }
+                return .call(.taskCheckpoints(TaskCheckpointsParams(task: words.first, scope: scope)), shared)
+            }
+            if sub == "restore-checkpoint" {
+                var words: [String] = []
+                var scope: String?
+                let shared = try options(&rest, command: "task restore-checkpoint", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                // The last word is the number, the one before it the task; without a task, the caller's own.
+                guard (1...2).contains(words.count), let number = words.last.flatMap({ Int($0) }), number > 0 else {
+                    throw UsageError(message: "task restore-checkpoint takes a checkpoint number, after the task id or slug", usage: usage)
+                }
+                return .call(.taskRestoreCheckpoint(TaskRestoreCheckpointParams(task: words.count == 2 ? words[0] : nil, number: number,
+                                                                                 scope: scope)), shared)
+            }
             if sub == "topic" {
                 var words: [String] = []
                 var clear = false
@@ -445,7 +476,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, show, archive, close, restore, topic", usage: usage)
+                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, checkpoints, restore-checkpoint, topic", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

@@ -60,6 +60,10 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     /// Run a task's branch in the user's own checkout, refresh it there, or put the checkout back (spec §4.5). The
     /// user's own terminal only: an agent is refused whatever the automation settings say.
     case taskTry = "task.try"
+    /// The checkpoints of a task: one snapshot of its sandboxes per turn that changed something.
+    case taskCheckpoints = "task.checkpoints"
+    /// Put a checkpoint's files back into the task's sandboxes; the state replaced is checkpointed first.
+    case taskRestoreCheckpoint = "task.restore-checkpoint"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
@@ -83,9 +87,9 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .configGet, .usage: false
+        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .taskTry, .gc, .configSet, .release: true
+             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release: true
         }
     }
 
@@ -195,6 +199,8 @@ public enum ControlCall: Sendable, Equatable {
     case taskRestore(TaskRestoreParams)
     case taskRebase(TaskRebaseParams)
     case taskTry(TaskTryParams)
+    case taskCheckpoints(TaskCheckpointsParams)
+    case taskRestoreCheckpoint(TaskRestoreCheckpointParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
@@ -220,6 +226,8 @@ public enum ControlCall: Sendable, Equatable {
         case .taskRestore: .taskRestore
         case .taskRebase: .taskRebase
         case .taskTry: .taskTry
+        case .taskCheckpoints: .taskCheckpoints
+        case .taskRestoreCheckpoint: .taskRestoreCheckpoint
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
@@ -240,10 +248,10 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .taskShow, .configGet, .configSet, .usage: .seconds(15)
+        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .gc: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
@@ -481,6 +489,81 @@ public struct TaskTryParams: Codable, Sendable, Equatable {
         self.scope = scope
         self.end = end
         self.refresh = refresh
+    }
+}
+
+/// `scope task checkpoints [<id|slug>]` — the task's checkpoints, oldest first: one snapshot of every sandbox per turn
+/// that changed something, kept under `refs/scope/checkpoints/<task>/<n>`.
+public struct TaskCheckpointsParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
+
+    public init(task: String? = nil, scope: String? = nil) {
+        self.task = task
+        self.scope = scope
+    }
+}
+
+/// `scope task restore-checkpoint [<id|slug>] <n>` — the checkpoint's files written back into every sandbox's
+/// working tree. The branch and its commits stay; what the sandboxes held is checkpointed first, as the undo.
+/// An agent may restore a checkpoint of its own task only.
+public struct TaskRestoreCheckpointParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    /// The checkpoint's number, as `task.checkpoints` lists it.
+    public var number: Int
+    public var scope: String?
+
+    public init(task: String? = nil, number: Int, scope: String? = nil) {
+        self.task = task
+        self.number = number
+        self.scope = scope
+    }
+}
+
+/// `task.checkpoints` — the list, with what each one records.
+public struct TaskCheckpointsResult: Codable, Sendable, Equatable {
+    public struct Entry: Codable, Sendable, Equatable {
+        public var number: Int
+        public var at: Date
+        /// `turn`, or `before_restore` for the undo taken before a restore.
+        public var reason: String
+        public var thread: String?
+        public var threadTitle: String?
+        public var turn: Int?
+        /// The first words of the reply the turn ended on.
+        public var said: String?
+        /// Lines against the previous checkpoint, every sandbox summed.
+        public var additions: Int
+        public var deletions: Int
+        /// The sandboxes the checkpoint covers (repository paths relative to the scope).
+        public var repos: [String]
+
+        public init(number: Int, at: Date, reason: String, thread: String? = nil, threadTitle: String? = nil, turn: Int? = nil,
+                    said: String? = nil, additions: Int = 0, deletions: Int = 0, repos: [String] = []) {
+            self.number = number
+            self.at = at
+            self.reason = reason
+            self.thread = thread
+            self.threadTitle = threadTitle
+            self.turn = turn
+            self.said = said
+            self.additions = additions
+            self.deletions = deletions
+            self.repos = repos
+        }
+    }
+
+    public var task: String
+    public var slug: String
+    public var checkpoints: [Entry]
+
+    public init(task: String, slug: String, checkpoints: [Entry]) {
+        self.task = task
+        self.slug = slug
+        self.checkpoints = checkpoints
     }
 }
 
@@ -1078,6 +1161,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case wait(ThreadWaitResult)
     case summary(SummaryResult)
     case taskShow(TaskShowResult)
+    case taskCheckpoints(TaskCheckpointsResult)
     case usage(UsageResult)
     case release(ReleaseResult)
 
@@ -1092,6 +1176,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .wait: .threadWait
         case .summary: .summary
         case .taskShow: .taskShow
+        case .taskCheckpoints: .taskCheckpoints
         case .usage: .usage
         case .release: .release
         }

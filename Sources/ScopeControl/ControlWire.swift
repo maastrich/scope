@@ -48,6 +48,8 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskRestore(let params): try encoder.encode(wire(params))
         case .taskRebase(let params): try encoder.encode(wire(params))
         case .taskTry(let params): try encoder.encode(wire(params))
+        case .taskCheckpoints(let params): try encoder.encode(wire(params))
+        case .taskRestoreCheckpoint(let params): try encoder.encode(wire(params))
         case .gc(let params): try encoder.encode(wire(params))
         case .threadRead(let params): try encoder.encode(wire(params))
         case .threadWait(let params): try encoder.encode(wire(params))
@@ -100,6 +102,8 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskRestore: .taskRestore(try required(TaskRestoreParams.self))
             case .taskRebase: .taskRebase(try decoder.decode(Params<TaskRebaseParams>.self, from: data).params ?? TaskRebaseParams())
             case .taskTry: .taskTry(try required(TaskTryParams.self))
+            case .taskCheckpoints: .taskCheckpoints(try decoder.decode(Params<TaskCheckpointsParams>.self, from: data).params ?? TaskCheckpointsParams())
+            case .taskRestoreCheckpoint: .taskRestoreCheckpoint(try required(TaskRestoreCheckpointParams.self))
             case .gc: .gc(try decoder.decode(Params<GCParams>.self, from: data).params ?? GCParams())
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             case .threadWait: .threadWait(try required(ThreadWaitParams.self))
@@ -197,6 +201,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .wait(let result): try encoder.encode(wire(result))
         case .summary(let result): try encoder.encode(wire(result))
         case .taskShow(let result): try encoder.encode(wire(result))
+        case .taskCheckpoints(let result): try encoder.encode(wire(result))
         case .usage(let result): try encoder.encode(wire(result))
         case .release(let result): try encoder.encode(wire(result))
         }
@@ -218,13 +223,14 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
-            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry, .gc,
-                 .configGet, .configSet:
+            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
+                 .taskRestoreCheckpoint, .gc, .configGet, .configSet:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)
             case .summary: .summary(try decoder.decode(Wrapped<SummaryResult>.self, from: data).result)
             case .taskShow: .taskShow(try decoder.decode(Wrapped<TaskShowResult>.self, from: data).result)
+            case .taskCheckpoints: .taskCheckpoints(try decoder.decode(Wrapped<TaskCheckpointsResult>.self, from: data).result)
             case .usage: .usage(try decoder.decode(Wrapped<UsageResult>.self, from: data).result)
             case .release: .release(try decoder.decode(Wrapped<ReleaseResult>.self, from: data).result)
             }

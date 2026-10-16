@@ -417,7 +417,7 @@ and the inspector, the height of the window and half the terminal's width by def
 it to go back to half; ✕ or Esc closes it).</p>
 <table>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
-  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>the brief (four lines, <b>Read in full</b> for the rest), where the branch forked, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply</td><td></td></tr>
+  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>the brief (four lines, <b>Read in full</b> for the rest), where the branch forked, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply; a turn that left a checkpoint has a dot under its bar, and the <b>Checkpoints</b> list follows: time, thread, first words, <code>+N −M</code>, with <b>Show diff</b>, <b>Restore files</b> and <b>Branch from here</b> on hover</td><td></td></tr>
   <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
   <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
   <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
@@ -683,6 +683,23 @@ branch deleted on close that git calls unmerged (a squash merge looks like that)
 way. Saved changes no task points to are deleted after 30 days.</p>
 <p>If a step fails, the task stays out of the sidebar, the Problem Center says why with <b>Retry</b>, and the
 next launch finishes the job.</p>
+
+<h3 id="checkpoints">Every turn leaves a checkpoint</h3>
+<p>Each time a turn ends in one of a task's threads and a file changed, Scope snapshots every sandbox of the task —
+tracked and untracked files, ignored ones aside, the same private-index commit as the saved changes above — under
+<code>refs/scope/checkpoints/&lt;task&gt;/&lt;n&gt;</code> in the repository. The branch does not move, the sandbox's
+index is not touched, and a turn that changed nothing leaves nothing. Turns ending seconds apart share one
+checkpoint. Fifty are kept on an open task, five with an archived one, none after a close.</p>
+<p>In the Task section, a turn that left a checkpoint has a dot under its bar in the timeline, and the
+<b>Checkpoints</b> list under it says when, which thread and turn, the first words of the reply and
+<code>+N −M</code> against the checkpoint before. Hover one for three actions, none of which asks:
+<b>Show diff</b> opens the checkpoint against the sandbox as it is now in the reading column; <b>Restore files</b>
+writes the checkpoint's files back into every sandbox (files it had restored, files that appeared since removed) —
+never a branch reset, never a commit touched — after taking a checkpoint of the files as they are, which the notice
+names as the undo; <b>Branch from here</b> creates <code>&lt;branch&gt;-cp&lt;n&gt;</code> at the checkpoint's commit
+without checking it out. <code>scope task checkpoints &lt;task&gt;</code> lists them and
+<code>scope task restore-checkpoint &lt;task&gt; &lt;n&gt;</code> restores one; an agent may restore within its own
+task only.</p>
 
 <h2 id="cleanup">Automatic cleanup</h2>
 <p>Scope tidies up after tasks on its own: when it opens, every 30 minutes, and after each archive or close. It
@@ -1042,6 +1059,9 @@ scope task archive &lt;id|slug&gt;        <span class="c"># put it away: process
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
+scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: one snapshot of the sandboxes per turn that changed a file</span>
+scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
+                                    <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
@@ -1160,7 +1180,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_checkpoints</code>,
+<code>scope_task_restore_checkpoint</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
 <code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same

@@ -300,6 +300,42 @@ public enum MCPBridge {
             readOnly: false
         ),
         MCPTool(
+            name: "scope_task_checkpoints",
+            title: "List a task's checkpoints",
+            description: """
+            The checkpoints of a task, oldest first: each time a turn ended in one of its threads and changed a file, \
+            Scope snapshotted every sandbox of the task (tracked and untracked files, ignored excluded) under \
+            refs/scope/checkpoints/<task>/<n>, without moving the branch. Each entry says when, which thread and turn, \
+            the first words of the reply, and +N -M against the checkpoint before. Read-only. Without a task, the \
+            task you run in. Restore one with scope_task_restore_checkpoint.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
+            name: "scope_task_restore_checkpoint",
+            title: "Put a checkpoint's files back",
+            description: """
+            Writes a checkpoint's files back into every sandbox of the task: files it had are restored, files that \
+            appeared since are removed. The branch, its commits and the index stay as they are. The sandboxes as they \
+            were are checkpointed first, so the restore can itself be undone (the answer names that checkpoint). You may \
+            restore a checkpoint of the task you run in only. Without a task, the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "number":{"type":"integer","description":"The checkpoint's number, as scope_task_checkpoints lists it."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"required":["number"],"additionalProperties":false}
+            """,
+            readOnly: false, destructive: true
+        ),
+        MCPTool(
             name: "scope_task_rebase",
             title: "Bring a task up to date with main",
             description: """
@@ -445,6 +481,10 @@ public enum MCPBridge {
                 return .success(.taskRestore(try decoder.decode(TaskRestoreParams.self, from: arguments)))
             case "scope_task_rebase":
                 return .success(.taskRebase(try decoder.decode(TaskRebaseParams.self, from: arguments)))
+            case "scope_task_checkpoints":
+                return .success(.taskCheckpoints(try decoder.decode(TaskCheckpointsParams.self, from: arguments)))
+            case "scope_task_restore_checkpoint":
+                return .success(.taskRestoreCheckpoint(try decoder.decode(TaskRestoreCheckpointParams.self, from: arguments)))
             case "scope_task_topic":
                 return try decoder.decode(TaskTopicArguments.self, from: arguments).call.map(ControlCall.taskTopic)
             case "scope_gc":
@@ -484,6 +524,7 @@ public enum MCPBridge {
         case .wait(let result): try encoder.encode(result)
         case .summary(let result): try encoder.encode(result)
         case .taskShow(let result): try encoder.encode(result)
+        case .taskCheckpoints(let result): try encoder.encode(result)
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
         }
@@ -531,6 +572,8 @@ public enum MCPBridge {
             "scope_task_restore": taskID,
             "scope_task_rebase": taskID,
             "scope_release": ["tag": .rename("version"), "repository": .rename("repo"), "preview": .rename("dry_run")],
+            "scope_task_checkpoints": taskID,
+            "scope_task_restore_checkpoint": taskID.merging(["n": .rename("number"), "checkpoint": .rename("number")]) { $1 },
             // Not `name` for the topic: on a task, the name is the task's own.
             "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
         ]

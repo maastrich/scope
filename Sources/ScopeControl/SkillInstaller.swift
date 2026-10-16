@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 19
+    public static let version = 20
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -211,6 +211,8 @@ public struct SkillInstaller: Sendable {
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
         | `scope task restore <slug> [--scope S]` | `scope_task_restore` `{task, scope}` |
         | `scope task rebase [<slug>] [--scope S]` | `scope_task_rebase` `{task, scope}` |
+        | `scope task checkpoints [<slug>] [--scope S]` | `scope_task_checkpoints` `{task, scope}` |
+        | `scope task restore-checkpoint [<slug>] <n> [--scope S]` | `scope_task_restore_checkpoint` `{task, number, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope release [X.Y.Z] [--repo R] [--scope S] [--dry-run] [--force]` | `scope_release` `{version, repo, scope, dry_run, force}` |
@@ -392,6 +394,17 @@ public struct SkillInstaller: Sendable {
         base is stashed and detached onto the branch, and put back afterwards. That is the user's move and only
         theirs: the call is refused to agents whatever the automation settings say, so do not try it, and keep working
         in the sandbox — the base is a mirror the user runs, never a place to edit.
+
+        Every turn leaves a checkpoint. When a turn ends in a task's thread and a file changed, Scope snapshots every
+        sandbox of the task — tracked and untracked files, ignored ones excluded — under
+        `refs/scope/checkpoints/<task>/<n>`, without moving the branch or touching the index. `scope task checkpoints
+        [<slug>]` (`scope_task_checkpoints`) lists them: when, which thread and turn, the first words of the reply,
+        `+N -M` against the one before. `scope task restore-checkpoint [<slug>] <n>` (`scope_task_restore_checkpoint`)
+        writes a checkpoint's files back into the sandboxes — files it had restored, files that appeared since removed —
+        and checkpoints the state it replaces first, so the answer names the undo. Commits are never rewritten: to
+        go back before a commit, restore the checkpoint and commit again, or let the user *Branch from here*. You may
+        restore a checkpoint of the task you run in only; the user may restore any. Fifty are kept on an open task, five
+        with an archived one.
 
         ## Cutting a release
 

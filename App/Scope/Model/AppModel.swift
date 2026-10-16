@@ -210,6 +210,9 @@ final class AppModel {
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
     /// The 30-minute garbage collection loop (`startGarbageCollection`).
     @ObservationIgnored var garbageCollector: Task<Void, Never>?
+    /// The checkpoint waiting to be taken for a task, after a turn ended (`AppModel+Checkpoints`); a turn ending in
+    /// the meantime replaces it.
+    @ObservationIgnored var checkpointJobs: [TaskID: Task<Void, Never>] = [:]
     /// The background pull request refresh (`startPullRequestRefresh`) and when each task is next due.
     @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
     /// The loop behind `AppModel+Ports`.
@@ -1468,7 +1471,10 @@ final class AppModel {
     func handle(_ event: AdapterEvent) {
         guard let session = session(event.threadID), session.isAlive else { return }
         // A late event changed nothing: no "needs your permission" for a thread whose turn is over.
-        if session.apply(event) { assistThenNotify(event, session: session) }
+        if session.apply(event) {
+            assistThenNotify(event, session: session)
+            if event.kind == .turnEnded || event.kind == .turnFailed { scheduleCheckpoint(after: session) }
+        }
         flushDeliveries(for: session)
         acknowledgeShownResult()
     }

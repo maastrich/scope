@@ -194,6 +194,10 @@ final class AppControlService: ControlService {
             return await tryInCheckout(params, from: origin, caller: caller)
         case .release(let params):
             return await release(params, from: origin, caller: caller, progress: progress)
+        case .taskCheckpoints(let params):
+            return await checkpoints(params, from: origin, caller: caller)
+        case .taskRestoreCheckpoint(let params):
+            return await restoreCheckpoint(params, from: origin, caller: caller)
         case .gc(let params):
             guard let report = await model.collectGarbage(dryRun: params.dryRun, force: true) else {
                 return .failure(.failed("the cleanup did not run"))
@@ -455,6 +459,63 @@ final class AppControlService: ControlService {
         if scope.repos.count == 1 { return .success(scope.repos[0]) }
         return .failure(.badRequest("which repository?",
                                     detail: "Name one with --repo:\n" + scope.repos.map { "  \($0.isEmpty ? "." : $0)" }.joined(separator: "\n")))
+    }
+
+    /// The task `query` names, or — without one — the task the caller's thread runs in.
+    private func resolveTaskOrOwn(_ query: String?, scope: String?, from origin: ControlOrigin, caller: ControlCaller,
+                                  verb: String) -> Result<TaskState, ControlError> {
+        let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
+        if let query { return resolveTask(query, scope: scope, callerScopeID: callerScopeID, callerCwd: caller.cwd) }
+        guard case .thread(let id, _) = origin, let own = model.session(id).flatMap(model.task(of:)) else {
+            return .failure(.badRequest("say which task to \(verb)", detail: "`scope list tasks` shows them; from a task's thread the task may be omitted."))
+        }
+        return .success(own)
+    }
+
+    /// `task.checkpoints`: the list, as the Task section shows it.
+    private func checkpoints(_ params: TaskCheckpointsParams, from origin: ControlOrigin,
+                             caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "list the checkpoints of") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let entries = await model.env.tasks.checkpoints.list(task.id).map { checkpoint in
+            TaskCheckpointsResult.Entry(
+                number: checkpoint.number, at: checkpoint.at, reason: checkpoint.reason == .turn ? "turn" : "before_restore",
+                thread: checkpoint.threadID, threadTitle: checkpoint.threadTitle, turn: checkpoint.turn, said: checkpoint.said,
+                additions: checkpoint.additions, deletions: checkpoint.deletions, repos: checkpoint.repos.map(\.repoRelativePath)
+            )
+        }
+        return .success(.taskCheckpoints(TaskCheckpointsResult(task: task.record.id.rawValue, slug: task.record.slug, checkpoints: entries)))
+    }
+
+    /// `task.restore-checkpoint`: the Restore files of the Task section (`AppModel.restoreCheckpoint`). An agent may
+    /// restore within its own task only; the user anywhere.
+    private func restoreCheckpoint(_ params: TaskRestoreCheckpointParams, from origin: ControlOrigin,
+                                   caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "restore a checkpoint of") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        guard !task.isArchived else {
+            return .failure(.badRequest("\(slug) is archived", detail: "Restore it first: `scope task restore \(slug)`."))
+        }
+        if let refusal = AutomationPolicy.mayRestoreCheckpoint(of: slug, taskThreads: model.threads(in: task.id).map(\.id), from: origin) {
+            return .failure(refusal)
+        }
+        do {
+            let result = try await model.restoreCheckpoint(params.number, of: task)
+            var lines = ["restored checkpoint \(params.number) of \(slug): every sandbox has its files; branch, commits and index untouched"]
+            if let undo = result.undo {
+                lines.append("the files as they were are checkpoint \(undo.number): `scope task restore-checkpoint \(slug) \(undo.number)` undoes this")
+            }
+            return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskRestoreCheckpoint))
+        } catch {
+            return .failure(.failed("could not restore checkpoint \(params.number) of \(slug)", detail: String(describing: error)))
+        }
     }
 
     /// Archive and close: the task named by id or slug, the outcome said in a few lines.
