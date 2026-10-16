@@ -51,8 +51,8 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "BY", "TOKENS", "ACTIVITY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", openedBy($0), $0.tokens ?? "", $0.activity ?? ""]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "STATE", "SCOPE", "TASK", "TOKENS", "BY", "ACTIVITY"], result.threads.map {
+                    [$0.id, $0.title, $0.driver, $0.state, $0.scopeSlug, $0.task ?? "", $0.tokens ?? "", openedBy($0), $0.activity ?? ""]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
