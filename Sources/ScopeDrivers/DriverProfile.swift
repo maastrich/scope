@@ -70,6 +70,11 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     /// driver's light model, with a read-only tool allowlist so it can look a mentioned pull request up.
     /// Falls back to `headless` when absent; may use placeholders.
     public var headlessLight: [String]?
+    /// Full argv for an *assist* call: one classification over untrusted terminal text, answered by the driver's
+    /// light model with **no tools at all** (`--tools ""`), since the text it reads was written by programs and
+    /// people nobody controls. Never falls back to `headlessLight`, which may run `gh` and `git`; absent, the
+    /// driver cannot assist. May use placeholders.
+    public var headlessAssist: [String]?
     /// Arguments appended to `args` when a thread starts with an initial prompt (a task created from a
     /// prompt): `["{prompt}"]` for tools that take the prompt as a positional argument. Nil → the prompt
     /// is not passed on the command line.
@@ -109,6 +114,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         resume: [String]? = nil,
         headless: [String]? = nil,
         headlessLight: [String]? = nil,
+        headlessAssist: [String]? = nil,
         prompt: [String]? = nil,
         addDir: [String]? = nil,
         modelArgs: [String]? = nil,
@@ -128,6 +134,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         self.resume = resume
         self.headless = headless
         self.headlessLight = headlessLight
+        self.headlessAssist = headlessAssist
         self.prompt = prompt
         self.addDir = addDir
         self.modelArgs = modelArgs
@@ -152,6 +159,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         resume = try container.decodeIfPresent([String].self, forKey: .resume)
         headless = try container.decodeIfPresent([String].self, forKey: .headless)
         headlessLight = try container.decodeIfPresent([String].self, forKey: .headlessLight)
+        headlessAssist = try container.decodeIfPresent([String].self, forKey: .headlessAssist)
         prompt = try container.decodeIfPresent([String].self, forKey: .prompt)
         addDir = try container.decodeIfPresent([String].self, forKey: .addDir)
         modelArgs = try container.decodeIfPresent([String].self, forKey: .modelArgs)
@@ -195,7 +203,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// Checks the id, the command and every `{placeholder}` used in `args`, `resume`, `headless`,
-    /// `headlessLight`, `prompt`, `addDir`, `modelArgs` and `env`.
+    /// `headlessLight`, `headlessAssist`, `prompt`, `addDir`, `modelArgs` and `env`.
     public func validate() throws(DriverProfileError) {
         guard Self.isValidID(id) else { throw .invalidID(id) }
         guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -206,6 +214,7 @@ public struct DriverProfile: Codable, Sendable, Equatable, Identifiable {
         try Self.checkPlaceholders(in: resume ?? [], field: "resume")
         try Self.checkPlaceholders(in: headless ?? [], field: "headless")
         try Self.checkPlaceholders(in: headlessLight ?? [], field: "headlessLight")
+        try Self.checkPlaceholders(in: headlessAssist ?? [], field: "headlessAssist")
         try Self.checkPlaceholders(in: prompt ?? [], field: "prompt")
         try Self.checkPlaceholders(in: addDir ?? [], field: "addDir")
         try Self.checkPlaceholders(in: modelArgs ?? [], field: "modelArgs")

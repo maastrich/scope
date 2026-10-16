@@ -39,6 +39,21 @@
     "--allowedTools",
     "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),Bash(git branch:*),Bash(git log:*)"
   ],
+  "headlessAssist": [
+    "claude",
+    "-p",
+    "{prompt}",
+    "--output-format",
+    "json",
+    "--model",
+    "haiku",
+    "--tools",
+    "",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--no-session-persistence"
+  ],
   "prompt": [
     "{prompt}"
   ],
@@ -61,5 +76,5 @@
   },
   "icon": "asterisk",
   "builtin": true,
-  "version": 7
+  "version": 8
 }
