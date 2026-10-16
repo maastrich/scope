@@ -206,8 +206,9 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
                 return .allow
-            case .taskClose, .taskArchive:
-                // Undoing a task removes worktrees and can delete a branch: the same approval as creating one.
+            case .taskClose, .taskArchive, .taskRebase:
+                // Undoing a task removes worktrees and can delete a branch; a rebase rewrites one and may open a
+                // thread: the same approval as creating a task.
                 approval = settings.tasks
             case .taskRestore:
                 // A task opened again, sandboxes and all: the budget and the approval of a new one. No depth to
@@ -300,6 +301,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             "close the task “\(params.task)”" + (params.deleteBranch ? " and delete its branch" : "")
         case .taskArchive(let params): "archive the task “\(params.task)”"
         case .taskRestore(let params): "restore the archived task “\(params.task)”"
+        case .taskRebase(let params): "rebase " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " on main"
         case .taskTopic(let params):
             "file " + (params.task.map { "the task “\($0)”" } ?? "its own task") + " "
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")

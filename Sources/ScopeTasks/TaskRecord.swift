@@ -188,6 +188,12 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// The file the task's work ends in, relative to the task root or a sandbox (`docs/study.md`): kept with the
     /// threads' last answers when the task is archived or closed (`TaskDeliverable`). `REPORT.md` is looked for anyway.
     public var deliverable: String?
+    /// The user asked that the branch be left alone when main moves ("Don't rebase automatically"): Scope neither
+    /// rebases it nor asks the agent to (`FollowMain`). Measuring and showing the lag goes on.
+    public var holdBranch: Bool = false
+    /// The head of the default branch Scope last acted on for this task — asked the agent, or rebased — so one move
+    /// of main gets one action, whatever the refreshes in between (`FollowMain.decide`).
+    public var followedMainHead: String?
 
     public init(
         id: TaskID = .generate(),
@@ -360,6 +366,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
         case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable
+        case holdBranch, followedMainHead
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
@@ -389,5 +396,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         origin = (try? container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)) ?? nil
         keptOpenAfterMerge = (try? container.decodeIfPresent(Bool.self, forKey: .keptOpenAfterMerge)) ?? false
         deliverable = (try? container.decodeIfPresent(String.self, forKey: .deliverable)) ?? nil
+        holdBranch = (try? container.decodeIfPresent(Bool.self, forKey: .holdBranch)) ?? false
+        followedMainHead = (try? container.decodeIfPresent(String.self, forKey: .followedMainHead)) ?? nil
     }
 }

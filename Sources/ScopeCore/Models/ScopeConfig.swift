@@ -59,6 +59,31 @@ public enum ChromeTheme: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// What Scope does when the default branch moves under an open task (spec §4.3, "a task follows main").
+public enum FollowMainMode: String, Codable, Sendable, CaseIterable {
+    /// The task's thread is told that main moved and asked to rebase — once per head of main — when the branch
+    /// conflicts with it, or its pull request turned CONFLICTING. A clean lag is left to the agent.
+    case askAgent
+    /// Behind without conflicts and no thread at work: Scope rebases the sandbox itself and pushes with lease
+    /// when the branch is published and its pull request open. A rebase that stops is aborted and the agent asked.
+    case rebaseWhenClean
+    /// Scope only measures and shows the lag.
+    case never
+
+    public var title: String {
+        switch self {
+        case .askAgent: "Ask the agent"
+        case .rebaseWhenClean: "Rebase when clean"
+        case .never: "Never"
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = FollowMainMode(rawValue: raw) ?? .askAgent
+    }
+}
+
 /// How much a sidebar row says.
 public enum SidebarRows: String, Codable, Sendable, CaseIterable {
     /// Two lines: the name, then what the task or thread is doing, in words.
@@ -291,6 +316,9 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     /// The model threads of this scope open on when nothing names one, ahead of the driver's default in Settings
     /// (`ModelChoice`); `nil` defers to that.
     public var model: String?
+    /// What happens to this scope's tasks when their default branch moves, when it differs from the preference
+    /// (`Preferences.followMain`). Edited by hand in `config.json`; `nil` follows the preference.
+    public var followMain: FollowMainMode?
 
     /// Allowed discovery depths.
     public static let depthRange = 0...4
@@ -309,8 +337,10 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         logo: String? = nil,
         logoDark: String? = nil,
         context: String? = nil,
-        model: String? = nil
+        model: String? = nil,
+        followMain: FollowMainMode? = nil
     ) {
+        self.followMain = followMain
         self.repoCommands = repoCommands
         self.icon = icon
         self.tint = tint
@@ -350,7 +380,8 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context, model
+        case id, path, name, slug, discoveryDepth, sandboxes, addedAt, repoCommands, icon, tint, logo, logoDark, context, model,
+             followMain
     }
 
     // Lenient decoding: hand-edited files may omit the optional fields.
@@ -371,6 +402,7 @@ public struct ScopeDeclaration: Codable, Sendable, Hashable, Identifiable {
         logoDark = try? container.decodeIfPresent(String.self, forKey: .logoDark)
         context = try? container.decodeIfPresent(String.self, forKey: .context)
         model = ((try? container.decodeIfPresent(String.self, forKey: .model)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
+        followMain = try? container.decodeIfPresent(FollowMainMode.self, forKey: .followMain)
     }
 
     /// The override for a repository, looked up whatever spelling the config used for its path.
@@ -467,6 +499,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var archiveMergedTasks: Bool
     /// Days without thread activity after which an open task is called idle (`TaskDormancy`); 0 never. 3 by default.
     public var dormantAfterDays: Int
+    /// What happens to an open task when the default branch moves under it (`FollowMainMode`). A scope's
+    /// declaration may override it (`ScopeDeclaration.followMain`). Ask the agent, by default.
+    public var followMain: FollowMainMode
 
     /// The token meter in the toolbar: what Claude Code threads consumed over five hours and seven days. On by default.
     public var showTokenMeter: Bool
@@ -526,6 +561,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         recordUsage: Bool = true,
         archiveMergedTasks: Bool = true,
         dormantAfterDays: Int = 3,
+        followMain: FollowMainMode = .askAgent,
         showTokenMeter: Bool = true,
         tokenBudgetPer5h: Int = 0,
         showAPICost: Bool = false,
@@ -564,6 +600,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.recordUsage = recordUsage
         self.archiveMergedTasks = archiveMergedTasks
         self.dormantAfterDays = max(0, dormantAfterDays)
+        self.followMain = followMain
         self.showTokenMeter = showTokenMeter
         self.tokenBudgetPer5h = max(0, tokenBudgetPer5h)
         self.showAPICost = showAPICost
@@ -579,7 +616,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
              automation, autoRelaunchThreads, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
-             showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
+             followMain, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes
     }
 
     public init(from decoder: any Decoder) throws {
@@ -633,6 +670,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         recordUsage = (try? container.decodeIfPresent(Bool.self, forKey: .recordUsage)) ?? defaults.recordUsage
         archiveMergedTasks = (try? container.decodeIfPresent(Bool.self, forKey: .archiveMergedTasks)) ?? defaults.archiveMergedTasks
         dormantAfterDays = max(0, (try? container.decodeIfPresent(Int.self, forKey: .dormantAfterDays)) ?? defaults.dormantAfterDays)
+        followMain = (try? container.decodeIfPresent(FollowMainMode.self, forKey: .followMain)) ?? defaults.followMain
         showTokenMeter = (try? container.decodeIfPresent(Bool.self, forKey: .showTokenMeter)) ?? defaults.showTokenMeter
         tokenBudgetPer5h = max(0, (try? container.decodeIfPresent(Int.self, forKey: .tokenBudgetPer5h)) ?? defaults.tokenBudgetPer5h)
         showAPICost = (try? container.decodeIfPresent(Bool.self, forKey: .showAPICost)) ?? defaults.showAPICost

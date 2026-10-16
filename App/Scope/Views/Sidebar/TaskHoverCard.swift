@@ -57,6 +57,13 @@ struct TaskHoverCard: View {
                     }
                 }
             }
+            if let lag = model.lag(of: task), let caption = lag.caption, lag.isBehind || task.record.holdBranch {
+                row("main") {
+                    Text(caption + (task.record.holdBranch ? " · held" : ""))
+                        .font(.scopeCaption)
+                        .foregroundStyle(lag.hasConflicts ? PullRequestStyle.failing : Ink.secondary)
+                }
+            }
             if let setup = setupCaption {
                 row("Setup") {
                     Text(setup)

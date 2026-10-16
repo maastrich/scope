@@ -174,6 +174,19 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                SettingsRow("When main moves") {
+                    ScopePicker("When main moves", selection: preference(\.followMain),
+                                title: model.config.preferences.followMain.title) {
+                        ForEach(FollowMainMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .usageID("follow-main", label: "When main moves")
+                }
+                Text("Every open task's branch is fetched and measured against the default branch with its pull request, and the lag shown in its Pull Request section and hover card. Ask the agent: when the branch conflicts with main, or GitHub says the pull request does, the task's thread is told what moved and asked to rebase, once per move of main. Rebase when clean: a branch behind without conflicts, with no thread at work, is rebased by Scope in its sandbox and pushed with lease when its pull request is open; one that conflicts is left as it was and the agent asked. Never: the lag is only shown. A task's context menu can hold its branch out of all of this. A scope may override the choice in config.json (followMain).")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 SettingsRow("Idle after") {
                     ScopePicker("Idle after", selection: preference(\.dormantAfterDays),
                                 title: Self.idleTitle(model.config.preferences.dormantAfterDays)) {

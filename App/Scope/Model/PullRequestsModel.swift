@@ -39,6 +39,18 @@ final class PullRequestsModel {
     private(set) var taskPullRequestCheckedAt: [TaskID: Date] = [:]
     /// Tasks whose pull request is being merged (the button shows a spinner).
     private(set) var merging: Set<TaskID> = []
+    /// Where each task's branch stands against the default branch, as the last background pass measured it.
+    private(set) var taskLags: [TaskID: TaskLag] = [:]
+    /// Tasks Scope is measuring, rebasing or messaging about main right now: one pass at a time per task.
+    private(set) var followingMain: Set<TaskID> = []
+
+    func setTaskLag(_ lag: TaskLag?, for task: TaskID) {
+        taskLags[task] = lag
+    }
+
+    func setFollowingMain(_ task: TaskID, _ on: Bool) {
+        if on { followingMain.insert(task) } else { followingMain.remove(task) }
+    }
 
     func setTaskPullRequest(_ pr: PullRequest, for task: TaskID) {
         taskPullRequests[task] = pr

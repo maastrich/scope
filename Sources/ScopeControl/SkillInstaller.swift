@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 15
+    public static let version = 16
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -210,6 +210,7 @@ public struct SkillInstaller: Sendable {
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
         | `scope task restore <slug> [--scope S]` | `scope_task_restore` `{task, scope}` |
+        | `scope task rebase [<slug>] [--scope S]` | `scope_task_rebase` `{task, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
@@ -358,6 +359,17 @@ public struct SkillInstaller: Sendable {
         puts back the uncommitted changes saved at archive; then open a thread in it (`scope thread new --task`).
         `scope list tasks` marks archived tasks `(archived)`. Restoring one needs a free slot of the task budget, and
         one you created holds it again until you archive it.
+
+        A task follows main on its own. Scope fetches and measures each open task's branch against `origin/<default>`
+        in the background — `scope list tasks` shows it in MAIN: `behind 4`, `behind 4, 2 conflicts`, `held` — and, per
+        the user's preference (Settings › Tasks › When main moves, default *Ask the agent*), either tells the task's
+        thread that main moved and asks it to rebase (once per head of main; the message says which pull requests
+        merged and where the conflicts are), rebases the sandbox itself when the lag is clean and pushes with lease,
+        or only shows the lag. So do not keep rebasing a task on your own schedule: if you are that thread and Scope
+        asks you to rebase, do it — rebase on `origin/<default>`, keep both sides, re-run the suites you touched one
+        at a time, push with `--force-with-lease`, reply when mergeable. `scope task rebase <slug>`
+        (`scope_task_rebase`) does it on demand for any task: the clean rebase, or the message to its thread. A task
+        the user marked *Don't rebase automatically* is left alone, and the call says so.
 
         ## What you may do
 

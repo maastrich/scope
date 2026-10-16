@@ -55,6 +55,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskTopic = "task.topic"
     /// Bring an archived task back: its sandboxes rebuilt on its branches, the uncommitted work saved at archive put back.
     case taskRestore = "task.restore"
+    /// Bring a task up to date with main now: rebase its sandbox when clean, ask its thread when it conflicts.
+    case taskRebase = "task.rebase"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
@@ -76,8 +78,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     public var isMutating: Bool {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .configGet, .usage: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc,
-             .configSet: true
+        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
+             .taskRebase, .gc, .configSet: true
         }
     }
 
@@ -185,6 +187,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskArchive(TaskArchiveParams)
     case taskTopic(TaskTopicParams)
     case taskRestore(TaskRestoreParams)
+    case taskRebase(TaskRebaseParams)
     case gc(GCParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
@@ -207,6 +210,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskArchive: .taskArchive
         case .taskTopic: .taskTopic
         case .taskRestore: .taskRestore
+        case .taskRebase: .taskRebase
         case .gc: .gc
         case .threadRead: .threadRead
         case .threadWait: .threadWait
@@ -229,7 +233,7 @@ public enum ControlCall: Sendable, Equatable {
         case .list, .threadRead, .summary, .taskShow, .configGet, .configSet, .usage: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .gc: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .gc: .seconds(300)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -390,6 +394,21 @@ public struct TaskRestoreParams: Codable, Sendable, Equatable {
     public var scope: String?
 
     public init(task: String, scope: String? = nil) {
+        self.task = task
+        self.scope = scope
+    }
+}
+
+/// `scope task rebase <id|slug>` — the task brought up to date with its default branch now: behind without conflicts,
+/// Scope rebases the sandbox and pushes with lease; conflicting, its thread is asked to rebase. A held branch
+/// ("Don't rebase automatically") is refused.
+public struct TaskRebaseParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
+
+    public init(task: String? = nil, scope: String? = nil) {
         self.task = task
         self.scope = scope
     }
@@ -688,10 +707,19 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var parentTask: String?
     /// When it was archived; `nil` for a live task. An archived task has no sandbox until `task.restore` brings it back.
     public var archivedAt: Date?
+    /// Commits the default branch has that the task's branch does not, the last time Scope measured; `nil` not measured.
+    public var behind: Int?
+    /// Files a rebase on the default branch would leave in conflict; `nil` not measured.
+    public var conflicts: Int?
+    /// "Don't rebase automatically" is set on the task.
+    public var holdBranch: Bool?
 
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
                 root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil,
-                archivedAt: Date? = nil) {
+                archivedAt: Date? = nil, behind: Int? = nil, conflicts: Int? = nil, holdBranch: Bool? = nil) {
+        self.behind = behind
+        self.conflicts = conflicts
+        self.holdBranch = holdBranch
         self.id = id
         self.name = name
         self.slug = slug

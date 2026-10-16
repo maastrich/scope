@@ -780,6 +780,30 @@ with <b>Restore</b>. A running thread postpones it to the next refresh. A pull r
 never archives anything, and a task with a pull request that you restore stays open. Turn it off in <b>Settings ▸ General ▸
 Tasks ▸ Archive a task when its pull request merges</b>. A task with a pull request therefore stays open until the
 merge: agents no longer poll GitHub for it, and only archive themselves work that has no pull request.</p>
+<h3 id="follow-main">A task follows main</h3>
+<p>Thirteen tasks on one repository, and every pull request rebased by hand once a sibling merged: that is what this
+replaces. After each background refresh Scope fetches the task's sandbox and measures its branch against
+<code>origin/&lt;default&gt;</code> — how many commits behind, and whether bringing main in would conflict, with a dry
+merge (<code>git merge-tree --write-tree</code>) that touches nothing. The Pull Request section and the task's hover
+card say <i>behind main by 4 · conflicts in 2 files</i>; <code>scope list tasks</code> has a MAIN column. Then,
+per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
+<ul>
+  <li><b>Ask the agent</b> (default): when the branch conflicts with main, or GitHub reports the pull request as
+  conflicting, the task's thread — the first live Claude Code or Codex thread, or a new one when none runs — is
+  told what moved (<i>main moved (4 commits, merged: #12, #15)</i>, the conflicting files) and asked to rebase on
+  <code>origin/main</code>, keep both sides, regenerate, re-run the suites it touched one at a time, rebuild, push
+  with lease and reply when mergeable. Once per move of main: no repeat until main moves again. A branch behind
+  without conflicts is left to the agent, which rebases when it pushes.</li>
+  <li><b>Rebase when clean</b>: behind without conflicts and no thread at work in the task, Scope runs
+  <code>git rebase origin/&lt;default&gt;</code> in the sandbox itself and pushes with
+  <code>--force-with-lease</code> when the branch is published and its pull request open. A rebase that stops is
+  aborted, the branch left exactly where it was, and the agent asked instead. The base checkout is never touched.</li>
+  <li><b>Never</b>: the lag is measured and shown, nothing more.</li>
+</ul>
+<p>A task's context menu holds its branch out of all of this — <b>Don't Rebase Automatically</b> — and offers
+<b>Rebase on Main Now</b>, the same as <code>scope task rebase &lt;task&gt;</code> (<code>scope_task_rebase</code>):
+the clean rebase, or the message to the thread, on demand. A scope may set its own choice in <code>config.json</code>
+(<code>followMain</code> on the scope's declaration).</p>
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
 pull request was closed without merging, says so in its row — <code>idle 4d</code>, <code>PR closed</code>, ahead of
 what its agent last did, or at the end of a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
@@ -934,6 +958,7 @@ scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what 
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
+scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
@@ -1046,7 +1071,7 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_gc</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_gc</code>, <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
 <code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same

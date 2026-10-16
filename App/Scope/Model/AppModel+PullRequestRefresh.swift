@@ -58,6 +58,9 @@ extension AppModel {
             pullRequestSchedule.failed(task.id)
         }
         await archiveIfMerged(task)
+        // Independently of GitHub: fetch, measure the branch against main, and act on it (`AppModel+FollowMain`).
+        guard !task.isArchived else { return }
+        await followMain(task)
     }
 
     /// A task bound to a pull request, or whose branch carries commits a pull request could be made of. One with

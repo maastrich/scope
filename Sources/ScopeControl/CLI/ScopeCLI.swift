@@ -56,6 +56,9 @@ public enum ScopeCLI {
       scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
       scope task restore <id|slug>        bring an archived task back: worktrees rebuilt on its branches, the
                                           uncommitted work saved at archive put back (--scope for a shared slug)
+      scope task rebase [<id|slug>]        bring a task up to date with main now: behind and clean, Scope rebases
+                                          the sandbox and pushes with lease; conflicting, its thread is asked
+                                          (default: the caller's own task; --scope for a shared slug)
       scope task topic [<id|slug>] <topic>
                                           file a task under a topic, or out of any with --clear (default: the
                                           caller's own task); the tasks it started follow unless --no-children
@@ -341,6 +344,17 @@ public enum ScopeCLI {
                 })
                 guard words.count == 1 else { throw UsageError(message: "task restore takes one task id or slug", usage: usage) }
                 return .call(.taskRestore(TaskRestoreParams(task: words[0], scope: scope)), shared)
+            }
+            if sub == "rebase" {
+                var words: [String] = []
+                var scope: String?
+                let shared = try options(&rest, command: "task rebase", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
+                guard words.count <= 1 else { throw UsageError(message: "task rebase takes at most one task id or slug", usage: usage) }
+                return .call(.taskRebase(TaskRebaseParams(task: words.first, scope: scope)), shared)
             }
             if sub == "topic" {
                 var words: [String] = []

@@ -297,6 +297,25 @@ public enum MCPBridge {
             readOnly: false
         ),
         MCPTool(
+            name: "scope_task_rebase",
+            title: "Bring a task up to date with main",
+            description: """
+            Brings a task's branch up to date with its default branch now. Behind without conflicts, Scope rebases \
+            the sandbox itself and pushes with --force-with-lease when the branch is published and its pull request \
+            open; conflicting (locally, or GitHub says so), the task's thread is told what moved and asked to rebase, \
+            keep both sides, re-run the suites and push. A task whose branch the user marked "Don't rebase \
+            automatically" is refused. scope_list shows each task's lag: behind and conflicts. Without a task, \
+            the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
             name: "scope_task_topic",
             title: "File a task under a topic",
             description: """
@@ -394,6 +413,8 @@ public enum MCPBridge {
                 return .success(.taskArchive(try decoder.decode(TaskArchiveParams.self, from: arguments)))
             case "scope_task_restore":
                 return .success(.taskRestore(try decoder.decode(TaskRestoreParams.self, from: arguments)))
+            case "scope_task_rebase":
+                return .success(.taskRebase(try decoder.decode(TaskRebaseParams.self, from: arguments)))
             case "scope_task_topic":
                 return try decoder.decode(TaskTopicArguments.self, from: arguments).call.map(ControlCall.taskTopic)
             case "scope_gc":
@@ -474,6 +495,7 @@ public enum MCPBridge {
             "scope_task_archive": taskID,
             "scope_task_close": taskID,
             "scope_task_restore": taskID,
+            "scope_task_rebase": taskID,
             // Not `name` for the topic: on a task, the name is the task's own.
             "scope_task_topic": taskID.merging(["remove": .rename("clear")]) { $1 },
         ]

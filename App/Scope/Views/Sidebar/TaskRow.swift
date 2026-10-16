@@ -234,6 +234,20 @@ struct TaskContextMenu: View {
             Button("Open Pull Request \(pr.label) on GitHub") { model.openOnGitHub(pr.url) }
         }
         Divider()
+        Button(model.lag(of: task)?.hasConflicts == true ? "Ask the Agent to Rebase on Main" : "Rebase on Main Now") {
+            Task {
+                Usage.click("sidebar.task.rebase-now", label: "Rebase on main now")
+                _ = await model.rebaseNow(task)
+            }
+        }
+        .disabled(task.record.holdBranch || model.pullRequests.followingMain.contains(task.id))
+        Toggle("Don't Rebase Automatically", isOn: Binding(
+            get: { task.record.holdBranch },
+            set: { hold in
+                Usage.click("sidebar.task.hold-branch", label: "Don't rebase automatically")
+                Task { await model.setHoldBranch(hold, for: task) }
+            }))
+        Divider()
         Button("Reveal in Finder") {
             Reveal.inFinder(task.record.rootURL)
         }
