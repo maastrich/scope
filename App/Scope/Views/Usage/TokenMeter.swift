@@ -41,6 +41,7 @@ struct TokenMeterToolbarButton: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.scopeGhost)
+            .usageID("toolbar.token-meter", label: "Token meter (toolbar)")
             .help("Tokens Claude Code threads consumed in the last 5 hours — \(TokenUsageText.compact(windows.sevenDays.counts.total)) over 7 days")
             .accessibilityLabel("Tokens: \(TokenUsageText.compact(windows.fiveHours.counts.total)) in the last 5 hours")
             .popover(isPresented: $shown, arrowEdge: .bottom) {

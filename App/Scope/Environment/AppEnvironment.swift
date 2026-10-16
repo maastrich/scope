@@ -30,7 +30,7 @@ final class AppEnvironment {
     let threadRecords: ThreadRecordStore
     /// `<home>/threads/<id>.activity.json`, beside each record.
     let threadActivity: ThreadActivityStore
-    /// `<home>/usage/tokens.json`: what each thread's Claude Code transcripts reported.
+    /// `<home>/tokens.json`: what each thread's Claude Code transcripts reported.
     let tokenLedger: TokenLedgerStore
     let drivers: DriverRegistry
     let shell: ShellEnvironmentResolver

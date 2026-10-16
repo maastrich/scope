@@ -171,6 +171,7 @@ import Testing
 
         let third = await store.scan([source], now: Self.fixtureNow, calendar: Self.paris)
         #expect(third == second)
+        #expect(FileManager.default.fileExists(atPath: home.appending(path: "tokens.json").path))
     }
 
     @Test func subagentsCountForTheirThreadAndARepeatedMessageCountsOnce() async throws {

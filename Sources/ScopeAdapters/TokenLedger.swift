@@ -272,7 +272,8 @@ public struct TokenUsageSnapshot: Sendable, Equatable {
     }
 }
 
-/// Owner of `<home>/usage/tokens.json`, and the only reader of transcripts: one actor, so a scan triggered by a turn
+/// Owner of `<home>/tokens.json` — beside the usage log's `usage/` folder rather than in it, so clearing that log
+/// never takes the counts with it — and the only reader of transcripts: one actor, so a scan triggered by a turn
 /// ending and one by the timer never read the same bytes twice. Offsets and totals are saved in one file, so a crash
 /// between the two cannot count a call twice.
 public actor TokenLedgerStore {
@@ -297,8 +298,7 @@ public actor TokenLedgerStore {
     private var ledger: TokenLedger?
 
     public init(home: URL) {
-        url = home.appending(path: "usage", directoryHint: .isDirectory)
-            .appending(path: "tokens.json", directoryHint: .notDirectory)
+        url = home.appending(path: "tokens.json", directoryHint: .notDirectory)
     }
 
     /// Reads what each source's transcripts (and its subagents') gained since the last scan, saves the ledger when
