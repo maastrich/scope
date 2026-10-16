@@ -4,7 +4,7 @@ import ScopeCore
 import ScopeDrivers
 import UserNotifications
 
-/// Settings window (⌘,): General, Shell environment, Drivers, Automation.
+/// Settings window (⌘,): General, Shell environment, Drivers, Automation, Assist.
 struct SettingsView: View {
     @State private var tab: SettingsTab = .general
 
@@ -15,6 +15,7 @@ struct SettingsView: View {
             case .shell: ShellSettingsView()
             case .drivers: DriversSettingsView()
             case .automation: AutomationSettingsView()
+            case .assist: AssistSettingsView()
             }
         }
         .frame(width: 600, height: 520)

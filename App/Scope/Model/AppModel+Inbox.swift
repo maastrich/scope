@@ -60,10 +60,11 @@ extension AppModel {
 
     private func inboxInput(_ session: ThreadSession) -> Inbox.ThreadInput? {
         let state = session.displayState
-        guard state.needsAttention || state.isUnreadResult else { return nil }
+        let stuck = state == .running ? session.assistNote?.stuckReason : nil
+        guard state.needsAttention || state.isUnreadResult || stuck != nil else { return nil }
         let activity = session.activity
-        let since = activity.pendingRequest?.at ?? activity.turns.last?.endedAt ?? session.record.lastLaunchedAt
-            ?? session.record.createdAt
+        let since = stuck != nil ? (session.assistNote?.at ?? .now)
+            : activity.pendingRequest?.at ?? activity.turns.last?.endedAt ?? session.record.lastLaunchedAt ?? session.record.createdAt
         let text: String?
         if state == .failed {
             let code = session.lastFailure ?? activity.turns.last?.error
@@ -75,7 +76,7 @@ extension AppModel {
         }
         return Inbox.ThreadInput(id: session.id, scopeID: session.record.scopeID,
                                  taskID: session.record.taskID.flatMap(TaskID.init(rawValue:)),
-                                 title: displayTitle(for: session), state: state, since: since, text: text)
+                                 title: displayTitle(for: session), state: state, since: since, text: text, stuckReason: stuck)
     }
 
     private func inboxInput(_ task: TaskState) -> Inbox.TaskInput {
@@ -120,7 +121,9 @@ extension AppModel {
 
     /// e: a thread item is marked read (its state goes back to idle); a task item is dismissed until it changes.
     func markInboxItemRead(_ item: Inbox.Item) {
-        if let thread = item.threadID {
+        if item.kind == .stuck, let thread = item.threadID {
+            markNotStuck(thread)
+        } else if let thread = item.threadID {
             markRead(thread)
             session(thread)?.acknowledgeResult()
         } else {

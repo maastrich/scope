@@ -138,7 +138,7 @@ struct SettingsChrome<Content: View>: View {
 }
 
 enum SettingsTab: String, CaseIterable, Hashable {
-    case general, shell, drivers, automation
+    case general, shell, drivers, automation, assist
 
     var title: String {
         switch self {
@@ -146,6 +146,7 @@ enum SettingsTab: String, CaseIterable, Hashable {
         case .shell: "Shell Environment"
         case .drivers: "Drivers"
         case .automation: "Automation"
+        case .assist: "Assist"
         }
     }
 }

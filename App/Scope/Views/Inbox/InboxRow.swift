@@ -108,6 +108,7 @@ struct InboxKindMark: View {
         case .permission: StateDot(state: .waiting(reason: .permission))
         case .reply: StateDot(state: .done)
         case .failure: StateDot(state: .failed)
+        case .stuck: glyph("arrow.triangle.2.circlepath", PullRequestStyle.pending)
         case .readyToMerge: glyph("arrow.triangle.pull", PullRequestStyle.passing)
         case .checksFailing: glyph("xmark.circle", PullRequestStyle.failing)
         case .archivedOnMerge: glyph("archivebox", Ink.tertiary)
@@ -174,7 +175,8 @@ struct InboxActions: View {
                 default:
                     EmptyView()
                 }
-                action("checkmark", item.kind.isThreadItem ? "Mark as Read (e)" : "Done (e)", id: "mark-read") {
+                action("checkmark", item.kind == .stuck ? "Not stuck (e)" : item.kind.isThreadItem ? "Mark as Read (e)" : "Done (e)",
+                       id: item.kind == .stuck ? "not-stuck" : "mark-read") {
                     model.markInboxItemRead(item)
                 }
             }

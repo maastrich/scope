@@ -53,6 +53,8 @@ final class ThreadSession: Identifiable {
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
+    /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
+    private(set) var assistNote: AssistNote?
     /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
@@ -367,8 +369,24 @@ final class ThreadSession: Identifiable {
     }
 
     private func refreshActivityHeadline() {
-        let next = ThreadActivityHeadline.make(activity, state: displayState)
+        var next = ThreadActivityHeadline.make(activity, state: displayState)
+        // While the turn runs, the assistant's words beat the tool's: "Retrying the same test" says more than
+        // "Running swift test", and a stuck verdict is the one thing the caption must show.
+        if displayState == .running, let note = assistNote {
+            if let reason = note.stuckReason {
+                next = ThreadActivityHeadline(text: "Seems stuck — \(reason)", detail: reason)
+            } else if let activity = note.activity {
+                next = ThreadActivityHeadline(text: activity, detail: next?.detail)
+            }
+        }
         if activityHeadline != next { activityHeadline = next }
+    }
+
+    /// Replaces the assistant's note; the caption follows.
+    func setAssistNote(_ note: AssistNote?) {
+        guard note != assistNote else { return }
+        assistNote = note
+        refreshActivityHeadline()
     }
 
     /// Persists a driver session id captured elsewhere.
@@ -426,6 +444,7 @@ final class ThreadSession: Identifiable {
         let status = ExitStatus.decode(rawWaitStatus: rawWaitStatus)
         phase = .exited(status)
         adapterState = nil
+        assistNote = nil
         setActivity(activity.closingOpenTurn(at: .now))
         record.lastExit = status
         record.lastState = .exited

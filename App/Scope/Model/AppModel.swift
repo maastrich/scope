@@ -575,6 +575,7 @@ final class AppModel {
         let (loadedConfig, configProblem) = await configLoad
         config = loadedConfig
         startUsage()
+        startAssist()
         switch configProblem {
         case .corrupt(let backup, let underlying):
             problems.error("config.json was unreadable and has been moved aside",
@@ -596,6 +597,7 @@ final class AppModel {
         }
 
         drivers = await driverTask.value
+        refreshAssistModels()
         reportDriverProblems()
 
         scopes = config.scopes.map { ScopeState(declaration: $0, git: env.git, problems: problems) }
@@ -815,6 +817,7 @@ final class AppModel {
         if config.preferences.shellProbe != before.shellProbe {
             reprobeShell()
         }
+        if config.preferences.assist != before.assist { refreshAssistModels() }
     }
 
     func reprobeShell() {
@@ -1291,6 +1294,7 @@ final class AppModel {
         problems.dismissAll(thread: id)
         await env.threadRecords.delete(id)
         await forgetActivity(id)
+        forgetAssist(id)
     }
 
     private func confirmClose(_ session: ThreadSession) async -> Bool {
@@ -1456,7 +1460,7 @@ final class AppModel {
     func handle(_ event: AdapterEvent) {
         guard let session = session(event.threadID), session.isAlive else { return }
         // A late event changed nothing: no "needs your permission" for a thread whose turn is over.
-        if session.apply(event) { notifyIfNeeded(event, session: session) }
+        if session.apply(event) { assistThenNotify(event, session: session) }
         flushDeliveries(for: session)
         acknowledgeShownResult()
     }

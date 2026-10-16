@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ScopeAssist
 import ScopeCore
 import ScopeTasks
 
@@ -29,6 +30,9 @@ struct InspectorSubjectBand: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 TaskTokenBadge(task: task)
+                if let hint = task.archiveHint {
+                    ArchiveHintChip(task: task, hint: hint)
+                }
                 Spacer(minLength: 4)
                 HStack(spacing: 2) {
                     // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
@@ -83,6 +87,44 @@ struct InspectorSubjectBand: View {
         .frame(maxWidth: .infinity)
         .background(Surface.panel)
         .onHover { hovering = $0 }
+    }
+}
+
+/// "Looks finished — archive?": the assistant's reading of the last reply (spec §4.10), as a proposal with its two
+/// answers. The hint goes with the next turn in the task, with the archive, or with the ✕.
+private struct ArchiveHintChip: View {
+    @Environment(AppModel.self) private var model
+    let task: TaskState
+    let hint: ArchiveHint
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button {
+                Task { await model.archiveTask(task.id) }
+            } label: {
+                Label("Looks finished — archive?", systemImage: "archivebox")
+                    .font(.scopeCaption)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Ink.secondary)
+            .help(hint.reason.isEmpty ? "The assistant reads the last reply as a final deliverable." : hint.reason)
+            .usageID("inspector.task.assist-archive", label: "Archive from the assistant's hint")
+            Button {
+                model.dismissArchiveHint(task)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.tertiary)
+            .help("Not finished")
+            .accessibilityLabel("Dismiss the archive hint")
+            .usageID("inspector.task.assist-archive-dismiss", label: "Dismiss the archive hint")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Surface.ground, in: Capsule())
     }
 }
 
