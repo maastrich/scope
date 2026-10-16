@@ -50,6 +50,7 @@ scope thread wait &lt;id&gt;...           <span class="c"># until they finish th
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
+scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what was kept at archive: last answers, https://github.com/maastrich/scopeRT.md</span>
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
@@ -117,10 +118,20 @@ worked and how long it waited on you (a question, a permission, a result not yet
 threads opened outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
 week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
 <code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
-<code>--task &lt;slug&gt;</code> prints one task's whole brief. Each task and thread carries the tokens its
+<code>--task &lt;slug&gt;</code> prints one task's whole brief, and the last answers its threads gave before
+it was put away; each task's line carries the opening of that answer. Each task and thread carries the tokens its
 Claude Code threads consumed, all told. The installed <code>/scope-summary</code> skill has
 an agent turn it into an account.</p>
-<p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
+<h3 id="deliverable">What a task leaves behind</h3>
+<p>About half of the tasks are studies with no pull request: their deliverable is the agent's final answer,
+which used to go with the thread when the task was archived. Now archiving or closing a task keeps the last
+reply of each of its threads (its end, 64 KB), and the task's report file when it wrote one: <code>https://github.com/maastrich/scopeRT.md</code>
+in the task root or a sandbox, or the file named with <code>scope task new --deliverable docs/study.md</code>
+(<code>deliverable</code> in the MCP tool), 1 MB at most. They live in <code>~/.scope/tasks/deliverables/</code>
+and outlive a close. <code>scope task show &lt;slug&gt;</code> (<code>scope_task_show</code>) prints the brief
+and everything kept, for an open, archived or closed task; in the app, <b>Read deliverable</b> — in the Task
+section of a restored task, or from the palette for an archived one — opens it in the reading column.</p>
+<p>It is built from records, not conversations: of what was said in a thread, Scope keeps only that last answer. Closing a task
 or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;
 work closed before this version left nothing. A pull request's state is the last one Scope saw while its task was open.</p>
 <p><code>scope usage last week</code> reads the log Scope keeps of its own interface — on this Mac only, in
@@ -228,7 +239,7 @@ method or a newer <code>rpc</code> answers <code>unsupported</code> rather than 
 <code>scope</code> binary that outlives its app says so instead of hanging. Error codes:
 <code>bad_request</code>, <code>unsupported</code>, <code>denied</code>, <code>not_found</code>,
 <code>failed</code>, <code>timeout</code>.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl3" href="#skill">The Scope skill</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#install">Getting scope</a><a class="lvl2" href="#commands">Commands</a><a class="lvl3" href="#deliverable">What a task leaves behind</a><a class="lvl2" href="#links">Links</a><a class="lvl2" href="#mcp">The MCP server</a><a class="lvl3" href="#skill">The Scope skill</a><a class="lvl2" href="#automation">What an agent is allowed to do</a><a class="lvl2" href="#protocol">The protocol</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

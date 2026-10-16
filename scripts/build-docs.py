@@ -417,7 +417,7 @@ and the inspector, the height of the window and half the terminal's width by def
 it to go back to half; ✕ or Esc closes it).</p>
 <table>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
-  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, the prompt, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply</td><td></td></tr>
+  <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>the brief (four lines, <b>Read in full</b> for the rest), where the branch forked, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply</td><td></td></tr>
   <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
   <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
   <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
@@ -684,6 +684,16 @@ FIG_DELTA_FILES
 <p>Files are grouped by repository, with an add/modify/delete filter, a fuzzy filter field and per-file line
 counts. The mode is the menu in the section's header. Click a file to read its diff in the reading column beside
 the inspector; <kbd>j</kbd>/<kbd>k</kbd> move between files, <kbd>[</kbd>/<kbd>]</kbd> between hunks.</p>
+<h3 id="reply">The agent's reply, as a page</h3>
+<p>An answer with headings, a table and a code block reads badly in a terminal, where lines wrap and tables
+break. <kbd>⇧⌘R</kbd>, the speech-bubble button in the toolbar, <b>Read Reply</b> in a thread's menu, or a click
+on the <i>Finished</i> caption of its sidebar row open the thread's last reply in the reading column, rendered
+as Markdown: headings, lists, tables, fenced code with a copy button, quotes. Web links open in the browser; a
+path — a link, or a code span such as <code>Sources/App.swift:12</code> — opens the file as a terminal link
+would. Nothing in the text is ever fetched or run: images are shown as their text, HTML stays text, and a
+<code>javascript:</code> or <code>data:</code> link is not a link. <b>Copy as Markdown</b> sits in the header;
+<kbd>Esc</kbd> closes.</p>
+
 <h3 id="links">Files an agent mentions</h3>
 <p><kbd>⌘</kbd>-click a path, or a <code>file://</code> link, in a thread's terminal and the file opens in the same
 column, at the line it names: the task's copy while the thread belongs to a task, the base checkout's otherwise,
@@ -914,6 +924,7 @@ scope thread wait &lt;id&gt;...           <span class="c"># until they finish th
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread</span>
+scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what was kept at archive: last answers, REPORT.md</span>
 scope task archive &lt;id|slug&gt;        <span class="c"># put it away: processes stopped, work saved, branch kept</span>
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
@@ -981,10 +992,20 @@ worked and how long it waited on you (a question, a permission, a result not yet
 threads opened outside tasks. The period reads <code>today</code>, <code>yesterday</code>, <code>this week</code>, <code>last
 week</code> (the previous calendar week, Monday to Sunday), <code>last month</code>, <code>last 14 days</code>,
 <code>2026-10-01..2026-10-14</code>, <code>since 2026-10-01</code>; the default is the last seven days.
-<code>--task &lt;slug&gt;</code> prints one task's whole brief. Each task and thread carries the tokens its
+<code>--task &lt;slug&gt;</code> prints one task's whole brief, and the last answers its threads gave before
+it was put away; each task's line carries the opening of that answer. Each task and thread carries the tokens its
 Claude Code threads consumed, all told. The installed <code>/scope-summary</code> skill has
 an agent turn it into an account.</p>
-<p>It is built from records, not conversations: Scope keeps nothing of what was said in a thread. Closing a task
+<h3 id="deliverable">What a task leaves behind</h3>
+<p>About half of the tasks are studies with no pull request: their deliverable is the agent's final answer,
+which used to go with the thread when the task was archived. Now archiving or closing a task keeps the last
+reply of each of its threads (its end, 64 KB), and the task's report file when it wrote one: <code>REPORT.md</code>
+in the task root or a sandbox, or the file named with <code>scope task new --deliverable docs/study.md</code>
+(<code>deliverable</code> in the MCP tool), 1 MB at most. They live in <code>~/.scope/tasks/deliverables/</code>
+and outlive a close. <code>scope task show &lt;slug&gt;</code> (<code>scope_task_show</code>) prints the brief
+and everything kept, for an open, archived or closed task; in the app, <b>Read deliverable</b> — in the Task
+section of a restored task, or from the palette for an archived one — opens it in the reading column.</p>
+<p>It is built from records, not conversations: of what was said in a thread, Scope keeps only that last answer. Closing a task
 or a thread deletes its record, so a closed one now leaves a line in <code>~/.scope/history.jsonl</code>;
 work closed before this version left nothing. A pull request's state is the last one Scope saw while its task was open.</p>
 <p><code>scope usage last week</code> reads the log Scope keeps of its own interface — on this Mac only, in
@@ -1233,6 +1254,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
   <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
   <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread, picking the driver's session back up when it can</td></tr>
+  <tr><td><kbd>⇧⌘R</kbd></td><td>Read the agent's last reply as Markdown, in the reading column</td></tr>
   <tr><td><kbd>⌘1</kbd>–<kbd>⌘9</kbd>, <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd></td><td>Switch threads</td></tr>
   <tr><td><kbd>⌃1</kbd>–<kbd>⌃9</kbd>, <kbd>⌥⌘←</kbd> / <kbd>⌥⌘→</kbd></td><td>Switch scopes, back to where you were in each</td></tr>
   <tr><td><kbd>⌃⌘L</kbd> / <kbd>⌃⌘G</kbd></td><td>Sidebar rows detailed or compact / arranged by state or as a tree</td></tr>
