@@ -27,10 +27,18 @@ struct SceneView: View {
         }
         .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            if !model.exitNotices.isEmpty {
-                ExitToastStack()
-                    .padding(.horizontal, 12)
+            VStack(spacing: 8) {
+                if let sent = model.messageUI.sent {
+                    SentToast(notice: sent)
+                        .transition(.opacity)
+                        .padding(.bottom, model.exitNotices.isEmpty ? 12 : 0)
+                }
+                if !model.exitNotices.isEmpty {
+                    ExitToastStack()
+                }
             }
+            .padding(.horizontal, 12)
+            .animation(.easeOut(duration: 0.15), value: model.messageUI.sent?.id)
         }
         // The window's own title and subtitle, not a custom item: the system truncates them to the room left
         // and draws them bare (a custom `.principal` view overflowed on a long path).

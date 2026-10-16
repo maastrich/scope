@@ -8,11 +8,18 @@ struct CommandPalette: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
+    /// The message being written in `.compose` mode, kept apart from the query it may have started from.
+    @State private var draft = ""
     @State private var highlighted = 0
     @FocusState private var focused: Bool
 
     private var mode: PaletteMode { model.searchUI.paletteMode }
     private var items: [PaletteItem] { PaletteModel.results(model, query: query, mode: mode) }
+    /// The thread a `.compose` palette writes to.
+    private var composeTarget: ThreadID? {
+        if case .compose(let id) = mode { return id }
+        return nil
+    }
 
     var body: some View {
         let items = items
@@ -22,9 +29,13 @@ struct CommandPalette: View {
                 .onTapGesture { close() }
                 .accessibilityHidden(true)
             VStack(spacing: 0) {
-                inputRow
-                Divider()
-                results(items)
+                if let target = composeTarget {
+                    composeRow(target)
+                } else {
+                    inputRow
+                    Divider()
+                    results(items)
+                }
                 Divider()
                 footer
             }
@@ -38,10 +49,12 @@ struct CommandPalette: View {
             .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
             .padding(.top, 120)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            .onKeyPress(.upArrow) { move(-1, count: items.count); return .handled }
-            .onKeyPress(.downArrow) { move(1, count: items.count); return .handled }
+            // The message field moves its caret with the arrows and takes ↩ itself.
+            .onKeyPress(.upArrow) { guard composeTarget == nil else { return .ignored }; move(-1, count: items.count); return .handled }
+            .onKeyPress(.downArrow) { guard composeTarget == nil else { return .ignored }; move(1, count: items.count); return .handled }
             .onKeyPress(.escape) { close(); return .handled }
             .onKeyPress(keys: [.return], phases: .down) { press in
+                guard composeTarget == nil else { return .ignored }
                 guard let item = items[safe: highlighted] else { return .handled }
                 if press.modifiers.contains(.option) {
                     if let path = item.path { Pasteboard.copy(path) }
@@ -62,7 +75,7 @@ struct CommandPalette: View {
             focused = true
         }
         .onChange(of: query) { highlighted = 0 }
-        .onChange(of: mode) { query = ""; highlighted = 0 }
+        .onChange(of: mode) { query = ""; draft = ""; highlighted = 0 }
     }
 
     private var inputRow: some View {
@@ -92,6 +105,41 @@ struct CommandPalette: View {
         .frame(height: 48)
     }
 
+    /// `.compose`: who the message goes to, then the field. ↩ sends and closes; the selection stays where it was.
+    private func composeRow(_ target: ThreadID) -> some View {
+        let name = model.messageTargetName(target)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                if let session = model.session(target) {
+                    StateDot(state: session.displayState)
+                        .frame(width: 12)
+                }
+                Text("To \(name)")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if model.session(target)?.isAlive == false {
+                    Text("· starts it")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                }
+            }
+            MessageComposer(text: $draft, placeholder: placeholder(for: target, name: name),
+                            font: .system(size: 15), height: 96) {
+                guard model.sendMessage(draft, to: target) else { return }
+                close()
+            } onCancel: {
+                close()
+            }
+        }
+        .padding(EdgeInsets(top: 12, leading: 14, bottom: 10, trailing: 14))
+    }
+
+    private func placeholder(for target: ThreadID, name: String) -> String {
+        model.session(target)?.record.resident == .orchestrator ? "Ask the \(name)…" : "Message \(name)…"
+    }
+
     private func results(_ items: [PaletteItem]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -100,7 +148,7 @@ struct CommandPalette: View {
                         if mode == .files {
                             FileFinderEmptyView(query: query, hasRoots: !model.fileRoots.isEmpty)
                         } else {
-                            Text(mode == .archivedTasks && query.isEmpty ? "No archived task to restore" : "No match")
+                            Text(emptyText)
                                 .font(.scopeBody)
                                 .foregroundStyle(Ink.tertiary)
                                 .frame(maxWidth: .infinity)
@@ -154,12 +202,30 @@ struct CommandPalette: View {
         return rows
     }
 
+    private var emptyText: String {
+        guard query.isEmpty else { return "No match" }
+        switch mode {
+        case .archivedTasks: return "No archived task to restore"
+        case .pickThread: return "No thread to send to"
+        default: return "No match"
+        }
+    }
+
     private var footer: some View {
         HStack(spacing: 16) {
-            Text("↑↓ navigate")
-            Text(chrome.run)
-            Text("⌥↩ copy path")
-            if mode == .files {
+            if composeTarget != nil {
+                Text("↩ send")
+                Text("⇧↩ new line")
+            } else {
+                Text("↑↓ navigate")
+                Text(chrome.run)
+            }
+            if mode == .all || mode == .files {
+                Text("⌥↩ copy path")
+            }
+            if composeTarget != nil || mode == .pickThread {
+                EmptyView()
+            } else if mode == .files {
                 Text("⌘K everything")
             } else {
                 Text("⌘P files")
@@ -178,6 +244,8 @@ struct CommandPalette: View {
         switch mode {
         case .files: ("Go to File", "doc.text.magnifyingglass", FileFinderChrome.placeholder, "File name", "↩ open")
         case .archivedTasks: ("Restore Archived Task", "archivebox", "Restore an archived task…", "Task name", "↩ restore")
+        case .pickThread: ("Send to Thread", "arrowshape.turn.up.right", "Send to which thread?", "Thread name", "↩ write")
+        case .compose: ("Message", "bubble.left", "", "Message", "↩ send")
         case .all: ("Command Palette", "magnifyingglass", "Type a command, a file, a repo or a thread…", "Command or search", "↩ run")
         }
     }

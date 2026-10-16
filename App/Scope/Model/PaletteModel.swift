@@ -14,6 +14,8 @@ struct PaletteItem: Identifiable {
         case pullRequests = "Pull Requests"
         case scopes = "Scopes"
         case archivedTasks = "Restore Archived Task"
+        /// The free-text row under everything else (`askItem`).
+        case ask = "Ask"
     }
 
     let id: String
@@ -49,9 +51,14 @@ enum PaletteModel {
             return rank(archivedTaskItems(model), query: query, recents: model.searchUI)
         case .files:
             return fileItems(model, query: query, limit: fileLimitFinder)
+        case .pickThread:
+            return rank(threadPickerItems(model), query: query, recents: model.searchUI)
+        case .compose:
+            return []
         case .all:
             let files = fileItems(model, query: query, limit: query.isEmpty ? 0 : fileLimitMixed)
-            return rank(items(model), query: query, recents: model.searchUI) + files
+            let found = rank(messageActions(model) + items(model), query: query, recents: model.searchUI) + files
+            return found + askItem(model, query: query, matches: found.count)
         }
     }
 

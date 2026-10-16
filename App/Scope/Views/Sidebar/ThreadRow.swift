@@ -177,6 +177,10 @@ struct ThreadMenuItems: View {
     let session: ThreadSession
 
     var body: some View {
+        Button("Reply…") {
+            model.beginReply(to: session.id)
+        }
+        .disabled(!model.canReply(to: session))
         Button("Mark as Read") {
             model.markRead(session.id)
         }

@@ -60,6 +60,9 @@ struct SidebarView: View {
                 // on another panel. `.plain` runs the rows the full width of the column, edge to edge, and
                 // the hairline on the right is the only thing that separates the sidebar from the scene.
                 .listStyle(.plain)
+                .onKeyPress(keys: [.return], phases: .down) { press in
+                    replyToSelection(press)
+                }
                 .environment(\.defaultMinListRowHeight, 28)
                 .scrollContentBackground(.hidden)
                 .background(ListSelectionHighlightRemover())
@@ -189,6 +192,22 @@ struct SidebarView: View {
                 if swipeOffset == 0 { swipePreview = nil }
             }
         }
+    }
+
+    /// ⌥↩ with the list holding the keyboard: the reply field under the selected row's thread (a task row's live
+    /// thread). Only here: ⌥↩ in a terminal is the agents' meta-return, so it can never be a menu shortcut.
+    private func replyToSelection(_ press: KeyPress) -> KeyPress.Result {
+        // An open reply field passes ⌥↩ up as a new line of its own: it must not land here.
+        guard press.modifiers == .option, model.messageUI.replyingTo == nil else { return .ignored }
+        let id: ThreadID? = switch model.selection {
+        case .thread(let id): id
+        case .task(let task):
+            model.threads(in: task).first { $0.id == model.selectedThreadID }?.id ?? model.threads(in: task).first?.id
+        default: nil
+        }
+        guard let id, let session = model.session(id), model.canReply(to: session) else { return .ignored }
+        model.beginReply(to: id)
+        return .handled
     }
 
     /// Hands the keyboard to the visible terminal, one turn later: the thread's `TerminalHost` has to be in
@@ -357,10 +376,18 @@ struct SidebarView: View {
     private func taskRows(_ task: TaskState, depth: Int = 0) -> some View {
         TaskRow(task: task, depth: depth)
             .tag(SidebarItem.task(task.id))
+        // The task row stands for its only thread, and for all of them while collapsed: their reply field goes under it.
+        if let replying = model.messageUI.replyingTo, model.threads(in: task.id).contains(where: { $0.id == replying }),
+           model.threads(in: task.id).count == 1 || !(task.isExpanded || isFiltering) {
+            InlineReplySlot(thread: replying, depth: depth + 1)
+        }
         if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
             ForEach(visibleThreads(in: task)) { session in
                 ThreadRow(session: session, depth: depth + 1)
                     .tag(SidebarItem.thread(session.id))
+                if model.messageUI.replyingTo == session.id {
+                    InlineReplySlot(thread: session.id, depth: depth + 1)
+                }
             }
         }
     }
@@ -382,6 +409,9 @@ struct SidebarView: View {
                     // Depth 1 so its title lines up with the task names it sits among.
                     ThreadRow(session: session, depth: 1)
                         .tag(SidebarItem.thread(session.id))
+                    if model.messageUI.replyingTo == session.id {
+                        InlineReplySlot(thread: session.id, depth: 1)
+                    }
                 }
             }
         }
@@ -396,6 +426,9 @@ struct SidebarView: View {
         ForEach(model.residents(in: scope.id).filter { matches($0.title) }) { session in
             ThreadRow(session: session, depth: 1)
                 .tag(SidebarItem.thread(session.id))
+            if model.messageUI.replyingTo == session.id {
+                InlineReplySlot(thread: session.id, depth: 1)
+            }
         }
     }
 
@@ -411,6 +444,9 @@ struct SidebarView: View {
                 ForEach(threads) { session in
                     ThreadRow(session: session, depth: 1)
                         .tag(SidebarItem.thread(session.id))
+                    if model.messageUI.replyingTo == session.id {
+                        InlineReplySlot(thread: session.id, depth: 1)
+                    }
                 }
             }
         }
