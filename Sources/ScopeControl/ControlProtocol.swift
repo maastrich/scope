@@ -67,11 +67,13 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case configGet = "config.get"
     /// Changes one of them live, as the Settings window would. The user's own terminal only.
     case configSet = "config.set"
+    /// How the user has been using Scope's own interface, from the local usage log.
+    case usage
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .configGet: false
+        case .ping, .list, .threadRead, .threadWait, .summary, .configGet, .usage: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore, .gc,
              .configSet: true
         }
@@ -187,6 +189,7 @@ public enum ControlCall: Sendable, Equatable {
     case summary(SummaryParams)
     case configGet(ConfigGetParams)
     case configSet(ConfigSetParams)
+    case usage(UsageParams)
 
     public var method: ControlMethod {
         switch self {
@@ -207,6 +210,7 @@ public enum ControlCall: Sendable, Equatable {
         case .summary: .summary
         case .configGet: .configGet
         case .configSet: .configSet
+        case .usage: .usage
         }
     }
 
@@ -218,7 +222,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .configGet, .configSet: .seconds(15)
+        case .list, .threadRead, .summary, .configGet, .configSet, .usage: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .threadSend, .taskTopic: .seconds(30)
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .gc: .seconds(300)
@@ -893,6 +897,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case read(ThreadReadResult)
     case wait(ThreadWaitResult)
     case summary(SummaryResult)
+    case usage(UsageResult)
 
     public var method: ControlMethod {
         switch self {
@@ -904,6 +909,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .read: .threadRead
         case .wait: .threadWait
         case .summary: .summary
+        case .usage: .usage
         }
     }
 }

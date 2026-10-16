@@ -62,6 +62,8 @@ public enum ScopeCLI {
       scope config set <key> <value>      change one, as Settings would; from your own terminal only, never an agent's
       scope summary [period]              what was done over a period, scope by scope: tasks finished or dropped,
                                           their pull requests and briefs (default: last 7 days)
+      scope usage [period]                how Scope's own interface was used: top controls and commands, what was
+                                          never used, keyboard vs menu vs palette, agent vs user calls (local log)
       scope mcp                           speak MCP on stdio, same commands
       scope ping                          check that Scope is listening
 
@@ -98,6 +100,11 @@ public enum ScopeCLI {
                                     since 2026-10-01 (weeks start on Monday)
       --scope <slug|name|id>        only that scope
       --task <id|slug>              one task: its whole brief and every thread, whatever the period
+
+    usage:
+      [period]                      same words as summary (default: last 7 days)
+      --area <name>                 one area only: sidebar, inspector, sheet, command, palette, control, …
+      --limit <n>                   rows per list (default: 20)
 
     options:
       --json                        machine-readable output
@@ -150,6 +157,30 @@ public enum ScopeCLI {
                 parameters.period = period
             }
             return .call(.summary(parameters), shared)
+        case "usage":
+            var words: [String] = []
+            var parameters = UsageParams()
+            let shared = try options(&rest, command: "usage", positional: { words.append($0) }, specific: { flag, value in
+                switch flag {
+                case "--area": parameters.area = try value()
+                case "--limit":
+                    let text = try value()
+                    guard let limit = Int(text), limit > 0 else {
+                        throw UsageError(message: "usage: --limit takes a positive number, not “\(text)”", usage: usage)
+                    }
+                    parameters.limit = limit
+                default: return false
+                }
+                return true
+            })
+            if !words.isEmpty {
+                let period = words.joined(separator: " ")
+                guard ActivityPeriod.parse(period) != nil else {
+                    throw UsageError(message: "usage: no period called “\(period)”. Try: \(ActivityPeriod.grammar)", usage: usage)
+                }
+                parameters.period = period
+            }
+            return .call(.usage(parameters), shared)
         case "list":
             var kind = ListParams.Kind.all
             if let word = rest.first, !word.hasPrefix("-") {

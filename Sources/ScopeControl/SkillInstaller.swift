@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 11
+    public static let version = 12
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -212,8 +212,12 @@ public struct SkillInstaller: Sendable {
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
+        | `scope usage [period] [--area A] [--limit N]` | `scope_usage` `{period, area, limit}` |
 
-        To tell the user what they did over a period, follow the `\(summaryName)` skill.
+        To tell the user what they did over a period, follow the `\(summaryName)` skill. To say how they use Scope
+        itself — which controls, commands and panels, by keyboard, menu, palette or mouse, and what they never touch —
+        read `scope usage --json` (`scope_usage`): a log kept on this Mac, ids only. Check its `limits` before calling
+        anything unused.
 
         ## Referring to a task
 

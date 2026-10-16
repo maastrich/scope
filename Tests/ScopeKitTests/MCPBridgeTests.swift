@@ -187,6 +187,13 @@ import Testing
         #expect(byName["scope_thread_send"]?.readOnly == false)
     }
 
+    @Test func theUsageToolReadsAndMapsOntoTheSameCall() {
+        #expect(MCPBridge.tools.first { $0.name == "scope_usage" }?.readOnly == true)
+        #expect(Self.call("scope_usage", "{}") == .success(.usage(UsageParams())))
+        #expect(Self.call("scope_usage", #"{"period":"yesterday","area":"command","limit":3}"#)
+            == .success(.usage(UsageParams(period: "yesterday", area: "command", limit: 3))))
+    }
+
     @Test func theSummaryToolReadsAndMapsOntoTheSameCall() {
         #expect(MCPBridge.tools.first { $0.name == "scope_summary" }?.readOnly == true)
         #expect(Self.call("scope_summary", "{}") == .success(.summary(SummaryParams())))

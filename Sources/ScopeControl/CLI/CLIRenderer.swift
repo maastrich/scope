@@ -18,6 +18,7 @@ public enum CLIRenderer {
         case .read(let result): try encoder.encode(result)
         case .wait(let result): try encoder.encode(result)
         case .summary(let result): try encoder.encode(result)
+        case .usage(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -112,6 +113,8 @@ public enum CLIRenderer {
             return lines.joined(separator: "\n")
         case .summary(let result):
             return summary(result)
+        case .usage(let result):
+            return usage(result)
         }
     }
 
@@ -190,6 +193,88 @@ public enum CLIRenderer {
             if !scope.threads.isEmpty {
                 lines.append("  outside tasks")
                 lines += scope.threads.map { "    " + threadLine($0) }
+            }
+        }
+        lines += [""] + result.limits.map { "note: \($0)" }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The usage report: totals against the period before, then one block per list. Counts in a right-aligned column so
+    /// the eye runs down them; an element's label after its id when the registry has one.
+    static func usage(_ result: UsageResult) -> String {
+        let zone = TimeZone(identifier: result.period.timeZone) ?? .current
+        func day(_ date: Date) -> String {
+            date.formatted(Date.ISO8601FormatStyle(timeZone: zone).year().month().day())
+        }
+        func span(_ period: UsageResult.Period) -> String {
+            let lastDay = period.until.addingTimeInterval(-1)
+            return day(period.since) == day(lastDay) ? day(lastDay) : "\(day(period.since)) → \(day(lastDay))"
+        }
+        func count(_ value: Int) -> String {
+            let text = String(value)
+            return String(repeating: " ", count: max(0, 6 - text.count)) + text
+        }
+        func change(_ now: Int, _ before: Int) -> String {
+            now == before ? "=" : (now > before ? "+\(now - before)" : "−\(before - now)")
+        }
+        func name(_ id: String, _ label: String?) -> String {
+            guard let label, label != id else { return id }
+            return "\(id) — \(label)"
+        }
+        func duration(_ seconds: Double) -> String {
+            let total = Int(seconds.rounded())
+            if total < 60 { return "\(total)s" }
+            if total < 3600 { return "\(total / 60)m\(String(format: "%02d", total % 60))s" }
+            return "\(total / 3600)h\(String(format: "%02d", total % 3600 / 60))m"
+        }
+
+        var lines = ["\(result.period.label): \(span(result.period)) (\(result.period.timeZone))",
+                     "\(result.total) events (\(change(result.total, result.previousTotal)) against \(span(result.previousPeriod)))"
+                        + (result.recording ? "" : " · recording is off")]
+        if result.total == 0 && result.neverUsed.isEmpty {
+            lines += ["", "nothing recorded in this period"]
+        }
+        if !result.areas.isEmpty {
+            lines += ["", "by area"]
+            for area in result.areas {
+                lines.append("  \(count(area.count))  \(area.area) (\(change(area.count, area.previous)))")
+                lines += area.top.map { "            \(count($0.count))  \(name($0.id, $0.label))" }
+            }
+        }
+        if !result.commands.isEmpty {
+            lines += ["", "commands          total  keyboard  menu  palette  mouse"]
+            for command in result.commands {
+                let cells = [command.total, command.keyboard, command.menu, command.palette, command.mouse].map(count)
+                lines.append("  \(name(command.id, command.label))")
+                lines.append("                   " + cells.joined(separator: "  "))
+            }
+        }
+        if !result.control.isEmpty {
+            lines += ["", "cli / mcp calls     user  agent"]
+            lines += result.control.map { "  \($0.method.padding(toLength: 16, withPad: " ", startingAt: 0))\(count($0.user)) \(count($0.agent))" }
+        }
+        if !result.views.isEmpty {
+            lines += ["", "time on screen"]
+            lines += result.views.map { "  \(duration($0.seconds).padding(toLength: 8, withPad: " ", startingAt: 0)) \($0.opens)× \(name($0.id, $0.label))" }
+        }
+        if !result.settings.isEmpty {
+            lines += ["", "settings changed"]
+            lines += result.settings.map { "  \(count($0.count))  \($0.id)" }
+        }
+        if !result.rising.isEmpty || !result.falling.isEmpty {
+            lines += ["", "against the period before"]
+            lines += result.rising.map { "  \(change($0.count, $0.previous).padding(toLength: 6, withPad: " ", startingAt: 0)) \(name($0.id, $0.label)) (\($0.previous) → \($0.count))" }
+            lines += result.falling.map { "  \(change($0.count, $0.previous).padding(toLength: 6, withPad: " ", startingAt: 0)) \(name($0.id, $0.label)) (\($0.previous) → \($0.count))" }
+        }
+        if !result.neverUsed.isEmpty {
+            lines += ["", "never used in this period (\(result.neverUsed.count))"]
+            var area: String?
+            for element in result.neverUsed {
+                if element.area != area {
+                    area = element.area
+                    lines.append("  \(element.area)")
+                }
+                lines.append("    \(name(element.id, element.label))")
             }
         }
         lines += [""] + result.limits.map { "note: \($0)" }

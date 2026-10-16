@@ -198,6 +198,15 @@ import Testing
         #expect(try Self.options(["summary", "yesterday", "--json"]).json)
     }
 
+    @Test func usageTakesAPeriodAnAreaAndALimit() throws {
+        #expect(try Self.call(["usage"]) == .usage(UsageParams()))
+        #expect(try Self.call(["usage", "last", "week", "--area", "sidebar", "--limit", "5"])
+            == .usage(UsageParams(period: "last week", area: "sidebar", limit: 5)))
+        #expect(try Self.options(["usage", "--json"]).json)
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["usage", "someday"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["usage", "--limit", "0"]) }
+    }
+
     @Test func summaryRefusesAPeriodItCannotRead() {
         #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["summary", "someday"]) }
     }

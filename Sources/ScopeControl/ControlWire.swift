@@ -52,6 +52,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .summary(let params): try encoder.encode(wire(params))
         case .configGet(let params): try encoder.encode(wire(params))
         case .configSet(let params): try encoder.encode(wire(params))
+        case .usage(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -99,6 +100,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .summary: .summary(try decoder.decode(Params<SummaryParams>.self, from: data).params ?? SummaryParams())
             case .configGet: .configGet(try decoder.decode(Params<ConfigGetParams>.self, from: data).params ?? ConfigGetParams())
             case .configSet: .configSet(try required(ConfigSetParams.self))
+            case .usage: .usage(try decoder.decode(Params<UsageParams>.self, from: data).params ?? UsageParams())
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -186,6 +188,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .read(let result): try encoder.encode(wire(result))
         case .wait(let result): try encoder.encode(wire(result))
         case .summary(let result): try encoder.encode(wire(result))
+        case .usage(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -211,6 +214,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)
             case .summary: .summary(try decoder.decode(Wrapped<SummaryResult>.self, from: data).result)
+            case .usage: .usage(try decoder.decode(Wrapped<UsageResult>.self, from: data).result)
             }
         }
         return ControlResponse(rpc: line.rpc, id: line.id, kind: kind, message: line.message,
