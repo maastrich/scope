@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The sidebar's way into the Inbox, first of the global views: the tray, and the number of items in every scope. The
-/// count takes the accent while one of them is a thread waiting for an answer, the one kind that blocks an agent.
+/// The sidebar's way into the Inbox, first of the global views: the tray and the number of items in every scope, with
+/// the title where there is room for it (the menu bar and the palette say it in words). The count takes the waiting
+/// colour while one of the items is a thread waiting for an answer, the one kind that blocks an agent.
 struct InboxButton: View {
     @Environment(AppModel.self) private var model
-    var showsTitle = true
+    var showsTitle = false
 
     var body: some View {
         let items = model.inboxItems

@@ -267,10 +267,12 @@ public enum Inbox {
 
         /// Drops what no longer hides anything: an item gone, or one whose fingerprint moved on. Without this a
         /// dismissal of failing checks would hide them again the next time they fail the same way, after a green run.
-        /// `candidates` are the task items before dismissals (`Inbox.items` with no dismissals).
-        public func pruned(keeping candidates: [Item]) -> Dismissals {
+        /// `candidates` are the task items before dismissals (`Inbox.items` with no dismissals). `judged` says which
+        /// item ids the app could tell about: a pull request not read since launch says nothing, and its dismissal is
+        /// kept rather than dropped for an absence that is only ignorance.
+        public func pruned(keeping candidates: [Item], judged: (String) -> Bool = { _ in true }) -> Dismissals {
             let current = Dictionary(candidates.map { ($0.id, $0.fingerprint) }, uniquingKeysWith: { first, _ in first })
-            return Dismissals(fingerprints: fingerprints.filter { current[$0.key] == $0.value })
+            return Dismissals(fingerprints: fingerprints.filter { current[$0.key] == $0.value || !judged($0.key) })
         }
     }
 }

@@ -134,6 +134,14 @@ private func task(_ id: String, scope: ScopeID = acme, state: PullRequest.State 
         #expect(Inbox.items(threads: [], tasks: [failing], dismissed: dismissed, now: t0).count == 1)
     }
 
+    @Test func aDismissalTheAppCannotJudgeIsKept() {
+        var dismissed = Inbox.Dismissals()
+        dismissed.dismiss(Inbox.items(threads: [], tasks: [task("bbbbbbbbbbb1")], now: t0)[0])
+        // Just launched: the pull request is not read yet, so no item, but nothing is known either.
+        #expect(dismissed.pruned(keeping: [], judged: { _ in false }).fingerprints.count == 1)
+        #expect(dismissed.pruned(keeping: []).fingerprints.isEmpty)
+    }
+
     @Test func threadItemsAreNeverDismissedHere() {
         var dismissed = Inbox.Dismissals()
         let item = Inbox.items(threads: [thread("aaaaaaaaaaa1", .done, at: 1)], tasks: [], now: t0)[0]

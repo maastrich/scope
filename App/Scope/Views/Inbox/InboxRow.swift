@@ -79,10 +79,11 @@ struct InboxRow: View {
         .truncationMode(.tail)
     }
 
-    /// A thread item names its task after the thread; a task item's title already is the task.
+    /// A thread item names its task after the thread, unless the thread is called after its task already (the first
+    /// thread of a task is); a task item's title already is the task.
     private var taskName: String? {
-        guard item.threadID != nil, let id = item.taskID else { return nil }
-        return model.task(id)?.name
+        guard item.threadID != nil, let id = item.taskID, let name = model.task(id)?.name, name != item.title else { return nil }
+        return name
     }
 
     private var background: Color {

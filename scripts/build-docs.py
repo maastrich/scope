@@ -421,10 +421,28 @@ closes it).</p>
 sections stay in place, dimmed, and Base follows the selected repository. Drag the panel's left edge to resize;
 <kbd>⌥⌘I</kbd> hides it.</p>
 
-<h2 id="global-views">Pull Requests and Graph</h2>
-<p>The two views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
-the window: <b>Pull Requests</b> (<kbd>⇧⌘P</kbd>) lists the open pull requests of a repository through
-<code>gh</code>; <b>Graph</b> (<kbd>⌥⌘G</kbd>) shows one card per repository.</p>
+<h2 id="global-views">Inbox, Pull Requests and Graph</h2>
+<p>The views of the whole scope open from the buttons under the scope name in the sidebar, as a sheet over
+the window: <b>Inbox</b> (<kbd>⇧⌘I</kbd>) lists what needs you, in every scope; <b>Pull Requests</b>
+(<kbd>⇧⌘P</kbd>) lists the open pull requests of a repository through <code>gh</code>; <b>Graph</b>
+(<kbd>⌥⌘G</kbd>) shows one card per repository.</p>
+
+<h2 id="inbox">Inbox</h2>
+<p>One list of what needs the owner, across every scope: threads waiting for an answer or a permission (with the
+question), turns that finished while you were not looking (the first line of the reply), turns that failed (the
+error), tasks whose pull request is ready to merge or has a failing check, and tasks archived when their pull
+request merged (kept three days, with <b>Restore</b>). Items are grouped by scope, the scope with the newest news
+first, each with its state, its task and its age. The sidebar button carries the count; it turns to the waiting
+colour while a thread is blocked on you.</p>
+<p>Every action is in place, without moving the selection or the terminal on screen: <b>Reply</b> opens a field
+under the item and sends the way the sidebar's reply does; <b>Open</b> reveals the thread or the task;
+<b>Mark as Read</b> clears a thread item, and dismisses a pull request item until the pull request changes;
+<b>Archive Task</b>, <b>Open Pull Request in Browser</b> and <b>Send the failing checks to the thread</b> do what
+the inspector does. Keys: <kbd>j</kbd>/<kbd>k</kbd> move, <kbd>↩</kbd> open, <kbd>r</kbd> reply, <kbd>e</kbd> mark
+read, <kbd>a</kbd> archive, <kbd>o</kbd> open the pull request, <kbd>s</kbd> send the checks; the foot of the sheet
+shows the keys of the selected item.</p>
+<p>The menu bar item is the same list, compact, with Reply and Open on each item — so an answer can go out
+without bringing the window up.</p>
 """
 
 TASKS = """
@@ -1107,7 +1125,8 @@ state.</p>
 <h2 id="notifications">Notifications and the badge</h2>
 <p>When a thread starts waiting while Scope is not frontmost, you get a macOS notification with <b>Reply</b>,
 <b>Go to thread</b> and <b>See delta</b> actions. The Dock badge counts the waiting threads, and the optional menu bar
-item lists them, so you can leave the window behind and come back exactly when an agent needs you.</p>
+item shows the <a href="concepts.html#inbox">Inbox</a>, so you can leave the window behind and answer from there
+when an agent needs you.</p>
 <p>The notification quotes the agent: the question it asks (Claude Code's <code>AskUserQuestion</code>, the plan
 of <code>ExitPlanMode</code>, a dialog's message), else the end of the answer it just gave; for a finished turn,
 the start of its answer. Markdown is stripped and the quote cut to about 180 characters, so you can tell from the
@@ -1179,6 +1198,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌥↩</kbd></td><td>In the sidebar: reply to the selected row's thread in place</td></tr>
   <tr><td><kbd>⌘P</kbd> / <kbd>⇧⌘O</kbd></td><td>Go to file</td></tr>
   <tr><td><kbd>⌥⌘F</kbd></td><td>Filter the sidebar</td></tr>
+  <tr><td><kbd>⇧⌘I</kbd></td><td>Inbox: what needs you, in every scope (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>↩</kbd>, <kbd>r</kbd>, <kbd>e</kbd> inside)</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Delta / Base / Pull requests</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
   <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>

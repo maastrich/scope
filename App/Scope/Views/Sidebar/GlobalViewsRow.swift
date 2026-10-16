@@ -10,13 +10,12 @@ struct GlobalViewsRow: View {
     @State private var width: CGFloat = 0
 
     /// Below this width the buttons drop their titles, like the footer does.
-    private static let titleThreshold: CGFloat = 230
-    private static let inboxTitleThreshold: CGFloat = 330
+    private static let titleThreshold: CGFloat = 300
 
     var body: some View {
         HStack(spacing: 6) {
-            // The Inbox keeps its title only where three titles fit; its count says enough without it.
-            InboxButton(showsTitle: width >= Self.inboxTitleThreshold)
+            // Icon and count only: the row's width goes to the two scope views, and the count says enough.
+            InboxButton()
             Group {
             Button {
                 model.showPullRequests()
