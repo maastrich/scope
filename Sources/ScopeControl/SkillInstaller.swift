@@ -325,12 +325,13 @@ public struct SkillInstaller: Sendable {
 
         ## Finishing
 
-        Archive the tasks you created once their work is in (handed back, or a pull request opened): an open task
-        holds a worktree per repository and a share of the agents' budget (below) until then.
+        A task with a pull request stays open until it merges: Scope reads every open task's pull request from
+        GitHub every few minutes and archives the task itself once it is merged and none of its threads is running
+        (Settings › Tasks, on by default). Archiving it earlier hides the merge from Scope and leaves a failing check
+        no thread to go to. So do not keep a thread polling GitHub for the merge: open the pull request, report, stop.
 
-        Scope reads every open task's pull request from GitHub every few minutes and archives the task itself once
-        the pull request is merged and none of its threads is running (Settings › Tasks, on by default). Do not keep
-        a thread polling GitHub to wait for a merge before archiving: open the pull request, report, and stop.
+        Archive yourself the tasks you created whose work has no pull request to wait for (an investigation, work
+        handed back): an open task holds a worktree per repository and a share of the agents' budget (below).
 
         `scope task archive <slug>` stops the task's threads and processes, removes the worktrees and keeps the
         branch. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:

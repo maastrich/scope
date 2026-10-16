@@ -596,8 +596,9 @@ public actor TaskManager {
             throw error
         }
         record.archivedAt = nil
-        // Brought back after a merge: whoever did it wants the task open, and the next refresh must not archive it again.
-        if record.pullRequest?.state == "merged" { record.keptOpenAfterMerge = true }
+        // Whoever brings a task with a pull request back wants it open: the merge may have happened while it was
+        // archived, unseen, and the next refresh must not archive it again.
+        if record.pullRequest != nil { record.keptOpenAfterMerge = true }
         record.portBase = allocatePort(excluding: id)
         try await save(record)
         return record

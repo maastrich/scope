@@ -158,12 +158,13 @@ import ScopeGit
         #expect(try await base.hasUncommittedChanges(at: sandbox))
     }
 
-    @Test func restoringAMergedTaskKeepsItOpenAfterTheMerge() async throws {
+    @Test func restoringATaskWithAPullRequestKeepsItOpenAfterTheMerge() async throws {
         let scope = try await TestScope.make()
         _ = try await scope.makeRepo("api")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "shipped", branch: "feat/shipped", in: scope.declaration, repos: ["api"])
-        let link = LinkedPullRequest(number: 4, url: URL(string: "https://github.com/acme/api/pull/4")!, title: "x", state: "merged")
+        // Archived while open: the merge happens after, unseen, and the record still says `open` at restore.
+        let link = LinkedPullRequest(number: 4, url: URL(string: "https://github.com/acme/api/pull/4")!, title: "x", state: "open")
         _ = try await manager.linkPullRequest(link, to: task.id)
         _ = try await manager.dismantle(task.id, .archive)
 

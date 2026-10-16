@@ -129,8 +129,9 @@ once older than 15 minutes: a green that old may no longer be true.</p>
 <p>When a refresh sees the pull request <b>merged</b> and no thread of the task is running, Scope archives the task
 the way the sidebar's Archive does and leaves one quiet notice, <i>Archived &lt;task&gt;: pull request merged</i>,
 with <b>Restore</b>. A running thread postpones it to the next refresh. A pull request closed without merging
-never archives anything, and a task you restore after its merge stays open. Turn it off in <b>Settings ▸ General ▸
-Tasks ▸ Archive a task when its pull request merges</b>. Agents no longer need to wait for the merge to archive.</p>
+never archives anything, and a task with a pull request that you restore stays open. Turn it off in <b>Settings ▸ General ▸
+Tasks ▸ Archive a task when its pull request merges</b>. A task with a pull request therefore stays open until the
+merge: agents no longer poll GitHub for it, and only archive themselves work that has no pull request.</p>
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
 pull request was closed without merging, says so at the end of its row — <code>idle 4d</code>, <code>PR closed</code>
 — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>

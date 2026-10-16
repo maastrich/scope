@@ -169,8 +169,8 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Who asked for the task, as recorded for its first thread: what tells an agent's task from the user's when the
     /// budgets count them. `nil` on records from before it existed and on tasks the user made in the app.
     public var origin: ThreadOrigin?
-    /// Restored after its pull request merged: the user wants it open, so a merge no longer archives it
-    /// (`MergedTaskArchive`). Set by `TaskManager.reopen`.
+    /// Restored with a pull request: someone wants it open, so a merge no longer archives it (`MergedTaskArchive`).
+    /// Set by `TaskManager.reopen`.
     public var keptOpenAfterMerge: Bool = false
 
     public init(

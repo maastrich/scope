@@ -28,6 +28,9 @@ extension AppModel {
     func refreshDuePullRequests(now: Date = .now) async {
         let candidates = tasks.filter { !$0.isArchived && mayHavePullRequest($0) }
         pullRequestSchedule.sync(candidates.map(\.id), now: now)
+        // Already known merged, held by a running thread: no `gh` call needed to archive it once the thread stops,
+        // rather than at the next refresh of a settled pull request, half an hour later.
+        for task in candidates where task.record.pullRequest?.state == "merged" { await archiveIfMerged(task) }
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let due = pullRequestSchedule.due(at: now).compactMap { task($0) }
         guard !due.isEmpty else { return }
@@ -94,8 +97,9 @@ extension AppModel {
     func dormancy(of task: TaskState, now: Date = .now) -> TaskDormancy {
         let sessions = threads(in: task.id)
         let dates = sessions.flatMap { session -> [Date?] in
+            // Not `lastLaunchedAt`: every launch of the app relaunches the live threads, and would reset the clock.
             [session.activity.turns.last?.endedAt, session.activity.lastTool?.at, session.activity.turnStartedAt,
-             session.record.lastLaunchedAt, session.record.createdAt]
+             session.record.createdAt]
         }
         let state = livePullRequest(for: task)?.state.rawValue ?? task.record.pullRequest?.state
         return TaskDormancy.classify(
