@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeControl
 import ScopeCore
 import ScopeTasks
 
@@ -49,11 +50,23 @@ struct TaskRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if detailed {
-                    Text(TaskStatus.summary(status, facts: facts))
-                        .font(.scopeCaption)
-                        .foregroundStyle(Ink.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    HStack(spacing: 0) {
+                        if let parent = linkedParent {
+                            ParentTaskLink(parent: parent)
+                            Text(" · ")
+                                .font(.scopeCaption)
+                                .foregroundStyle(Ink.tertiary)
+                        }
+                        if let headline = activityHeadline(threads) {
+                            ThreadActivityCaption(headline: headline)
+                        } else {
+                            Text(TaskStatus.summary(status, facts: facts))
+                                .font(.scopeCaption)
+                                .foregroundStyle(Ink.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
                 }
             }
             .layoutPriority(1)
@@ -98,6 +111,22 @@ struct TaskRow: View {
     /// The row the List highlights.
     private var isListSelected: Bool {
         model.selection == .task(task.id)
+    }
+
+    /// In the tree, a task started from another one names it at the start of its second line. By state, rows move
+    /// with what they are doing and the hover card says where a task came from.
+    private var linkedParent: TaskState? {
+        guard model.config.preferences.sidebarArrangement == .tree else { return nil }
+        return model.parentTask(of: task)
+    }
+
+    /// A one-thread task is that thread's row too: while its agent works, waits or has an unread result, the
+    /// second line says what it is doing, as the thread's row would. Once read, the task's own status says more.
+    private func activityHeadline(_ threads: [ThreadSession]) -> ThreadActivityHeadline? {
+        guard threads.count == 1, let only = threads.first else { return nil }
+        let state = only.displayState
+        guard state == .running || state.needsAttention || state.isUnreadResult else { return nil }
+        return only.activityHeadline(model.config.preferences.finishedThreadLine)
     }
 
     private var hoverControls: some View {
@@ -176,6 +205,7 @@ struct TaskContextMenu: View {
         }
         Divider()
         TopicMenu(tasks: [task])
+        DelegationMenuItems(task: task)
         let candidates = model.candidateRepos(for: task)
         Menu("Add Repo…") {
             ForEach(candidates) { repo in

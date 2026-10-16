@@ -22,9 +22,14 @@ enum ThreadTitle {
         return steps.joined(separator: " › ")
     }
 
-    /// `Claude Code · …/api/auth-refresh`: what runs, and where — the line under the path.
+    /// `Claude Code · …/api/auth-refresh`: what runs, and where — the line under the path. While the agent works or
+    /// waits, what it is doing takes the place of where (`Claude Code · Editing App.swift`); a line that would need a
+    /// clock (`Finished · 3m ago`) does not, the window title has none.
     static func detail(_ session: ThreadSession) -> String {
-        "\(session.profile.name) · \(abbreviatedDirectory(currentDirectory(session)))"
+        if let headline = session.activityHeadline, headline.since == nil {
+            return "\(session.profile.name) · \(headline.text)"
+        }
+        return "\(session.profile.name) · \(abbreviatedDirectory(currentDirectory(session)))"
     }
 
     /// `@acme · auth-refresh · …/api/auth-refresh`: the scope, the task that owns the thread when one does, the
