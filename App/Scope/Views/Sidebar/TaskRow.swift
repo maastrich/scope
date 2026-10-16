@@ -226,7 +226,8 @@ struct TaskContextMenu: View {
     }
 }
 
-/// The Topic submenu of a task: file it under a topic in use in its scope, a new one, or none.
+/// The Topic submenu of a task: file it under a topic in use in its scope, a new one, or none. The tasks it started
+/// that still share its topic come along (`AppModel.fileTasks`).
 struct TopicMenu: View {
     @Environment(AppModel.self) private var model
     let tasks: [TaskState]
@@ -238,17 +239,17 @@ struct TopicMenu: View {
                 ForEach(model.topics(in: first.scopeID), id: \.self) { topic in
                     Toggle(topic, isOn: Binding(
                         get: { current == TaskTopic.key(topic) },
-                        set: { _ in Task { await model.setTopic(topic, for: tasks.map(\.id)) } }
+                        set: { _ in Task { await model.fileTasks(tasks.map(\.id), underTopic: topic) } }
                     ))
                 }
                 if !model.topics(in: first.scopeID).isEmpty { Divider() }
                 Button("New Topic…") {
                     guard let name = model.promptTopicName(title: "New Topic", current: nil, action: "File") else { return }
-                    Task { await model.setTopic(name, for: tasks.map(\.id)) }
+                    Task { await model.fileTasks(tasks.map(\.id), underTopic: name) }
                 }
                 if current != nil {
                     Button("Remove from Topic") {
-                        Task { await model.setTopic(nil, for: tasks.map(\.id)) }
+                        Task { await model.fileTasks(tasks.map(\.id), underTopic: nil) }
                     }
                 }
             }

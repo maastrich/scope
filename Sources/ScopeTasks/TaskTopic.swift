@@ -38,6 +38,27 @@ public enum TaskTopic {
         return (name, name)
     }
 
+    /// The tasks that move with `root` when its topic changes: those it started, and theirs, still filed where it is
+    /// filed now (both without a topic counts). That is how they got there — `inherit` — so they are the same piece
+    /// of work; one filed elsewhere since was put there on purpose and stays, and so does what hangs under it.
+    public static func followers<ID: Hashable>(of root: ID, in tasks: [(id: ID, parent: ID?, topic: String?)]) -> [ID] {
+        let current = Dictionary(tasks.map { ($0.id, normalize($0.topic).map(key)) }) { first, _ in first }
+        guard let rootKey = current[root] else { return [] }
+        let children = Dictionary(grouping: tasks.filter { $0.parent != nil }, by: { $0.parent! })
+        var result: [ID] = []
+        var seen: Set<ID> = [root]
+        var queue = [root]
+        while !queue.isEmpty {
+            let parent = queue.removeFirst()
+            for child in children[parent] ?? [] where !seen.contains(child.id) && current[child.id] == rootKey {
+                seen.insert(child.id)
+                result.append(child.id)
+                queue.append(child.id)
+            }
+        }
+        return result
+    }
+
     /// A run of the sidebar: one task on its own, or the tasks of a topic under one row.
     public enum Entry<ID: Hashable>: Hashable {
         case task(ID)

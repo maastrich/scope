@@ -112,3 +112,89 @@ import ScopeCore
         #expect(text.contains("auth rework"))
     }
 }
+
+/// Filing a task that already runs: who follows it, and how the façades say it.
+@Suite struct TaskTopicRefileTests {
+    /// 1 started 2 and 4; 2 started 3; 4 was filed elsewhere since and started 5; 6 is unrelated.
+    static let lineage: [(id: Int, parent: Int?, topic: String?)] = [
+        (id: 1, parent: nil, topic: "Auth"), (id: 2, parent: 1, topic: "auth"), (id: 3, parent: 2, topic: "AUTH "),
+        (id: 4, parent: 1, topic: "billing"), (id: 5, parent: 4, topic: "auth"), (id: 6, parent: nil, topic: "auth"),
+    ]
+
+    @Test func whatItStartedFollowsWhileItSharesTheTopic() {
+        #expect(TaskTopic.followers(of: 1, in: Self.lineage) == [2, 3])
+    }
+
+    /// One filed elsewhere was put there on purpose, and what hangs under it is its own business.
+    @Test func aTaskFiledElsewhereStaysAndKeepsItsOwn() {
+        #expect(!TaskTopic.followers(of: 1, in: Self.lineage).contains(4))
+        #expect(!TaskTopic.followers(of: 1, in: Self.lineage).contains(5))
+        #expect(TaskTopic.followers(of: 4, in: Self.lineage) == [])
+    }
+
+    @Test func tasksWithoutATopicFollowEachOther() {
+        let bare: [(id: Int, parent: Int?, topic: String?)] = [(id: 1, parent: nil, topic: nil), (id: 2, parent: 1, topic: nil)]
+        #expect(TaskTopic.followers(of: 1, in: bare) == [2])
+        #expect(TaskTopic.followers(of: 9, in: bare) == [])
+    }
+
+    @Test func aBrokenLoopEnds() {
+        let loop: [(id: Int, parent: Int?, topic: String?)] = [(id: 1, parent: 2, topic: "a"), (id: 2, parent: 1, topic: "a")]
+        #expect(TaskTopic.followers(of: 1, in: loop) == [2])
+    }
+
+    @Test func theCommandLineFilesAndClears() throws {
+        func parse(_ words: [String]) throws -> ControlCall? {
+            guard case .call(let call, _) = try ScopeCLI.parse(words) else { return nil }
+            return call
+        }
+        #expect(try parse(["task", "topic", "split", "auth rework"]) == .taskTopic(TaskTopicParams(task: "split", topic: "auth rework")))
+        #expect(try parse(["task", "topic", "auth rework"]) == .taskTopic(TaskTopicParams(task: nil, topic: "auth rework")))
+        #expect(try parse(["task", "topic", "split", "--clear"]) == .taskTopic(TaskTopicParams(task: "split", topic: nil)))
+        #expect(try parse(["task", "topic", "--clear", "--no-children"])
+            == .taskTopic(TaskTopicParams(task: nil, topic: nil, children: false)))
+    }
+
+    /// Taking a task out of its group is said out loud, never read from an empty or missing topic.
+    @Test func theCommandLineRefusesAnEmptyTopic() {
+        #expect(throws: (any Error).self) { try ScopeCLI.parse(["task", "topic", "split", "  "]) }
+        #expect(throws: (any Error).self) { try ScopeCLI.parse(["task", "topic"]) }
+        #expect(throws: (any Error).self) { try ScopeCLI.parse(["task", "topic", "split", "auth", "--clear"]) }
+        #expect(throws: (any Error).self) { try ScopeCLI.parse(["task", "topic", "a", "b", "c"]) }
+    }
+
+    @Test func theMCPToolMapsOntoTheSameCall() throws {
+        func call(_ json: String) -> Result<ControlCall, ControlError> {
+            MCPBridge.call(tool: "scope_task_topic", arguments: Data(json.utf8))
+        }
+        #expect(call(#"{"task":"split","topic":"auth"}"#) == .success(.taskTopic(TaskTopicParams(task: "split", topic: "auth"))))
+        #expect(call(#"{"slug":"split","clear":true,"children":false}"#)
+            == .success(.taskTopic(TaskTopicParams(task: "split", topic: nil, children: false))))
+        #expect(call(#"{"topic":"auth"}"#) == .success(.taskTopic(TaskTopicParams(topic: "auth"))))
+        for refused in [#"{"task":"split"}"#, #"{"task":"split","topic":" "}"#, #"{"topic":"auth","clear":true}"#] {
+            guard case .failure(let error) = call(refused) else {
+                Issue.record("\(refused) should be refused")
+                continue
+            }
+            #expect(error.code == .badRequest)
+        }
+        #expect(MCPBridge.tools.first { $0.name == "scope_task_topic" }?.readOnly == false)
+    }
+
+    @Test func theRequestRoundTripsAndAnOlderClientMovesTheChildren() throws {
+        let request = ControlRequest(id: "abcd1234", caller: ControlCaller(client: "scope-cli/1"),
+                                     call: .taskTopic(TaskTopicParams(task: "split", topic: nil, children: false)))
+        #expect(try ControlRequest.decode(try request.encoded()).get() == request)
+        let bare = try JSONDecoder().decode(TaskTopicParams.self, from: Data(#"{"task":"split","topic":"auth"}"#.utf8))
+        #expect(bare.children)
+    }
+
+    /// A label: an agent may set it wherever it may drive Scope, whatever approval creating tasks needs.
+    @Test func anAgentMayFileATaskWithoutApproval() {
+        let call = ControlCall.taskTopic(TaskTopicParams(task: "split", topic: "auth"))
+        let thread = ThreadID(rawValue: "3f9a2c17be04")!
+        #expect(AutomationPolicy(settings: AutomationSettings(tasks: .ask)).decide(call, from: .thread(thread, depth: 2)) == .allow)
+        #expect(AutomationPolicy(settings: AutomationSettings(tasks: .deny)).decide(call, from: .externalAgent(client: "scope-mcp/1")) == .allow)
+        #expect(ControlMethod.taskTopic.isMutating)
+    }
+}

@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 8
+    public static let version = 9
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -208,6 +208,7 @@ public struct SkillInstaller: Sendable {
         | `scope thread stop <id>` / `scope thread close <id>` | `scope_thread_stop` / `scope_thread_close` `{thread}` |
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
+        | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
 
@@ -236,6 +237,11 @@ public struct SkillInstaller: Sendable {
         same `--topic` (a few words: `auth rework`). A task created from inside a task gets that task's topic
         unless you name another; if the task you are in has none, both are filed under its name, so a split never
         scatters. `scope list tasks` shows each task's topic.
+
+        A topic can be set later: `scope task topic <slug> "<topic>"` files a running task (yours when you omit the
+        slug), `--clear` takes it out. Only the label moves — branch, worktrees and threads stay. The tasks it
+        started, and theirs, follow while they still share its old topic; `--no-children` moves it alone. Name the
+        topic once the work's shape is clear rather than leaving siblings scattered.
 
         `scope thread new --task <slug> -p "<prompt>"` opens another agent in an existing task. Its working
         directory is the sandbox, so it commits on the task branch. `--task` finds a task in any scope.
