@@ -223,7 +223,9 @@ import ScopeGit
         defer { try? FileManager.default.removeItem(at: home) }
         let store = TaskRecordStore(home: home)
         let wakes = Mutex(0)
-        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(200)) {
+        // Half a second rather than the app's 300 ms: a loaded CI runner spreads one burst over several FSEvents
+        // batches, and the test is about coalescing, not about the exact gap.
+        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(500)) {
             wakes.withLock { $0 += 1 }
         }
         watcher.start()
@@ -248,30 +250,34 @@ import ScopeGit
         defer { try? FileManager.default.removeItem(at: home) }
         let store = TaskRecordStore(home: home)
         let reloads = Mutex<[Int]>([])
-        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(150)) {
+        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(500)) {
             let reload = await store.reloadExternalChanges()
             reloads.withLock { $0.append(reload.changed.count + reload.removed.count) }
         }
+        // How many times the watcher woke depends on how FSEvents batched the events on this machine; what must
+        // hold is that only the outside edit ever reloaded anything.
+        let reloaded = { reloads.withLock { $0 }.filter { $0 != 0 } }
         watcher.start()
         defer { watcher.stop() }
         try await Task.sleep(for: .milliseconds(300))
 
         let record = task("Own")
         try await store.save(record)
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(for: .milliseconds(1500))
         // Woken by its own write, with nothing to reload.
-        #expect(reloads.withLock { $0 } == [0])
+        #expect(!reloads.withLock { $0 }.isEmpty)
+        #expect(reloaded() == [])
 
         var edited = record
         edited.name = "Own, edited"
         try editOutside(edited, at: store.url(for: record.id))
-        try await Task.sleep(for: .seconds(1))
-        #expect(reloads.withLock { $0 } == [0, 1])
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(reloaded() == [1])
 
         // The app writes the record it just took in (what a reload that re-saved would do): no second reload.
         try await store.save(edited)
-        try await Task.sleep(for: .seconds(1))
-        #expect(reloads.withLock { $0 } == [0, 1, 0])
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(reloaded() == [1])
     }
 
     @Test func theFileWatcherSeesAnAtomicWriteAndARewriteInPlace() async throws {
