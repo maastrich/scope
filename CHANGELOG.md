@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.26.0](https://github.com/maastrich/scope/releases/tag/v0.26.0) - 2026-10-19
+
+### Added
+
+- **state:** reload state files changed on disk, and archive the right task for a shared slug ([#70](https://github.com/maastrich/scope/pull/70)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.25.0...v0.26.0
+
 ## [0.25.0](https://github.com/maastrich/scope/releases/tag/v0.25.0) - 2026-10-16
 
 ### Added
