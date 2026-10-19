@@ -70,6 +70,105 @@ import Testing
                                      now: Self.now, waitingSince: Self.ago(60)))
     }
 
+    /// A turn that ended with sub-agents in the background is not the end of the work: the driver opens a new turn
+    /// when they report. Someone to answer, or no process, still settles it.
+    @Test func aSubAgentRunningInTheBackgroundHoldsTheWait() {
+        func settled(_ state: String, agents: Int, reply: TimeInterval? = nil, waitingFor: TimeInterval? = nil) -> Bool {
+            ThreadWait.isSettled(.init(state: state, replyAt: Self.ago(reply), agents: agents), now: Self.now, waitingSince: Self.ago(waitingFor))
+        }
+        #expect(!settled("idle", agents: 1))
+        #expect(!settled("done", agents: 3))
+        #expect(!settled("running", agents: 1))
+        #expect(settled("idle", agents: 0))
+        #expect(!settled("idle", agents: 1, reply: 5, waitingFor: 60), "the answer that ended that turn says it is waiting")
+        #expect(settled("waiting", agents: 1), "a question or a permission: someone must act")
+        #expect(settled("exited", agents: 1) && settled("failed", agents: 1))
+        let entry = ThreadWaitResult.Entry(thread: "3f9a2c17be04", title: "api", state: "idle", settled: false, agents: 2)
+        #expect(entry.agents == 2)
+        #expect(ThreadWaitResult.Entry(thread: "3f9a2c17be04", title: "api", state: "idle", settled: true).agents == nil)
+        let text = CLIRenderer.text(.wait(ThreadWaitResult(threads: [entry], complete: false, waited: 600)))
+        #expect(text.contains("(idle, still at work: 2 sub-agents running in the background)"))
+    }
+
+    /// `thread send --wait`: one call where an agent made two, every time it handed a thread something.
+    @Test func aSendCanWaitForTheAnswerOnBothFacades() throws {
+        let expected = ControlCall.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go on", wait: true, timeout: 120))
+        guard case .call(let call, _) = try ScopeCLI.parse(["thread", "send", "3f9a2c17be04", "go on", "--wait", "--timeout", "120"]) else {
+            Issue.record("not a call")
+            return
+        }
+        #expect(call == expected)
+        #expect(MCPBridge.call(tool: "scope_thread_send",
+                               arguments: Data(#"{"thread":"3f9a2c17be04","text":"go on","wait":true,"timeout":120}"#.utf8))
+                == .success(expected))
+        #expect(MCPBridge.call(tool: "scope_thread_send", arguments: Data(#"{"thread":"3f9a2c17be04","message":"go on","block":true}"#.utf8))
+                == .success(.threadSend(ThreadSendParams(thread: "3f9a2c17be04", text: "go on", wait: true))))
+        // Keystrokes have no answer to wait for.
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["thread", "send", "3f9a2c17be04", "x", "--wait", "--no-enter"]) }
+        #expect(ThreadSendParams(thread: "x", text: "y", submit: false, wait: true).waitParams == nil)
+        #expect(ThreadSendParams(thread: "x", text: "y", wait: true, timeout: 30).waitParams == ThreadWaitParams(threads: ["x"], timeout: 30))
+        // The socket outlasts the wait, as for `thread.wait`; a plain send keeps its short bound.
+        #expect(expected.timeout > .seconds(120))
+        #expect(ControlCall.threadSend(ThreadSendParams(thread: "x", text: "y")).timeout == .seconds(30))
+        #expect(expected.serverDeadline(floor: .seconds(60)) > .seconds(120))
+        // An older binary never sends the fields: they decode as off.
+        let request = ControlRequest(caller: ControlCaller(client: "scope-cli/1"), call: expected)
+        #expect(try ControlRequest.decode(request.encoded()).get() == request)
+        let old = Data(#"{"rpc":1,"id":"1","method":"thread.send","caller":{"client":"scope-cli/0.9"},"params":{"thread":"x","text":"y"}}"#.utf8)
+        #expect(try ControlRequest.decode(old).get().call == .threadSend(ThreadSendParams(thread: "x", text: "y")))
+        #expect(MCPBridge.tools.first { $0.name == "scope_thread_send" }?.schema.contains("\"wait\"") == true)
+    }
+
+    /// The send's answer carries the wait's, decoded as an action and printed after the send line.
+    @Test func aSendThatWaitedCarriesTheWaitAcrossTheWire() throws {
+        let pr = PullRequestSummary(number: 38, url: URL(string: "https://github.com/acme/api/pull/38")!, title: "Rework auth",
+                                    state: "open", checks: "passing", mergeable: "mergeable", review: "approved",
+                                    checkedAt: Date(timeIntervalSince1970: 0))
+        let wait = ThreadWaitResult(threads: [
+            .init(thread: "3f9a2c17be04", title: "api", state: "done", settled: true,
+                  reply: AgentReply(text: "Pushed.", at: Date(timeIntervalSince1970: 0)), task: "t1", pullRequest: pr),
+        ], complete: true, waited: 42)
+        let action = ActionResult(message: "typed 5 characters into 3f9a2c17be04 and pressed ↩", thread: "3f9a2c17be04", wait: wait)
+        let response = ControlResponse.result(id: "1", .action(action, .threadSend))
+        #expect(try ControlResponse.decode(try response.encoded(), method: .threadSend) == response)
+        let text = CLIRenderer.text(.action(action, .threadSend))
+        #expect(text.hasPrefix("typed 5 characters into 3f9a2c17be04 and pressed ↩\n\ndone waiting after 42s\n"))
+        #expect(text.contains("Pushed."))
+        #expect(text.contains("pull request #38 open · checks passing · mergeable · approved https://github.com/acme/api/pull/38 · task t1"))
+        // Without a wait, the action is the one line it always was.
+        let plain = ActionResult(message: "typed 5 characters", thread: "3f9a2c17be04")
+        #expect(CLIRenderer.text(.action(plain, .threadSend)) == "typed 5 characters")
+        #expect(!String(decoding: try ControlProtocol.makeEncoder().encode(plain), as: UTF8.self).contains("wait"))
+    }
+
+    /// What `scope list tasks` and `task show` say of a pull request: the line an agent used to run `gh pr view` for.
+    @Test func aTaskCarriesItsPullRequestInTheListAndTheShow() throws {
+        let url = URL(string: "https://github.com/acme/api/pull/38")!
+        let seen = PullRequestSummary(number: 38, url: url, state: "open", checks: "failing", mergeable: "conflicting",
+                                      review: "changesRequested", draft: true, checkedAt: Date(timeIntervalSince1970: 0))
+        #expect(seen.line == "#38 open · draft · checks failing · conflicting · changes requested")
+        #expect(PullRequestSummary(number: 38, url: url, state: "merged", checks: "passing", mergeable: "unknown", review: "none").line
+                == "#38 merged · checks passing")
+        #expect(PullRequestSummary(number: 38, url: url, state: "unknown").line == "#38 unknown")
+        let task = TaskSummary(id: "t1", name: "Rework auth", slug: "rework-auth", branch: "feat/auth", scope: "Acme",
+                               scopeSlug: "acme", root: "/r", repos: ["api"], threads: [], pullRequest: seen)
+        let bare = TaskSummary(id: "t2", name: "Study", slug: "study", branch: "feat/study", scope: "Acme",
+                               scopeSlug: "acme", root: "/s", repos: ["api"], threads: [])
+        let text = CLIRenderer.text(.list(ListResult(tasks: [task, bare])))
+        #expect(text.contains("PR") && text.contains("#38 open · draft · checks failing · conflicting · changes requested"))
+        #expect(!String(decoding: try ControlProtocol.makeEncoder().encode(bare), as: UTF8.self).contains("pullRequest"))
+        let response = ControlResponse.result(id: "1", .list(ListResult(tasks: [task, bare])))
+        #expect(try ControlResponse.decode(try response.encoded(), method: .list) == response)
+        let show = TaskShowResult(
+            scope: "acme",
+            task: .init(id: "t1", slug: "rework-auth", name: "Rework auth", branch: "feat/auth", repos: ["api"], outcome: .active,
+                        createdAt: Date(timeIntervalSince1970: 0), lastActivity: Date(timeIntervalSince1970: 0),
+                        pullRequest: .init(number: 38, url: url, title: "Rework auth", state: "open"), createdByAgent: true, threads: []),
+            prompt: "Rework auth", deliverable: nil, notes: [], pullRequest: seen)
+        #expect(CLIRenderer.text(.taskShow(show)).contains("pr          #38 open · draft · checks failing · conflicting · changes requested https://"))
+        #expect(try ControlResponse.decode(try ControlResponse.result(id: "1", .taskShow(show)).encoded(), method: .taskShow).payload == .taskShow(show))
+    }
+
     @Test func allWaitsForEveryThreadAndAnyForTheFirst() {
         #expect(ThreadWait.isOver([true, true], until: .all))
         #expect(!ThreadWait.isOver([true, false], until: .all))

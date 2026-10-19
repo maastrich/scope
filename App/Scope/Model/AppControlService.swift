@@ -119,7 +119,7 @@ final class AppControlService: ControlService {
             // A driver command rewrites how another agent works and carries no signature: its own, narrower reach.
             let reach = params.command ? automation.effectiveCommandReach : automation.threadReach
             params.text = await model.expandMentions(params.text)
-            return act(on: params.thread, from: origin, reach: reach) { session in
+            let sent = act(on: params.thread, from: origin, reach: reach) { session in
                 guard session.isAlive else {
                     // A scope's residents start on its first visit; a message is a good reason to start one sooner.
                     if session.record.resident != nil, model.residentHolds[session.id] == nil {
@@ -140,6 +140,15 @@ final class AppControlService: ControlService {
                                                          + (params.submit ? " and pressed ↩" : "") + signed,
                                                      thread: session.id.rawValue), .threadSend))
             }
+            // `--wait`: the same wait a second call would have made, its answer carried with the send's. A wait that
+            // fails (the reach for reading is narrower than for typing) leaves the send reported as it was.
+            guard let waitParams = params.waitParams, case .success(.action(var action, let method)) = sent else { return sent }
+            switch await wait(waitParams, from: origin) {
+            case .success(.wait(let result)): action.wait = result
+            case .failure(let error): action.message += "\n(not waited for: \(error.message))"
+            default: break
+            }
+            return .success(.action(action, method))
         case .threadRead(let params):
             // The gate is `thread.send`'s: the same reach, and any thread from the user's own terminal.
             return act(on: params.thread, from: origin) { session in
@@ -392,12 +401,47 @@ final class AppControlService: ControlService {
             try? await Task.sleep(for: .milliseconds(500))
             settled = look()
         }
+        // A settled thread's next question is where its pull request stands: asked of GitHub now, once per task,
+        // unless the background pass just did, so the answer spares the caller a `gh pr view` of its own.
+        var refreshed: Set<TaskID> = []
+        for (session, done) in zip(sessions, settled) where done {
+            guard let task = taskOf(session), !task.isArchived, !refreshed.contains(task.id) else { continue }
+            refreshed.insert(task.id)
+            let checkedAt = model.pullRequestCheckedAt(for: task)
+            guard checkedAt.map({ Date.now.timeIntervalSince($0) > AppControlService.pullRequestFreshness }) ?? true else { continue }
+            await model.refreshTaskPullRequest(task)
+        }
         let entries = zip(sessions, settled).map { session, settled in
-            ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
-                                   settled: settled, reply: session.lastReply, lastPromptAt: session.lastPromptAt)
+            let task = taskOf(session)
+            return ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
+                                          settled: settled, reply: session.lastReply, lastPromptAt: session.lastPromptAt,
+                                          agents: session.waitSnapshot.agents, task: task?.record.id.rawValue,
+                                          pullRequest: task.flatMap(pullRequestSummary))
         }
         return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
                                                waited: Int(Date.now.timeIntervalSince(started).rounded()))))
+    }
+
+    /// A pull request looked at within this many seconds is not asked about again when a wait ends.
+    static let pullRequestFreshness: TimeInterval = 30
+
+    /// The task a thread runs in, when it does.
+    private func taskOf(_ session: ThreadSession) -> TaskState? {
+        guard let raw = session.record.taskID else { return nil }
+        return model.tasks.first { $0.record.id.rawValue == raw }
+    }
+
+    /// The task's pull request as the answers carry it: what `gh` last said when Scope asked (checks, mergeability,
+    /// review), else what the record kept when it was bound.
+    private func pullRequestSummary(for task: TaskState) -> PullRequestSummary? {
+        if let live = model.livePullRequest(for: task) {
+            return PullRequestSummary(number: live.number, url: live.url, title: live.title, state: live.state.rawValue,
+                                      checks: live.checks.rawValue, mergeable: live.mergeable.rawValue,
+                                      review: live.reviewDecision.rawValue, draft: live.isDraft,
+                                      checkedAt: model.pullRequestCheckedAt(for: task))
+        }
+        guard let link = task.record.pullRequest else { return nil }
+        return PullRequestSummary(number: link.number, url: link.url, title: link.title, state: link.state ?? "unknown")
     }
 
     /// The task named by id or slug.
@@ -839,9 +883,12 @@ final class AppControlService: ControlService {
         let threads = model.threads.map(\.record.snapshot)
         let home = model.env.home
         let (history, deliverables) = await Task.detached { (ActivityHistory.load(home: home), TaskDeliverableStore.loadAll(home: home)) }.value
-        guard let result = ActivitySummary.show(params.task, scopes: scopes, tasks: tasks, threads: threads, history: history,
+        guard var result = ActivitySummary.show(params.task, scopes: scopes, tasks: tasks, threads: threads, history: history,
                                                 deliverables: deliverables) else {
             return .failure(.notFound("no task “\(params.task)”, open, archived or closed since the history began"))
+        }
+        if let task = model.tasks.first(where: { $0.record.id.rawValue == result.task.id }) {
+            result.pullRequest = pullRequestSummary(for: task)
         }
         return .success(.taskShow(result))
     }
@@ -872,7 +919,8 @@ final class AppControlService: ControlService {
             threads: model.threads(in: task.record.id).map(\.id.rawValue),
             topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt,
             behind: model.lag(of: task)?.behind, conflicts: model.lag(of: task)?.conflicts,
-            holdBranch: task.record.holdBranch ? true : nil
+            holdBranch: task.record.holdBranch ? true : nil,
+            pullRequest: pullRequestSummary(for: task)
         )
     }
 

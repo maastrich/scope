@@ -159,7 +159,7 @@ enum HookCLI {
         }
         // Every value lifted here is bounded (`HookStdin.toolTargetLimit`, a path), so the payload stays small.
         let lifted = [(HookEvent.toolKey, stdin.toolName), (HookEvent.targetKey, stdin.toolTarget),
-                      (HookEvent.transcriptKey, stdin.transcriptPath)]
+                      (HookEvent.transcriptKey, stdin.transcriptPath), (HookEvent.agentKey, stdin.agentID)]
         for case let (key, value?) in lifted where payload[key] == nil && !value.isEmpty {
             payload[key] = value
         }

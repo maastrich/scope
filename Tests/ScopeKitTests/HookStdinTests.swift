@@ -14,6 +14,17 @@ struct HookStdinTests {
         #expect(stdin.hookEventName == "Notification")
     }
 
+    @Test("SubagentStart and SubagentStop give the sub-agent's id, the same on both")
+    func liftsTheAgentID() {
+        let json = #"{"session_id":"s1","hook_event_name":"SubagentStop","agent_id":"a-42","agent_type":"Explore","stop_hook_active":false}"#
+        let stdin = HookStdin.parse(Data(json.utf8))
+        #expect(stdin.agentID == "a-42")
+        #expect(stdin.sessionID == "s1")
+        #expect(HookStdin.parse(Data(#"{"agent_id":""}"#.utf8)).agentID == nil)
+        #expect(HookCommandEvent(word: "agent.ended")?.resolve(stdin: stdin) == .agentEnded)
+        #expect(HookCommandEvent(word: "agent.started")?.resolve(stdin: stdin) == .agentStarted)
+    }
+
     @Test("PostToolUse gives how long the call took")
     func parsesToolDuration() {
         let json = #"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":""},"duration_ms":41}"#

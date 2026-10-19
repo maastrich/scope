@@ -19,6 +19,7 @@ import ScopeCore
 /// | `StopFailure`                         | `turn.failed`           | failed                |
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 /// | `MessageDisplay`                      | `turn.said`             | unchanged (the answer, as it is written) |
+/// | `SubagentStart` / `SubagentStop`      | `agent.started` / `agent.ended` | unchanged (a sub-agent running in the background holds `thread.wait`) |
 ///
 /// `MessageDisplay` exists since Claude Code 2.1.152; an older one ignores the entry with a note and keeps the
 /// rest of the file, so the reading column simply waits for `Stop` there.
@@ -60,6 +61,8 @@ public enum ClaudeHooksAdapter {
         Entry(event: "StopFailure", matcher: nil, arguments: ["turn.failed", "--stdin"]),
         Entry(event: "SessionEnd", matcher: nil, arguments: ["thread.ended", "--stdin"]),
         Entry(event: "MessageDisplay", matcher: nil, arguments: ["turn.said", "--stdin"]),
+        Entry(event: "SubagentStart", matcher: nil, arguments: ["agent.started", "--stdin"]),
+        Entry(event: "SubagentStop", matcher: nil, arguments: ["agent.ended", "--stdin"]),
     ]
 
     /// `<home>/threads/<thread-id>.claude-settings.json`

@@ -43,16 +43,18 @@ public enum ScopeCLI {
     public static let usage = """
     usage: scope <command> [options]
 
-      scope list [scopes|threads|tasks]   what Scope is holding right now
+      scope list [scopes|threads|tasks]   what Scope is holding right now, each task with its pull request
       scope thread new [options]          open a thread and print its id
       scope thread stop <id>              stop the thread's process (the row stays)
       scope thread close <id>             hang it up and remove it
       scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line);
-                                          from a thread, the message says which thread sent it
+                                          from a thread, the message says which thread sent it; --wait then
+                                          waits for its answer as thread wait would (--timeout <s>)
       scope thread read <id>              the last lines of its terminal (-n/--lines <count>, --cursor <line>);
                                           --reply for the agent's last answer alone
       scope thread wait <id>...           block until the threads finish their turn or need someone, then print
-                                          their state and last answer (--any for the first one, --timeout <s>)
+                                          their state, last answer and pull request (--any for the first one,
+                                          --timeout <s>); a sub-agent still running in the background holds it
       scope task new <prompt> [options]   sandbox a task (branch + worktrees) and open its first thread;
                                           @task:<slug> / @thread:<id> in a prompt or a message is replaced by
                                           that task's or thread's context (brief, branch, PR, last answer)
@@ -120,6 +122,9 @@ public enum ScopeCLI {
       --command                     a command for the driver itself (/model, /clear, /compact): typed verbatim,
                                     no line saying who sent it; agents may only command the threads they opened
                                     unless Settings ▸ Automation says otherwise
+      --wait                        once submitted, wait for the thread's answer and print it, as thread wait
+                                    does (one call instead of send then wait)
+      --timeout <s>                 seconds the wait may take (default 600)
 
     task new:
       --scope <slug|name|id|path>   which scope
@@ -305,17 +310,22 @@ public enum ScopeCLI {
                 var words: [String] = []
                 var submit = true
                 var command = false
-                let shared = try options(&rest, command: "thread send", positional: { words.append($0) }, specific: { flag, _ in
+                var wait = false
+                var timeout: Int?
+                let shared = try options(&rest, command: "thread send", positional: { words.append($0) }, specific: { flag, value in
                     switch flag {
                     case "--no-enter": submit = false
                     case "--command": command = true
+                    case "--wait": wait = true
+                    case "--timeout": timeout = try count(try value(), flag: flag)
                     default: return false
                     }
                     return true
                 })
                 guard words.count >= 2 else { throw UsageError(message: "thread send takes a thread id and the text to type", usage: usage) }
+                guard submit || !wait else { throw UsageError(message: "--wait needs the text submitted: drop --no-enter", usage: usage) }
                 return .call(.threadSend(ThreadSendParams(thread: words[0], text: words.dropFirst().joined(separator: " "),
-                                                          submit: submit, command: command)), shared)
+                                                          submit: submit, command: command, wait: wait, timeout: timeout)), shared)
             case "read":
                 var words: [String] = []
                 var parameters = ThreadReadParams(thread: "")

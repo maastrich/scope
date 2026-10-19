@@ -44,6 +44,8 @@ public struct HookStdin: Sendable, Equatable {
     public var displayFinal: Bool?
     /// `PostToolUse`: how long the call took (`duration_ms`).
     public var toolDurationMs: Int?
+    /// Claude Code `SubagentStart` / `SubagentStop`: the sub-agent's own id (`agent_id`), the same on both.
+    public var agentID: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
@@ -164,6 +166,7 @@ public struct HookStdin: Sendable, Equatable {
         let input = object["tool_input"] as? [String: Any]
         result.toolTarget = toolTarget(tool: result.toolName, input: input)
         result.toolDurationMs = (object["duration_ms"] as? NSNumber).map(\.intValue)
+        result.agentID = (object["agent_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.question = question(tool: result.toolName, input: input, message: object["message"] as? String)
         if result.hookEventName == "MessageDisplay" {

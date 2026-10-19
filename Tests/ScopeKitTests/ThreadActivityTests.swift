@@ -27,6 +27,32 @@ import Testing
 
     // MARK: Reducer
 
+    /// A sub-agent started and not ended is still running: what holds `thread.wait` across a turn that ended with
+    /// "waiting for N background agents". Its end, a new session or the end of the thread forget it, and so does
+    /// the bound: an end lost on the way must not hold every later wait.
+    @Test func subAgentsAreCountedUntilTheyEndOrTheProcessGoes() {
+        var activity = Self.fold([
+            Self.event(.turnStarted, 1),
+            Self.event(.agentStarted, 2, [HookEvent.agentKey: "a1"]),
+            Self.event(.agentStarted, 3, [HookEvent.agentKey: "a2"]),
+            Self.event(.agentStarted, 3, [:]),
+            Self.event(.turnEnded, 4, [HookEvent.replyKey: "Waiting for 2 background agents."]),
+        ])
+        #expect(activity.runningAgents(now: Self.at(5)) == 2, "an event without an id counts nothing")
+        #expect(!activity.inTurn)
+        #expect(activity.turns.count == 1, "the turn ended all the same")
+        activity = Self.fold([Self.event(.agentEnded, 6, [HookEvent.agentKey: "a1"])], from: activity)
+        #expect(activity.runningAgents(now: Self.at(7)) == 1)
+        #expect(activity.runningAgents(now: Self.at(3 + ThreadActivity.agentLimit)) == 0, "past the bound, believed gone")
+        #expect(Self.fold([Self.event(.sessionStarted, 8)], from: activity).runningAgents(now: Self.at(9)) == 0)
+        #expect(Self.fold([Self.event(.threadEnded, 8)], from: activity).runningAgents(now: Self.at(9)) == 0)
+        // A sub-agent reporting after the turn is not a tool report: it never reopens the turn.
+        #expect(!Self.fold([Self.event(.agentEnded, 8, [HookEvent.agentKey: "a2"])], from: activity).inTurn)
+        // Not written to the file: the process is what runs them.
+        let data = try? JSONStore.makeEncoder(fractionalSeconds: true).encode(activity)
+        #expect(data.map { !String(decoding: $0, as: UTF8.self).contains("\"agents\"") } == true)
+    }
+
     @Test func aPromptOpensATurnAndToolsRunInsideIt() {
         let activity = Self.fold([
             Self.event(.sessionStarted, 0, [HookEvent.transcriptKey: "/t/9b1d.jsonl"]),
