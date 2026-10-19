@@ -59,8 +59,10 @@ public enum ScopeCLI {
       scope task show <id|slug>           its whole brief, and what was kept when it was archived or closed: each
                                           thread's last answer and its report file (REPORT.md or --deliverable)
       scope task archive <id|slug>        put a finished task away: threads and processes stopped,
-                                          uncommitted work saved, worktrees removed; branch kept
-      scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too)
+                                          uncommitted work saved, worktrees removed; branch kept (--scope for
+                                          a shared slug)
+      scope task close <id|slug>          archive it, then forget it (--delete-branch to delete the branch too;
+                                          --scope for a shared slug)
       scope task restore <id|slug>        bring an archived task back: worktrees rebuilt on its branches, the
                                           uncommitted work saved at archive put back (--scope for a shared slug)
       scope task rebase [<id|slug>]        bring a task up to date with main now: behind and clean, Scope rebases
@@ -439,16 +441,22 @@ public enum ScopeCLI {
             }
             if sub == "archive" {
                 var words: [String] = []
-                let shared = try options(&rest, command: "task archive", positional: { words.append($0) })
+                var scope: String?
+                let shared = try options(&rest, command: "task archive", positional: { words.append($0) }, specific: { flag, value in
+                    guard flag == "--scope" else { return false }
+                    scope = try value()
+                    return true
+                })
                 guard words.count == 1 else { throw UsageError(message: "task archive takes one task id or slug", usage: usage) }
-                return .call(.taskArchive(TaskArchiveParams(task: words[0])), shared)
+                return .call(.taskArchive(TaskArchiveParams(task: words[0], scope: scope)), shared)
             }
             if sub == "close" {
                 var words: [String] = []
                 var parameters = TaskCloseParams(task: "")
-                let shared = try options(&rest, command: "task close", positional: { words.append($0) }, specific: { flag, _ in
+                let shared = try options(&rest, command: "task close", positional: { words.append($0) }, specific: { flag, value in
                     switch flag {
                     case "--delete-branch": parameters.deleteBranch = true
+                    case "--scope": parameters.scope = try value()
                     // Accepted from older scripts; a close no longer refuses anything, so there is nothing to force.
                     case "--force": break
                     default: return false

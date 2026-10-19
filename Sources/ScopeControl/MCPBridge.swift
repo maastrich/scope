@@ -280,7 +280,8 @@ public enum MCPBridge {
             """,
             schema: """
             {"type":"object","properties":{\
-            "task":{"type":"string","description":"Task id or slug."}\
+            "task":{"type":"string","description":"Task id or slug."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
             },"required":["task"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -388,7 +389,8 @@ public enum MCPBridge {
             schema: """
             {"type":"object","properties":{\
             "task":{"type":"string","description":"Task id or slug."},\
-            "delete_branch":{"type":"boolean","description":"Delete the task's branch as well."}\
+            "delete_branch":{"type":"boolean","description":"Delete the task's branch as well."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
             },"required":["task"],"additionalProperties":false}
             """,
             readOnly: false,
@@ -753,14 +755,16 @@ public enum MCPBridge {
     struct TaskCloseArguments: Decodable {
         var task: String
         var deleteBranch: Bool?
+        var scope: String?
 
         private enum CodingKeys: String, CodingKey {
             case task
             case deleteBranch = "delete_branch"
+            case scope
         }
 
         var call: TaskCloseParams {
-            TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false)
+            TaskCloseParams(task: task, deleteBranch: deleteBranch ?? false, scope: scope)
         }
     }
 

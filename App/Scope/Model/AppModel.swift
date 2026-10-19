@@ -59,6 +59,8 @@ final class AppModel {
     private(set) var isBootstrapped = false
     /// Follows Vibe Island's jump log (`AppModel+Attention`); `nil` until bootstrap.
     @ObservationIgnored var vibeIslandJumps: VibeIslandJumpWatcher?
+    /// The watchers of the state documents under the home (`AppModel+ExternalChanges`); `nil` until bootstrap.
+    @ObservationIgnored var stateWatchers: StateWatchers?
     /// Threads that exited live: the tab stays (greyed) while the toast shows; see `threadExited`.
     private(set) var exitNotices: [ThreadExitNotice] = []
     /// Threads closed in the last 30 s, most recent last (⇧⌘T restores the last one).
@@ -682,6 +684,7 @@ final class AppModel {
         startDiskUsageRefresh()
         isBootstrapped = true
         startReturnTracking()
+        startWatchingState()
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }
 
@@ -826,6 +829,25 @@ final class AppModel {
 
     // MARK: Config
 
+    /// The config as somebody changed it on disk (`applyExternalConfig`): taken as is, never written back.
+    func takeConfig(fromDisk config: ScopeConfig) {
+        self.config = config
+    }
+
+    /// A scope declared on disk behind the app (`applyExternalConfig`): shown and watched, nothing written.
+    func addScope(fromDisk declaration: ScopeDeclaration) -> ScopeState {
+        let state = ScopeState(declaration: declaration, git: env.git, problems: problems)
+        scopes.append(state)
+        state.startWatching()
+        return state
+    }
+
+    /// The sidebar order as `config.scopes` on disk has it; a scope the order does not name goes last.
+    func orderScopes(like declarations: [ScopeDeclaration]) {
+        let order = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.id, $0) })
+        scopes.sort { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
+    }
+
     private func saveConfig() {
         let config = config
         Task { await env.config.save(config) }
@@ -895,6 +917,15 @@ final class AppModel {
     }
 
     func removeScope(_ id: ScopeID, closingThreads: Bool) async {
+        guard scopes.contains(where: { $0.id == id }) else { return }
+        config.scopes.removeAll { $0.id == id }
+        saveConfig()
+        await tearDownScope(id)
+    }
+
+    /// Everything `removeScope` does besides the config: the state, its threads and its tasks' watchers go, the
+    /// selection moves on. Also the path of a scope whose declaration vanished from `config.json` on disk.
+    func tearDownScope(_ id: ScopeID) async {
         guard let index = scopes.firstIndex(where: { $0.id == id }) else { return }
         let scope = scopes[index]
         scope.stopWatching()
@@ -909,8 +940,6 @@ final class AppModel {
             task.stopWatching()
         }
         scopes.remove(at: index)
-        config.scopes.removeAll { $0.id == id }
-        saveConfig()
         for name in [scope.declaration.logo, scope.declaration.logoDark].compactMap(\.self) { logos.remove(named: name) }
         if scopeSettingsID == id { scopeSettingsID = nil }
         for repo in scope.repos {
@@ -1310,6 +1339,24 @@ final class AppModel {
     }
 
     /// The permanent part of a close: hook files, problems, the persisted record.
+    /// The record file of a stopped thread was removed outside the app: the thread goes the way a closed one does,
+    /// except that nothing is deleted — the file is gone already — and the history gets no line.
+    func dropThread(removedOutside id: ThreadID) async {
+        guard let session = session(id), !session.isAlive else { return }
+        residentRestarts.removeValue(forKey: id)?.cancel()
+        residentHolds[id] = nil
+        residentQuickExits[id] = nil
+        takeExitNotice(id)
+        detach(session)
+        session.onActivityChanged = nil
+        session.onRecordChanged = nil
+        env.knownThreads.remove(id)
+        autoRelaunchBlocks[id] = nil
+        problems.dismissAll(thread: id)
+        await forgetActivity(id)
+        forgetAssist(id)
+    }
+
     private func forget(id: ThreadID, scopeID: ScopeID, profile: DriverProfile) async {
         env.knownThreads.remove(id)
         autoRelaunchBlocks[id] = nil
