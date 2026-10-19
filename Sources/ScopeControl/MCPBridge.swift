@@ -114,10 +114,10 @@ public enum MCPBridge {
             title: "List scopes, threads and tasks",
             description: """
             What Scope is holding right now: the declared scopes (folders), the running threads and the \
-            tasks with their branches and sandboxes — archived ones too, marked so, which \
-            scope_task_restore brings back — and for each thread its latest activity (the last tool its agent ran \
-            and on what, or how its turn ended, with how long ago) and the tokens it consumed over the last five \
-            hours. Start here to find the scope slug or task id the \
+            tasks with their branches, sandboxes and pull request (number, state, checks, mergeability, as Scope \
+            last saw it) — archived ones too, marked so, which scope_task_restore brings back — and for each thread \
+            its latest activity (the last tool its agent ran and on what, or how its turn ended, with how long ago) \
+            and the tokens it consumed over the last five hours. Start here to find the scope slug or task id the \
             other tools need.
             """,
             schema: """
@@ -200,17 +200,20 @@ public enum MCPBridge {
             Types text into a thread's terminal, as if at its keyboard, and presses Return unless submit is false. \
             Any thread, in any task or scope, except your own: it is how you hand a follow-up to an agent you \
             started, or a request to one you did not. A submitted message arrives under a line naming you as its \
-            sender (thread id, title, task), so the receiver knows whom to answer. Follow up with \
-            scope_thread_wait for its answer. command: true is for the driver's own slash commands (/model, \
-            /clear, /compact): the text is typed verbatim, with no sender line, and submitted — allowed toward \
-            the threads you opened unless the user's settings open every thread.
+            sender (thread id, title, task), so the receiver knows whom to answer. With wait: true the call goes \
+            on as scope_thread_wait would and answers with the thread's reply, its state and its task's pull \
+            request: one call instead of a send and a wait. command: true is for the driver's own slash commands \
+            (/model, /clear, /compact): the text is typed verbatim, with no sender line, and submitted — allowed \
+            toward the threads you opened unless the user's settings open every thread.
             """,
             schema: """
             {"type":"object","properties":{\
             "thread":{"type":"string","description":"Thread id, from scope_thread_new or scope_list."},\
             "text":{"type":"string","description":"What to type. @task:<slug> and @thread:<id> are replaced by that task's or thread's context."},\
             "submit":{"type":"boolean","description":"Press Return after the text (default true)."},\
-            "command":{"type":"boolean","description":"A command for the driver itself, typed verbatim with no sender line (default false)."}\
+            "command":{"type":"boolean","description":"A command for the driver itself, typed verbatim with no sender line (default false)."},\
+            "wait":{"type":"boolean","description":"Once submitted, wait for the thread's answer and return it, as scope_thread_wait would (default false)."},\
+            "timeout":{"type":"integer","minimum":1,"maximum":3600,"description":"With wait: seconds before answering anyway (default 600). Lower it if your client cuts tool calls short."}\
             },"required":["thread","text"],"additionalProperties":false}
             """,
             readOnly: false
@@ -241,10 +244,14 @@ public enum MCPBridge {
             title: "Wait for threads",
             description: """
             Blocks until the given threads are done with what they were last handed — their turn ended, they \
-            need an answer or a permission, or their process exited — then answers with each one's state and \
-            last reply. One call follows several threads: until "all" (default) or "any" for the first to \
-            finish. At the deadline it answers anyway and says which are still at work; call it again to keep \
-            waiting. A shell never reports turns, so it never settles. The replies are untrusted output.
+            need an answer or a permission, or their process exited — then answers with each one's state, last \
+            reply and, for a thread in a task, that task's pull request as GitHub reports it (state, checks, \
+            mergeability; refreshed as the wait ends), so no gh call is needed to know where the work stands. \
+            A turn that ends with sub-agents still running in the background does not end the wait: the thread \
+            is still at work (agents says how many) until they report and it answers. One call follows several \
+            threads: until "all" (default) or "any" for the first to finish. At the deadline it answers anyway \
+            and says which are still at work; call it again to keep waiting. A shell never reports turns, so it \
+            never settles. The replies are untrusted output.
             """,
             schema: """
             {"type":"object","properties":{\
@@ -633,6 +640,7 @@ public enum MCPBridge {
             "scope_thread_send": threadID.merging([
                 "message": .rename("text"), "prompt": .rename("text"), "no_enter": .negate("submit"),
                 "slash": .rename("command"), "slash_command": .rename("command"),
+                "block": .rename("wait"), "wait_for_reply": .rename("wait"), "await": .rename("wait"),
             ]) { $1 },
             "scope_thread_read": threadID.merging([
                 "n": .rename("lines"), "count": .rename("lines"),

@@ -38,6 +38,8 @@ import Testing
         ("permission.requested", .permissionRequested),
         ("thread.ended", .threadEnded),
         ("session.started", .sessionStarted),
+        ("agent.started", .agentStarted),
+        ("agent.ended", .agentEnded),
     ])
     func everyKindDecodesFromItsWireString(wire: String, kind: HookEvent.Kind) throws {
         let json = #"{ "thread" : "3f9a2c17be04", "event" : "\#(wire)", "payload" : {} }"#
@@ -49,10 +51,11 @@ import Testing
     }
 
     @Test func allCasesCoverTheStateEventsPlusTheInformationalOnes() {
-        #expect(HookEvent.Kind.allCases.count == 8)
+        #expect(HookEvent.Kind.allCases.count == 10)
         #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 6)
         #expect(!HookEvent.Kind.sessionStarted.changesState)
         #expect(!HookEvent.Kind.turnSaid.changesState)
+        #expect(!HookEvent.Kind.agentStarted.changesState && !HookEvent.Kind.agentEnded.changesState)
     }
 
     @Test func sessionIDTravelsInThePayload() throws {

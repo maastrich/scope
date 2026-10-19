@@ -51,9 +51,9 @@ public enum CLIRenderer {
                 }))
             }
             if !result.tasks.isEmpty {
-                blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "MAIN", "ROOT"], result.tasks.map {
+                blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "PR", "MAIN", "ROOT"], result.tasks.map {
                     [$0.slug + ($0.archivedAt == nil ? "" : " (archived)"), $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch,
-                     mainColumn($0), $0.root]
+                     $0.pullRequest?.line ?? "", mainColumn($0), $0.root]
                 }))
             }
             if !result.threads.isEmpty {
@@ -98,7 +98,8 @@ public enum CLIRenderer {
             }
             return lines.joined(separator: "\n")
         case .action(let result, _):
-            return result.message
+            guard let wait = result.wait else { return result.message }
+            return result.message + "\n\n" + text(.wait(wait))
         case .read(let result):
             var lines: [String]
             if result.source == ThreadReadParams.View.reply.rawValue {
@@ -121,7 +122,11 @@ public enum CLIRenderer {
                 : "still at work after \(result.waited)s: " + result.threads.filter { !$0.settled }.map(\.thread).joined(separator: ", ")]
             for entry in result.threads {
                 lines.append("")
-                lines.append("thread \(entry.thread) — \(entry.title) (\(entry.state)\(entry.settled ? "" : ", still at work"))")
+                var status = entry.state
+                if !entry.settled { status += ", still at work" }
+                if let agents = entry.agents { status += ": \(agents) sub-agent\(agents == 1 ? "" : "s") running in the background" }
+                lines.append("thread \(entry.thread) — \(entry.title) (\(status))")
+                if let pr = entry.pullRequest { lines.append("pull request \(pr.line) \(pr.url.absoluteString)" + (entry.task.map { " · task \($0)" } ?? "")) }
                 if let reply = entry.reply {
                     lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
                     if entry.staleReply == true { lines.append(staleNotice) }
@@ -301,7 +306,11 @@ public enum CLIRenderer {
         var lines = ["task \(task.slug) — \(task.name) (\(result.scope))"]
         lines.append("outcome     \(task.outcome.rawValue)")
         lines.append("branch      \(task.branch)" + (task.repos.isEmpty ? "" : " in " + task.repos.joined(separator: ", ")))
-        if let pr = task.pullRequest { lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)") }
+        if let live = result.pullRequest {
+            lines.append("pr          \(live.line)" + (live.title.map { " — \($0)" } ?? "") + " \(live.url.absoluteString)")
+        } else if let pr = task.pullRequest {
+            lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)")
+        }
         lines.append("created     \(time(task.createdAt))")
         if let archived = task.archivedAt { lines.append("archived    \(time(archived))") }
         if let closed = task.closedAt { lines.append("closed      \(time(closed))") }

@@ -266,7 +266,9 @@ public enum ControlCall: Sendable, Equatable {
         case .ping: .seconds(5)
         case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList: .seconds(15)
         case .threadNew: .seconds(60)
-        case .threadStop, .threadClose, .threadSend, .taskTopic, .milestoneAdd: .seconds(30)
+        case .threadStop, .threadClose, .taskTopic, .milestoneAdd: .seconds(30)
+        // Typing takes a moment; with `wait`, the thread's whole turn follows.
+        case .threadSend(let params): .seconds(30 + (params.waitParams.map { $0.effectiveTimeout + 15 } ?? 0))
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .scheduleRun: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
@@ -282,6 +284,7 @@ public enum ControlCall: Sendable, Equatable {
     public func serverDeadline(floor: Duration) -> Duration {
         switch self {
         case .threadWait(let params): max(floor, .seconds(params.effectiveTimeout + 10))
+        case .threadSend(let params): params.waitParams.map { max(floor, .seconds($0.effectiveTimeout + 20)) } ?? floor
         case .release: max(floor, .seconds(ReleaseParams.serverTimeout + 15))
         default: floor
         }
@@ -364,12 +367,19 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
     /// line saying who sent it — a signature would turn the command into prose — and submitted. Off by default;
     /// agents may only command the threads `AutomationSettings.commandReach` lets them.
     public var command: Bool
+    /// Once typed and submitted, wait for the thread's answer as `thread.wait` would, and return it with the
+    /// action: one call where an agent made two, every time. Off by default; ignored without `submit`.
+    public var wait: Bool
+    /// Seconds the wait may take (`ThreadWaitParams.defaultTimeout` when absent); nothing without `wait`.
+    public var timeout: Int?
 
-    public init(thread: String, text: String, submit: Bool = true, command: Bool = false) {
+    public init(thread: String, text: String, submit: Bool = true, command: Bool = false, wait: Bool = false, timeout: Int? = nil) {
         self.thread = thread
         self.text = text
         self.submit = submit
         self.command = command
+        self.wait = wait
+        self.timeout = timeout
     }
 
     public init(from decoder: any Decoder) throws {
@@ -378,6 +388,16 @@ public struct ThreadSendParams: Codable, Sendable, Equatable {
         text = try container.decode(String.self, forKey: .text)
         submit = try container.decodeIfPresent(Bool.self, forKey: .submit) ?? true
         command = try container.decodeIfPresent(Bool.self, forKey: .command) ?? false
+        wait = try container.decodeIfPresent(Bool.self, forKey: .wait) ?? false
+        timeout = try container.decodeIfPresent(Int.self, forKey: .timeout)
+    }
+
+    /// `true` when the answer carries a wait: asked for, on a submitted message.
+    public var waits: Bool { wait && submit }
+
+    /// The wait the send goes on with, when it does.
+    public var waitParams: ThreadWaitParams? {
+        waits ? ThreadWaitParams(threads: [thread], until: .all, timeout: timeout) : nil
     }
 }
 
@@ -892,6 +912,50 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     }
 }
 
+/// A task's pull request as Scope last saw it, in the answers an agent reads before deciding what to do next
+/// (`scope list tasks`, `task.show`, `thread.wait`): what used to take a `gh pr view` of its own. Scope refreshes
+/// every open task's pull request in the background and again when a wait on one of its threads ends; the
+/// checks, mergeability and review decision are from that last look, `checkedAt` says when it was.
+public struct PullRequestSummary: Codable, Sendable, Equatable {
+    public var number: Int
+    public var url: URL
+    public var title: String?
+    /// `open`, `merged`, `closed`; `unknown` when the task was bound to the pull request and nothing asked GitHub since.
+    public var state: String
+    /// `passing`, `failing`, `pending`, `none`; absent until GitHub was asked.
+    public var checks: String?
+    /// `mergeable`, `conflicting`, `unknown`; absent until GitHub was asked.
+    public var mergeable: String?
+    /// `approved`, `changesRequested`, `reviewRequired`, `none`; absent until GitHub was asked.
+    public var review: String?
+    public var draft: Bool?
+    /// When `gh` last answered about it; absent when only the record knows it.
+    public var checkedAt: Date?
+
+    public init(number: Int, url: URL, title: String? = nil, state: String, checks: String? = nil, mergeable: String? = nil,
+                review: String? = nil, draft: Bool? = nil, checkedAt: Date? = nil) {
+        self.number = number
+        self.url = url
+        self.title = title
+        self.state = state
+        self.checks = checks
+        self.mergeable = mergeable
+        self.review = review
+        self.draft = draft
+        self.checkedAt = checkedAt
+    }
+
+    /// `#38 open · checks passing · mergeable · approved`, as the tables and the wait print it.
+    public var line: String {
+        var parts = ["#\(number) \(state)"]
+        if draft == true { parts.append("draft") }
+        if let checks { parts.append("checks \(checks)") }
+        if let mergeable, mergeable != "unknown" { parts.append(mergeable) }
+        if let review, review != "none" { parts.append(review == "changesRequested" ? "changes requested" : review == "reviewRequired" ? "review required" : review) }
+        return parts.joined(separator: " · ")
+    }
+}
+
 public struct TaskSummary: Codable, Sendable, Equatable {
     public var id: String
     public var name: String
@@ -904,6 +968,8 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var threads: [String]
     /// The topic the task is filed under, if any.
     public var topic: String?
+    /// Its pull request, as Scope last saw it; absent when the task has none Scope knows of.
+    public var pullRequest: PullRequestSummary?
     /// The task whose agent created this one, if any.
     public var parentTask: String?
     /// When it was archived; `nil` for a live task. An archived task has no sandbox until `task.restore` brings it back.
@@ -917,7 +983,9 @@ public struct TaskSummary: Codable, Sendable, Equatable {
 
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
                 root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil,
-                archivedAt: Date? = nil, behind: Int? = nil, conflicts: Int? = nil, holdBranch: Bool? = nil) {
+                archivedAt: Date? = nil, behind: Int? = nil, conflicts: Int? = nil, holdBranch: Bool? = nil,
+                pullRequest: PullRequestSummary? = nil) {
+        self.pullRequest = pullRequest
         self.behind = behind
         self.conflicts = conflicts
         self.holdBranch = holdBranch
@@ -1071,11 +1139,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var message: String
     public var thread: String?
     public var task: String?
+    /// `thread.send` with `wait`: how the thread stood once it answered, exactly what `thread.wait` would have said.
+    public var wait: ThreadWaitResult?
 
-    public init(message: String, thread: String? = nil, task: String? = nil) {
+    public init(message: String, thread: String? = nil, task: String? = nil, wait: ThreadWaitResult? = nil) {
         self.message = message
         self.thread = thread
         self.task = task
+        self.wait = wait
     }
 }
 
@@ -1150,9 +1221,15 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         /// The reply predates the thread's latest prompt: it answers something else, and this turn has not
         /// answered yet (a question, a permission, a deadline came first).
         public var staleReply: Bool?
+        /// Sub-agents of the driver still running in the background, when any: why an `idle` thread is not settled.
+        public var agents: Int?
+        /// The task the thread runs in, when it does, and that task's pull request as Scope last saw it — refreshed
+        /// when the wait ends, so the answer says whether the work is merged, mergeable or failing its checks.
+        public var task: String?
+        public var pullRequest: PullRequestSummary?
 
         public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil,
-                    lastPromptAt: Date? = nil) {
+                    lastPromptAt: Date? = nil, agents: Int = 0, task: String? = nil, pullRequest: PullRequestSummary? = nil) {
             self.thread = thread
             self.title = title
             self.state = state
@@ -1160,6 +1237,9 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
             self.reply = reply.map { ThreadTranscript.defused($0.text) }
             self.replyAt = reply?.at
             self.staleReply = reply.map { ThreadWait.isStale($0, lastPromptAt: lastPromptAt) }
+            self.agents = agents > 0 ? agents : nil
+            self.task = task
+            self.pullRequest = pullRequest
         }
     }
 
