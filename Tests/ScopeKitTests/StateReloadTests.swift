@@ -185,11 +185,11 @@ import ScopeGit
     @Test func configReloadsAnOutsideEditButNotItsOwnWriteNorWhileASaveIsPending() async throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }
-        let store = ConfigStore(home: home, saveDelay: .milliseconds(40))
+        let store = ConfigStore(home: home, saveDelay: .seconds(60))
         var config = ScopeConfig.empty
         config.preferences.branchPrefix = "feat/"
         await store.save(config)
-        try await Task.sleep(for: .milliseconds(200))
+        await store.flush()
         #expect(await store.writeCount == 1)
         #expect(await store.reloadIfChanged() == nil)
 
@@ -207,7 +207,7 @@ import ScopeGit
         outside.preferences.branchPrefix = "docs/"
         try editOutside(outside, at: store.url)
         #expect(await store.reloadIfChanged() == nil)
-        try await Task.sleep(for: .milliseconds(200))
+        await store.flush()
         #expect(await store.reloadIfChanged() == nil)
         #expect(try JSONStore.load(ScopeConfig.self, from: store.url) == later)
 
