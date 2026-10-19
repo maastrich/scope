@@ -152,6 +152,7 @@ struct ThreadBanner: View {
                     Task { await model.relaunch(session.id) }
                 }
                 .keyboardShortcut("r", modifiers: .command)
+                .keyHint("⌘R")
                 .help(session.canResume ? "Relaunch (⌘R) — resumes the previous session" : "Relaunch (⌘R)")
                 .usageID("banner.relaunch", label: "Relaunch (exited thread banner)")
                 if session.canResume {

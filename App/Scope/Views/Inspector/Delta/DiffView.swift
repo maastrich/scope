@@ -118,6 +118,8 @@ struct DiffView: View {
             DeltaCounts(additions: file.additions, deletions: file.deletions)
                 .fixedSize()
             Spacer(minLength: 4)
+                // The keys of the diff, shown while ⌘ is held: next / previous file, next / previous hunk.
+                .keyHints(.after) { ["j / k", "[ / ]"] }
             HStack(spacing: 2) {
                 Button { model.delta.copyPatch() } label: { Image(systemName: "doc.on.doc") }
                     .help("Copy patch")

@@ -81,6 +81,9 @@ struct ThreadRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
         .contentShape(Rectangle())
+        // Left of the state dot, over the caption: the row's number among the scope's threads (⌘1…⌘9, the menu's
+        // order) and ⌥↩ when a reply can go under the row.
+        .keyHints(.custom(.trailing, CGSize(width: -(SidebarMetrics.stateDot + 10), height: 0))) { rowHints }
         .help(helpText)
         .onHover { hovering in
             if reduceMotion {
@@ -107,6 +110,17 @@ struct ThreadRow: View {
         .buttonStyle(.iconTight)
         .help("Close Thread (⌘W)")
         .accessibilityLabel("Close \(model.displayTitle(for: session))")
+    }
+
+    private var rowHints: [String] {
+        var hints: [String] = []
+        if let scope = model.currentScope,
+           let index = model.threadOrder(in: scope.id).firstIndex(where: { $0.id == session.id }),
+           let keys = CommandKeyHints.shared.keys(for: KeyHintIndex.threadID(index + 1)) {
+            hints.append(keys)
+        }
+        if model.canReply(to: session) { hints.append("⌥↩") }
+        return hints
     }
 
     // The selected row is a neutral fill (`sidebarRow`), so its glyph and caption keep their ordinary tiers.

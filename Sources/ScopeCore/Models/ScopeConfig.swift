@@ -506,6 +506,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var showSidebarFooter: Bool
     /// The brand's by default.
     public var chromeTheme: ChromeTheme
+    /// Holding ⌘ alone for a moment shows each control's shortcut in a keycap beside it (`CommandHoldDetector`).
+    /// On by default; the delay is an internal setting (`commandKeyHintsDelay` in the app's defaults).
+    public var showShortcutHints: Bool
     /// Commit…, Push, Create PR and Merge under the Delta panel. Off by default: committing and shipping is the
     /// agent's work in its thread, and the panel is for reading what it did. Pulling a base checkout, opening a
     /// pull request and asking a thread to fix conflicts are not part of this and stay.
@@ -610,6 +613,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         swipeBetweenScopes: Bool = true,
         showSidebarFooter: Bool = false,
         chromeTheme: ChromeTheme = .brand,
+        showShortcutHints: Bool = true,
         showGitActions: Bool = false,
         automation: AutomationSettings? = nil,
         cleanUpAutomatically: Bool = true,
@@ -660,6 +664,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.swipeBetweenScopes = swipeBetweenScopes
         self.showSidebarFooter = showSidebarFooter
         self.chromeTheme = chromeTheme
+        self.showShortcutHints = showShortcutHints
         self.showGitActions = showGitActions
         self.automation = automation
         self.cleanUpAutomatically = cleanUpAutomatically
@@ -691,7 +696,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showGitActions,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showShortcutHints, showGitActions,
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
@@ -742,6 +747,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
         showSidebarFooter = (try? container.decodeIfPresent(Bool.self, forKey: .showSidebarFooter)) ?? defaults.showSidebarFooter
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
+        showShortcutHints = (try? container.decodeIfPresent(Bool.self, forKey: .showShortcutHints)) ?? defaults.showShortcutHints
         showGitActions = (try? container.decodeIfPresent(Bool.self, forKey: .showGitActions)) ?? defaults.showGitActions
         automation = try container.decodeIfPresent(AutomationSettings.self, forKey: .automation)
         cleanUpAutomatically = (try? container.decodeIfPresent(Bool.self, forKey: .cleanUpAutomatically))

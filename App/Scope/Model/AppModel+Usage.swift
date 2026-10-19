@@ -12,6 +12,8 @@ extension AppModel {
         Usage.currentScope = { [weak self] in self?.currentScopeID?.rawValue }
         env.usage.setEnabled(config.preferences.recordUsage)
         UsageMenuTracker.install()
+        CommandKeyHints.shared.isEnabled = config.preferences.showShortcutHints
+        CommandKeyHints.shared.install()
         let usage = env.usage
         Task { await usage.prune() }
     }
@@ -57,6 +59,7 @@ extension AppModel {
         if before.recordUsage != config.preferences.recordUsage {
             env.usage.setEnabled(config.preferences.recordUsage)
         }
+        CommandKeyHints.shared.isEnabled = config.preferences.showShortcutHints
     }
 
     /// `scope usage`: everything queued is written first, then the files are read off the main actor.

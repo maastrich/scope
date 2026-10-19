@@ -141,6 +141,10 @@ struct ScopeSwitcher: View {
                     }
                 }
                 .help(tileHelp(other))
+                .keyHints(.over) {
+                    model.scopes.firstIndex(where: { $0.id == other.id })
+                        .flatMap { CommandKeyHints.shared.keys(for: KeyHintIndex.scopeID($0 + 1)) }.map { [$0] } ?? []
+                }
                 .accessibilityLabel("\(other.name), \(model.activity(of: other).label)")
             }
             if !hidden.isEmpty {

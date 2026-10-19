@@ -35,6 +35,7 @@ struct GlobalViewsRow: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            .commandKeyHint("command.show-prs", .trailing)
             .help("Open pull requests of the scope's repositories (⇧⌘P)")
             .accessibilityLabel(openCount.map { "Pull Requests, \($0) open" } ?? "Pull Requests")
 
@@ -49,6 +50,7 @@ struct GlobalViewsRow: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            .commandKeyHint("command.show-graph", .trailing)
             .help("Repository cards of the scope (⌥⌘G)")
             .accessibilityLabel("Graph")
             }

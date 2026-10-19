@@ -92,6 +92,7 @@ enum ShortcutCatalog {
         ]),
         ShortcutGroup(title: "Help", entries: [
             ShortcutEntry(keys: "⌘/", title: "Keyboard Shortcuts…"),
+            ShortcutEntry(keys: "⌘ (hold)", title: "Show the shortcuts beside the controls", note: "half a second alone; Settings › General › Appearance turns it off"),
         ]),
     ]
 }
