@@ -5,21 +5,22 @@ import ScopeCore
 /// `ReturnDigest` measures a return against. UI state, not configuration — `<home>/scope-visits.json`.
 public struct ScopeVisits: Codable, Sendable, Equatable {
     /// Schema version written by this build. Anything else reads as no visits: the next return just says nothing.
-    public static let currentVersion = 1
+    /// 2: a task keeps every one of its pull requests, not one.
+    public static let currentVersion = 2
 
     public struct Visit: Codable, Sendable, Equatable {
         /// The moment the owner stopped looking: switched away, or the app left the front.
         public var lastSeen: Date
-        /// The scope's tasks that had a pull request then, by task id.
-        public var pullRequests: [String: PullRequestSnapshot]
+        /// The pull requests of the scope's tasks that had any then, by task id.
+        public var pullRequests: [String: [PullRequestSnapshot]]
 
-        public init(lastSeen: Date, pullRequests: [TaskID: PullRequestSnapshot] = [:]) {
+        public init(lastSeen: Date, pullRequests: [TaskID: [PullRequestSnapshot]] = [:]) {
             self.lastSeen = lastSeen
             self.pullRequests = Dictionary(uniqueKeysWithValues: pullRequests.map { ($0.key.rawValue, $0.value) })
         }
 
         /// `pullRequests` keyed by task id again; a key that is not one is dropped.
-        public var seenPullRequests: [TaskID: PullRequestSnapshot] {
+        public var seenPullRequests: [TaskID: [PullRequestSnapshot]] {
             Dictionary(uniqueKeysWithValues: pullRequests.compactMap { key, value in
                 TaskID(rawValue: key).map { ($0, value) }
             })

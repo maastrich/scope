@@ -163,7 +163,8 @@ import Testing
             scope: "acme",
             task: .init(id: "t1", slug: "rework-auth", name: "Rework auth", branch: "feat/auth", repos: ["api"], outcome: .active,
                         createdAt: Date(timeIntervalSince1970: 0), lastActivity: Date(timeIntervalSince1970: 0),
-                        pullRequest: .init(number: 38, url: url, title: "Rework auth", state: "open"), createdByAgent: true, threads: []),
+                        pullRequest: .init(number: 38, url: url, title: "Rework auth", state: "open"),
+                        pullRequests: [.init(number: 38, url: url, title: "Rework auth", state: "open")], createdByAgent: true, threads: []),
             prompt: "Rework auth", deliverable: nil, notes: [], pullRequest: seen)
         #expect(CLIRenderer.text(.taskShow(show)).contains("pr          #38 open · draft · checks failing · conflicting · changes requested https://"))
         #expect(try ControlResponse.decode(try ControlResponse.result(id: "1", .taskShow(show)).encoded(), method: .taskShow).payload == .taskShow(show))

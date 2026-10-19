@@ -22,7 +22,7 @@ import Testing
                      pr: TaskSnapshot.PullRequest? = nil, byAgent: Bool = false) -> TaskSnapshot {
         TaskSnapshot(id: id, name: slug.replacingOccurrences(of: "-", with: " ").capitalized, slug: slug, scopeID: scope,
                      scopeSlug: scopeSlug, scopeName: scopeSlug.capitalized, branch: "feat/\(slug)", topic: topic,
-                     repos: ["api"], createdAt: created, archivedAt: archived, prompt: prompt, pullRequest: pr,
+                     repos: ["api"], createdAt: created, archivedAt: archived, prompt: prompt, pullRequests: pr.map { [$0] } ?? [],
                      createdByAgent: byAgent)
     }
 

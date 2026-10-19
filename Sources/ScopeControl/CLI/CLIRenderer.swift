@@ -53,7 +53,7 @@ public enum CLIRenderer {
             if !result.tasks.isEmpty {
                 blocks.append(table(["TASK", "NAME", "SCOPE", "TOPIC", "BRANCH", "PR", "MAIN", "ROOT"], result.tasks.map {
                     [$0.slug + ($0.archivedAt == nil ? "" : " (archived)"), $0.name, $0.scopeSlug, $0.topic ?? "", $0.branch,
-                     $0.pullRequest?.line ?? "", mainColumn($0), $0.root]
+                     pullRequestColumn($0), mainColumn($0), $0.root]
                 }))
             }
             if !result.threads.isEmpty {
@@ -215,7 +215,10 @@ public enum CLIRenderer {
 
         func taskLines(_ task: SummaryResult.Task, indent: String) -> [String] {
             var parts = ["\(task.name) [\(task.slug)]"]
-            if let pr = task.pullRequest { parts.append("#\(pr.number)" + (pr.state.map { " \($0)" } ?? " (state unknown)")) }
+            let named = task.pullRequests.count > 1
+            for pr in task.pullRequests {
+                parts.append((named ? pr.repo.map { "\(RepoName.display($0)) " } ?? "" : "") + "#\(pr.number)" + (pr.state.map { " \($0)" } ?? " (state unknown)"))
+            }
             var when = "created \(day(task.createdAt))"
             if let closed = task.closedAt { when += ", closed \(day(closed))" }
             else if let archived = task.archivedAt { when += ", archived \(day(archived))" }
@@ -249,7 +252,7 @@ public enum CLIRenderer {
             lines.append("outcome     \(task.outcome.rawValue)")
             lines.append("branch      \(task.branch)" + (task.repos.isEmpty ? "" : " in " + task.repos.joined(separator: ", ")))
             if let topic = task.topic { lines.append("topic       \(topic)") }
-            if let pr = task.pullRequest { lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)") }
+            lines += pullRequestLines(task.pullRequests)
             lines.append("created     \(day(task.createdAt))" + (task.createdByAgent ? " by an agent" : ""))
             if let tokens = task.tokens { lines.append("tokens      \(TokenUsageText.compact(tokens))") }
             if let archived = task.archivedAt { lines.append("archived    \(day(archived))") }
@@ -299,6 +302,23 @@ public enum CLIRenderer {
         return lines.joined(separator: "\n")
     }
 
+    /// `pr          api #12 Title (open) https://…`, one per pull request; `prs         2 · 1 merged · 1 open` first
+    /// when there are several, so the count is read before the lines.
+    static func pullRequestLines(_ pullRequests: [SummaryResult.PullRequest]) -> [String] {
+        var lines: [String] = []
+        let named = pullRequests.count > 1
+        if named {
+            let states = Dictionary(grouping: pullRequests, by: { $0.state ?? "state unknown" }).mapValues(\.count)
+            let counts = ["open", "merged", "closed", "state unknown"].compactMap { state in states[state].map { "\($0) \(state)" } }
+            lines.append("prs         \(pullRequests.count) · " + counts.joined(separator: " · "))
+        }
+        for pr in pullRequests {
+            let repo = named ? pr.repo.map { "\(RepoName.display($0)) " } ?? "" : ""
+            lines.append("pr          \(repo)#\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)")
+        }
+        return lines
+    }
+
     /// `scope task show`: the task's facts, its whole brief, then each report file and each thread's last answer,
     /// fenced as agent output.
     static func taskShow(_ result: TaskShowResult) -> String {
@@ -306,10 +326,15 @@ public enum CLIRenderer {
         var lines = ["task \(task.slug) — \(task.name) (\(result.scope))"]
         lines.append("outcome     \(task.outcome.rawValue)")
         lines.append("branch      \(task.branch)" + (task.repos.isEmpty ? "" : " in " + task.repos.joined(separator: ", ")))
-        if let live = result.pullRequest {
-            lines.append("pr          \(live.line)" + (live.title.map { " — \($0)" } ?? "") + " \(live.url.absoluteString)")
-        } else if let pr = task.pullRequest {
-            lines.append("pr          #\(pr.number) \(pr.title) (\(pr.state ?? "state unknown")) \(pr.url.absoluteString)")
+        if let lives = result.pullRequests ?? result.pullRequest.map({ [$0] }), !lives.isEmpty {
+            // What GitHub last said of each, over what the record keeps.
+            let named = lives.count > 1
+            if named { lines += pullRequestLines(task.pullRequests).prefix(1) }
+            for live in lives {
+                lines.append("pr          \(live.line(named: named))" + (live.title.map { " — \($0)" } ?? "") + " \(live.url.absoluteString)")
+            }
+        } else {
+            lines += pullRequestLines(task.pullRequests)
         }
         lines.append("created     \(time(task.createdAt))")
         if let archived = task.archivedAt { lines.append("archived    \(time(archived))") }
@@ -431,6 +456,14 @@ public enum CLIRenderer {
     }
 
     /// The BY column: Scope itself for a resident thread, the parent thread or the client otherwise.
+    /// What `scope list tasks` says of a task's pull requests: `#12 open · checks failing`, or
+    /// `api #12 open · checks failing · web #7 merged` when there are several; empty without one.
+    static func pullRequestColumn(_ task: TaskSummary) -> String {
+        let prs = task.allPullRequests
+        let named = prs.count > 1
+        return prs.map { $0.line(named: named) }.joined(separator: " · ")
+    }
+
     /// What `scope list tasks` says of a task's lag on main: `behind 4`, `behind 4, 2 conflicts`, `up to date`,
     /// `held` when the user asked for no automatic rebase; empty when never measured.
     static func mainColumn(_ task: TaskSummary) -> String {

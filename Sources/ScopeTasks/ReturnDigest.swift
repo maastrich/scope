@@ -86,24 +86,24 @@ public struct ReturnDigest: Sendable, Equatable {
         public var id: TaskID
         public var name: String
         public var isArchived: Bool
-        /// The bound pull request now, `nil` when the task has none.
-        public var pullRequest: PullRequestSnapshot?
+        /// The bound pull requests now, empty when the task has none.
+        public var pullRequests: [PullRequestSnapshot]
 
-        public init(id: TaskID, name: String, isArchived: Bool = false, pullRequest: PullRequestSnapshot? = nil) {
+        public init(id: TaskID, name: String, isArchived: Bool = false, pullRequests: [PullRequestSnapshot] = []) {
             self.id = id
             self.name = name
             self.isArchived = isArchived
-            self.pullRequest = pullRequest
+            self.pullRequests = pullRequests
         }
     }
 
     /// The digest of what changed after `since`, `nil` when nothing did.
     ///
     /// - Parameters:
-    ///   - seen: each task's pull request as it was when the owner left, by task id. A task missing from it had
-    ///     no pull request then (or did not exist yet).
+    ///   - seen: each task's pull requests as they were when the owner left, by task id. A task missing from it had
+    ///     no pull request then (or did not exist yet); a pull request missing from its list is new.
     public static func make(since: Date, threads: [ThreadFacts], tasks: [TaskFacts],
-                            seen: [TaskID: PullRequestSnapshot]) -> ReturnDigest? {
+                            seen: [TaskID: [PullRequestSnapshot]]) -> ReturnDigest? {
         var fragments: [Fragment] = []
 
         let questions = threads.compactMap { thread in thread.waitingSince.flatMap { $0 > since ? (thread.id, $0) : nil } }
@@ -116,17 +116,21 @@ public struct ReturnDigest: Sendable, Equatable {
         fragments += turns(threads.map { ($0.id, $0.failedTurns) }, after: since, kind: .turnsFailed, verb: "failed")
         fragments += turns(threads.map { ($0.id, $0.finishedTurns) }, after: since, kind: .turnsFinished, verb: "finished")
 
-        var changes: [Fragment.Kind: [TaskFacts]] = [:]
+        // One entry per task and kind, whichever of its pull requests moved; the target is the first that did.
+        var changes: [Fragment.Kind: [(task: TaskFacts, pullRequest: PullRequestSnapshot)]] = [:]
         for task in tasks {
-            guard let now = task.pullRequest else { continue }
-            for kind in pullRequestChanges(from: seen[task.id], to: now, number: now.number) {
-                changes[kind, default: []].append(task)
+            let before = seen[task.id] ?? []
+            for now in task.pullRequests {
+                for kind in pullRequestChanges(from: before.first { $0.url == now.url }, to: now, number: now.number)
+                where !(changes[kind] ?? []).contains(where: { $0.task.id == task.id }) {
+                    changes[kind, default: []].append((task, now))
+                }
             }
         }
-        for (kind, tasks) in changes {
-            let sorted = tasks.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            fragments.append(Fragment(kind: kind, count: sorted.count, text: phrase(kind, sorted),
-                                      target: target(of: sorted[0])))
+        for (kind, moved) in changes {
+            let sorted = moved.sorted { $0.task.name.localizedStandardCompare($1.task.name) == .orderedAscending }
+            fragments.append(Fragment(kind: kind, count: sorted.count, text: phrase(kind, sorted.map(\.task)),
+                                      target: target(of: sorted[0].task, pullRequest: sorted[0].pullRequest)))
         }
 
         guard !fragments.isEmpty else { return nil }
@@ -135,10 +139,10 @@ public struct ReturnDigest: Sendable, Equatable {
         return ReturnDigest(since: since, fragments: shown, overflow: fragments.count - shown.count)
     }
 
-    /// What happened to a pull request between the two snapshots. A change of number is a new pull request.
+    /// What happened to a pull request between the two snapshots. A snapshot of another pull request is no snapshot.
     static func pullRequestChanges(from before: PullRequestSnapshot?, to now: PullRequestSnapshot,
                                    number: Int) -> [Fragment.Kind] {
-        let before = before?.number == number ? before : nil
+        let before = before?.url == now.url ? before : nil
         switch now.state {
         case .merged:
             return before?.state == .open ? [.merged] : []
@@ -177,9 +181,8 @@ public struct ReturnDigest: Sendable, Equatable {
         }
     }
 
-    private static func target(of task: TaskFacts) -> Target? {
-        guard task.isArchived else { return .task(task.id) }
-        return task.pullRequest.map { .url($0.url) }
+    private static func target(of task: TaskFacts, pullRequest: PullRequestSnapshot) -> Target? {
+        task.isArchived ? .url(pullRequest.url) : .task(task.id)
     }
 }
 

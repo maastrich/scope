@@ -137,7 +137,7 @@ extension AppModel {
             let reply = session.activity.lastReply?.text ?? session.lastReply?.text ?? ""
             return AssistTriggers.ThreadSnapshot(
                 id: session.id, state: session.displayState, turnStartedAt: session.activity.turnStartedAt,
-                task: task?.id.rawValue, taskHasPullRequest: task.map { $0.record.pullRequest != nil || livePullRequest(for: $0) != nil } ?? false,
+                task: task?.id.rawValue, taskHasPullRequest: task.map { !$0.record.pullRequests.isEmpty } ?? false,
                 replyLooksFinal: ArchiveHint.replyLooksFinal(reply))
         }
     }

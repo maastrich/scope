@@ -136,7 +136,7 @@ extension AppModel {
             resolution.repos = [candidate.path]
             resolution.pullRequest = pr
             resolution.startPoint = .pullRequest(pr)
-            resolution.existingTask = tasks(in: scope.id).first { $0.record.pullRequest?.number == pr.number }?.id
+            resolution.existingTask = tasks(in: scope.id).first { $0.record.primaryPullRequest?.number == pr.number }?.id
             resolution.unresolved = nil
             resolution.unresolvedReason = nil
         } catch {
@@ -260,7 +260,7 @@ extension AppModel {
             record = try await env.tasks.create(
                 name: proposal.title, branch: proposal.branch, slug: proposal.slug, initialPrompt: prompt,
                 in: scope.declaration, repos: repos, startPoint: startPoint,
-                pullRequest: startPoint.pullRequest.map(LinkedPullRequest.init),
+                pullRequest: startPoint.pullRequest.map { LinkedPullRequest($0) },
                 scopeRepos: scopeRepos, repoSummaries: summaries, contextFiles: contextFileNames,
                 createdBy: createdBy, topic: topic, parentTask: parentTask,
                 origin: threadOrigin.author == .control ? threadOrigin : nil, deliverable: deliverable,
@@ -464,16 +464,11 @@ extension AppModel {
         TaskManager.Teardown(commands: await sandboxCommands(for: task.record), runner: await commandRunner())
     }
 
-    /// What `TaskStatus.resolve` decides from: the task's threads, its delta, its setup and its pull request.
+    /// What `TaskStatus.resolve` decides from: the task's threads, its delta, its setup and its pull requests.
     func taskFacts(for task: TaskState) -> TaskFacts {
-        let pullRequest = task.record.pullRequest.map { link in
-            let live = livePullRequest(for: task)
-            return PullRequestFacts(number: link.number, isDraft: live?.isDraft ?? false,
-                                    checks: live?.checks ?? .none, mergeable: live?.mergeable ?? .unknown)
-        }
-        return TaskFacts(threads: threads(in: task.id).map(\.displayState), additions: task.totalAdditions,
-                         deletions: task.totalDeletions, isDirty: task.dirtyRepoCount > 0, setup: task.record.setupState,
-                         pullRequest: pullRequest)
+        TaskFacts(threads: threads(in: task.id).map(\.displayState), additions: task.totalAdditions,
+                  deletions: task.totalDeletions, isDirty: task.dirtyRepoCount > 0, setup: task.record.setupState,
+                  pullRequests: pullRequestFacts(for: task))
     }
 
     /// Repos of the task's scope that are not part of the task yet.
@@ -585,7 +580,7 @@ extension AppModel {
     /// pull request a thread opened, too. Never holds the archive up past `pullRequestSettleTimeout`; a refresh that
     /// finishes later still lands on an archived record.
     private func settlePullRequest(of task: TaskState) async {
-        guard pullRequests.gh != nil, !["merged", "closed"].contains(task.record.pullRequest?.state ?? "") else { return }
+        guard pullRequests.gh != nil, !PullRequestSet.isSettled(task.record.pullRequests.map(\.state)) else { return }
         let race = SettleRace()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             Task {

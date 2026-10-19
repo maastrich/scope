@@ -24,16 +24,19 @@ public enum TaskMention {
         public var range: Range<String.Index>
     }
 
-    /// The pull request of a mentioned task, as the block states it.
+    /// One pull request of a mentioned task, as the block states it.
     public struct PullRequest: Sendable, Equatable {
         public var number: Int
         public var state: String?
         public var url: URL?
+        /// The task repository it belongs to, when the task has several.
+        public var repo: String?
 
-        public init(number: Int, state: String? = nil, url: URL? = nil) {
+        public init(number: Int, state: String? = nil, url: URL? = nil, repo: String? = nil) {
             self.number = number
             self.state = state
             self.url = url
+            self.repo = repo
         }
     }
 
@@ -46,14 +49,15 @@ public enum TaskMention {
         public var branch: String
         public var topic: String?
         public var outcome: String
-        public var pullRequest: PullRequest?
+        /// Every pull request of the task, in its order.
+        public var pullRequests: [PullRequest]
         public var brief: String?
         /// The kept deliverable's opening: the last reply, or the report file when there is no reply.
         public var answer: String?
         public var reports: [String]
 
         public init(name: String, slug: String, id: String, scope: String? = nil, branch: String, topic: String? = nil,
-                    outcome: String, pullRequest: PullRequest? = nil, brief: String? = nil, answer: String? = nil,
+                    outcome: String, pullRequests: [PullRequest] = [], brief: String? = nil, answer: String? = nil,
                     reports: [String] = []) {
             self.name = name
             self.slug = slug
@@ -62,7 +66,7 @@ public enum TaskMention {
             self.branch = branch
             self.topic = topic
             self.outcome = outcome
-            self.pullRequest = pullRequest
+            self.pullRequests = pullRequests
             self.brief = brief
             self.answer = answer
             self.reports = reports
@@ -75,7 +79,7 @@ public enum TaskMention {
             let answer = kept?.lastReply?.text ?? kept?.files.first?.text
             self.init(name: task.name, slug: task.slug, id: task.id, scope: shown.scope, branch: task.branch, topic: task.topic,
                       outcome: task.outcome.rawValue,
-                      pullRequest: task.pullRequest.map { PullRequest(number: $0.number, state: $0.state, url: $0.url) },
+                      pullRequests: task.pullRequests.map { PullRequest(number: $0.number, state: $0.state, url: $0.url, repo: $0.repo) },
                       brief: shown.prompt, answer: answer, reports: kept?.files.map(\.name) ?? [])
         }
     }
@@ -146,8 +150,11 @@ public enum TaskMention {
         var lines = ["", "[Scope: context of task \(block.slug) — begin]"]
         lines.append("Task: \(block.name) (\(block.slug), \(block.id))" + (block.scope.map { " in scope \($0)" } ?? ""))
         lines.append("Branch: \(block.branch) · outcome: \(block.outcome)")
-        if let pr = block.pullRequest {
-            lines.append("Pull request: #\(pr.number)" + (pr.state.map { " (\($0))" } ?? "") + (pr.url.map { " \($0.absoluteString)" } ?? ""))
+        let several = block.pullRequests.count > 1
+        for pr in block.pullRequests {
+            let label = (several ? pr.repo.map { "\(RepoName.display($0)) " } ?? "" : "") + "#\(pr.number)"
+            lines.append((several ? "Pull request \(label)" : "Pull request: #\(pr.number)")
+                         + (pr.state.map { " (\($0))" } ?? "") + (pr.url.map { " \($0.absoluteString)" } ?? ""))
         }
         if let topic = block.topic { lines.append("Topic: \(topic)") }
         if let brief = cut(block.brief) {

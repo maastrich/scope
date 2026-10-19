@@ -90,25 +90,25 @@ import ScopeCore
 
     @Test func aMergedPullRequestArchivesAQuietTask() {
         for threads in [[], [ThreadState.idle], [.done], [.waiting(reason: .input)], [.exited]] {
-            #expect(MergedTaskArchive.decide(pullRequestState: "merged", threads: threads, enabled: true,
+            #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: threads, enabled: true,
                                              keptOpenAfterMerge: false) == .archive)
         }
     }
 
     @Test func aRunningThreadPostponesTheArchive() {
-        #expect(MergedTaskArchive.decide(pullRequestState: "merged", threads: [.idle, .running], enabled: true,
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [.idle, .running], enabled: true,
                                          keptOpenAfterMerge: false) == .wait)
     }
 
     @Test func nothingButAMergeArchives() {
         for state in [nil, "open", "closed"] {
-            #expect(MergedTaskArchive.decide(pullRequestState: state, threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+            #expect(MergedTaskArchive.decide(pullRequestStates: [state], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
         }
     }
 
     @Test func thePreferenceAndARestoreKeepTheTask() {
-        #expect(MergedTaskArchive.decide(pullRequestState: "merged", threads: [], enabled: false, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestState: "merged", threads: [], enabled: true, keptOpenAfterMerge: true) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: false, keptOpenAfterMerge: false) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: true, keptOpenAfterMerge: true) == .keep)
     }
 
     @Test func preferencesDefaultToArchivingMergedTasksAndThreeIdleDays() throws {
@@ -117,5 +117,16 @@ import ScopeCore
         #expect(preferences.dormantAfterDays == 3)
         let negative = try JSONDecoder().decode(Preferences.self, from: Data(#"{"dormantAfterDays": -2}"#.utf8))
         #expect(negative.dormantAfterDays == 0)
+    }
+
+    @Test func aTaskWithSeveralPullRequestsArchivesOnceNoneIsOpen() {
+        // One merged, one still open: the task stays. Once the second lands — or is dropped — it goes.
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "open"], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", nil], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "merged"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "closed"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["closed", "closed"], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: [], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "merged"], threads: [.running], enabled: true, keptOpenAfterMerge: false) == .wait)
     }
 }

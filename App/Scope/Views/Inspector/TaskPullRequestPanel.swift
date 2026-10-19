@@ -1,6 +1,7 @@
 import SwiftUI
 import ScopeCore
 import ScopeGit
+import ScopeTasks
 
 /// The checks of a task's pull request, in the Pull Request section. One summary row — `✓ n ✗ n ● n` — then the
 /// rows: every check, failures first, in the `.full` layout the section uses; the failing ones alone until unfolded,
@@ -15,6 +16,8 @@ struct TaskPullRequestPanel: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
     let pullRequest: PullRequest
+    /// The bound pull request the checks belong to: where a failure's log is fetched from.
+    let link: LinkedPullRequest
     var layout: Layout = .compact
     @State private var unfolded = false
 
@@ -121,7 +124,7 @@ struct TaskPullRequestPanel: View {
             Spacer(minLength: 4)
             if check.state == .failing {
                 ThreadPicker(task: task, title: "Send the failure to the thread", systemImage: "paperplane") { thread in
-                    Task { await model.sendCheckFailure(check, of: task, to: thread) }
+                    Task { await model.sendCheckFailure(check, of: task, pullRequest: link, to: thread) }
                 }
             }
             if let url = check.detailsURL {

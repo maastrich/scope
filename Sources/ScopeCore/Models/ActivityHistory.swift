@@ -6,19 +6,22 @@ import Foundation
 /// Built from a live `TaskRecord` (`ScopeTasks`) when a summary is asked for, and written to the history when the
 /// record is deleted — a closed task leaves nothing else behind.
 public struct TaskSnapshot: Codable, Sendable, Equatable {
-    /// The pull request the task was bound to, with the last state Scope saw on GitHub.
+    /// One pull request the task was bound to, with the last state Scope saw on GitHub.
     public struct PullRequest: Codable, Sendable, Equatable {
         public var number: Int
         public var url: URL
         public var title: String
         /// `open`, `merged` or `closed` as last observed; `nil` when Scope never looked after binding it.
         public var state: String?
+        /// The task repository it belongs to, relative to the scope root; `nil` on links written before it was kept.
+        public var repo: String?
 
-        public init(number: Int, url: URL, title: String, state: String? = nil) {
+        public init(number: Int, url: URL, title: String, state: String? = nil, repo: String? = nil) {
             self.number = number
             self.url = url
             self.title = title
             self.state = state
+            self.repo = repo
         }
     }
 
@@ -36,7 +39,8 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
     public var archivedAt: Date?
     /// The brief the task was created from; capped at `promptLimit` in the history.
     public var prompt: String?
-    public var pullRequest: PullRequest?
+    /// Every pull request, in the task's order. Entries written before a task could hold several carry one.
+    public var pullRequests: [PullRequest]
     /// An agent asked for the task (`TaskRecord.createdByAgent`).
     public var createdByAgent: Bool
     public var parentTask: String?
@@ -52,7 +56,7 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
 
     public init(id: String, name: String, slug: String, scopeID: String, scopeSlug: String, scopeName: String,
                 branch: String, topic: String? = nil, repos: [String] = [], createdAt: Date, archivedAt: Date? = nil,
-                prompt: String? = nil, pullRequest: PullRequest? = nil, createdByAgent: Bool = false,
+                prompt: String? = nil, pullRequests: [PullRequest] = [], createdByAgent: Bool = false,
                 parentTask: String? = nil, agentSeconds: Double? = nil, waitingSeconds: Double? = nil) {
         self.id = id
         self.name = name
@@ -66,11 +70,75 @@ public struct TaskSnapshot: Codable, Sendable, Equatable {
         self.createdAt = createdAt
         self.archivedAt = archivedAt
         self.prompt = prompt
-        self.pullRequest = pullRequest
+        self.pullRequests = pullRequests
         self.createdByAgent = createdByAgent
         self.parentTask = parentTask
         self.agentSeconds = agentSeconds
         self.waitingSeconds = waitingSeconds
+    }
+
+    /// The one a single field stands for: the first open, else the first merged, else the first.
+    public var pullRequest: PullRequest? {
+        pullRequests.first { ($0.state ?? "open") == "open" } ?? pullRequests.first { $0.state == "merged" } ?? pullRequests.first
+    }
+
+    /// `open`, `merged`, `closed` for the task as a whole: open while any is, merged once any is and none is open.
+    public var pullRequestState: String? {
+        guard !pullRequests.isEmpty else { return nil }
+        let states = pullRequests.map { $0.state ?? "open" }
+        if states.contains("open") { return "open" }
+        return states.contains("merged") ? "merged" : "closed"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, slug, scopeID, scopeSlug, scopeName, branch, topic, repos, createdAt, archivedAt, prompt
+        case pullRequests, pullRequest, createdByAgent, parentTask, agentSeconds, waitingSeconds
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        slug = try c.decode(String.self, forKey: .slug)
+        scopeID = try c.decode(String.self, forKey: .scopeID)
+        scopeSlug = try c.decode(String.self, forKey: .scopeSlug)
+        scopeName = try c.decode(String.self, forKey: .scopeName)
+        branch = try c.decode(String.self, forKey: .branch)
+        topic = try c.decodeIfPresent(String.self, forKey: .topic)
+        repos = try c.decodeIfPresent([String].self, forKey: .repos) ?? []
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        prompt = try c.decodeIfPresent(String.self, forKey: .prompt)
+        // History lines from before a task could hold several pull requests carry `pullRequest` alone.
+        pullRequests = try c.decodeIfPresent([PullRequest].self, forKey: .pullRequests)
+            ?? c.decodeIfPresent(PullRequest.self, forKey: .pullRequest).map { [$0] } ?? []
+        createdByAgent = try c.decodeIfPresent(Bool.self, forKey: .createdByAgent) ?? false
+        parentTask = try c.decodeIfPresent(String.self, forKey: .parentTask)
+        agentSeconds = try c.decodeIfPresent(Double.self, forKey: .agentSeconds)
+        waitingSeconds = try c.decodeIfPresent(Double.self, forKey: .waitingSeconds)
+    }
+
+    /// `pullRequest` is written too, as the primary, for readers of the history that know one field.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(slug, forKey: .slug)
+        try c.encode(scopeID, forKey: .scopeID)
+        try c.encode(scopeSlug, forKey: .scopeSlug)
+        try c.encode(scopeName, forKey: .scopeName)
+        try c.encode(branch, forKey: .branch)
+        try c.encodeIfPresent(topic, forKey: .topic)
+        try c.encode(repos, forKey: .repos)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(archivedAt, forKey: .archivedAt)
+        try c.encodeIfPresent(prompt, forKey: .prompt)
+        try c.encode(pullRequests, forKey: .pullRequests)
+        try c.encodeIfPresent(pullRequest, forKey: .pullRequest)
+        try c.encode(createdByAgent, forKey: .createdByAgent)
+        try c.encodeIfPresent(parentTask, forKey: .parentTask)
+        try c.encodeIfPresent(agentSeconds, forKey: .agentSeconds)
+        try c.encodeIfPresent(waitingSeconds, forKey: .waitingSeconds)
     }
 
     /// The copy kept in the history: the prompt cut at `promptLimit`.

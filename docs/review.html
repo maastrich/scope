@@ -135,9 +135,19 @@ browser, or turn it into a task whose sandbox sits on the PR's head.</p>
 <div class="note"><p>The panel needs <code>gh auth login</code> and a GitHub remote. A repository without one
 simply shows nothing to list.</p></div>
 
-<h2 id="pr-lifecycle">A task's pull request, to the merge</h2>
+<h2 id="pr-lifecycle">A task's pull requests, to the merge</h2>
 <p>Once a task has a pull request — opened from its thread, or the one it was opened on — the Pull Request section
 lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
+<p>A task can have several: one per repository, two on the same branch, a stack, a docs pull request next to the
+prototype's. Scope finds them on every branch a sandbox has been on (<code>gh pr list --head</code>, the reflog
+says which) and keeps them all, in a fixed order — the task's repositories, then the numbers — that never moves
+with their states. The sidebar row speaks for the most pressing <i>open</i> one (a conflict before red checks before
+running checks), and says <i>PR merged</i> once every one is merged or closed. The section's header, the hover card
+and <code>scope list tasks</code> sum them up (<i>2 PRs · 1 merged · 1 checks failing</i>); the section lists them
+with the repository in front, and the one you pick is the one <b>Open on GitHub</b>, <b>Merge</b>, <b>Fix Conflicts</b>
+and <b>Send to Thread</b> act on. The context menu and the palette offer one <b>Open Pull Request</b> per pull
+request, named by repository; the Inbox lists one item per pull request. A task is archived on merge only once none
+of its pull requests is still open.</p>
 <ul>
   <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
   and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so
@@ -190,7 +200,7 @@ the clean rebase, or the message to the thread, on demand. A scope may set its o
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
 pull request was closed without merging, says so in its row — <code>idle 4d</code>, <code>PR closed</code>, ahead of
 what its agent last did, or at the end of a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#reply">The agent's reply, as a page</a><a class="lvl3" href="#links">Files an agent mentions</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl3" href="#try-in-checkout">Trying a task in your checkout</a><a class="lvl2" href="#prs">Pull requests</a><a class="lvl2" href="#pr-lifecycle">A task's pull request, to the merge</a><a class="lvl3" href="#pr-background">Every task, not only the one on screen</a><a class="lvl3" href="#follow-main">A task follows main</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#delta">Delta</a><a class="lvl3" href="#reply">The agent's reply, as a page</a><a class="lvl3" href="#links">Files an agent mentions</a><a class="lvl3" href="#diff">The diff</a><a class="lvl3" href="#publish">Commit, push, open the PR</a><a class="lvl2" href="#comments">Commenting on lines</a><a class="lvl2" href="#base">Base</a><a class="lvl3" href="#try-in-checkout">Trying a task in your checkout</a><a class="lvl2" href="#prs">Pull requests</a><a class="lvl2" href="#pr-lifecycle">A task's pull requests, to the merge</a><a class="lvl3" href="#pr-background">Every task, not only the one on screen</a><a class="lvl3" href="#follow-main">A task follows main</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

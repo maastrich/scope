@@ -21,9 +21,9 @@ private func task(_ id: String, scope: ScopeID = acme, state: PullRequest.State 
                   pullRequest: Bool = true) -> Inbox.TaskInput {
     Inbox.TaskInput(
         id: TaskID(rawValue: id)!, scopeID: scope, name: "task \(id.prefix(2))",
-        pullRequest: pullRequest ? .init(number: 12, title: "Add the inbox", url: prURL, state: state, checks: checks,
-                                         mergeable: mergeable, isDraft: draft, failingChecks: failing,
-                                         updatedAt: t0.addingTimeInterval(minutes * 60)) : nil,
+        pullRequests: pullRequest ? [.init(number: 12, title: "Add the inbox", url: prURL, state: state, checks: checks,
+                                           mergeable: mergeable, isDraft: draft, failingChecks: failing,
+                                           updatedAt: t0.addingTimeInterval(minutes * 60))] : [],
         archivedAt: archivedAt, isDismantling: dismantling)
 }
 
@@ -196,5 +196,31 @@ private func task(_ id: String, scope: ScopeID = acme, state: PullRequest.State 
         var silent = input
         silent.run = ScheduleRun(at: t0, outcome: .noReply, thread: "ccccccccccc1")
         #expect(Inbox.items(threads: [], tasks: [], schedules: [silent], now: t0).first?.detail == "no reply yet — open the thread")
+    }
+
+    @Test func eachPullRequestOfATaskGetsItsOwnItemNamedByRepository() {
+        let api = Inbox.TaskInput.PullRequestInput(number: 41, title: "api: cache", url: URL(string: "https://github.com/o/api/pull/41")!,
+                                                   repo: "api", state: .open, checks: .failing, mergeable: .mergeable,
+                                                   failingChecks: ["CI / unit"], updatedAt: t0)
+        let web = Inbox.TaskInput.PullRequestInput(number: 7, title: "web: ui", url: URL(string: "https://github.com/o/web/pull/7")!,
+                                                   repo: "web", state: .open, checks: .passing, mergeable: .mergeable, updatedAt: t0.addingTimeInterval(60))
+        let docs = Inbox.TaskInput.PullRequestInput(number: 43, title: "docs", url: URL(string: "https://github.com/o/api/pull/43")!,
+                                                    repo: "api", state: .merged, checks: .passing, mergeable: .unknown, updatedAt: t0)
+        let task = Inbox.TaskInput(id: TaskID(rawValue: "cccccccccccc")!, scopeID: acme, name: "cache", pullRequests: [api, docs, web])
+        let items = Inbox.items(threads: [], tasks: [task], now: t0)
+        #expect(items.map(\.kind) == [.readyToMerge, .checksFailing])
+        #expect(items.map(\.id) == ["task:cccccccccccc:pr:/o/web/pull/7", "task:cccccccccccc:pr:/o/api/pull/41"])
+        #expect(items[0].detail == "web #7 ready to merge · web: ui" && items[0].pullRequestURL == web.url)
+        #expect(items[1].detail == "api #41 failing: CI / unit" && items[1].pullRequestURL == api.url)
+        // Dismissing one leaves the other.
+        var dismissed = Inbox.Dismissals()
+        dismissed.dismiss(items[1])
+        #expect(Inbox.items(threads: [], tasks: [task], dismissed: dismissed, now: t0).map(\.id) == [items[0].id])
+        // Archived on the merge of both: one item naming them.
+        var done = task
+        done.pullRequests = [api, web].map { var pr = $0; pr.state = .merged; return pr }
+        done.archivedAt = t0.addingTimeInterval(120)
+        let archived = Inbox.items(threads: [], tasks: [done], now: t0.addingTimeInterval(180))
+        #expect(archived.map(\.kind) == [.archivedOnMerge] && archived[0].detail == "api #41, web #7 merged")
     }
 }

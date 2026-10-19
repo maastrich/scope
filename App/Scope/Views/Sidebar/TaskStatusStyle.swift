@@ -21,6 +21,7 @@ enum TaskStatusStyle {
         case .checksPassed: "checkmark.seal.fill"
         case .draft: "pencil.circle.fill"
         case .pullRequestOpen: "arrow.triangle.pull"
+        case .merged: "arrow.triangle.merge"
         case .changed: "plusminus.circle.fill"
         case .clean: "arrow.triangle.branch"
         }
@@ -34,7 +35,7 @@ enum TaskStatusStyle {
         case .failed: AnyShapeStyle(ThreadStateStyle.failed)
         case .setupFailed, .checksFailing: AnyShapeStyle(PullRequestStyle.failing)
         case .conflicted, .checksRunning: AnyShapeStyle(PullRequestStyle.pending)
-        case .checksPassed: AnyShapeStyle(PullRequestStyle.passing)
+        case .checksPassed, .merged: AnyShapeStyle(PullRequestStyle.passing)
         case .setupRunning, .draft, .pullRequestOpen, .changed: AnyShapeStyle(.secondary)
         case .clean: AnyShapeStyle(.tertiary)
         }

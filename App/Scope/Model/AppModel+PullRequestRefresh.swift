@@ -30,7 +30,7 @@ extension AppModel {
         pullRequestSchedule.sync(candidates.map(\.id), now: now)
         // Already known merged, held by a running thread: no `gh` call needed to archive it once the thread stops,
         // rather than at the next refresh of a settled pull request, half an hour later.
-        for task in candidates where task.record.pullRequest?.state == "merged" { await archiveIfMerged(task) }
+        for task in candidates where task.record.pullRequestState == "merged" { await archiveIfMerged(task) }
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let due = pullRequestSchedule.due(at: now).compactMap { task($0) }
         guard !due.isEmpty else { return }
@@ -52,8 +52,7 @@ extension AppModel {
     private func refreshInBackground(_ task: TaskState) async {
         guard !task.isArchived else { return }
         if await refreshTaskPullRequest(task) {
-            let state = task.record.pullRequest?.state
-            pullRequestSchedule.succeeded(task.id, settled: state == "merged" || state == "closed")
+            pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)))
         } else {
             pullRequestSchedule.failed(task.id)
         }
@@ -67,32 +66,40 @@ extension AppModel {
     /// nothing committed yet has nothing to open a pull request from: no `gh` call until it does. Summaries not
     /// read yet count as maybe.
     private func mayHavePullRequest(_ task: TaskState) -> Bool {
-        if task.record.pullRequest != nil { return true }
+        if !task.record.pullRequests.isEmpty { return true }
         let summaries = task.activeRepos.compactMap { task.summary(for: $0) }
         return summaries.isEmpty || summaries.contains { $0.ahead > 0 }
     }
 
     /// Settings ▸ Tasks ▸ Archive a task when its pull request merges: through the sidebar's own archive, one quiet
-    /// notice with Restore. A thread still running holds it until the next refresh; a restored task stays.
+    /// notice with Restore. Only once every pull request of the task is merged or closed, and one merged: a task
+    /// with two pull requests waits for the second. A thread still running holds it until the next refresh; a
+    /// restored task stays.
     func archiveIfMerged(_ task: TaskState) async {
         guard !task.isArchived else { return }
         let decision = MergedTaskArchive.decide(
-            pullRequestState: task.record.pullRequest?.state, threads: threads(in: task.id).map(\.displayState),
+            pullRequestStates: task.record.pullRequests.map(\.state), threads: threads(in: task.id).map(\.displayState),
             enabled: config.preferences.archiveMergedTasks, keptOpenAfterMerge: task.record.keptOpenAfterMerge)
         guard decision == .archive else { return }
+        let merged = task.record.pullRequests.filter(\.isMerged)
+        let what = merged.count == 1 ? "pull request merged" : "\(merged.count) pull requests merged"
         do {
-            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): pull request merged")
+            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): \(what)")
         } catch {
             dismantleFailed(task, verb: "archive", error: error)
         }
     }
 
-    /// When what is shown of the task's pull request was read: its own `gh pr view`, else the PRs panel's list.
+    /// When what is shown of one pull request was read: its own `gh` answer, else the PRs panel's list.
+    func pullRequestCheckedAt(for task: TaskState, link: LinkedPullRequest) -> Date? {
+        if let own = pullRequests.checkedAt(link.url, for: task.id) { return own }
+        return livePullRequest(for: task, link: link) == nil ? nil : pullRequests.lastRefresh
+    }
+
+    /// The oldest reading among the task's pull requests: what the sidebar's one age stands for. `nil` while none was read.
     func pullRequestCheckedAt(for task: TaskState) -> Date? {
-        if let own = pullRequests.taskPullRequests[task.id], own.number == task.record.pullRequest?.number {
-            return pullRequests.taskPullRequestCheckedAt[task.id]
-        }
-        return livePullRequest(for: task) == nil ? nil : pullRequests.lastRefresh
+        let dates = task.record.pullRequests.compactMap { pullRequestCheckedAt(for: task, link: $0) }
+        return dates.isEmpty ? nil : dates.min()
     }
 
     /// Whether the task looks forgotten (`TaskDormancy`): idle past Settings ▸ Tasks ▸ Idle after, or its pull
@@ -104,7 +111,7 @@ extension AppModel {
             [session.activity.turns.last?.endedAt, session.activity.lastTool?.at, session.activity.turnStartedAt,
              session.record.createdAt]
         }
-        let state = livePullRequest(for: task)?.state.rawValue ?? task.record.pullRequest?.state
+        let state = pullRequestState(for: task)
         return TaskDormancy.classify(
             lastActivity: TaskDormancy.lastActivity(createdAt: task.record.createdAt, threadDates: dates), now: now,
             idleDays: config.preferences.dormantAfterDays, pullRequestState: state,

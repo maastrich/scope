@@ -446,7 +446,7 @@ it to go back to half; ✕ or Esc closes it).</p>
   <tr><th>Section</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Task</b></td><td>the branch, commits ahead, the base's lag</td><td>the brief (four lines, <b>Read in full</b> for the rest), where the branch forked, one row per repository, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply; a turn that left a checkpoint has a dot under its bar, and the <b>Checkpoints</b> list follows: time, thread, first words, <code>+N −M</code>, with <b>Show diff</b>, <b>Restore files</b> and <b>Branch from here</b> on hover</td><td></td></tr>
   <tr><td><b>Delta</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
-  <tr><td><b>Pull Request</b></td><td>its number and the checks</td><td>the pull request and every one of its checks</td><td></td></tr>
+  <tr><td><b>Pull Request</b></td><td>its number and the checks — or <i>2 PRs · 1 merged · 1 checks failing</i> when the task has several</td><td>one row per pull request (repository, number, title, state, checks, review), the one you pick in full with every one of its checks</td><td></td></tr>
   <tr><td><b>Base</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
   <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
@@ -898,9 +898,19 @@ browser, or turn it into a task whose sandbox sits on the PR's head.</p>
 <div class="note"><p>The panel needs <code>gh auth login</code> and a GitHub remote. A repository without one
 simply shows nothing to list.</p></div>
 
-<h2 id="pr-lifecycle">A task's pull request, to the merge</h2>
+<h2 id="pr-lifecycle">A task's pull requests, to the merge</h2>
 <p>Once a task has a pull request — opened from its thread, or the one it was opened on — the Pull Request section
 lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
+<p>A task can have several: one per repository, two on the same branch, a stack, a docs pull request next to the
+prototype's. Scope finds them on every branch a sandbox has been on (<code>gh pr list --head</code>, the reflog
+says which) and keeps them all, in a fixed order — the task's repositories, then the numbers — that never moves
+with their states. The sidebar row speaks for the most pressing <i>open</i> one (a conflict before red checks before
+running checks), and says <i>PR merged</i> once every one is merged or closed. The section's header, the hover card
+and <code>scope list tasks</code> sum them up (<i>2 PRs · 1 merged · 1 checks failing</i>); the section lists them
+with the repository in front, and the one you pick is the one <b>Open on GitHub</b>, <b>Merge</b>, <b>Fix Conflicts</b>
+and <b>Send to Thread</b> act on. The context menu and the palette offer one <b>Open Pull Request</b> per pull
+request, named by repository; the Inbox lists one item per pull request. A task is archived on merge only once none
+of its pull requests is still open.</p>
 <ul>
   <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
   and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so

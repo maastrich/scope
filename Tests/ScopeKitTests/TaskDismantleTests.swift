@@ -170,7 +170,7 @@ import ScopeGit
 
         let reopened = try await manager.reopen(task.id)
         #expect(reopened.keptOpenAfterMerge)
-        #expect(MergedTaskArchive.decide(pullRequestState: "merged", threads: [], enabled: true,
+        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: true,
                                          keptOpenAfterMerge: reopened.keptOpenAfterMerge) == .keep)
     }
 

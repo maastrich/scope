@@ -10,9 +10,13 @@ extension PaletteModel {
     /// The current task's actions.
     static func taskActions(_ model: AppModel, task: TaskState) -> [PaletteItem] {
         var items: [PaletteItem] = []
-        if let pr = task.record.pullRequest {
-            items.append(PaletteItem(id: "task-open-pr", section: .actions, icon: "arrow.triangle.pull",
-                                     label: "Open Pull Request in Browser", hint: "\(pr.label) \(pr.title)") {
+        // One row per pull request, the repository named when the task has several, so each opens the right page.
+        let several = task.record.pullRequests.count > 1
+        for pr in task.record.pullRequests {
+            let where_ = several ? (model.repo(of: pr, in: task).map { "\($0.name) " } ?? "") : ""
+            items.append(PaletteItem(id: "task-open-pr-\(pr.url.path)", section: .actions, icon: "arrow.triangle.pull",
+                                     label: several ? "Open Pull Request \(where_)\(pr.label) in Browser" : "Open Pull Request in Browser",
+                                     hint: "\(pr.label) \(pr.title)" + (pr.isOpen ? "" : " · \(pr.state ?? "")")) {
                 model.openOnGitHub(pr.url)
             })
         }

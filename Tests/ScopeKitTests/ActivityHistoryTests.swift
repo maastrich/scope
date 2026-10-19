@@ -41,8 +41,8 @@ import Testing
         let prompt = String(repeating: "x", count: TaskSnapshot.promptLimit + 500)
         let record = TaskRecord(scopeID: ScopeID(rawValue: "S1"), scopeRoot: "/work/acme", scopeSlug: "acme", name: "Spike",
                                 slug: "spike", branch: "spike/parser", root: "/home/sandboxes/acme/spike",
-                                pullRequest: LinkedPullRequest(number: 7, url: URL(string: "https://github.com/acme/api/pull/7")!,
-                                                               title: "Parser spike", state: "closed"),
+                                pullRequests: [LinkedPullRequest(number: 7, url: URL(string: "https://github.com/acme/api/pull/7")!,
+                                                                 title: "Parser spike", state: "closed")],
                                 prompt: prompt, topic: "parser")
         try await store.save(record)
 

@@ -912,6 +912,15 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     }
 }
 
+/// The last component of a task repository's path, or `.` for a repo scope: what a line names a repository by.
+public enum RepoName {
+    public static func display(_ repoRelativePath: String) -> String {
+        let trimmed = repoRelativePath.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard !trimmed.isEmpty, trimmed != "." else { return "." }
+        return trimmed.split(separator: "/").last.map(String.init) ?? trimmed
+    }
+}
+
 /// A task's pull request as Scope last saw it, in the answers an agent reads before deciding what to do next
 /// (`scope list tasks`, `task.show`, `thread.wait`): what used to take a `gh pr view` of its own. Scope refreshes
 /// every open task's pull request in the background and again when a wait on one of its threads ends; the
@@ -931,9 +940,13 @@ public struct PullRequestSummary: Codable, Sendable, Equatable {
     public var draft: Bool?
     /// When `gh` last answered about it; absent when only the record knows it.
     public var checkedAt: Date?
+    /// The task repository it belongs to, relative to the scope root: what tells `api#12` from `web#12` on a
+    /// task with several pull requests. Absent on links made before it was kept.
+    public var repo: String?
 
     public init(number: Int, url: URL, title: String? = nil, state: String, checks: String? = nil, mergeable: String? = nil,
-                review: String? = nil, draft: Bool? = nil, checkedAt: Date? = nil) {
+                review: String? = nil, draft: Bool? = nil, checkedAt: Date? = nil, repo: String? = nil) {
+        self.repo = repo
         self.number = number
         self.url = url
         self.title = title
@@ -946,8 +959,11 @@ public struct PullRequestSummary: Codable, Sendable, Equatable {
     }
 
     /// `#38 open · checks passing · mergeable · approved`, as the tables and the wait print it.
-    public var line: String {
-        var parts = ["#\(number) \(state)"]
+    public var line: String { line(named: false) }
+
+    /// `line` with the repository in front (`api #38 open · …`) when `named`, for a task with several pull requests.
+    public func line(named: Bool) -> String {
+        var parts = [(named ? repo.map { "\(RepoName.display($0)) " } ?? "" : "") + "#\(number) \(state)"]
         if draft == true { parts.append("draft") }
         if let checks { parts.append("checks \(checks)") }
         if let mergeable, mergeable != "unknown" { parts.append(mergeable) }
@@ -968,8 +984,15 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var threads: [String]
     /// The topic the task is filed under, if any.
     public var topic: String?
-    /// Its pull request, as Scope last saw it; absent when the task has none Scope knows of.
+    /// Its primary pull request (the first open, else the first merged), as Scope last saw it; absent when the task
+    /// has none Scope knows of. `pullRequests` has every one.
     public var pullRequest: PullRequestSummary?
+    /// Every pull request the task is bound to, in its order: one per repository, a stack, a docs PR beside the code.
+    /// Absent when there is none — a task without a pull request carries no key for it.
+    public var pullRequests: [PullRequestSummary]?
+
+    /// `pullRequests`, or the primary alone when that is all the answer carries.
+    public var allPullRequests: [PullRequestSummary] { pullRequests ?? pullRequest.map { [$0] } ?? [] }
     /// The task whose agent created this one, if any.
     public var parentTask: String?
     /// When it was archived; `nil` for a live task. An archived task has no sandbox until `task.restore` brings it back.
@@ -984,8 +1007,9 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
                 root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil,
                 archivedAt: Date? = nil, behind: Int? = nil, conflicts: Int? = nil, holdBranch: Bool? = nil,
-                pullRequest: PullRequestSummary? = nil) {
+                pullRequest: PullRequestSummary? = nil, pullRequests: [PullRequestSummary] = []) {
         self.pullRequest = pullRequest
+        self.pullRequests = pullRequests.isEmpty ? nil : pullRequests
         self.behind = behind
         self.conflicts = conflicts
         self.holdBranch = holdBranch

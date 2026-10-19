@@ -31,8 +31,9 @@ public enum TaskOutcome: String, Codable, Sendable, CaseIterable {
     /// Still open.
     case active
 
-    /// The verdict from what the record holds. A merged pull request wins over everything: the work landed even if
-    /// the task is still open.
+    /// The verdict from what the record holds. `pullRequestState` is the task's as a whole (`TaskSnapshot.pullRequestState`:
+    /// open while any is, merged once any merged and none is open). A merged pull request wins over everything: the
+    /// work landed even if the task is still open.
     public static func classify(archived: Bool, closed: Bool, pullRequestState: String?, hasPullRequest: Bool) -> TaskOutcome {
         if pullRequestState == "merged" { return .merged }
         if !archived && !closed { return .active }
@@ -57,6 +58,8 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         public var title: String
         /// `open`, `merged`, `closed`; absent when Scope never saw it after binding it — ask GitHub.
         public var state: String?
+        /// The task repository it belongs to, relative to the scope root; absent on links made before it was kept.
+        public var repo: String?
     }
 
     public struct Thread: Codable, Sendable, Equatable {
@@ -89,7 +92,10 @@ public struct SummaryResult: Codable, Sendable, Equatable {
         public var closedAt: Date?
         /// The latest date Scope knows of: a thread launched or closed, the task archived or closed.
         public var lastActivity: Date
+        /// The primary pull request (the first open, else the first merged): what one field can say. `pullRequests` has them all.
         public var pullRequest: PullRequest?
+        /// Every pull request of the task, in its order: one per repository, a stack, a docs PR beside the code.
+        public var pullRequests: [PullRequest]
         public var createdByAgent: Bool
         public var parentTask: String?
         /// The opening lines of the brief, at most `ActivitySummary.briefLimit` characters; the detail has it whole.
@@ -433,17 +439,17 @@ public enum ActivitySummary {
             let kept = deliverables[task.id]
             let threads = (threadsByTask[task.id] ?? []).map { render($0.0, closedAt: $0.1) }
                 .sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
-            let pr = task.pullRequest
+            let prs = task.pullRequests.map { SummaryResult.PullRequest(number: $0.number, url: $0.url, title: $0.title, state: $0.state, repo: $0.repo) }
             let outcome = TaskOutcome.classify(archived: task.archivedAt != nil, closed: entry.closedAt != nil,
-                                               pullRequestState: pr?.state, hasPullRequest: pr != nil)
+                                               pullRequestState: task.pullRequestState, hasPullRequest: !prs.isEmpty)
             let dates = [task.createdAt, task.archivedAt, entry.closedAt].compactMap { $0 }
                 + threads.flatMap { [$0.createdAt, $0.lastLaunchedAt, $0.closedAt].compactMap { $0 } }
             return SummaryResult.Task(
                 id: task.id, slug: task.slug, name: task.name, topic: task.topic, branch: task.branch, repos: task.repos,
                 outcome: outcome, createdAt: task.createdAt, archivedAt: task.archivedAt, closedAt: entry.closedAt,
                 lastActivity: dates.max() ?? task.createdAt,
-                pullRequest: pr.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
-                createdByAgent: task.createdByAgent, parentTask: task.parentTask,
+                pullRequest: task.pullRequest.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state, repo: $0.repo) },
+                pullRequests: prs, createdByAgent: task.createdByAgent, parentTask: task.parentTask,
                 brief: ActivitySummary.excerpt(task.prompt), threads: threads,
                 tokens: threads.compactMap(\.tokens).reduce(nil) { ($0 ?? 0) + $1 },
                 agentSeconds: task.agentSeconds, waitingSeconds: task.waitingSeconds,
@@ -486,9 +492,12 @@ public struct TaskShowResult: Codable, Sendable, Equatable {
     /// An open task's pull request with its checks and mergeability, as Scope last saw it; `task.pullRequest` only
     /// says what the record keeps.
     public var pullRequest: PullRequestSummary?
+    /// Every pull request of an open task with its live state, in the task's order; absent for an archived or closed one.
+    public var pullRequests: [PullRequestSummary]?
 
     public init(scope: String, task: SummaryResult.Task, prompt: String?, deliverable: TaskDeliverable?, notes: [String],
-                pullRequest: PullRequestSummary? = nil) {
+                pullRequest: PullRequestSummary? = nil, pullRequests: [PullRequestSummary]? = nil) {
+        self.pullRequests = pullRequests
         self.scope = scope
         self.task = task
         self.prompt = prompt

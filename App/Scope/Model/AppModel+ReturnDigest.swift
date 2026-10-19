@@ -102,22 +102,24 @@ extension AppModel {
     /// Writes `id`'s visit as ending now, with its tasks' pull requests as they are.
     private func stampVisit(_ id: ScopeID) {
         guard let store = returnDigests.store else { return }
-        var seen: [TaskID: PullRequestSnapshot] = [:]
+        var seen: [TaskID: [PullRequestSnapshot]] = [:]
         for task in tasks(in: id) {
-            if let snapshot = pullRequestSnapshot(task) { seen[task.id] = snapshot }
+            let snapshots = pullRequestSnapshots(task)
+            if !snapshots.isEmpty { seen[task.id] = snapshots }
         }
         returnDigests.visits[id] = .init(lastSeen: .now, pullRequests: seen)
         store.save(returnDigests.visits)
     }
 
-    /// What is known of the task's pull request: the last `gh pr view` when there was one, the record otherwise.
-    private func pullRequestSnapshot(_ task: TaskState) -> PullRequestSnapshot? {
-        if let live = pullRequests.taskPullRequests[task.id] {
-            return PullRequestSnapshot(number: live.number, url: live.url, state: live.state, checks: live.checks)
+    /// What is known of each of the task's pull requests: the last `gh` answer when there was one, the record otherwise.
+    private func pullRequestSnapshots(_ task: TaskState) -> [PullRequestSnapshot] {
+        task.record.pullRequests.map { link in
+            if let live = pullRequests.taskPullRequest(link.url, for: task.id) {
+                return PullRequestSnapshot(number: live.number, url: live.url, state: live.state, checks: live.checks)
+            }
+            return PullRequestSnapshot(number: link.number, url: link.url,
+                                       state: link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open)
         }
-        guard let link = task.record.pullRequest else { return nil }
-        return PullRequestSnapshot(number: link.number, url: link.url,
-                                   state: link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open)
     }
 
     /// Measures what moved in `id` since its last visit and shows it; then asks GitHub about the open pull requests
@@ -142,7 +144,7 @@ extension AppModel {
         // Archived tasks count only if they were live when the owner left: auto-archiving on merge must not hide
         // the merge, and a task archived long ago is not news.
         let tasks = tasks.filter { $0.scopeID == pending.scopeID && (!$0.isArchived || seen[$0.id] != nil) }.map {
-            ReturnDigest.TaskFacts(id: $0.id, name: $0.name, isArchived: $0.isArchived, pullRequest: pullRequestSnapshot($0))
+            ReturnDigest.TaskFacts(id: $0.id, name: $0.name, isArchived: $0.isArchived, pullRequests: pullRequestSnapshots($0))
         }
         // The owner may have moved on while the activity was read.
         guard returnDigests.pendingReturn?.id == returnID, currentScopeID == pending.scopeID else { return }
@@ -174,7 +176,7 @@ extension AppModel {
         guard pullRequests.gh != nil else { return false }
         let now = Date.now
         let due = tasks(in: scope).filter { task in
-            guard let link = task.record.pullRequest, (link.state ?? "open") == "open" else { return false }
+            guard task.record.pullRequests.contains(where: \.isOpen) else { return false }
             return returnDigests.askedGitHub[task.id].map { now.timeIntervalSince($0) >= Self.returnDigestGitHubInterval } ?? true
         }
         guard !due.isEmpty else { return false }

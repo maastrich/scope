@@ -81,23 +81,24 @@ extension AppModel {
     }
 
     private func inboxInput(_ task: TaskState) -> Inbox.TaskInput {
-        Inbox.TaskInput(id: task.id, scopeID: task.scopeID, name: task.name, pullRequest: inboxPullRequest(task),
+        Inbox.TaskInput(id: task.id, scopeID: task.scopeID, name: task.name, pullRequests: inboxPullRequests(task),
                         archivedAt: task.record.isArchived ? (task.record.archivedAt ?? task.record.createdAt) : nil,
                         isDismantling: task.isDismantling, attemptsKept: task.record.attemptsKept)
     }
 
-    /// An open task's pull request as `gh` last saw it. An archived one is not asked again: its record keeps the state
-    /// GitHub last answered, which is what tells a merge.
-    private func inboxPullRequest(_ task: TaskState) -> Inbox.TaskInput.PullRequestInput? {
-        if !task.record.isArchived, let pr = livePullRequest(for: task) {
-            return .init(number: pr.number, title: pr.title, url: pr.url, state: pr.state, checks: pr.checks,
-                         mergeable: pr.mergeable, isDraft: pr.isDraft,
-                         failingChecks: pr.checkRuns.filter { $0.state == .failing }.map(\.title), updatedAt: pr.updatedAt)
+    /// An open task's pull requests as `gh` last saw them. An archived one is not asked again: its record keeps the
+    /// state GitHub last answered, which is what tells a merge.
+    private func inboxPullRequests(_ task: TaskState) -> [Inbox.TaskInput.PullRequestInput] {
+        pullRequestStates(for: task).map { link, live in
+            if !task.record.isArchived, let pr = live {
+                return .init(number: pr.number, title: pr.title, url: pr.url, repo: link.repo, state: pr.state, checks: pr.checks,
+                             mergeable: pr.mergeable, isDraft: pr.isDraft,
+                             failingChecks: pr.checkRuns.filter { $0.state == .failing }.map(\.title), updatedAt: pr.updatedAt)
+            }
+            return .init(number: link.number, title: link.title, url: link.url, repo: link.repo,
+                         state: link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open, checks: .none,
+                         mergeable: .unknown, updatedAt: task.record.archivedAt ?? task.record.createdAt)
         }
-        guard let link = task.record.pullRequest else { return nil }
-        return .init(number: link.number, title: link.title, url: link.url,
-                     state: link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open, checks: .none,
-                     mergeable: .unknown, updatedAt: task.record.archivedAt ?? task.record.createdAt)
     }
 
     // MARK: Actions
@@ -175,10 +176,11 @@ extension AppModel {
     /// s: every failing check of the item's pull request, to the task's thread (`sendCheckFailure`).
     func sendInboxCheckFailures(_ item: Inbox.Item) {
         guard let task = item.taskID.flatMap(task), let thread = checkFailureThread(for: item),
-              let pr = livePullRequest(for: task) else { return }
+              let link = task.record.pullRequests.first(where: { $0.url == item.pullRequestURL }) ?? task.record.primaryPullRequest,
+              let pr = livePullRequest(for: task, link: link) else { return }
         let failing = pr.checkRuns.filter { $0.state == .failing }
         Task {
-            for check in failing { await sendCheckFailure(check, of: task, to: thread.id) }
+            for check in failing { await sendCheckFailure(check, of: task, pullRequest: link, to: thread.id) }
         }
         messageUI.showSent("Sent \(failing.count == 1 ? "the failing check" : "\(failing.count) failing checks") to \(messageTargetName(thread.id))",
                            thread: thread.id)
@@ -188,8 +190,12 @@ extension AppModel {
     func pruneInboxDismissals() {
         let candidates = Inbox.items(threads: [], tasks: tasks.map(inboxInput), schedules: inboxScheduleInputs)
         // An open task whose pull request was not read since launch has no item for want of knowing.
-        let unread = Set(tasks.filter { !$0.record.isArchived && $0.record.pullRequest != nil && livePullRequest(for: $0) == nil }
-            .map { "task:\($0.id.rawValue):pr" })
+        // The ids `Inbox.items` gives: the plain one for a single pull request, the URL path for each of several.
+        let unread = Set(tasks.filter { !$0.record.isArchived }.flatMap { task in
+            pullRequestStates(for: task).filter { $0.live == nil }.map { link in
+                task.record.pullRequests.count == 1 ? "task:\(task.id.rawValue):pr" : "task:\(task.id.rawValue):pr:\(link.link.url.path)"
+            }
+        })
         inbox.setDismissals(inbox.dismissals.pruned(keeping: candidates, judged: { !unread.contains($0) }))
     }
 }
