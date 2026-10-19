@@ -118,8 +118,10 @@ cleanup() {
     fi
     security delete-keychain "$KEYCHAIN_PATH" || true
   fi
-  # Trusting a certificate in the system keychain outlives the build, so undo it even on failure.
-  if [[ -n "$SYSTEM_TRUSTED_PEM" && -f "$SYSTEM_TRUSTED_PEM" ]]; then
+  # Trusting a certificate in the system keychain outlives the build, so undo it even on failure — on a developer
+  # machine. A hosted runner is thrown away with the job, and there `remove-trusted-cert -d` hangs until the
+  # 30 s cap (the gap between "Done" and the next step on v0.26.0: 18:37:05 -> 18:37:38).
+  if [[ -n "$SYSTEM_TRUSTED_PEM" && -f "$SYSTEM_TRUSTED_PEM" && -z "${GITHUB_ACTIONS:-}" ]]; then
     run_capped 30 sudo -n security remove-trusted-cert -d "$SYSTEM_TRUSTED_PEM" >/dev/null 2>&1 || true
   fi
   rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/certificate.pem" 2>/dev/null || true

@@ -20,7 +20,10 @@ struct RootView: View {
         // while a view is drawn, so nothing else would tell the sidebar and the inspector to draw again. The scene
         // is left alone — rebuilding it would take the terminal off screen — and handles its own empty views.
         let theme = model.config.preferences.chromeTheme
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
+            // A staged release, across the top: it concerns the whole app, not the thread on screen.
+            UpdateReadyBand()
+            HStack(spacing: 0) {
             if sidebarPresented {
                 SidebarView()
                     .usageArea("sidebar")
@@ -49,6 +52,7 @@ struct RootView: View {
                     .id(theme)
                     .frame(width: model.inspectorWidth)
                     .transition(.move(edge: .trailing))
+            }
             }
         }
         .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { windowWidth = $0 }
