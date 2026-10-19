@@ -564,6 +564,7 @@ struct SidebarView: View {
                 }
             }
             .disabled(model.currentScope == nil)
+            .commandKeyHint("command.new-thread")
             .help("New loose thread \(model.looseThreadTargetDescription ?? "") — right-click to choose a driver; "
                   + "a thread inside a task is on the task's own menu")
             .accessibilityLabel("New Thread")
@@ -576,6 +577,7 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity)
             }
             .disabled(model.currentScope == nil || model.currentScope?.kind == .missing)
+            .commandKeyHint("command.new-task")
             .help("New Task (⇧⌘T)")
             .accessibilityLabel("New Task")
         }

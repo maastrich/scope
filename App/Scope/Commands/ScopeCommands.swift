@@ -8,7 +8,8 @@ import ScopeCore
 /// ⌘-combinations are menu key equivalents and win over the terminal; nothing an agent TUI needs uses ⌘.
 /// ⌘K opens the command palette, so "clear" is ⌥⌘K. ⌘R is Refresh Scope (platform meaning), Relaunch is
 /// ⌥⌘R; ⌘W closes the thread, ⇧⌘W the window; ⌘M maximizes the thread, so Minimize is ⌥⌘M. The full table is
-/// Help ▸ Keyboard Shortcuts… (`ShortcutCatalog`).
+/// Help ▸ Keyboard Shortcuts… (`ShortcutCatalog`), and ⌘ held alone shows each control's chord beside it
+/// (`CommandKeyHints`, which reads them back off this menu).
 struct ScopeCommands: Commands {
     @FocusedValue(\.appModel) private var model
 

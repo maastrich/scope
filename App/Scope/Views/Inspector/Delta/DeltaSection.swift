@@ -23,7 +23,7 @@ struct DeltaSection: View {
         let task = model.currentTask
         CollapsibleSection(section: .delta, bodyHeight: bodyHeight,
                            help: "Keyboard: j / k next and previous file, ] / [ next and previous hunk",
-                           sash: sash) {
+                           command: "command.delta", sash: sash) {
             if let task { summary(task) }
         } accessories: {
             HStack(spacing: 6) {

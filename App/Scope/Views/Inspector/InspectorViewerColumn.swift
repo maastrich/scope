@@ -65,6 +65,7 @@ struct InspectorViewerColumn: View {
         } label: {
             Image(systemName: "xmark")
         }
+        .keyHint("⎋", .inside)
         .help("Close (Esc)")
         .accessibilityLabel("Close the viewer")
         .usageID("close", label: "Close (reading column)")

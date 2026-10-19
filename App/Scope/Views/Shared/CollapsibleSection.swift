@@ -20,6 +20,8 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
     /// What the header says when the section has nothing to show (no task, no repository).
     var unavailable = "no task"
     var help = ""
+    /// The menu command that opens and focuses the section (`command.delta`), for the ⌘-held hint on its header.
+    var command: String? = nil
     var onNatural: (Double) -> Void = { _ in }
     /// Set when an open list sits above this one: the header's top edge is then the sash between the two.
     var sash: SectionSash?
@@ -127,6 +129,8 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
                         .allowsHitTesting(hovering)
                 }
             }
+            // ⌘D / ⇧⌘B after the title, over the summary, while ⌘ is held.
+            .keyHints(.custom(.leading, .zero)) { command.flatMap { CommandKeyHints.shared.keys(for: $0) }.map { [$0] } ?? [] }
         }
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())

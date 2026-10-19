@@ -31,6 +31,7 @@ struct InboxButton: View {
             .frame(maxWidth: showsTitle ? .infinity : nil)
             .padding(.horizontal, showsTitle ? 0 : 4)
         }
+        .commandKeyHint("command.inbox", showsTitle ? .trailing : .corner)
         .help("What needs you, in every scope (⇧⌘I)")
         .accessibilityLabel(items.isEmpty ? "Inbox" : "Inbox, \(items.count) items")
         .usageID("inbox", label: "Inbox")

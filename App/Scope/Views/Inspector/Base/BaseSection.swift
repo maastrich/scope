@@ -20,7 +20,8 @@ struct BaseSection: View {
     var body: some View {
         let scope = model.currentScope
         let subject = model.baseSubject()
-        CollapsibleSection(section: .base, bodyHeight: bodyHeight, unavailable: "no repository", onNatural: onNatural) {
+        CollapsibleSection(section: .base, bodyHeight: bodyHeight, unavailable: "no repository", command: "command.base",
+                           onNatural: onNatural) {
             if let subject { summary(repo: subject.repo) }
         } accessories: {
             if let scope, let subject { accessories(scope: scope, repo: subject.repo, reason: subject.reason) }

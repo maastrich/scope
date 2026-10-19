@@ -65,6 +65,7 @@ struct SceneView: View {
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.icon)
+            .commandKeyHint("command.sidebar", .inside)
             .help("Toggle Sidebar (⌃⌘S)")
             .accessibilityLabel("Toggle Sidebar")
         }
@@ -89,6 +90,7 @@ struct SceneView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.icon)
+                .commandKeyHint("command.read-reply", .inside)
                 .help("Read the agent's last reply (⇧⌘R)")
                 .accessibilityLabel("Read Reply")
                 .usageID("toolbar.read-reply", label: "Read reply (toolbar)")
@@ -127,6 +129,7 @@ struct SceneView: View {
             }
             .buttonStyle(.icon)
             .disabled(model.scopes.isEmpty)
+            .commandKeyHint("command.inspector", .inside)
             .help("Toggle Inspector (⌥⌘I)")
             .accessibilityLabel("Toggle Inspector")
         }

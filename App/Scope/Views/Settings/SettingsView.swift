@@ -72,6 +72,13 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Show keyboard shortcuts while ⌘ is held", isOn: preference(\.showShortcutHints))
+                    .toggleStyle(.scope)
+                    .usageID("show-shortcut-hints", label: "Show keyboard shortcuts while ⌘ is held")
+                Text("Hold ⌘ on its own for half a second: every button, row and tab with a shortcut shows it in a keycap beside itself. Let go and they disappear. The full list is Help ▸ Keyboard Shortcuts… (⌘/).")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Terminal") {
                 SettingsRow("Font size") {
