@@ -129,6 +129,10 @@ import Testing
         #expect(Self.call("scope_task_close", #"{"task":"t","delete_branch":true}"#)
             == .success(.taskClose(TaskCloseParams(task: "t", deleteBranch: true, force: false))))
         #expect(Self.call("scope_task_archive", #"{"task":"t"}"#) == .success(.taskArchive(TaskArchiveParams(task: "t"))))
+        #expect(Self.call("scope_task_archive", #"{"task":"health","scope":"beta"}"#)
+            == .success(.taskArchive(TaskArchiveParams(task: "health", scope: "beta"))))
+        #expect(Self.call("scope_task_close", #"{"task":"health","scope":"beta"}"#)
+            == .success(.taskClose(TaskCloseParams(task: "health", scope: "beta"))))
         #expect(Self.call("scope_gc", "{}") == .success(.gc(GCParams())))
         #expect(Self.call("scope_gc", #"{"dry_run":true}"#) == .success(.gc(GCParams(dryRun: true))))
     }
@@ -144,7 +148,7 @@ import Testing
             Issue.record("force was accepted"); return
         }
         #expect(error.code == .badRequest && error.message.contains("force"))
-        #expect(error.detail?.contains("It takes: delete_branch, task") == true)
+        #expect(error.detail?.contains("It takes: delete_branch, scope, task") == true)
         guard case .failure = Self.call("scope_list", #"{"kind":"threads","verbose":true}"#) else {
             Issue.record("verbose was accepted"); return
         }

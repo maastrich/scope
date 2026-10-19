@@ -179,10 +179,11 @@ final class AppControlService: ControlService {
         case .usage(let params):
             return await model.usageReport(params)
         case .taskClose(let params):
-            return await dismantle(params.task, .close(deleteBranch: params.deleteBranch), method: .taskClose,
+            return await dismantle(params.task, scope: params.scope, .close(deleteBranch: params.deleteBranch), method: .taskClose,
+                                   from: origin, caller: caller,
                                    done: "closed the task %@" + (params.deleteBranch ? " and deleted its branch" : "; its branch is kept"))
         case .taskArchive(let params):
-            return await dismantle(params.task, .archive, method: .taskArchive,
+            return await dismantle(params.task, scope: params.scope, .archive, method: .taskArchive, from: origin, caller: caller,
                                    done: "archived the task %@; its branch is kept")
         case .taskTopic(let params):
             return await fileTask(params, from: origin)
@@ -400,19 +401,12 @@ final class AppControlService: ControlService {
     }
 
     /// The task named by id or slug.
-    private func task(named name: String) -> Result<TaskState, ControlError> {
-        guard let task = model.tasks.first(where: { $0.record.id.rawValue == name || $0.record.slug == name }) else {
-            return .failure(.notFound("no task “\(name)”", detail: model.tasks.map(\.record.slug).joined(separator: ", ")))
-        }
-        return .success(task)
-    }
-
     /// `task.topic`: the label, and the tasks it started that share it. The answer echoes the topic as stored —
     /// trimmed and bounded — so the agent sees what the sidebar shows.
     private func fileTask(_ params: TaskTopicParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
         let found: Result<TaskState, ControlError>
         if let name = params.task {
-            found = task(named: name)
+            found = resolveTask(name, scope: nil, callerScopeID: callerScopeID(origin), callerCwd: nil)
         } else if case .thread(let id, _) = origin,
                   let raw = model.session(id)?.record.taskID, let own = model.tasks.first(where: { $0.record.id.rawValue == raw }) {
             found = .success(own)
@@ -458,7 +452,7 @@ final class AppControlService: ControlService {
                          caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
         let callerScopeID: String? = if case .thread(let id, _) = origin { model.session(id)?.record.scopeID.rawValue } else { nil }
         let task: TaskState
-        switch resolveTask(params.task, scope: params.scope, callerScopeID: callerScopeID, callerCwd: caller.cwd) {
+        switch resolveTask(params.task, scope: params.scope, callerScopeID: callerScopeID, callerCwd: caller.cwd, preferring: .archived) {
         case .failure(let error): return .failure(error)
         case .success(let match): task = match
         }
@@ -678,10 +672,12 @@ final class AppControlService: ControlService {
         }
     }
 
-    /// Archive and close: the task named by id or slug, the outcome said in a few lines.
-    private func dismantle(_ name: String, _ mode: DismantleMode, method: ControlMethod, done: String) async -> Result<ControlResultPayload, ControlError> {
+    /// Archive and close: the task named by id or slug — the live one when an archived namesake of another scope
+    /// shares the slug (`TaskLookup`) — and the outcome said in a few lines.
+    private func dismantle(_ name: String, scope: String?, _ mode: DismantleMode, method: ControlMethod,
+                           from origin: ControlOrigin, caller: ControlCaller, done: String) async -> Result<ControlResultPayload, ControlError> {
         let task: TaskState
-        switch self.task(named: name) {
+        switch resolveTask(name, scope: scope, callerScopeID: callerScopeID(origin), callerCwd: caller.cwd) {
         case .failure(let error): return .failure(error)
         case .success(let match): task = match
         }
@@ -957,32 +953,35 @@ final class AppControlService: ControlService {
 
     /// The task `query` names by id or slug. With `scope`, only in that scope; without, in any scope — the
     /// caller's own when the same slug exists in several.
-    private func resolveTask(_ query: String, scope: String?, callerScopeID: String?,
-                             callerCwd: String?) -> Result<TaskState, ControlError> {
-        var candidates = model.tasks.filter { $0.record.id.rawValue == query || $0.record.slug == query }
+    /// The task a request names (`TaskLookup`): an id exactly; a slug narrowed by `scope` when given, then to the
+    /// kind the command wants (live, or archived for a restore), then to the caller's own scope.
+    private func resolveTask(_ query: String, scope: String?, callerScopeID: String?, callerCwd: String?,
+                             preferring preference: TaskLookup.Preference = .live) -> Result<TaskState, ControlError> {
+        var only: ScopeSummary?
         if let scope {
             let resolved = ScopeResolver.resolve(scope, in: scopeSummaries, callerScopeID: callerScopeID, callerCwd: callerCwd)
-            guard case .success(let only) = resolved else { return .failure(resolved.failureError) }
-            candidates = candidates.filter { $0.scopeID.rawValue == only.id }
-            guard let task = candidates.first else {
+            guard case .success(let summary) = resolved else { return .failure(resolved.failureError) }
+            only = summary
+        }
+        let candidates = model.tasks.map { task in
+            TaskLookup.Candidate(id: task.record.id.rawValue, slug: task.record.slug, scopeID: task.scopeID.rawValue,
+                                 scopeSlug: task.record.scopeSlug, isArchived: task.isArchived)
+        }
+        switch TaskLookup.resolve(query, among: candidates, preferring: preference, scopeID: only?.id, callerScopeID: callerScopeID) {
+        case .found(let match):
+            guard let task = model.tasks.first(where: { $0.record.id.rawValue == match.id }) else { return .failure(.notFound("no task “\(query)”")) }
+            return .success(task)
+        case .ambiguous(let shared):
+            return .failure(.badRequest("“\(query)” names a task in several scopes",
+                                        detail: "Say which with --scope: " + shared.map(\.qualified).joined(separator: ", ")))
+        case .none:
+            if let only {
                 return .failure(.notFound("no task “\(query)” in \(only.slug)",
                                           detail: model.tasks.filter { $0.scopeID.rawValue == only.id }.map(\.record.slug).joined(separator: ", ")))
             }
-            return .success(task)
-        }
-        if candidates.count > 1, let own = candidates.first(where: { $0.scopeID.rawValue == callerScopeID }) {
-            return .success(own)
-        }
-        guard candidates.count <= 1 else {
-            return .failure(.badRequest("“\(query)” names a task in several scopes",
-                                        detail: "Say which with --scope: "
-                                            + candidates.map { "\($0.record.scopeSlug)/\($0.record.slug)" }.joined(separator: ", ")))
-        }
-        guard let task = candidates.first else {
             return .failure(.notFound("no task “\(query)”",
                                       detail: "`scope list tasks` shows every task; ids and slugs both work."))
         }
-        return .success(task)
     }
 
     /// `scope task new` — the New Task sheet without the sheet: the same request resolution, the same

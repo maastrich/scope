@@ -454,9 +454,12 @@ public struct ThreadWaitParams: Codable, Sendable, Equatable {
 public struct TaskArchiveParams: Codable, Sendable, Equatable {
     /// Task id or slug.
     public var task: String
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
 
-    public init(task: String) {
+    public init(task: String, scope: String? = nil) {
         self.task = task
+        self.scope = scope
     }
 }
 
@@ -633,11 +636,14 @@ public struct TaskCloseParams: Codable, Sendable, Equatable {
     /// Ignored, kept so an older client's request still decodes: a close no longer refuses anything, it saves
     /// uncommitted work and unmerged branches before removing them.
     public var force: Bool
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
 
-    public init(task: String, deleteBranch: Bool = false, force: Bool = false) {
+    public init(task: String, deleteBranch: Bool = false, force: Bool = false, scope: String? = nil) {
         self.task = task
         self.deleteBranch = deleteBranch
         self.force = force
+        self.scope = scope
     }
 
     public init(from decoder: any Decoder) throws {
@@ -645,6 +651,7 @@ public struct TaskCloseParams: Codable, Sendable, Equatable {
         task = try container.decode(String.self, forKey: .task)
         deleteBranch = try container.decodeIfPresent(Bool.self, forKey: .deleteBranch) ?? false
         force = try container.decodeIfPresent(Bool.self, forKey: .force) ?? false
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
     }
 }
 

@@ -89,6 +89,9 @@ import Testing
 
     @Test func archiveAndGarbageCollection() throws {
         #expect(try Self.call(["task", "archive", "rework-auth"]) == .taskArchive(TaskArchiveParams(task: "rework-auth")))
+        #expect(try Self.call(["task", "archive", "health", "--scope", "beta"]) == .taskArchive(TaskArchiveParams(task: "health", scope: "beta")))
+        #expect(try Self.call(["task", "close", "health", "--scope=beta", "--delete-branch"])
+            == .taskClose(TaskCloseParams(task: "health", deleteBranch: true, scope: "beta")))
         #expect(throws: ScopeCLI.UsageError.self) { try Self.call(["task", "archive"]) }
         #expect(try Self.call(["gc"]) == .gc(GCParams()))
         #expect(try Self.call(["gc", "--dry-run"]) == .gc(GCParams(dryRun: true)))
