@@ -117,9 +117,9 @@ extension AppModel {
                 return "could not reach the thread of \(task.record.slug): \(reason)"
             }
         }
-        // No agent in the task: one is started with the message as its first prompt, with the driver the scope
-        // usually gets, as long as it reports its turns (a shell cannot be asked anything).
-        let driver = [preferredProfile].compactMap { $0 }.first(where: AdapterInstaller.deliversEvents)
+        // No agent in the task: one is started with the message as its first prompt, with the default driver, as
+        // long as it reports its turns (a shell cannot be asked anything).
+        let driver = [defaultProfile].compactMap { $0 }.first(where: AdapterInstaller.deliversEvents)
             ?? drivers.profiles.first(where: AdapterInstaller.deliversEvents)
         guard let driver else {
             problems.warn("No agent to ask about \(task.name)'s branch", detail: "main moved; no Claude Code or Codex profile is installed.",

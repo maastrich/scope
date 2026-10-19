@@ -86,7 +86,7 @@ public struct ScheduleTarget: Codable, Sendable, Hashable {
     }
 
     public var kind: Kind
-    /// `newTask` only: the driver of the task's first thread; `nil` is the scope's usual one.
+    /// `newTask` only: the driver of the task's first thread; `nil` is the default driver from Settings.
     public var driver: String?
     /// `newTask` only: the model of that thread; `nil` is the usual default.
     public var model: String?

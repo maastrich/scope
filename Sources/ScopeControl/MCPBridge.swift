@@ -141,7 +141,7 @@ public enum MCPBridge {
             schema: """
             {"type":"object","properties":{\
             "scope":{"type":"string","description":"Slug, name, id or path. Defaults to the caller's own scope."},\
-            "driver":{"type":"string","description":"Driver profile id (claude-code, codex, shell…). Defaults to the scope's usual one."},\
+            "driver":{"type":"string","description":"Driver profile id (claude-code, codex, shell…). Omitted: the default driver from Settings, never the one you run on."},\
             "task":{"type":"string","description":"Task id or slug: opens the thread in that task's sandbox."},\
             "repo":{"type":"string","description":"Repository relative to the scope root."},\
             "title":{"type":"string","description":"Row label for the thread."},\
@@ -177,7 +177,7 @@ public enum MCPBridge {
             "issue":{"type":"string","description":"GitHub issue to work on (123, #123, owner/repo#123 or its URL): its title, body and labels open the brief and the task records it; the call fails if it cannot be read. Omitted, only an issue the prompt asks to work on (\\"fix #123\\", an issue URL) is used; one it merely cites is context."},\
             "title":{"type":"string","description":"Task name; omitted lets the driver propose one."},\
             "slug":{"type":"string","description":"Sandbox folder name; omitted derives it from the title."},\
-            "driver":{"type":"string","description":"Driver for the task's first thread."},\
+            "driver":{"type":"string","description":"Driver for the task's first thread. Omitted: the default driver from Settings, never the one you run on."},\
             "model":{"type":"string","description":"Model of the task's first thread; same defaults as scope_thread_new."},\
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\

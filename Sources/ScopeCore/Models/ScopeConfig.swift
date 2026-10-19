@@ -444,8 +444,10 @@ public enum AssistMode: String, Codable, Sendable, CaseIterable {
 
 /// User preferences stored in `config.json`. Every field has a default so a partial document decodes.
 public struct Preferences: Codable, Sendable, Equatable {
-    /// Driver a scope starts on, before you open one in it. Empty — the default — means *automatic*: Scope
-    /// takes the first agent profile it has, since running agents is what it is for; a shell is a choice.
+    /// The driver of every thread and task opened without naming one — by the user, an agent, the CLI, a schedule
+    /// (`DriverChoice`). Empty — the default — means *automatic*: Scope takes the first agent profile it has, since
+    /// running agents is what it is for; a shell is a choice. Only then does the user's ⌘T reach for the driver
+    /// last opened in the scope.
     public var defaultDriverID: String
     /// Deprecated, unused since task branches are proposed by the driver (`TaskProposer`); kept so an
     /// older `config.json` still decodes. Empty by default.

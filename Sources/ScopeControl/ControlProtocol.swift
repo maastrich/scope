@@ -675,7 +675,7 @@ public struct ListParams: Codable, Sendable, Equatable {
 public struct ThreadNewParams: Codable, Sendable, Equatable {
     /// Slug, name, id or path. `nil` = the caller's own scope, then the scope containing its cwd.
     public var scope: String?
-    /// Driver profile id; `nil` = the scope's usual one.
+    /// Driver profile id; `nil` = the default driver from Settings (`DriverChoice`), never the caller's own.
     public var driver: String?
     /// Task id or slug: opens the thread in that task's sandbox instead of the scope root.
     public var task: String?

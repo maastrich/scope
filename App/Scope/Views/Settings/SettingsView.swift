@@ -385,10 +385,11 @@ private struct GeneralSettingsView: View {
 
     private var driverCaption: String {
         let automatic = model.config.preferences.defaultDriverID.isEmpty
-        let name = model.preferredProfile?.name ?? "the first driver"
+        let name = model.defaultProfile?.name ?? "the first driver"
         return automatic
-            ? "Automatic picks the first agent profile installed (\(name) here). A scope then keeps the driver you last opened in it — ⌘T never asks twice."
-            : "A scope keeps the driver you last opened in it; this is what a scope starts on."
+            ? "Automatic picks the first agent profile installed (\(name) here) for everything agents, the CLI and schedules open. "
+                + "Your own ⌘T keeps the driver you last opened in the scope."
+            : "Every thread and task opened without naming a driver runs on it: yours (⌘T), an agent's, the CLI's, a schedule's."
     }
 
     private var orchestratorDriverTitle: String {

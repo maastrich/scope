@@ -107,7 +107,7 @@ public enum ScopeCLI {
 
     thread new:
       --scope <slug|name|id|path>   which scope (default: the caller's, else the one holding the cwd)
-      --driver <id>                 driver profile (default: the scope's usual one)
+      --driver <id>                 driver profile (default: the one chosen in Settings, never yours)
       --task <id|slug>              open it inside that task's sandbox (any scope; --scope settles a shared slug)
       --repo <relative/path>        open it in that repository
       --title <text>                row label
@@ -134,7 +134,7 @@ public enum ScopeCLI {
                                     prompt asks to work on — "fix #123", an issue URL — never one it only cites)
       --title <text>                task name (default: proposed)
       --slug <name>                 sandbox folder name (default: from the title)
-      --driver <id>                 driver for the first thread
+      --driver <id>                 driver for the first thread (default: the one chosen in Settings)
       --model <name>                model of the first thread (same defaults as thread new)
       --topic <text>                file it under a topic (default: the topic of the caller's own task)
       --deliverable <path>          the file the work ends in, relative to the task root or a sandbox; kept with
