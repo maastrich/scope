@@ -36,24 +36,23 @@ final class DeltaModel {
     var focusedHunk: Int?
     /// PR of the current branch per repo (`prView`), looked up once per task.
     private(set) var prURLs: [String: URL] = [:]
-    /// Files marked as viewed, per task and mode, with the digest of their diff when marked (`DiffDigest`): a mark
-    /// stands while the diff is the one that was looked at.
-    private(set) var viewed: [TaskID: [ViewedKey: String]] = [:]
-
-    struct ViewedKey: Hashable {
-        let mode: DeltaMode
-        let ref: DeltaFileRef
-    }
+    /// The files of the followed task marked as viewed (`ViewedMarks`), loaded from `viewedStore` with the task and
+    /// saved as they change: a review survives a relaunch, and a file the agent touched again says so.
+    private(set) var viewed = ViewedMarks()
     let gh: GhClient?
 
+    @ObservationIgnored let viewedStore: ViewedStore
     @ObservationIgnored private let env: AppEnvironment
     @ObservationIgnored private let problems: ProblemCenter
     @ObservationIgnored private var generation = 0
+    /// Saves run one after the other, so an older list never lands after a newer one.
+    @ObservationIgnored private var savingViewed: Task<Void, Never>?
 
     init(env: AppEnvironment, problems: ProblemCenter) {
         self.env = env
         self.problems = problems
         self.gh = GhClient.locate()
+        self.viewedStore = ViewedStore(home: env.home)
     }
 
     // MARK: Derived
@@ -97,28 +96,61 @@ final class DeltaModel {
 
     // MARK: Viewed
 
-    func isViewed(_ ref: DeltaFileRef, _ file: DiffFile) -> Bool {
-        guard let taskID, let digest = viewed[taskID]?[ViewedKey(mode: mode, ref: ref)] else { return false }
-        return digest == DiffDigest.of(file)
+    func viewedState(_ ref: DeltaFileRef, _ file: DiffFile) -> ViewedMarks.State {
+        viewed.state(mode: mode, repo: ref.repo, path: ref.path, digest: DiffDigest.of(file))
     }
 
+    func isViewed(_ ref: DeltaFileRef, _ file: DiffFile) -> Bool { viewedState(ref, file).isViewed }
+
+    /// Viewed → unviewed; unviewed or changed since viewed → viewed with the diff the file has now.
     func toggleViewed(_ ref: DeltaFileRef, _ file: DiffFile) {
-        guard let taskID else { return }
-        let key = ViewedKey(mode: mode, ref: ref)
+        guard taskID != nil else { return }
         if isViewed(ref, file) {
-            viewed[taskID]?[key] = nil
+            Usage.click("inspector.delta.unmark-viewed", label: "Unmark a file as viewed")
+            viewed.clear(mode: mode, repo: ref.repo, path: ref.path)
         } else {
-            viewed[taskID, default: [:]][key] = DiffDigest.of(file)
+            Usage.click("inspector.delta.mark-viewed", label: "Mark a file as viewed")
+            viewed.set(mode: mode, repo: ref.repo, path: ref.path, digest: DiffDigest.of(file))
+        }
+        persistViewed()
+    }
+
+    /// `(viewed, changed since viewed)` among the files of `repo` in the current mode, for its group row.
+    func viewedCounts(in repo: RepoDelta) -> (viewed: Int, changed: Int) {
+        viewed.counts(mode: mode, files: (repo.delta?.files ?? []).map { (repo.id, $0.path, DiffDigest.of($0)) })
+    }
+
+    /// Drops the marks of files no longer in the delta: the agent reverted them, nothing is left to look at. A file
+    /// whose diff merely changed keeps its mark and shows as changed since viewed.
+    private func pruneViewed() {
+        let before = viewed
+        viewed.retain(mode: mode) { file(DeltaFileRef(repo: $0.repo, path: $0.path)) != nil }
+        if viewed != before { persistViewed() }
+    }
+
+    private func loadViewed(for task: TaskID) {
+        let store = viewedStore
+        Task {
+            let loaded = await store.load(task)
+            guard taskID == task else { return }
+            viewed = loaded
+            if hasLoaded { pruneViewed() }
         }
     }
 
-    /// Drops the marks of files whose diff changed (or went away) since: the agent touched them again.
-    private func pruneViewed() {
-        guard let taskID, var marks = viewed[taskID] else { return }
-        for (key, digest) in marks where key.mode == mode {
-            if file(key.ref).map(DiffDigest.of) != digest { marks[key] = nil }
+    private func persistViewed() {
+        guard let taskID else { return }
+        let snapshot = viewed
+        let store = viewedStore
+        let previous = savingViewed
+        savingViewed = Task { [problems] in
+            await previous?.value
+            do {
+                try await store.save(snapshot, for: taskID)
+            } catch {
+                problems.warn("Could not save the viewed marks", detail: String(describing: error))
+            }
         }
-        viewed[taskID] = marks
     }
 
     // MARK: Keyboard
@@ -153,6 +185,8 @@ final class DeltaModel {
             prURLs = [:]
             repos = []
             hasLoaded = false
+            viewed = ViewedMarks()
+            loadViewed(for: record.id)
             Task { await lookupPRs(task: record) }
         }
         isLoading = true

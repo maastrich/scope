@@ -148,6 +148,18 @@ struct DeltaFileList: View {
                 Text(shown == delta.files.count ? "\(delta.files.count) \(delta.files.count == 1 ? "file" : "files")" : "\(shown) of \(delta.files.count) files")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.tertiary)
+                let counts = model.delta.viewedCounts(in: repo)
+                if counts.viewed > 0 || counts.changed > 0 {
+                    Text("· \(counts.viewed) viewed")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                }
+                if counts.changed > 0 {
+                    Text("· \(counts.changed) changed")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Color(nsColor: .systemOrange))
+                        .help("Viewed, then touched again by the agent")
+                }
                 DeltaCounts(additions: delta.summary.additions, deletions: delta.summary.deletions)
             }
             .padding(.horizontal, 14)
@@ -161,7 +173,9 @@ struct DeltaFileList: View {
 
     private func fileRow(repo: TaskRepo, ref: DeltaFileRef, file: DiffFile) -> some View {
         let selected = model.delta.selectedFile == ref
-        let viewed = model.delta.isViewed(ref, file)
+        let state = model.delta.viewedState(ref, file)
+        let viewed = state.isViewed
+        let changed = state.isChanged
         return HStack(spacing: 8) {
             Text(statusLetter(file.status))
                 .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
@@ -170,18 +184,29 @@ struct DeltaFileList: View {
             FilePathLabel(path: file.path)
                 .opacity(viewed ? 0.5 : 1)
             Spacer(minLength: 4)
+            if changed {
+                // The thing to look at next: viewed once, then touched again by the agent.
+                Text("changed")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Color(nsColor: .systemOrange))
+                    .help(Self.changedHelp(state))
+            }
             DeltaCounts(additions: file.additions, deletions: file.deletions)
                 .opacity(viewed ? 0.5 : 1)
             Button {
                 model.delta.toggleViewed(ref, file)
             } label: {
-                Image(systemName: viewed ? "checkmark.square.fill" : "square")
+                Image(systemName: viewed ? "checkmark.square.fill" : changed ? "exclamationmark.square.fill" : "square")
                     .font(.scopeCaption)
-                    .foregroundStyle(viewed ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(viewed ? AnyShapeStyle(Color.accentColor)
+                                     : changed ? AnyShapeStyle(Color(nsColor: .systemOrange)) : AnyShapeStyle(.tertiary))
             }
             .buttonStyle(.plain)
-            .help(viewed ? "Viewed — click to unmark" : "Mark as viewed (cleared when this file's diff changes)")
-            .accessibilityLabel(viewed ? "Viewed, \(file.path)" : "Mark \(file.path) as viewed")
+            .help(viewed ? "Viewed — click to unmark"
+                  : changed ? "\(Self.changedHelp(state)) — click to mark as viewed again"
+                  : "Mark as viewed (kept until this file's diff changes)")
+            .accessibilityLabel(viewed ? "Viewed, \(file.path)"
+                                : changed ? "Changed since viewed, \(file.path)" : "Mark \(file.path) as viewed")
             Button {
                 model.openInEditorOrCopy(path: repo.sandboxPath, file: repo.sandboxURL.appending(path: file.path).path,
                                          line: file.hunks.first?.newStart)
@@ -199,6 +224,11 @@ struct DeltaFileList: View {
         .background(selected ? Fill.selectedTint : .clear)
         .contentShape(Rectangle())
         .onTapGesture { model.showDiff(ref) }
+    }
+
+    private static func changedHelp(_ state: ViewedMarks.State) -> String {
+        guard case .changedSinceViewed(let at) = state else { return "" }
+        return "Changed since you viewed it at \(at.formatted(date: .omitted, time: .shortened))"
     }
 
     static func letter(_ status: DiffFile.Status) -> String {

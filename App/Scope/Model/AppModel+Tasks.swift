@@ -717,7 +717,11 @@ extension AppModel {
         let taskID = task.id
         task.stopWatching()
         let reviews = review.store
-        Task { await reviews.delete(taskID) }
+        let viewed = delta.viewedStore
+        Task {
+            await reviews.delete(taskID)
+            await viewed.delete(taskID)
+        }
         tasks.removeAll { $0.id == taskID }
         if selection == .task(taskID) || currentTask?.id == taskID {
             selection = .scope(task.scopeID)
