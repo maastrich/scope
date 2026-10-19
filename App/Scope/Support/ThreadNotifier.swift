@@ -9,17 +9,21 @@ import UserNotifications
 @MainActor
 final class ThreadNotifier {
     nonisolated static let category = "thread"
+    /// A finished turn the assistant read as blocking: the same actions, plus *Not blocking*.
+    nonisolated static let triagedCategory = "thread-triaged"
     nonisolated static let goToThreadAction = "goToThread"
     nonisolated static let seeDeltaAction = "seeDelta"
     nonisolated static let replyAction = "reply"
+    nonisolated static let notBlockingAction = "notBlocking"
 
     private var categoryRegistered = false
 
-    /// Posts `content` for `threadID` when the app is not frontmost. Silently drops when the user denied.
-    func post(_ content: ThreadNotificationContent, threadID: ThreadID) {
+    /// Posts `content` for `threadID` when the app is not frontmost. Silently drops when the user denied. `triaged`
+    /// when the assistant's verdict is what let it through (spec §4.10), so the person can say it was wrong.
+    func post(_ content: ThreadNotificationContent, threadID: ThreadID, triaged: Bool = false) {
         registerCategoryIfNeeded()
         let center = UNUserNotificationCenter.current()
-        let request = Self.request(content, threadID: threadID)
+        let request = Self.request(content, threadID: threadID, triaged: triaged)
         // The async form keeps `center` and `request` on this actor. The completion-handler pair handed both to
         // a `@Sendable` closure instead, and neither type is `Sendable`.
         Task { @MainActor in
@@ -38,12 +42,12 @@ final class ThreadNotifier {
         center.removeDeliveredNotifications(withIdentifiers: [threadID.rawValue])
     }
 
-    private static func request(_ content: ThreadNotificationContent, threadID: ThreadID) -> UNNotificationRequest {
+    private static func request(_ content: ThreadNotificationContent, threadID: ThreadID, triaged: Bool) -> UNNotificationRequest {
         let body = UNMutableNotificationContent()
         body.title = content.title
         if let subtitle = content.subtitle { body.subtitle = subtitle }
         body.body = content.body
-        body.categoryIdentifier = category
+        body.categoryIdentifier = triaged ? triagedCategory : category
         body.threadIdentifier = threadID.rawValue
         body.sound = .default
         return UNNotificationRequest(identifier: threadID.rawValue, content: body, trigger: nil)
@@ -59,6 +63,9 @@ final class ThreadNotifier {
                                                   textInputButtonTitle: "Send", textInputPlaceholder: "Answer the thread")
         let category = UNNotificationCategory(identifier: Self.category, actions: [reply, goTo, delta],
                                               intentIdentifiers: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        let notBlocking = UNNotificationAction(identifier: Self.notBlockingAction, title: "Not Blocking", options: [])
+        let triaged = UNNotificationCategory(identifier: Self.triagedCategory, actions: [reply, goTo, delta, notBlocking],
+                                             intentIdentifiers: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category, triaged])
     }
 }

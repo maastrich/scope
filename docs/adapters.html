@@ -113,10 +113,13 @@ notification goes once it is sent. <b>Settings › General › Notifications ›
 default) turns the quote off, for when your screen is shared.</p>
 
 <h2 id="assist">The assistant</h2>
-<p>On events only — a turn that ends, a question, a thread running for more than four minutes, a task being
+<p>On events only — a turn that ends, a thread running for more than four minutes, a task being
 created — Scope can hand the end of the terminal to a small model and get <i>labels</i> back: what the agent is
 doing, whether it seems stuck and why, whether a finished turn is worth a notification, whether a task without a
-pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it.</p>
+pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it, and it
+never reads the same words twice: a thread whose terminal has not moved keeps its last digest (asked again every
+eight minutes at most), a finished turn is triaged only when a notification could be quieted by it, and the same
+answer reported twice gets one verdict and one notification.</p>
 <p>The first model is Apple's on-device one (macOS 26, Apple Intelligence on): free, local, about a second per
 answer, good at exactly this kind of structured classification. <b>Settings › Assist › On-device + Haiku</b> adds
 Claude Code's light model as a second opinion on a stuck verdict, and as the fallback when the on-device model is
@@ -125,7 +128,8 @@ output, under a daily cap you set (40 by default). Each call counts against your
 <p>What you see: the activity line under a running thread takes the model's words; a thread read as stuck says
 <i>Seems stuck — reason</i> in the sidebar, in the Inbox and as a notification, with a <b>Not stuck</b> answer that
 is remembered as a false positive; a finished turn the model reads as informational stays silent (a question or a
-failure always notifies); a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
+failure always notifies), and one it reads as blocking notifies with a <b>Not Blocking</b> action that is remembered
+the same way; a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
 its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
 one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
 
