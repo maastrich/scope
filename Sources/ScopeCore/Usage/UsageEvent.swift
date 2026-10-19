@@ -19,7 +19,10 @@ public struct UsageEvent: Codable, Sendable, Equatable {
         case notification
         /// A CLI or MCP request; `source` says whether the user's terminal or an agent made it.
         case control
-        /// A sheet, an inspector section or a panel was on screen; `duration` is how long, sent once it closes.
+        /// A sheet, an inspector section or a panel was on screen; `duration` is how long. Since the screen-time clock
+        /// (`ScreenTimeClock`) one event is one counted run: `context` is `active` for the first run of an opening,
+        /// `resumed` for the runs after a pause. Events without either were timed from appear to disappear, whatever
+        /// the person was doing, and the report ignores their durations.
         case view
         /// A preference changed; `id` is its key, the value is never recorded.
         case setting
@@ -60,6 +63,16 @@ public struct UsageEvent: Codable, Sendable, Equatable {
         self.scope = scope
         self.context = context
         self.duration = duration
+    }
+
+    /// `context` of a `view` event counted by the screen-time clock: the first run of an opening.
+    public static let activeViewContext = "active"
+    /// `context` of a `view` event counted after a pause of the same opening: a run, not another opening.
+    public static let resumedViewContext = "resumed"
+
+    /// `true` for a `view` event whose duration was counted by the screen-time clock, so it can be trusted.
+    public var isTimedView: Bool {
+        kind == .view && (context == Self.activeViewContext || context == Self.resumedViewContext)
     }
 
     /// The area of `id`: its first dotted component.

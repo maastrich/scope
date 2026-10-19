@@ -23,6 +23,7 @@ final class AssistEngine {
     private(set) var lastLatency: [AssistTier: TimeInterval] = [:]
 
     @ObservationIgnored var history = AssistTriggers.History()
+    @ObservationIgnored var memory = AssistMemory()
     @ObservationIgnored var onDevice: (any AssistModel)?
     @ObservationIgnored var haiku: (any AssistModel)?
     @ObservationIgnored var store: AssistLedgerStore?
@@ -167,6 +168,7 @@ extension AppModel {
         if event.kind == .turnStarted {
             if event.payload[HookEvent.toolKey].map(\.isEmpty) ?? true { session.setAssistNote(nil) }
             task(of: session)?.setArchiveHint(nil)
+            engine.memory.turnStarted(session.id)
         } else if event.kind.changesState {
             session.setAssistNote(nil)
         }
@@ -178,19 +180,31 @@ extension AppModel {
         let wanted = AssistTriggers.jobs(for: occasion, threads: assistSnapshots, history: engine.history)
         assist(on: occasion)
         let triage = AssistJob.triage(session.id)
+        // Only when the verdict can change something: a notification that would go anyway, or not go at all, is
+        // not worth a call (`AssistTriggers.triageMatters`).
         guard wanted.contains(triage), !engine.running.contains(triage),
+              AssistTriggers.triageMatters(kind: event.kind, appIsActive: NSApplication.shared.isActive,
+                                           quietsInformational: config.preferences.assistQuietsInformational),
               let said = ThreadNotificationContent.Said.from(event, activity: session.activity) else {
             notifyIfNeeded(event, session: session)
             return
         }
-        engine.running.insert(triage)
-        engine.history.ran(triage, at: .now)
         let text = switch said {
         case .question(let text): "The agent asks:\n" + TranscriptTail.quoting(text)
         case .reply(let text): "The agent's last message:\n" + TranscriptTail.quoting(text)
         }
         let input = TranscriptTail.tokens(in: text) > TranscriptTail.defaultTokenBudget
             ? String(text.suffix(TranscriptTail.defaultTokenBudget * TranscriptTail.charactersPerToken)) : text
+        // The same words as last time: the verdict holds, and what it decided was done then — a late copy of the
+        // event, or a thread re-reporting its answer, brings no second notification.
+        if let known = engine.memory.triage(of: session.id, for: input) {
+            guard !known.handled else { return }
+            engine.memory.markHandled(session.id)
+            notifyIfNeeded(event, session: session, triage: known.verdict)
+            return
+        }
+        engine.running.insert(triage)
+        engine.history.ran(triage, at: .now)
         Task(priority: .utility) { [weak self] in
             let verdict: NotificationTriage? = await self?.ask(model, instructions: NotificationTriage.instructions,
                                                                  input: input, schema: NotificationTriage.schema, job: triage)
@@ -198,6 +212,7 @@ extension AppModel {
             self.assist.running.remove(triage)
             if let verdict {
                 Usage.record(.assist, "assist.triage.\(UsageID.slug(verdict.kind.rawValue))", source: .app, context: tier.rawValue)
+                self.assist.memory.rememberTriage(of: session.id, for: input, verdict: verdict, handled: true)
             }
             self.notifyIfNeeded(event, session: session, triage: verdict)
         }
@@ -215,6 +230,7 @@ extension AppModel {
     /// The thread is closed for good.
     func forgetAssist(_ id: ThreadID) {
         assist.history.forget(id)
+        assist.memory.forget(id)
     }
 
     // MARK: Jobs
@@ -236,9 +252,13 @@ extension AppModel {
     private func runDigest(_ job: AssistJob, model: any AssistModel, tier: AssistTier) async {
         guard let id = job.thread, let session = session(id), session.isAlive, session.displayState == .running else { return }
         let lines = TerminalBridge.transcript(of: session).lines
+        // Nothing printed since the last digest: what it said still holds, and asking again would only say it again.
+        let fingerprint = TranscriptTail.fingerprint(of: lines)
+        guard !assist.memory.digestIsCurrent(for: id, tailFingerprint: fingerprint) else { return }
         let input = "Terminal tail:\n" + TranscriptTail.quoted(lines)
         guard var digest: ThreadDigest = await ask(model, instructions: ThreadDigest.instructions, input: input,
                                                    schema: ThreadDigest.schema, job: job) else { return }
+        assist.memory.rememberDigest(of: id, tailFingerprint: fingerprint)
         var answeredBy = tier
         let prefs = config.preferences
         if AssistPlan.wantsSecondOpinion(on: digest, answeredBy: tier, mode: prefs.assist, haikuAvailable: assist.haikuAvailable,
@@ -328,6 +348,23 @@ extension AppModel {
         guard let session = session(id), let note = session.assistNote, note.isStuck else { return }
         session.setAssistNote(AssistNote(activity: note.activity, stuckReason: nil, at: note.at, tier: note.tier))
         Usage.record(.assist, "assist.digest.stuck", source: .user, context: "false-positive")
+        clearNotifications(for: id)
+        if let store = assist.store {
+            Task { [weak self] in
+                let ledger = await store.countFalsePositive()
+                self?.assist.setLedger(ledger)
+            }
+        }
+    }
+
+    /// "Not blocking", from the notification a finished turn got because the assistant read it as a question or a
+    /// failure: the thread is marked read, the words are remembered as informational so they bring nothing more, and
+    /// the verdict is counted as a false positive in the ledger and the usage log.
+    func markNotBlocking(_ id: ThreadID) {
+        guard session(id) != nil else { return }
+        assist.memory.overruleTriage(of: id)
+        Usage.record(.assist, "assist.triage.blockingquestion", source: .user, context: "false-positive")
+        markRead(id)
         clearNotifications(for: id)
         if let store = assist.store {
             Task { [weak self] in

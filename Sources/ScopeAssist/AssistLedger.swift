@@ -11,7 +11,7 @@ public struct AssistLedger: Codable, Sendable, Equatable {
     public var day: String
     public var onDeviceCalls: Int
     public var haikuCalls: Int
-    /// "Not stuck" presses.
+    /// "Not stuck" and "Not blocking" presses.
     public var falsePositives: Int
 
     public init(day: String, onDeviceCalls: Int = 0, haikuCalls: Int = 0, falsePositives: Int = 0) {

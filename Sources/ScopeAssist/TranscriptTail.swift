@@ -47,6 +47,15 @@ public enum TranscriptTail {
             .joined(separator: "\n")
     }
 
+    /// A mark of what a digest would read, without the last line: that one is the live one — a spinner, a timer, a
+    /// progress count — and changes while nothing happens. Two tails with the same mark are the same output.
+    public static func fingerprint(of lines: [String], tokenBudget: Int = defaultTokenBudget) -> Int {
+        let body = text(of: lines, tokenBudget: tokenBudget).split(separator: "\n", omittingEmptySubsequences: false).dropLast()
+        var hasher = Hasher()
+        hasher.combine(body.joined(separator: "\n"))
+        return hasher.finalize()
+    }
+
     /// Roughly how many tokens `text` costs.
     public static func tokens(in text: String) -> Int {
         (text.count + charactersPerToken - 1) / charactersPerToken

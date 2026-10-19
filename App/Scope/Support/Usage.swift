@@ -16,8 +16,9 @@ enum Usage {
     static var currentScope: () -> String? = { nil }
     /// Ids already sent to the registry this launch, so a redraw costs a set lookup.
     private static var registered: Set<String> = []
-    /// Views on screen, by id, with when they appeared.
-    private static var shown: [String: Date] = [:]
+    /// Views on screen and how long they have been looked at; paused by `screenTime`.
+    private static var clock = ScreenTimeClock()
+    private static var screenTime: ScreenTimeMonitor?
     /// Until when a palette row's or a notification's action owns what changes: the selection it makes is theirs, not
     /// a click. A window rather than a flag, since most actions run in a `Task` that finishes after they return.
     private static var attributedUntil: TimeInterval = 0
@@ -53,17 +54,32 @@ enum Usage {
 
     static func opened(_ id: String, label: String? = nil) {
         register(id, label: label)
-        if shown[id] == nil { shown[id] = .now }
+        clock.open(id, at: .now)
     }
 
     static func closed(_ id: String, source: UsageEvent.Source = .mouse) {
-        guard let start = shown.removeValue(forKey: id) else { return }
-        record(.view, id, source: source, duration: Date.now.timeIntervalSince(start))
+        if let segment = clock.close(id, at: .now) { record(segment, source: source) }
     }
 
     /// At quit: whatever is still on screen is logged with the time it had.
     static func closeAll() {
-        for id in shown.keys.sorted() { closed(id, source: .app) }
+        for segment in clock.closeAll(at: .now) { record(segment, source: .app) }
+    }
+
+    /// Starts pausing the clocks while nobody can be looking (`ScreenTimeMonitor`).
+    static func startScreenTime() {
+        guard screenTime == nil else { return }
+        let monitor = ScreenTimeMonitor { blocker, on, at in
+            for segment in clock.set(blocker, on, at: at) { record(segment, source: .app) }
+        }
+        monitor.start()
+        screenTime = monitor
+    }
+
+    private static func record(_ segment: ScreenTimeClock.Segment, source: UsageEvent.Source) {
+        record(.view, segment.id, source: source,
+               context: segment.resumed ? UsageEvent.resumedViewContext : UsageEvent.activeViewContext,
+               duration: segment.duration)
     }
 
     // MARK: Where an event came from

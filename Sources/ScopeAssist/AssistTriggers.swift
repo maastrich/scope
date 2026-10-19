@@ -6,11 +6,21 @@ import ScopeCore
 /// what was asked before, and the clock. Never a loop: it runs on hook events, on task creation, and on a coarse
 /// tick that only exists to notice a thread that has been running for a while without any event.
 public enum AssistTriggers {
-    /// A thread running for longer than this without ending a turn gets a digest, and then one every `digestInterval`.
+    /// A thread running for longer than this without ending a turn gets a digest, and then one every `digestInterval`
+    /// at most — and only when its terminal printed something since (`AssistMemory`). Going in circles shows over
+    /// minutes; a caption refreshed every four minutes cost two hundred calls a day for words nobody read.
     public static let digestAfter: TimeInterval = 4 * 60
-    public static let digestInterval: TimeInterval = 4 * 60
-    /// Two triages of one thread closer than this are one: a question's `PreToolUse` is followed by its `Notification`.
-    public static let triageDebounce: TimeInterval = 5
+    public static let digestInterval: TimeInterval = 8 * 60
+    /// Two triages of one thread closer than this are one: a `Stop` and its late copy, a question's `PreToolUse` and
+    /// its permission prompt. A thread does not finish two turns worth telling apart within half a minute.
+    public static let triageDebounce: TimeInterval = 30
+
+    /// Whether a triage can change anything: the verdict only decides whether a finished turn's notification is
+    /// quieted, so it is worth a call when a notification would go (the app is in the background) and the preference
+    /// lets an informational one stay silent. A question always notifies; so does any event while the app is up.
+    public static func triageMatters(kind: HookEvent.Kind, appIsActive: Bool, quietsInformational: Bool) -> Bool {
+        kind == .turnEnded && !appIsActive && quietsInformational
+    }
 
     /// What happened.
     public enum Occasion: Sendable, Equatable {
@@ -63,7 +73,8 @@ public enum AssistTriggers {
     /// What `occasion` asks for, in the order to run it. Applies the rules:
     ///
     /// - **digest**: a thread `running` whose turn opened more than `digestAfter` ago, at most every `digestInterval`;
-    /// - **triage**: the thread of an `input.requested` or `turn.ended` event, once per `triageDebounce`;
+    /// - **triage**: the thread of an `input.requested` or `turn.ended` event, once per `triageDebounce` (whether it is
+    ///   worth a call is `triageMatters`);
     /// - **archive hint**: the thread of a `turn.ended` in a task without pull request, when its reply looks final;
     /// - **topic pick**: a task created without a topic, when the scope has topics to choose from.
     public static func jobs(for occasion: Occasion, threads: [ThreadSnapshot], history: History,

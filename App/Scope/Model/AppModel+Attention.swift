@@ -75,7 +75,8 @@ extension AppModel {
                                                            said: config.preferences.notificationsQuoteAgent
                                                                ? .from(event, activity: session.activity) : nil)
         else { return }
-        notifier.post(content, threadID: session.id)
+        // A finished turn the assistant read as blocking gets a *Not blocking* answer on its notification.
+        notifier.post(content, threadID: session.id, triaged: event.kind == .turnEnded && triage?.interrupts == true)
     }
 
     /// The thread on screen is being looked at: a turn it finished is no longer news (`ThreadSession.acknowledgeResult`).
