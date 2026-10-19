@@ -46,8 +46,9 @@ import ScopeGit
         #expect(task.name == "#6613 Agent tab")
         #expect(task.slug == "pr-6613-agent-tab")
         #expect(task.prompt == "rebase la pr .../pull/6613")
-        #expect(task.pullRequest?.number == 6613)
-        #expect(task.pullRequest?.isCrossRepository == false)
+        #expect(task.primaryPullRequest?.number == 6613)
+        #expect(task.primaryPullRequest?.isCrossRepository == false)
+        #expect(task.primaryPullRequest?.repo == "api")
         #expect(task.repos.map(\.repoRelativePath) == ["api"])
         let sandbox = await scope.client(for: task.repos[0].sandboxURL)
         #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/lcm-agent-tab")
@@ -86,7 +87,8 @@ import ScopeGit
         #expect(task.slug == "pr-42-fix-refresh-token")
         #expect(task.branch == "feature/x")
         #expect(task.repos.map(\.repoRelativePath) == ["api"])
-        #expect(task.pullRequest == LinkedPullRequest(number: 42, url: pr.url, title: "Fix refresh token!", headOwner: nil, isCrossRepository: false, state: "open"))
+        #expect(task.pullRequests == [LinkedPullRequest(number: 42, url: pr.url, title: "Fix refresh token!", headOwner: nil, isCrossRepository: false, state: "open",
+                                                        repo: "api", headRefName: pr.headRefName, baseRefName: pr.baseRefName)])
 
         let sandbox = await scope.client(for: task.repos[0].sandboxURL)
         #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feature/x")
@@ -102,7 +104,7 @@ import ScopeGit
         // Persisted with the link and reloadable by a fresh manager.
         let fresh = makeManager(scope)
         #expect(await fresh.loadAll().isEmpty)
-        #expect(await fresh.task(forPullRequest: 42, in: scope.declaration.id)?.pullRequest?.number == 42)
+        #expect(await fresh.task(forPullRequest: 42, in: scope.declaration.id)?.primaryPullRequest?.number == 42)
     }
 
     @Test func createsALocalPrBranchForACrossRepositoryPullRequest() async throws {
@@ -120,7 +122,7 @@ import ScopeGit
 
         let task = try await manager.createForPullRequest(pr, in: scope.declaration, repo: "api")
         #expect(task.branch == "pr/7" && task.slug == "pr-7-from-a-fork")
-        #expect(task.pullRequest?.isCrossRepository == true && task.pullRequest?.headOwner == "carol")
+        #expect(task.primaryPullRequest?.isCrossRepository == true && task.primaryPullRequest?.headOwner == "carol")
         let sandbox = await scope.client(for: task.repos[0].sandboxURL)
         #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "pr/7")
         #expect(try await sandbox.output(["rev-parse", "HEAD"]) == sha)
@@ -145,20 +147,35 @@ import ScopeGit
         try await scope.makeRepo("api")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "Auth", branch: "feat/auth", in: scope.declaration, repos: ["api"])
-        #expect(task.pullRequest == nil)
+        #expect(task.pullRequests.isEmpty)
         let link = LinkedPullRequest(number: 3, url: URL(string: "https://github.com/acme/api/pull/3")!, title: "Auth")
         let linked = try await manager.linkPullRequest(link, to: task.id)
-        #expect(linked.pullRequest == link)
+        #expect(linked.pullRequests == [link])
         #expect(await manager.task(forPullRequest: 3, in: scope.declaration.id)?.id == task.id)
 
-        // A record written without the field decodes with `pullRequest == nil`.
+        // A second pull request joins the first; a link with a known URL replaces it in place.
+        let second = LinkedPullRequest(number: 5, url: URL(string: "https://github.com/acme/api/pull/5")!, title: "Auth docs")
+        let two = try await manager.linkPullRequest(second, to: task.id)
+        #expect(two.pullRequests == [link, second])
+        var merged = link
+        merged.state = "merged"
+        #expect(try await manager.linkPullRequest(merged, to: task.id).pullRequests == [merged, second])
+
+        // A record written without the field decodes with no pull request; one written by an earlier build with
+        // the single `pullRequest` field decodes with that one.
         let file = TaskRecordStore(home: scope.home).url(for: task.id)
         var json = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
-        #expect(json["pullRequest"] != nil)
-        json["pullRequest"] = nil
+        #expect(json["pullRequests"] != nil && json["pullRequest"] == nil)
+        json["pullRequests"] = nil
         try JSONSerialization.data(withJSONObject: json).write(to: file)
         let fresh = makeManager(scope)
         #expect(await fresh.loadAll().isEmpty)
-        #expect(await fresh.task(task.id)?.pullRequest == nil)
+        #expect(await fresh.task(task.id)?.pullRequests.isEmpty == true)
+        json["pullRequest"] = ["number": 9, "url": "https://github.com/acme/api/pull/9", "title": "Legacy", "isCrossRepository": false, "state": "merged"]
+        try JSONSerialization.data(withJSONObject: json).write(to: file)
+        let legacy = makeManager(scope)
+        #expect(await legacy.loadAll().isEmpty)
+        let record = await legacy.task(task.id)
+        #expect(record?.pullRequests.map(\.number) == [9] && record?.pullRequestState == "merged")
     }
 }

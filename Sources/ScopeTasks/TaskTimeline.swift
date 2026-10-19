@@ -124,7 +124,7 @@ public struct TaskTimeline: Sendable, Equatable {
     ///   - pullRequest: `(number, openedAt, mergedAt, closedAt)` of the task's pull request, dates as GitHub gave them.
     public static func build(
         createdAt: Date, archivedAt: Date?, now: Date,
-        pullRequest: (number: Int, openedAt: Date?, mergedAt: Date?, closedAt: Date?)? = nil,
+        pullRequests: [(number: Int, openedAt: Date?, mergedAt: Date?, closedAt: Date?)] = [],
         checks: [TaskCheckMark] = [], lanes sources: [TimelineLaneSource]
     ) -> TaskTimeline {
         let start = createdAt
@@ -143,7 +143,7 @@ public struct TaskTimeline: Sendable, Equatable {
         }
 
         var ticks = [Tick(kind: .created, at: start, label: "Task created")]
-        if let pr = pullRequest {
+        for pr in pullRequests {
             if let opened = pr.openedAt { ticks.append(Tick(kind: .pullRequestOpened, at: clip(opened), label: "#\(pr.number) opened")) }
             if let merged = pr.mergedAt {
                 ticks.append(Tick(kind: .merged, at: clip(merged), label: "#\(pr.number) merged"))

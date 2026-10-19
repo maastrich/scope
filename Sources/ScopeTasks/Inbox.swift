@@ -94,12 +94,14 @@ public enum Inbox {
         }
     }
 
-    /// One task and its pull request as last read from GitHub.
+    /// One task and its pull requests as last read from GitHub.
     public struct TaskInput: Sendable, Equatable {
         public struct PullRequestInput: Sendable, Equatable {
             public var number: Int
             public var title: String
             public var url: URL
+            /// The task repository it belongs to, named in the item when the task has several.
+            public var repo: String?
             /// `open`, `merged`, `closed`.
             public var state: PullRequest.State
             public var checks: PullRequest.Checks
@@ -110,12 +112,13 @@ public enum Inbox {
             /// When GitHub last saw a change, else when the app read it.
             public var updatedAt: Date
 
-            public init(number: Int, title: String, url: URL, state: PullRequest.State, checks: PullRequest.Checks,
+            public init(number: Int, title: String, url: URL, repo: String? = nil, state: PullRequest.State, checks: PullRequest.Checks,
                         mergeable: PullRequest.Mergeable, isDraft: Bool = false, failingChecks: [String] = [],
                         updatedAt: Date) {
                 self.number = number
                 self.title = title
                 self.url = url
+                self.repo = repo
                 self.state = state
                 self.checks = checks
                 self.mergeable = mergeable
@@ -128,7 +131,8 @@ public enum Inbox {
         public var id: TaskID
         public var scopeID: ScopeID
         public var name: String
-        public var pullRequest: PullRequestInput?
+        /// In the task's order (`PullRequestSet.ordered`): one item each.
+        public var pullRequests: [PullRequestInput]
         /// `nil` for an open task.
         public var archivedAt: Date?
         /// Being archived or closed right now: not listed either way until it settles.
@@ -136,12 +140,12 @@ public enum Inbox {
         /// Set when the task was kept out of N attempts (`TaskRecord.attemptsKept`).
         public var attemptsKept: TaskAttemptsKept?
 
-        public init(id: TaskID, scopeID: ScopeID, name: String, pullRequest: PullRequestInput? = nil,
+        public init(id: TaskID, scopeID: ScopeID, name: String, pullRequests: [PullRequestInput] = [],
                     archivedAt: Date? = nil, isDismantling: Bool = false, attemptsKept: TaskAttemptsKept? = nil) {
             self.id = id
             self.scopeID = scopeID
             self.name = name
-            self.pullRequest = pullRequest
+            self.pullRequests = pullRequests
             self.archivedAt = archivedAt
             self.isDismantling = isDismantling
             self.attemptsKept = attemptsKept
@@ -149,7 +153,7 @@ public enum Inbox {
     }
 
     public struct Item: Sendable, Equatable, Identifiable {
-        /// Stable across refreshes: one per thread, and at most two per task (its pull request, its archive).
+        /// Stable across refreshes: one per thread, one per pull request of a task, one for a task's archive.
         public var id: String
         public var kind: Kind
         public var scopeID: ScopeID
@@ -257,32 +261,45 @@ public enum Inbox {
                               detail: "kept out of \(kept.count) attempts · \(kept.count - 1) archived\(branches)",
                               at: kept.at, fingerprint: "kept@\(kept.at.timeIntervalSinceReferenceDate)"))
         }
-        guard let pr = task.pullRequest else { return items }
+        guard !task.pullRequests.isEmpty else { return items }
+        let several = task.pullRequests.count > 1 || Set(task.pullRequests.compactMap(\.repo)).count > 1
+        // `api #12` when the task spans repositories, `#12` otherwise: the number alone repeats across repositories.
+        func label(_ pr: TaskInput.PullRequestInput) -> String {
+            guard several, let repo = pr.repo else { return "#\(pr.number)" }
+            return "\(TaskRepo.displayName(repo)) #\(pr.number)"
+        }
         if let archivedAt = task.archivedAt {
-            guard pr.state == .merged, now.timeIntervalSince(archivedAt) < archivedWindow else { return items }
+            let merged = task.pullRequests.filter { $0.state == .merged }
+            guard let first = merged.first, now.timeIntervalSince(archivedAt) < archivedWindow else { return items }
+            let detail = merged.count == 1 ? "\(label(first)) merged · \(first.title)"
+                : merged.map { label($0) }.joined(separator: ", ") + " merged"
             return items + [Item(id: "task:\(task.id.rawValue):archived", kind: .archivedOnMerge, scopeID: task.scopeID,
-                         taskID: task.id, threadID: nil, title: task.name, detail: "#\(pr.number) merged · \(pr.title)",
+                         taskID: task.id, threadID: nil, title: task.name, detail: detail,
                          at: archivedAt, fingerprint: "archived@\(archivedAt.timeIntervalSinceReferenceDate)",
-                         pullRequestURL: pr.url, pullRequestNumber: pr.number)]
+                         pullRequestURL: first.url, pullRequestNumber: first.number)]
         }
-        guard pr.state == .open else { return items }
-        let kind: Kind
-        let detail: String
-        if pr.checks == .failing {
-            kind = .checksFailing
-            let names = pr.failingChecks
-            detail = names.isEmpty ? "#\(pr.number) checks failing"
-                : "#\(pr.number) failing: " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? " +\(names.count - 3)" : "")
-        } else if !pr.isDraft, pr.mergeable == .mergeable, pr.checks == .passing || pr.checks == .none {
-            kind = .readyToMerge
-            detail = "#\(pr.number) ready to merge · \(pr.title)"
-        } else {
-            return items
+        for pr in task.pullRequests where pr.state == .open {
+            let kind: Kind
+            let detail: String
+            if pr.checks == .failing {
+                kind = .checksFailing
+                let names = pr.failingChecks
+                detail = names.isEmpty ? "\(label(pr)) checks failing"
+                    : "\(label(pr)) failing: " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? " +\(names.count - 3)" : "")
+            } else if !pr.isDraft, pr.mergeable == .mergeable, pr.checks == .passing || pr.checks == .none {
+                kind = .readyToMerge
+                detail = "\(label(pr)) ready to merge · \(pr.title)"
+            } else {
+                continue
+            }
+            // The id names the pull request by its URL path: `owner/repo/pull/12`, unique where a number is not. A
+            // task with a single one keeps the id it had, so earlier dismissals still hold.
+            let id = task.pullRequests.count == 1 ? "task:\(task.id.rawValue):pr" : "task:\(task.id.rawValue):pr:\(pr.url.path)"
+            items.append(Item(id: id, kind: kind, scopeID: task.scopeID, taskID: task.id, threadID: nil,
+                              title: task.name, detail: detail, at: pr.updatedAt,
+                              fingerprint: "\(kind.rawValue)#\(pr.number)" + (kind == .checksFailing ? ":" + pr.failingChecks.sorted().joined(separator: ",") : ""),
+                              pullRequestURL: pr.url, pullRequestNumber: pr.number))
         }
-        items.append(Item(id: "task:\(task.id.rawValue):pr", kind: kind, scopeID: task.scopeID, taskID: task.id, threadID: nil,
-                          title: task.name, detail: detail, at: pr.updatedAt,
-                          fingerprint: "\(kind.rawValue)#\(pr.number)" + (kind == .checksFailing ? ":" + pr.failingChecks.sorted().joined(separator: ",") : ""),
-                          pullRequestURL: pr.url, pullRequestNumber: pr.number))
         return items
     }
 

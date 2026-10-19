@@ -269,7 +269,7 @@ final class DeltaModel {
         }
         // Bind the PR to the task so the sidebar chip and the PRs panel know about it.
         guard let url = prURLs[key], let number = Int(url.lastPathComponent) else { return }
-        let link = LinkedPullRequest(number: number, url: url, title: title)
+        let link = LinkedPullRequest(number: number, url: url, title: title, repo: key, headRefName: record.branch)
         if let record = try? await env.tasks.linkPullRequest(link, to: record.id) {
             task.update(record: record)
         }

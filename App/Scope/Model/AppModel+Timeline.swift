@@ -46,9 +46,9 @@ extension AppModel {
     }
 
     func timeline(of task: TaskState, now: Date) -> TaskTimeline {
-        let pr = task.record.pullRequest.map { (number: $0.number, openedAt: $0.openedAt, mergedAt: $0.mergedAt, closedAt: $0.closedAt) }
+        let prs = task.record.pullRequests.map { (number: $0.number, openedAt: $0.openedAt, mergedAt: $0.mergedAt, closedAt: $0.closedAt) }
         return TaskTimeline.build(createdAt: task.record.createdAt, archivedAt: task.record.archivedAt, now: now,
-                                  pullRequest: pr, checks: task.timelineLog?.checks ?? [], lanes: timelineLanes(of: task))
+                                  pullRequests: prs, checks: task.timelineLog?.checks ?? [], lanes: timelineLanes(of: task))
     }
 
     /// The task as `scope summary` sees it, with the time its agents worked and waited.

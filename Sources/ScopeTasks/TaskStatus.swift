@@ -13,33 +13,52 @@ public struct TaskFacts: Sendable, Equatable {
     /// At least one sandbox has uncommitted changes.
     public var isDirty: Bool
     public var setup: SetupState
-    /// The bound pull request, when there is one.
-    public var pullRequest: PullRequestFacts?
+    /// The bound pull requests, in the task's order (`PullRequestSet.ordered`); empty without one.
+    public var pullRequests: [PullRequestFacts]
 
     public init(threads: [ThreadState] = [], additions: Int = 0, deletions: Int = 0, isDirty: Bool = false,
-                setup: SetupState = .notRun, pullRequest: PullRequestFacts? = nil) {
+                setup: SetupState = .notRun, pullRequests: [PullRequestFacts] = []) {
         self.threads = threads
         self.additions = additions
         self.deletions = deletions
         self.isDirty = isDirty
         self.setup = setup
-        self.pullRequest = pullRequest
+        self.pullRequests = pullRequests
     }
+
+    /// The pull request the status speaks for: the most pressing open one, else the first (`TaskStatus.decisive`).
+    public var pullRequest: PullRequestFacts? { TaskStatus.decisive(pullRequests) }
 }
 
-/// What is known about a task's pull request. `checks` and `mergeable` are live facts from `gh`, absent until
-/// something asked; `isDraft` likewise.
+/// What is known about one pull request of a task. `checks` and `mergeable` are live facts from `gh`, absent until
+/// something asked; `isDraft` likewise. `state` is GitHub's last word, `open` until it says otherwise.
 public struct PullRequestFacts: Sendable, Equatable {
     public var number: Int
     public var isDraft: Bool
     public var checks: PullRequest.Checks
     public var mergeable: PullRequest.Mergeable
+    public var state: PullRequest.State
 
-    public init(number: Int, isDraft: Bool = false, checks: PullRequest.Checks = .none, mergeable: PullRequest.Mergeable = .unknown) {
+    public init(number: Int, isDraft: Bool = false, checks: PullRequest.Checks = .none, mergeable: PullRequest.Mergeable = .unknown,
+                state: PullRequest.State = .open) {
         self.number = number
         self.isDraft = isDraft
         self.checks = checks
         self.mergeable = mergeable
+        self.state = state
+    }
+
+    /// What this pull request alone would make the task's status, when it is open; `nil` once merged or closed.
+    public var status: TaskStatus? {
+        guard state == .open else { return nil }
+        if mergeable == .conflicting { return .conflicted }
+        switch checks {
+        case .failing: return .checksFailing
+        case .pending: return .checksRunning
+        case .passing: return .checksPassed
+        case .none: break
+        }
+        return isDraft ? .draft : .pullRequestOpen
     }
 }
 
@@ -65,6 +84,9 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
     case checksPassed
     case draft
     case pullRequestOpen
+    /// Every pull request of the task is merged or closed, and at least one merged: the work landed, the task is
+    /// only waiting to be archived.
+    case merged
     /// Commits or uncommitted work on the branch, no pull request yet.
     case changed
     case clean
@@ -72,8 +94,22 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
     /// The ladder, most pressing first. `waiting` stands for both reasons.
     public static let precedence: [TaskStatus] = [
         .waiting(.input), .failed, .running, .setupRunning, .setupFailed, .done, .conflicted, .checksFailing,
-        .checksRunning, .checksPassed, .draft, .pullRequestOpen, .changed, .clean,
+        .checksRunning, .checksPassed, .draft, .pullRequestOpen, .merged, .changed, .clean,
     ]
+
+    /// With several pull requests, the one whose state is the most pressing on the ladder decides: an open one
+    /// before a settled one, red checks before green. Ties keep the task's order. `nil` for none.
+    public static func decisive(_ facts: [PullRequestFacts]) -> PullRequestFacts? {
+        let open = facts.filter { $0.state == .open }
+        guard !open.isEmpty else { return facts.first(where: { $0.state == .merged }) ?? facts.first }
+        return open.min { lhs, rhs in
+            rank(lhs.status ?? .pullRequestOpen) < rank(rhs.status ?? .pullRequestOpen)
+        }
+    }
+
+    private static func rank(_ status: TaskStatus) -> Int {
+        precedence.firstIndex(of: status) ?? precedence.count
+    }
 
     public static func resolve(_ facts: TaskFacts) -> TaskStatus {
         if let waiting = facts.threads.first(where: \.needsAttention), case .waiting(let reason) = waiting {
@@ -85,14 +121,9 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         if facts.setup == .failed { return .setupFailed }
         if facts.threads.contains(.done) { return .done }
         if let pr = facts.pullRequest {
-            if pr.mergeable == .conflicting { return .conflicted }
-            switch pr.checks {
-            case .failing: return .checksFailing
-            case .pending: return .checksRunning
-            case .passing: return .checksPassed
-            case .none: break
-            }
-            return pr.isDraft ? .draft : .pullRequestOpen
+            if let status = pr.status { return status }
+            if facts.pullRequests.contains(where: { $0.state == .merged }) { return .merged }
+            // Closed without a merge: the pull request says nothing more; the branch does (`TaskDormancy` says "PR closed").
         }
         if facts.additions + facts.deletions > 0 || facts.isDirty { return .changed }
         return .clean
@@ -114,6 +145,7 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         case .checksPassed: "Checks passed"
         case .draft: "Draft PR"
         case .pullRequestOpen: "PR open"
+        case .merged: "PR merged"
         case .changed: "Changed"
         case .clean: "Clean"
         }
@@ -138,10 +170,12 @@ public enum TaskStatus: Sendable, Equatable, Hashable {
         case .checksPassed: "Checks passed on \(pr)"
         case .draft: "\(pr) is a draft"
         case .pullRequestOpen: "\(pr) is open"
+        case .merged: facts.pullRequests.count > 1 ? "Every pull request is merged or closed" : "\(pr) is merged"
         case .changed: "The branch has changes and no pull request yet"
         case .clean: "Nothing changed on the branch yet"
         }
         var tail: [String] = []
+        if let caption = PullRequestSet.caption(facts.pullRequests) { tail.append(caption) }
         if facts.additions + facts.deletions > 0 { tail.append("+\(facts.additions) −\(facts.deletions)") }
         if facts.isDirty { tail.append("uncommitted work") }
         return tail.isEmpty ? head + "." : head + "; " + tail.joined(separator: ", ") + "."
@@ -171,7 +205,7 @@ public enum SidebarGroup: Int, Sendable, CaseIterable, Comparable {
         switch status {
         case .waiting, .failed, .setupFailed, .conflicted, .checksFailing: self = .needsYou
         case .running, .setupRunning, .checksRunning: self = .working
-        case .done, .checksPassed: self = .finished
+        case .done, .checksPassed, .merged: self = .finished
         case .draft, .pullRequestOpen, .changed, .clean: self = .quiet
         }
     }

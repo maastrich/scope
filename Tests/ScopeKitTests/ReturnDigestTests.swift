@@ -23,8 +23,9 @@ import ScopeGit
         PullRequestSnapshot(number: number, url: URL(string: "https://github.com/o/r/pull/\(number)")!, state: state, checks: checks)
     }
 
-    static func digest(threads: [Thread] = [], tasks: [Task] = [], seen: [TaskID: PullRequestSnapshot] = [:]) -> ReturnDigest? {
-        ReturnDigest.make(since: since, threads: threads, tasks: tasks, seen: seen)
+    static func digest(threads: [Thread] = [], tasks: [Task] = [], seen: [TaskID: PullRequestSnapshot] = [:],
+                       seenAll: [TaskID: [PullRequestSnapshot]] = [:]) -> ReturnDigest? {
+        ReturnDigest.make(since: since, threads: threads, tasks: tasks, seen: seen.mapValues { [$0] }.merging(seenAll) { $1 })
     }
 
     // MARK: Nothing to say
@@ -33,7 +34,7 @@ import ScopeGit
         let digest = Self.digest(
             threads: [Thread(id: Self.a, finishedTurns: [Self.before(60)], failedTurns: [Self.before(5)],
                              waitingSince: Self.before(30))],
-            tasks: [Task(id: Self.t1, name: "api-cache", pullRequest: Self.pr(7, .open, .failing))],
+            tasks: [Task(id: Self.t1, name: "api-cache", pullRequests: [Self.pr(7, .open, .failing)])],
             seen: [Self.t1: Self.pr(7, .open, .failing)])
         #expect(digest == nil)
     }
@@ -78,60 +79,60 @@ import ScopeGit
     // MARK: Pull requests
 
     @Test func aMergeIsOpenThenMerged() throws {
-        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "token-refresh", pullRequest: Self.pr(7, .merged))],
+        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "token-refresh", pullRequests: [Self.pr(7, .merged)])],
                                               seen: [Self.t1: Self.pr(7, .open, .passing)]))
         #expect(digest.fragments == [.init(kind: .merged, count: 1, text: "PR merged on token-refresh", target: .task(Self.t1))])
     }
 
     @Test func aMergedTaskAlreadyArchivedOpensThePullRequest() throws {
         let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "token-refresh", isArchived: true,
-                                                          pullRequest: Self.pr(7, .merged))],
+                                                          pullRequests: [Self.pr(7, .merged)])],
                                               seen: [Self.t1: Self.pr(7, .open)]))
         #expect(digest.fragments.first?.target == .url(URL(string: "https://github.com/o/r/pull/7")!))
     }
 
     @Test func aPullRequestMergedBeforeTheVisitIsNotNews() {
-        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", isArchived: true, pullRequest: Self.pr(7, .merged))],
+        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", isArchived: true, pullRequests: [Self.pr(7, .merged)])],
                             seen: [:]) == nil)
-        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequest: Self.pr(7, .merged))],
+        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequests: [Self.pr(7, .merged)])],
                             seen: [Self.t1: Self.pr(7, .merged)]) == nil)
     }
 
     @Test func checksFailingOnlyWhenTheyWereNotAlready() throws {
         let digest = try #require(Self.digest(
-            tasks: [Task(id: Self.t1, name: "api-cache", pullRequest: Self.pr(7, .open, .failing)),
-                    Task(id: Self.t2, name: "old-failure", pullRequest: Self.pr(8, .open, .failing))],
+            tasks: [Task(id: Self.t1, name: "api-cache", pullRequests: [Self.pr(7, .open, .failing)]),
+                    Task(id: Self.t2, name: "old-failure", pullRequests: [Self.pr(8, .open, .failing)])],
             seen: [Self.t1: Self.pr(7, .open, .pending), Self.t2: Self.pr(8, .open, .failing)]))
         #expect(digest.fragments == [.init(kind: .checksFailing, count: 1, text: "checks failing on api-cache", target: .task(Self.t1))])
     }
 
     @Test func checksUnknownThenPassingIsNotNews() {
-        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequest: Self.pr(7, .open, .passing))],
+        #expect(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequests: [Self.pr(7, .open, .passing)])],
                             seen: [Self.t1: Self.pr(7, .open, nil)]) == nil)
     }
 
     @Test func checksTurningGreen() throws {
-        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequest: Self.pr(7, .open, .passing))],
+        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequests: [Self.pr(7, .open, .passing)])],
                                               seen: [Self.t1: Self.pr(7, .open, .pending)]))
         #expect(digest.fragments.map(\.text) == ["checks passing on x"])
     }
 
     @Test func aNewPullRequestIsOpened() throws {
-        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequest: Self.pr(9))]))
+        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequests: [Self.pr(9)])]))
         #expect(digest.fragments.map(\.kind) == [.opened])
         #expect(digest.fragments.first?.text == "PR opened on x")
     }
 
     @Test func anotherNumberIsANewPullRequest() throws {
-        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequest: Self.pr(9, .open, .failing))],
+        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "x", pullRequests: [Self.pr(9, .open, .failing)])],
                                               seen: [Self.t1: Self.pr(7, .closed, .failing)]))
         #expect(digest.fragments.map(\.kind) == [.checksFailing, .opened])
     }
 
     @Test func severalTasksCollapseIntoACount() throws {
         let digest = try #require(Self.digest(
-            tasks: [Task(id: Self.t2, name: "b-task", pullRequest: Self.pr(2, .merged)),
-                    Task(id: Self.t1, name: "a-task", pullRequest: Self.pr(1, .merged))],
+            tasks: [Task(id: Self.t2, name: "b-task", pullRequests: [Self.pr(2, .merged)]),
+                    Task(id: Self.t1, name: "a-task", pullRequests: [Self.pr(1, .merged)])],
             seen: [Self.t1: Self.pr(1), Self.t2: Self.pr(2)]))
         #expect(digest.fragments == [.init(kind: .merged, count: 2, text: "PRs merged on 2 tasks", target: .task(Self.t1))])
     }
@@ -141,8 +142,8 @@ import ScopeGit
     @Test func whatWaitsOnTheOwnerComesFirst() throws {
         let digest = try #require(Self.digest(
             threads: [Thread(id: Self.a, finishedTurns: [Self.after(1), Self.after(2)], waitingSince: Self.after(3))],
-            tasks: [Task(id: Self.t1, name: "token-refresh", pullRequest: Self.pr(1, .merged)),
-                    Task(id: Self.t2, name: "api-cache", pullRequest: Self.pr(2, .open, .failing))],
+            tasks: [Task(id: Self.t1, name: "token-refresh", pullRequests: [Self.pr(1, .merged)]),
+                    Task(id: Self.t2, name: "api-cache", pullRequests: [Self.pr(2, .open, .failing)])],
             seen: [Self.t1: Self.pr(1), Self.t2: Self.pr(2, .open, .passing)]))
         #expect(digest.fragments.map(\.text) == ["1 question for you", "checks failing on api-cache",
                                                  "PR merged on token-refresh", "2 turns finished"])
@@ -152,9 +153,9 @@ import ScopeGit
     @Test func pastTheLimitTheRestIsCounted() throws {
         let digest = try #require(Self.digest(
             threads: [Thread(id: Self.a, finishedTurns: [Self.after(1)], failedTurns: [Self.after(2)], waitingSince: Self.after(3))],
-            tasks: [Task(id: Self.t1, name: "m", pullRequest: Self.pr(1, .merged)),
-                    Task(id: Self.t2, name: "f", pullRequest: Self.pr(2, .open, .failing)),
-                    Task(id: Self.t3, name: "c", pullRequest: Self.pr(3, .closed))],
+            tasks: [Task(id: Self.t1, name: "m", pullRequests: [Self.pr(1, .merged)]),
+                    Task(id: Self.t2, name: "f", pullRequests: [Self.pr(2, .open, .failing)]),
+                    Task(id: Self.t3, name: "c", pullRequests: [Self.pr(3, .closed)])],
             seen: [Self.t1: Self.pr(1), Self.t2: Self.pr(2, .open, .passing), Self.t3: Self.pr(3)]))
         #expect(digest.fragments.count == ReturnDigest.fragmentLimit)
         #expect(digest.fragments.map(\.kind) == [.questions, .checksFailing, .turnsFailed, .merged])
@@ -172,7 +173,7 @@ import ScopeGit
 
         let scope = ScopeID.generate(), gone = ScopeID.generate()
         var visits = ScopeVisits()
-        visits[scope] = .init(lastSeen: Self.since, pullRequests: [Self.t1: Self.pr(7, .open, .failing)])
+        visits[scope] = .init(lastSeen: Self.since, pullRequests: [Self.t1: [Self.pr(7, .open, .failing)]])
         visits[gone] = .init(lastSeen: Self.since)
         visits.retain([scope])
         store.save(visits)
@@ -180,7 +181,7 @@ import ScopeGit
         let loaded = store.load()
         #expect(loaded == visits)
         #expect(loaded[gone] == nil)
-        #expect(loaded[scope]?.seenPullRequests == [Self.t1: Self.pr(7, .open, .failing)])
+        #expect(loaded[scope]?.seenPullRequests == [Self.t1: [Self.pr(7, .open, .failing)]])
     }
 
     @Test func anotherVersionReadsAsNoVisits() throws {
@@ -190,5 +191,23 @@ import ScopeGit
         let store = ScopeVisitStore(home: home)
         try Data(#"{"version": 99, "scopes": {}}"#.utf8).write(to: store.url)
         #expect(store.load() == ScopeVisits())
+    }
+
+    // MARK: Several pull requests
+
+    @Test func eachPullRequestOfATaskIsComparedOnItsOwn() throws {
+        let api = Self.pr(41, .open, .failing), web = Self.pr(7, .merged, .passing), docs = Self.pr(43, .open, .passing)
+        let before = [Self.pr(41, .open, .passing), Self.pr(7, .open, .passing)]
+        let digest = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "cache", pullRequests: [api, docs, web])],
+                                              seenAll: [Self.t1: before]))
+        // Red on #41, merged #7, new #43 — three fragments for one task, the task counted once in each.
+        #expect(digest.fragments.map(\.kind) == [.checksFailing, .merged, .opened])
+        #expect(digest.fragments.map(\.count) == [1, 1, 1])
+        #expect(digest.fragments.map(\.text) == ["checks failing on cache", "PR merged on cache", "PR opened on cache"])
+        #expect(digest.fragments.allSatisfy { $0.target == .task(Self.t1) })
+        // Archived meanwhile: each fragment opens the pull request that moved.
+        let gone = try #require(Self.digest(tasks: [Task(id: Self.t1, name: "cache", isArchived: true, pullRequests: [api, web])],
+                                            seenAll: [Self.t1: before]))
+        #expect(gone.fragments.map(\.target) == [.url(api.url), .url(web.url)])
     }
 }

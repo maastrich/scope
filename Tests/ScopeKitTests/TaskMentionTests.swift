@@ -6,7 +6,7 @@ import ScopeCore
 @Suite struct TaskMentionTests {
     let study = TaskMention.TaskBlock(name: "Auth study", slug: "auth-study", id: "0123456789ab", scope: "acme", branch: "docs/auth-study",
                                       topic: "auth", outcome: "archived",
-                                      pullRequest: .init(number: 44, state: "merged", url: URL(string: "https://github.com/acme/api/pull/44")),
+                                      pullRequests: [.init(number: 44, state: "merged", url: URL(string: "https://github.com/acme/api/pull/44"))],
                                       brief: "Study the auth flow.\n\nWrite a plan.", answer: "The plan: rotate tokens.", reports: ["REPORT.md"])
 
     @Test func referencesAreFoundAndBounded() {

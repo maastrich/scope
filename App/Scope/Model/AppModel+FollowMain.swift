@@ -43,11 +43,13 @@ extension AppModel {
 
     /// What `FollowMain.decide` reads for the task right now.
     func followMainFacts(for task: TaskState, lag: TaskLag?) -> FollowMain.Facts {
-        let live = livePullRequest(for: task)
-        let state = live?.state.rawValue ?? task.record.pullRequest?.state
-        let settled = state == "merged" || state == "closed"
+        // Several pull requests: any open one that conflicts is a conflict; settled only once every one is.
+        let states = pullRequestStates(for: task)
+        let open = states.compactMap { $0.live }.filter { $0.state == .open }
+        let mergeable: PullRequest.Mergeable? = open.isEmpty ? nil : (open.contains { $0.mergeable == .conflicting } ? .conflicting : open[0].mergeable)
+        let settled = PullRequestSet.isSettled(states.map { $0.live?.state.rawValue ?? $0.link.state })
         return FollowMain.Facts(
-            lag: lag, pullRequestMergeable: live?.state == .open ? live?.mergeable : nil, pullRequestSettled: settled,
+            lag: lag, pullRequestMergeable: mergeable, pullRequestSettled: settled,
             holdBranch: task.record.holdBranch,
             threadRunning: threads(in: task.id).contains { $0.isAlive && $0.displayState == .running },
             actedOnHead: task.record.followedMainHead)
@@ -103,7 +105,7 @@ extension AppModel {
     /// runs — through the same delivery as a review or a failed check: now between turns, at the end of the turn
     /// otherwise. Remembered against the head of main, so the same move is never asked twice.
     private func askAgentToFollowMain(_ task: TaskState, lag: TaskLag) async -> String {
-        let fromGitHub = livePullRequest(for: task)?.mergeable == .conflicting
+        let fromGitHub = pullRequestStates(for: task).contains { $0.live?.state == .open && $0.live?.mergeable == .conflicting }
         let text = FollowMainPrompts.envelope(FollowMainPrompts.mainMoved(lag: lag, conflictsFromGitHub: fromGitHub))
         await noteFollowedMain(task, head: lag.upstreamHead)
         if let thread = threads(in: task.id).first(where: { $0.isAlive && $0.deliversEvents }) {
@@ -138,7 +140,7 @@ extension AppModel {
     /// as it was, and the agent asked instead.
     private func rebaseSandboxes(of task: TaskState, lag: TaskLag) async -> String {
         let git = env.git
-        let pullRequestOpen = livePullRequest(for: task)?.state == .open
+        let pullRequestOpen = pullRequestState(for: task) == "open"
         var done: [String] = []
         var pushed = false
         var conflicted = lag

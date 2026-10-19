@@ -134,11 +134,14 @@ public enum MergedTaskArchive: Sendable, Equatable {
     /// Nothing to do: not merged, the preference is off, or the user brought the task back after a merge.
     case keep
 
-    /// `pullRequestState` is GitHub's (`open`, `merged`, `closed`). A closed, unmerged pull request never archives:
-    /// the work did not land, and someone may yet reopen it or push it elsewhere.
-    public static func decide(pullRequestState: String?, threads: [ThreadState], enabled: Bool,
+    /// `pullRequestStates` are GitHub's (`open`, `merged`, `closed`), one per pull request of the task; `nil` for one
+    /// never read since it was bound, which counts as open. The task archives once none is open and at least one
+    /// merged (`PullRequestSet.aggregateState`): a task with two pull requests stays until the second lands. A
+    /// closed, unmerged pull request never archives on its own: the work did not land, and someone may yet reopen it
+    /// or push it elsewhere.
+    public static func decide(pullRequestStates: [String?], threads: [ThreadState], enabled: Bool,
                               keptOpenAfterMerge: Bool) -> MergedTaskArchive {
-        guard enabled, !keptOpenAfterMerge, pullRequestState == "merged" else { return .keep }
+        guard enabled, !keptOpenAfterMerge, PullRequestSet.aggregateState(pullRequestStates) == "merged" else { return .keep }
         return threads.contains(.running) ? .wait : .archive
     }
 }

@@ -147,6 +147,15 @@ public struct GhClient: Sendable {
         return try await runJSON(arguments, in: checkout, parse: Issue.parseOne(json:))
     }
 
+    /// Every pull request whose head is `branch`, open, merged or closed, newest first
+    /// (`gh pr list --state all --head <branch>`): what a task's refresh binds to the branches its sandbox visited.
+    public func prsForBranch(_ branch: String, in checkout: URL, repo: String? = nil, limit: Int = 10) async throws -> [PullRequest] {
+        var arguments = ["pr", "list", "--state", "all", "--head", branch, "--limit", String(limit), "--json", PullRequest.jsonFields]
+        if let repo { arguments += ["--repo", repo] }
+        return try await runJSON(arguments, in: checkout, parse: PullRequest.parse(json:))
+            .sorted { $0.number > $1.number }
+    }
+
     /// The open pull request whose head is `branch`, `nil` when there is none (`gh pr list --head <branch>`).
     public func prForBranch(_ branch: String, in checkout: URL, repo: String? = nil) async throws -> PullRequest? {
         var arguments = ["pr", "list", "--state", "open", "--head", branch, "--limit", "1", "--json", PullRequest.jsonFields]

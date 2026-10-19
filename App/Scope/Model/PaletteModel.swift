@@ -262,7 +262,7 @@ enum PaletteModel {
                 }
             }
             for task in model.tasks(in: scope.id) {
-                guard let pr = task.record.pullRequest, !listed.contains(pr.number) else { continue }
+                guard let pr = task.record.primaryPullRequest, !listed.contains(pr.number) else { continue }
                 items.append(PaletteItem(id: "pr-task-\(task.id.rawValue)", section: .pullRequests, icon: "arrow.triangle.pull",
                                          label: "#\(pr.number) \(pr.title) · \(task.reposCaption)", hint: "Switch to \(task.name)",
                                          path: pr.url.absoluteString) { model.switchToTask(task) })

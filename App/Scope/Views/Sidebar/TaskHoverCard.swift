@@ -44,15 +44,32 @@ struct TaskHoverCard: View {
                     }
                 }
             }
-            if let pr = task.record.pullRequest {
-                row(pr.label) {
+            // One row per pull request, the repository in front when the task spans several, so `api #12` and
+            // `web #12` read apart; a merged or closed one says so before its checks.
+            let several = task.record.pullRequests.count > 1
+            if let caption = PullRequestSet.caption(facts.pullRequests) {
+                row("PRs") {
+                    Text(caption)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            ForEach(Array(zip(task.record.pullRequests, facts.pullRequests)), id: \.0.url) { pr, prFacts in
+                row(several ? (model.repo(of: pr, in: task).map { "\($0.name) " } ?? "") + pr.label : pr.label) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pr.title)
                             .font(.scopeCaption)
                             .lineLimit(2)
-                        if let checks = facts.pullRequest?.checks, checks != .none {
-                            PullRequestChecksLabel(checks: checks, checkedAt: model.pullRequestCheckedAt(for: task))
-                                .font(.scopeCaption)
+                        HStack(spacing: 6) {
+                            if prFacts.state != .open {
+                                Text(prFacts.state == .merged ? "merged" : "closed")
+                                    .font(.scopeCaption)
+                                    .foregroundStyle(prFacts.state == .merged ? PullRequestStyle.passing : Ink.tertiary)
+                            }
+                            if prFacts.checks != .none {
+                                PullRequestChecksLabel(checks: prFacts.checks, checkedAt: model.pullRequestCheckedAt(for: task, link: pr))
+                                    .font(.scopeCaption)
+                            }
                         }
                     }
                 }

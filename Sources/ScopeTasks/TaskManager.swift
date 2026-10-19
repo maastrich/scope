@@ -161,7 +161,8 @@ public actor TaskManager {
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? slug : name,
             slug: slug, branch: branch, root: root.filesystemPath, createdAt: TaskRecord.roundedToMilliseconds(.now),
-            pullRequest: pullRequest, prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
+            pullRequests: pullRequest.map { link in var link = link; if link.repo == nil { link.repo = requested.first }; return [link] } ?? [],
+            prompt: (prompt?.isEmpty ?? true) ? nil : prompt, createdBy: createdBy,
             portBase: allocatePort(), topic: topic, parentTask: parentTask, origin: origin,
             deliverable: deliverable?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, issue: issue,
             attempt: attempt, mission: mission ? Mission() : nil
@@ -205,7 +206,7 @@ public actor TaskManager {
             scopeID: scope.id, scopeRoot: scope.path, scopeSlug: scope.slug, scopeName: scope.name,
             name: name, slug: slug, branch: branch, root: root.filesystemPath,
             createdAt: TaskRecord.roundedToMilliseconds(.now),
-            pullRequest: LinkedPullRequest(pr),
+            pullRequests: [LinkedPullRequest(pr, repo: path)],
             prompt: initialPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             portBase: allocatePort()
         )
@@ -233,19 +234,29 @@ public actor TaskManager {
         "pr-\(pr.number)-\(TaskBranch.slug(for: pr.title))"
     }
 
-    /// The task bound to pull request `number` in `scope` (archived tasks included), if any.
-    public func task(forPullRequest number: Int, in scope: ScopeID) -> TaskRecord? {
-        tasks(in: scope).first { $0.pullRequest?.number == number }
+    /// The task bound to pull request `number` in `scope` (archived tasks included), if any; in `repo` when given,
+    /// since numbers repeat across repositories.
+    public func task(forPullRequest number: Int, repo: String? = nil, in scope: ScopeID) -> TaskRecord? {
+        tasks(in: scope).first { task in
+            task.pullRequests.contains { $0.number == number && (repo == nil || $0.repo == nil || $0.repo == repo.map(TaskRepo.normalize)) }
+        }
     }
 
-    /// Binds a pull request to an existing task (after "Create PR" on its branch).
+    /// Binds a pull request to an existing task (after "Create PR" on its branch, or a refresh that found one on a
+    /// branch of a sandbox). A link with the same URL is replaced, so a refresh updates in place; the rest keep
+    /// their order (`PullRequestSet.ordered`).
     @discardableResult
     public func linkPullRequest(_ link: LinkedPullRequest, to id: TaskID) async throws -> TaskRecord {
-        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        record.pullRequest = link
-        try await persist(record)
-        records[id] = record
-        return record
+        try await linkPullRequests([link], to: id)
+    }
+
+    /// `linkPullRequest` for several at once: one write.
+    @discardableResult
+    public func linkPullRequests(_ links: [LinkedPullRequest], to id: TaskID) async throws -> TaskRecord {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        let merged = PullRequestSet.merging(record.pullRequests, with: links)
+        guard merged != record.pullRequests else { return record }
+        return try await mutate(id) { $0.pullRequests = PullRequestSet.ordered(PullRequestSet.merging($0.pullRequests, with: links), repoOrder: $0.repos.map(\.repoRelativePath)) }
     }
 
     /// "Don't rebase automatically": the branch is held, or released, when main moves (`TaskRecord.holdBranch`).
@@ -699,7 +710,7 @@ public actor TaskManager {
         record.archivedAt = nil
         // Whoever brings a task with a pull request back wants it open: the merge may have happened while it was
         // archived, unseen, and the next refresh must not archive it again.
-        if record.pullRequest != nil { record.keptOpenAfterMerge = true }
+        if !record.pullRequests.isEmpty { record.keptOpenAfterMerge = true }
         record.portBase = allocatePort(excluding: id)
         try await save(record)
         return record

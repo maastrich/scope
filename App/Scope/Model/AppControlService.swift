@@ -433,15 +433,24 @@ final class AppControlService: ControlService {
 
     /// The task's pull request as the answers carry it: what `gh` last said when Scope asked (checks, mergeability,
     /// review), else what the record kept when it was bound.
+    /// The task's primary pull request (`TaskRecord.primaryPullRequest`), as `gh` last saw it.
     private func pullRequestSummary(for task: TaskState) -> PullRequestSummary? {
-        if let live = model.livePullRequest(for: task) {
+        task.record.primaryPullRequest.map { pullRequestSummary(for: task, link: $0) }
+    }
+
+    /// Every pull request of the task, in its order.
+    private func pullRequestSummaries(for task: TaskState) -> [PullRequestSummary] {
+        task.record.pullRequests.map { pullRequestSummary(for: task, link: $0) }
+    }
+
+    private func pullRequestSummary(for task: TaskState, link: LinkedPullRequest) -> PullRequestSummary {
+        if let live = model.livePullRequest(for: task, link: link) {
             return PullRequestSummary(number: live.number, url: live.url, title: live.title, state: live.state.rawValue,
                                       checks: live.checks.rawValue, mergeable: live.mergeable.rawValue,
                                       review: live.reviewDecision.rawValue, draft: live.isDraft,
-                                      checkedAt: model.pullRequestCheckedAt(for: task))
+                                      checkedAt: model.pullRequestCheckedAt(for: task, link: link), repo: link.repo)
         }
-        guard let link = task.record.pullRequest else { return nil }
-        return PullRequestSummary(number: link.number, url: link.url, title: link.title, state: link.state ?? "unknown")
+        return PullRequestSummary(number: link.number, url: link.url, title: link.title, state: link.state ?? "unknown", repo: link.repo)
     }
 
     /// The task named by id or slug.
@@ -889,6 +898,7 @@ final class AppControlService: ControlService {
         }
         if let task = model.tasks.first(where: { $0.record.id.rawValue == result.task.id }) {
             result.pullRequest = pullRequestSummary(for: task)
+            result.pullRequests = pullRequestSummaries(for: task)
         }
         return .success(.taskShow(result))
     }
@@ -920,7 +930,7 @@ final class AppControlService: ControlService {
             topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt,
             behind: model.lag(of: task)?.behind, conflicts: model.lag(of: task)?.conflicts,
             holdBranch: task.record.holdBranch ? true : nil,
-            pullRequest: pullRequestSummary(for: task)
+            pullRequest: pullRequestSummary(for: task), pullRequests: pullRequestSummaries(for: task)
         )
     }
 

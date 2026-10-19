@@ -25,7 +25,7 @@ import Testing
     static func build(_ lanes: [TimelineLaneSource], now: Double = 120, archived: Double? = nil,
                       pr: (number: Int, openedAt: Date?, mergedAt: Date?, closedAt: Date?)? = nil,
                       checks: [TaskCheckMark] = []) -> TaskTimeline {
-        TaskTimeline.build(createdAt: t0, archivedAt: archived.map(at), now: at(now), pullRequest: pr, checks: checks, lanes: lanes)
+        TaskTimeline.build(createdAt: t0, archivedAt: archived.map(at), now: at(now), pullRequests: pr.map { [$0] } ?? [], checks: checks, lanes: lanes)
     }
 
     static func kinds(_ lane: TaskTimeline.Lane) -> [TaskTimeline.Span.Kind] { lane.spans.map(\.kind) }

@@ -540,7 +540,9 @@ public struct SkillInstaller: Sendable {
         - `merged` — its pull request was seen merged. Shipped.
         - `delivered` — archived or closed with a pull request whose last seen state was open, or never seen
           (`pullRequest.state` absent). Check those with `gh pr view <url> --json state,mergedAt` before calling
-          them shipped; run the checks together, and only for these.
+          them shipped; run the checks together, and only for these. A task can carry several pull requests
+          (`pullRequests[]`, one per repository or branch; `pullRequest` is the primary): the outcome is `merged`
+          once any merged and none is still open.
         - `abandoned` — its pull request was closed unmerged, or the task was closed without one. Dropped.
         - `archived` — put away without a pull request: finished with nothing to merge (an investigation, a
           report) or set aside. Scope cannot tell which; the brief may. Do not guess "done" or "dropped".

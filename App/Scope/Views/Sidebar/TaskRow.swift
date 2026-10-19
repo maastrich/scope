@@ -243,8 +243,10 @@ struct TaskContextMenu: View {
             model.selection = .task(task.id)
             model.showInspector(.delta)
         }
-        if let pr = task.record.pullRequest {
-            Button("Open Pull Request \(pr.label) on GitHub") { model.openOnGitHub(pr.url) }
+        // One item per pull request: the repository named when the task spans several, since numbers repeat.
+        ForEach(task.record.pullRequests) { pr in
+            let where_ = task.record.pullRequests.count > 1 ? (model.repo(of: pr, in: task).map { "\($0.name) " } ?? "") : ""
+            Button("Open Pull Request \(where_)\(pr.label) on GitHub") { model.openOnGitHub(pr.url) }
         }
         Divider()
         Button(model.lag(of: task)?.hasConflicts == true ? "Ask the Agent to Rebase on Main" : "Rebase on Main Now") {

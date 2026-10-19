@@ -74,6 +74,11 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var isScopeRoot: Bool { repoRelativePath == "." }
     /// Display name: last path component, or the scope name for `"."`.
     public var name: String { isScopeRoot ? "." : URL(fileURLWithPath: repoRelativePath).lastPathComponent }
+    /// `name` of a repository path alone.
+    public static func displayName(_ repoRelativePath: String) -> String {
+        let path = normalize(repoRelativePath)
+        return path == "." ? "." : URL(fileURLWithPath: path).lastPathComponent
+    }
     public var sandboxURL: URL { URL(fileURLWithPath: sandboxPath, isDirectory: true) }
 
     /// `""`, `"/"`, `"./"` → `"."`; strips leading `./` and trailing `/`.
@@ -86,9 +91,11 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     }
 }
 
-/// The pull request a task is bound to: created from it (`TaskManager.createForPullRequest`) or linked
-/// after "Create PR" in the Delta panel. Live state (checks, review) is not stored; `PullRequestsModel` has it.
-public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
+/// One pull request a task is bound to: created from it (`TaskManager.createForPullRequest`), linked after
+/// "Create PR" in the Delta panel, or adopted by a refresh that found it on a branch of a sandbox. A task holds as
+/// many as its work opened — one per repository, a stack, a docs PR beside a prototype — in `TaskRecord.pullRequests`.
+/// Live state (checks, review) is not stored; `PullRequestsModel` has it.
+public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var number: Int
     public var url: URL
     public var title: String
@@ -103,9 +110,16 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
     public var openedAt: Date?
     public var mergedAt: Date?
     public var closedAt: Date?
+    /// The task repository it belongs to (`TaskRepo.repoRelativePath`): what tells `api#12` from `web#12`, and
+    /// where its `gh` calls run. `nil` on links written before it was kept, which were all in the first repository.
+    public var repo: String?
+    /// Its head and base branches, as GitHub names them: a stacked pull request shows where it sits.
+    public var headRefName: String?
+    public var baseRefName: String?
 
     public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false,
-                state: String? = nil, openedAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil) {
+                state: String? = nil, openedAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil,
+                repo: String? = nil, headRefName: String? = nil, baseRefName: String? = nil) {
         self.number = number
         self.url = url
         self.title = title
@@ -115,21 +129,38 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable {
         self.openedAt = openedAt
         self.mergedAt = mergedAt
         self.closedAt = closedAt
+        self.repo = repo.map(TaskRepo.normalize)
+        self.headRefName = headRefName
+        self.baseRefName = baseRefName
     }
+
+    /// The URL is what tells two pull requests apart: numbers repeat across repositories.
+    public var id: URL { url }
 
     /// `#123`
     public var label: String { "#\(number)" }
 
-    /// The link that binds a task to `pr`.
-    public init(_ pr: PullRequest) {
+    /// `open` when GitHub never answered: a link is made of an open pull request.
+    public var isOpen: Bool { (state ?? "open") == "open" }
+    public var isMerged: Bool { state == "merged" }
+
+    /// The link that binds a task to `pr`, in `repo` when known.
+    public init(_ pr: PullRequest, repo: String? = nil) {
         self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository,
-                  state: pr.state.rawValue, openedAt: pr.createdAt, mergedAt: pr.mergedAt, closedAt: pr.closedAt)
+                  state: pr.state.rawValue, openedAt: pr.createdAt, mergedAt: pr.mergedAt, closedAt: pr.closedAt,
+                  repo: repo, headRefName: pr.headRefName, baseRefName: pr.baseRefName)
     }
 
-    /// `pr` says something this link does not keep yet: a new title, state or date.
+    /// `pr` says something this link does not keep yet: a new title, state, branch or date.
     public func isStale(against pr: PullRequest) -> Bool {
-        number == pr.number && (title != pr.title || state != pr.state.rawValue || openedAt != pr.createdAt
-                                || mergedAt != pr.mergedAt || closedAt != pr.closedAt)
+        url == pr.url && (title != pr.title || state != pr.state.rawValue || openedAt != pr.createdAt
+                          || mergedAt != pr.mergedAt || closedAt != pr.closedAt
+                          || headRefName != pr.headRefName || baseRefName != pr.baseRefName)
+    }
+
+    /// This link with what `pr` says now, its repository kept.
+    public func refreshed(with pr: PullRequest) -> LinkedPullRequest {
+        LinkedPullRequest(pr, repo: repo)
     }
 }
 
@@ -195,8 +226,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var createdAt: Date
     /// Set by `TaskManager.archive`.
     public var archivedAt: Date?
-    /// The pull request this task was opened from or linked to, if any.
-    public var pullRequest: LinkedPullRequest?
+    /// Every pull request the task is bound to — the one it was opened from, the ones its threads opened, in every
+    /// repository of the task — in the order `PullRequestSet.ordered` gives them. Empty until one is found.
+    public var pullRequests: [LinkedPullRequest] = []
     /// The initial request the task was created from (New Task sheet); shown in the sidebar and as the
     /// "Goal" of `AGENTS.md`, and given to the first thread as its opening prompt.
     public var prompt: String?
@@ -255,7 +287,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         repos: [TaskRepo] = [],
         createdAt: Date = .now,
         archivedAt: Date? = nil,
-        pullRequest: LinkedPullRequest? = nil,
+        pullRequests: [LinkedPullRequest] = [],
         prompt: String? = nil,
         createdBy: String? = nil,
         portBase: Int? = nil,
@@ -282,7 +314,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.repos = repos
         self.createdAt = createdAt
         self.archivedAt = archivedAt
-        self.pullRequest = pullRequest
+        self.pullRequests = PullRequestSet.ordered(pullRequests, repoOrder: repos.map(\.repoRelativePath))
         self.prompt = prompt
         self.createdBy = createdBy
         self.portBase = portBase
@@ -307,6 +339,11 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     public var rootURL: URL { URL(fileURLWithPath: root, isDirectory: true) }
     public var isArchived: Bool { archivedAt != nil }
+    /// The pull request a single button acts on when nothing picked one: the first open, else the first merged,
+    /// else the first (`PullRequestSet.primary`). `nil` without any.
+    public var primaryPullRequest: LinkedPullRequest? { PullRequestSet.primary(pullRequests) }
+    /// `open`, `merged`, `closed` for the task as a whole (`PullRequestSet.aggregateState`), `nil` without a pull request.
+    public var pullRequestState: String? { PullRequestSet.aggregateState(pullRequests.map(\.state)) }
     public var activeRepos: [TaskRepo] { repos.filter { $0.state == .active } }
     /// Repo scope: the single repo is the scope folder itself, so the task root is the sandbox.
     public var isMonoRepo: Bool { repos.count == 1 && repos[0].isScopeRoot }
@@ -378,7 +415,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
             id: id.rawValue, name: name, slug: slug, scopeID: scopeID.rawValue, scopeSlug: scopeSlug, scopeName: scopeName,
             branch: branch, topic: topic, repos: repos.map(\.repoRelativePath), createdAt: createdAt, archivedAt: archivedAt,
             prompt: prompt,
-            pullRequest: pullRequest.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state) },
+            pullRequests: pullRequests.map { .init(number: $0.number, url: $0.url, title: $0.title, state: $0.state, repo: $0.repo) },
             createdByAgent: createdByAgent, parentTask: parentTask?.rawValue
         )
     }
@@ -428,14 +465,21 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequest, prompt
+        case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequests, prompt
         case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
         case holdBranch, followedMainHead, trying, attempt, attemptsKept, mission
+    }
+
+    /// Keys read but no longer written.
+    private enum LegacyCodingKeys: String, CodingKey {
+        /// The one pull request a record held before it could hold several.
+        case pullRequest
     }
 
     // Lenient decoding: identity, scope, slug, branch and root are required.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
         version = try container.decode(Int.self, forKey: .version)
         id = try container.decode(TaskID.self, forKey: .id)
         scopeID = try container.decode(ScopeID.self, forKey: .scopeID)
@@ -449,7 +493,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         repos = try container.decodeIfPresent([TaskRepo].self, forKey: .repos) ?? []
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
-        pullRequest = try container.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest)
+        let links = try container.decodeIfPresent([LinkedPullRequest].self, forKey: .pullRequests)
+            ?? legacy.decodeIfPresent(LinkedPullRequest.self, forKey: .pullRequest).map { [$0] } ?? []
+        pullRequests = PullRequestSet.ordered(links, repoOrder: repos.map(\.repoRelativePath))
         prompt = try container.decodeIfPresent(String.self, forKey: .prompt)
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
         portBase = try container.decodeIfPresent(Int.self, forKey: .portBase)
