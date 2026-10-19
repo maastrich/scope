@@ -11,6 +11,27 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.27.0](https://github.com/maastrich/scope/releases/tag/v0.27.0) - 2026-10-19
+
+### Added
+
+- **delta:** keep viewed marks across launches and flag files changed since viewed ([#71](https://github.com/maastrich/scope/pull/71)) by @maastrich
+- **shortcuts:** hold ⌘ to see every control's shortcut beside it ([#75](https://github.com/maastrich/scope/pull/75)) by @maastrich
+- **updates:** stage releases in the background and offer a restart instead of a daily check ([#73](https://github.com/maastrich/scope/pull/73)) by @maastrich
+- **control:** fewer round trips for agents driving Scope ([#76](https://github.com/maastrich/scope/pull/76)) by @maastrich
+- **tasks:** show every pull request of a task, and archive only once all are merged ([#78](https://github.com/maastrich/scope/pull/78)) by @maastrich
+
+### Fixed
+
+- **drivers:** open agent-created tasks and threads on the Settings default driver ([#74](https://github.com/maastrich/scope/pull/74)) by @maastrich
+- **usage:** count time on screen only while looked at, and classify each thread state once ([#77](https://github.com/maastrich/scope/pull/77)) by @maastrich
+
+### Documentation
+
+- **research:** what the diff view can do for reviewing an agent's work ([#72](https://github.com/maastrich/scope/pull/72)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.26.0...v0.27.0
+
 ## [0.26.0](https://github.com/maastrich/scope/releases/tag/v0.26.0) - 2026-10-19
 
 ### Added
