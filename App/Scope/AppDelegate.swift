@@ -174,6 +174,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             return
         }
+        if action == ThreadNotifier.notBlockingAction {
+            await MainActor.run {
+                Usage.register("notification.not-blocking", label: "Not blocking")
+                Usage.record(.notification, "notification.not-blocking", source: .notification)
+                AppServices.model?.markNotBlocking(threadID)
+            }
+            return
+        }
         await MainActor.run {
             let id = switch action {
             case UNNotificationDefaultActionIdentifier: "notification.open"

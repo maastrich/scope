@@ -21,12 +21,12 @@ import ScopeCore
         #expect(old == [.digest(a)])
     }
 
-    @Test func aDigestRepeatsEveryFourMinutesAtMost() {
+    @Test func aDigestRepeatsEveryEightMinutesAtMost() {
         var history = AssistTriggers.History()
-        history.ran(.digest(a), at: now.addingTimeInterval(-60))
-        #expect(AssistTriggers.jobs(for: .tick, threads: [running(a, since: 600)], history: history, now: now).isEmpty)
         history.ran(.digest(a), at: now.addingTimeInterval(-4 * 60))
-        #expect(AssistTriggers.jobs(for: .tick, threads: [running(a, since: 600)], history: history, now: now) == [.digest(a)])
+        #expect(AssistTriggers.jobs(for: .tick, threads: [running(a, since: 900)], history: history, now: now).isEmpty)
+        history.ran(.digest(a), at: now.addingTimeInterval(-8 * 60))
+        #expect(AssistTriggers.jobs(for: .tick, threads: [running(a, since: 900)], history: history, now: now) == [.digest(a)])
     }
 
     @Test func onlyRunningThreadsWithAnOpenTurnAreDigested() {
@@ -48,9 +48,17 @@ import ScopeCore
     @Test func triageIsDebouncedPerThread() {
         let threads = [AssistTriggers.ThreadSnapshot(id: a, state: .waiting(reason: .input)), .init(id: b, state: .done)]
         var history = AssistTriggers.History()
-        history.ran(.triage(a), at: now.addingTimeInterval(-2))
+        history.ran(.triage(a), at: now.addingTimeInterval(-20))
         #expect(AssistTriggers.jobs(for: .hook(thread: a, kind: .inputRequested), threads: threads, history: history, now: now).isEmpty)
         #expect(AssistTriggers.jobs(for: .hook(thread: b, kind: .turnEnded), threads: threads, history: history, now: now) == [.triage(b)])
+    }
+
+    /// The verdict only quiets a finished turn's notification: no call when no notification would go.
+    @Test func aTriageIsWorthACallOnlyWhenItCanQuietANotification() {
+        #expect(AssistTriggers.triageMatters(kind: .turnEnded, appIsActive: false, quietsInformational: true))
+        #expect(!AssistTriggers.triageMatters(kind: .turnEnded, appIsActive: true, quietsInformational: true))
+        #expect(!AssistTriggers.triageMatters(kind: .turnEnded, appIsActive: false, quietsInformational: false))
+        #expect(!AssistTriggers.triageMatters(kind: .inputRequested, appIsActive: false, quietsInformational: true))
     }
 
     @Test func anUnknownThreadAsksNothing() {

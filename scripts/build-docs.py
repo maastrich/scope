@@ -1216,8 +1216,10 @@ work closed before this version left nothing. A pull request's state is the last
 <code>~/.scope/usage/</code>, never sent anywhere: the controls, commands, sheets and inspector sections used most,
 per area; those never used in the period; for each command, how often it came from its shortcut, the menu, the
 palette or a click; the CLI and MCP calls made by you and by agents; the time spent in each sheet and section; and
-what rose or fell against the period before. It holds ids, never what you type, a path or a name. Settings ▸
-General ▸ Usage turns it off or clears it. The MCP tool is <code>scope_usage</code>.</p>
+what rose or fell against the period before. Time on screen counts only while Scope is frontmost, one of its windows
+is visible, the session is unlocked and you touched the keyboard or the mouse in the last two minutes; the report
+says since when it is measured that way, and ignores the durations logged before. It holds ids, never what you type,
+a path or a name. Settings ▸ General ▸ Usage turns it off or clears it. The MCP tool is <code>scope_usage</code>.</p>
 <h3 id="schedules">Scheduled prompts</h3>
 <p>Scope can send a prompt on its own — every hour at a minute, every day, on weekdays or once a week at a time —
 to a scope's orchestrator, or into a new task with a driver and model of its own. Schedules live on the scope
@@ -1421,10 +1423,13 @@ notification goes once it is sent. <b>Settings › General › Notifications ›
 default) turns the quote off, for when your screen is shared.</p>
 
 <h2 id="assist">The assistant</h2>
-<p>On events only — a turn that ends, a question, a thread running for more than four minutes, a task being
+<p>On events only — a turn that ends, a thread running for more than four minutes, a task being
 created — Scope can hand the end of the terminal to a small model and get <i>labels</i> back: what the agent is
 doing, whether it seems stuck and why, whether a finished turn is worth a notification, whether a task without a
-pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it.</p>
+pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it, and it
+never reads the same words twice: a thread whose terminal has not moved keeps its last digest (asked again every
+eight minutes at most), a finished turn is triaged only when a notification could be quieted by it, and the same
+answer reported twice gets one verdict and one notification.</p>
 <p>The first model is Apple's on-device one (macOS 26, Apple Intelligence on): free, local, about a second per
 answer, good at exactly this kind of structured classification. <b>Settings › Assist › On-device + Haiku</b> adds
 Claude Code's light model as a second opinion on a stuck verdict, and as the fallback when the on-device model is
@@ -1433,7 +1438,8 @@ output, under a daily cap you set (40 by default). Each call counts against your
 <p>What you see: the activity line under a running thread takes the model's words; a thread read as stuck says
 <i>Seems stuck — reason</i> in the sidebar, in the Inbox and as a notification, with a <b>Not stuck</b> answer that
 is remembered as a false positive; a finished turn the model reads as informational stays silent (a question or a
-failure always notifies); a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
+failure always notifies), and one it reads as blocking notifies with a <b>Not Blocking</b> action that is remembered
+the same way; a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
 its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
 one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
 

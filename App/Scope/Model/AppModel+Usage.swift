@@ -14,6 +14,7 @@ extension AppModel {
         UsageMenuTracker.install()
         CommandKeyHints.shared.isEnabled = config.preferences.showShortcutHints
         CommandKeyHints.shared.install()
+        Usage.startScreenTime()
         let usage = env.usage
         Task { await usage.prune() }
     }
@@ -75,11 +76,13 @@ extension AppModel {
             let previous = UsageReport.previous(of: period)
             let events = log.read(since: previous.since, until: period.until)
             let historySince = log.firstEventDate()
+            let screenTimeSince = log.firstEventDate { $0.kind == .view && $0.context == UsageEvent.activeViewContext }
             return UsageReport.build(period: period, timeZone: timeZone,
                                      events: events.filter { period.contains($0.at) },
                                      previousEvents: events.filter { previous.contains($0.at) },
                                      registry: log.readRegistry(), recording: recording, historySince: historySince,
-                                     area: params.area, limit: params.limit ?? UsageReport.defaultLimit)
+                                     screenTimeSince: screenTimeSince, area: params.area,
+                                     limit: params.limit ?? UsageReport.defaultLimit)
         }.value
         return .success(.usage(result))
     }

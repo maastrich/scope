@@ -83,14 +83,42 @@ import Testing
         #expect(result.control == [.init(method: "thread.new", user: 1, agent: 2), .init(method: "summary", user: 1, agent: 0)])
     }
 
+    static func timed(_ id: String, _ context: String = UsageEvent.activeViewContext, duration: Double) -> UsageEvent {
+        UsageEvent(at: date(14), kind: .view, id: id, source: .app, context: context, duration: duration)
+    }
+
     @Test func viewsAddUpTheirTimeOnScreen() {
         let result = Self.build([
-            Self.event("inspector.delta", .view, .mouse, duration: 30),
-            Self.event("inspector.delta", .view, .app, duration: 90),
-            Self.event("sheet.graph", .view, .mouse, duration: 400),
+            Self.timed("inspector.delta", duration: 30),
+            Self.timed("inspector.delta", duration: 90),
+            Self.timed("sheet.graph", duration: 400),
         ])
         #expect(result.views == [.init(id: "sheet.graph", label: nil, opens: 1, seconds: 400),
                                  .init(id: "inspector.delta", label: nil, opens: 2, seconds: 120)])
+    }
+
+    /// A run after a pause is the same opening; a duration from before the clock could be a night left open.
+    @Test func resumedRunsAreOneOpeningAndUntimedDurationsDoNotCount() {
+        let result = Self.build([
+            Self.timed("inspector.delta", duration: 30),
+            Self.timed("inspector.delta", UsageEvent.resumedViewContext, duration: 45),
+            Self.event("inspector.delta", .view, .mouse, duration: 47 * 3600),
+        ])
+        #expect(result.views == [.init(id: "inspector.delta", label: nil, opens: 2, seconds: 75)])
+    }
+
+    @Test func theReportSaysSinceWhenTimeOnScreenCanBeTrusted() {
+        let events = [Self.event("inspector.delta", .view, .mouse, duration: 3600)]
+        let unmeasured = UsageReport.build(period: Self.week, timeZone: Self.paris, events: events, previousEvents: [],
+                                           registry: UsageRegistry(), historySince: Self.date(1))
+        #expect(unmeasured.limits.first?.hasPrefix("Time on screen is not measured yet") == true)
+        let measured = UsageReport.build(period: Self.week, timeZone: Self.paris, events: events, previousEvents: [],
+                                         registry: UsageRegistry(), historySince: Self.date(1), screenTimeSince: Self.date(15))
+        #expect(measured.screenTimeSince == Self.date(15))
+        #expect(measured.limits.first?.hasPrefix("Time on screen is measured since 2026-10-15") == true)
+        let before = UsageReport.build(period: Self.week, timeZone: Self.paris, events: events, previousEvents: [],
+                                       registry: UsageRegistry(), historySince: Self.date(1), screenTimeSince: Self.date(2))
+        #expect(!before.limits.contains { $0.hasPrefix("Time on screen is") && !$0.hasPrefix("Time on screen counts") })
     }
 
     @Test func settingsAreCountedByKey() {
@@ -129,7 +157,7 @@ import Testing
     @Test func theResultSurvivesTheWireAndRendersAsText() throws {
         let result = Self.build([Self.event("command.new-thread", .shortcut, .keyboard),
                                  Self.event("control.thread.new", .control, .agent),
-                                 Self.event("sheet.graph", .view, .mouse, duration: 75)])
+                                 Self.timed("sheet.graph", duration: 75)])
         let encoder = ControlProtocol.makeEncoder()
         let decoded = try ControlProtocol.makeDecoder().decode(UsageResult.self, from: encoder.encode(result))
         #expect(decoded == result)

@@ -93,7 +93,9 @@ public struct UsageResult: Codable, Sendable, Equatable {
         public var agent: Int
     }
 
-    /// A sheet, a section or a panel: how often it was opened and how long it stayed.
+    /// A sheet, a section or a panel: how often it was opened and how long it was looked at. `seconds` only adds up
+    /// the runs the screen-time clock counted (`UsageEvent.isTimedView`): an opening from before it is counted in
+    /// `opens` and nowhere else.
     public struct View: Codable, Sendable, Equatable {
         public var id: String
         public var label: String?
@@ -119,6 +121,9 @@ public struct UsageResult: Codable, Sendable, Equatable {
     public var recording: Bool
     /// The oldest event on disk: before it, nothing was recorded.
     public var historySince: Date?
+    /// The oldest `view` event timed by the screen-time clock: from it, `views[].seconds` can be trusted. `nil` when
+    /// there is none yet.
+    public var screenTimeSince: Date?
     public var top: [Element]
     public var areas: [Area]
     /// Registered elements nobody used in the period, by area then id. Elements never drawn are not in the registry
@@ -143,6 +148,7 @@ public enum UsageReport {
         "A button without its own usage id is counted under its area (`<area>.button`): the area is right, the button is not named.",
         "Buttons pressed with the keyboard (Return on a default button, Space on a focused one) are not counted as clicks; menu shortcuts are, as `keyboard`.",
         "`neverUsed` lists elements the app has drawn at least once since recording began; one never shown is in neither list.",
+        "Time on screen counts only while Scope is frontmost, one of its windows is visible, the session is unlocked and you touched the keyboard or the mouse in the last two minutes.",
     ]
 
     /// The period before `period`, of the same length.
@@ -154,7 +160,8 @@ public enum UsageReport {
     public static func build(
         period: ActivityPeriod, timeZone: TimeZone = .current,
         events: [UsageEvent], previousEvents: [UsageEvent], registry: UsageRegistry,
-        recording: Bool = true, historySince: Date? = nil, area: String? = nil, limit: Int = defaultLimit
+        recording: Bool = true, historySince: Date? = nil, screenTimeSince: Date? = nil, area: String? = nil,
+        limit: Int = defaultLimit
     ) -> UsageResult {
         let previousPeriod = previous(of: period)
         let current = events.filter { period.contains($0.at) && (area == nil || $0.area == area) }
@@ -206,8 +213,9 @@ public enum UsageReport {
         var views: [String: UsageResult.View] = [:]
         for event in current where event.kind == .view {
             var row = views[event.id] ?? .init(id: event.id, label: label(event.id), opens: 0, seconds: 0)
-            row.opens += 1
-            row.seconds += max(0, event.duration ?? 0)
+            // A run after a pause is the same opening; a duration from before the clock could be a night.
+            if event.context != UsageEvent.resumedViewContext { row.opens += 1 }
+            if event.isTimedView { row.seconds += max(0, event.duration ?? 0) }
             views[event.id] = row
         }
 
@@ -225,6 +233,11 @@ public enum UsageReport {
             .sorted { ($0.previous - $0.count, $1.id) > ($1.previous - $1.count, $0.id) }
 
         var limits = fixedLimits
+        if let screenTimeSince, screenTimeSince > period.since {
+            limits.insert("Time on screen is measured since \(screenTimeSince.formatted(.iso8601.year().month().day())): openings before it are counted, their durations are not.", at: 0)
+        } else if screenTimeSince == nil, current.contains(where: { $0.kind == .view }) {
+            limits.insert("Time on screen is not measured yet: openings are counted, their durations are not.", at: 0)
+        }
         if !recording { limits.insert("Recording is off (Settings ▸ General ▸ Usage): nothing after it was turned off is counted.", at: 0) }
         if let historySince, historySince > period.since {
             limits.insert("Recording began \(historySince.formatted(.iso8601.year().month().day())), inside this period: anything before is unknown, not unused.", at: 0)
@@ -235,6 +248,7 @@ public enum UsageReport {
         return UsageResult(
             period: render(period, timeZone), previousPeriod: render(previousPeriod, timeZone),
             total: current.count, previousTotal: before.count, recording: recording, historySince: historySince,
+            screenTimeSince: screenTimeSince,
             top: Array(ranked.prefix(limit)), areas: areaRows, neverUsed: neverUsed,
             commands: commands.values.sorted { $0.total != $1.total ? $0.total > $1.total : $0.id < $1.id },
             control: control.values.sorted { ($0.user + $0.agent, $1.method) > ($1.user + $1.agent, $0.method) },

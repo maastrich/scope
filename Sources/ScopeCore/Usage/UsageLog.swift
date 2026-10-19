@@ -62,11 +62,13 @@ public struct UsageLog: Sendable {
         return events
     }
 
-    /// The date of the oldest event on disk: when recording began, as far as what is left can tell.
-    public func firstEventDate(fileManager: FileManager = .default) -> Date? {
+    /// The date of the oldest event on disk: when recording began, as far as what is left can tell. With `matching`,
+    /// the oldest event it accepts.
+    public func firstEventDate(fileManager: FileManager = .default,
+                               matching: (UsageEvent) -> Bool = { _ in true }) -> Date? {
         for url in files(fileManager: fileManager) {
             guard let data = try? Data(contentsOf: url) else { continue }
-            if let first = data.split(separator: UInt8(ascii: "\n")).lazy.compactMap({ UsageEvent.decode(line: $0) }).first {
+            if let first = data.split(separator: UInt8(ascii: "\n")).lazy.compactMap({ UsageEvent.decode(line: $0) }).first(where: matching) {
                 return first.at
             }
         }

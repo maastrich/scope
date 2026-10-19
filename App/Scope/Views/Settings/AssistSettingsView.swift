@@ -55,7 +55,7 @@ struct AssistSettingsView: View {
                 Toggle("File a new task under one of the scope's topics", isOn: preference(\.assistPicksTopic))
                     .toggleStyle(.scope)
                     .usageID("assist-pick-topic", label: "Pick a topic for new tasks")
-                Text("A thread the assistant reads as stuck shows *Seems stuck* in the sidebar and the Inbox, with a *Not stuck* answer that is remembered as a false positive.")
+                Text("A thread the assistant reads as stuck shows *Seems stuck* in the sidebar and the Inbox, with a *Not stuck* answer; a finished turn it reads as a question notifies with a *Not Blocking* action. Both are remembered as false positives.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -63,7 +63,7 @@ struct AssistSettingsView: View {
             SettingsSection("Today") {
                 SettingsRow("On-device calls", value: "\(engine.ledger.onDeviceCalls)" + latency(.onDevice))
                 SettingsRow("Haiku calls", value: "\(engine.ledger.haikuCalls) of \(prefs.assistDailyCap)" + latency(.haiku))
-                SettingsRow("Marked not stuck", value: "\(engine.ledger.falsePositives)")
+                SettingsRow("False positives", value: "\(engine.ledger.falsePositives)")
                 Text("Every decision is logged in the usage log by its id and tier only — never the text it read.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
