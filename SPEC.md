@@ -88,7 +88,7 @@ Option par scope : *sandboxes à côté des repos* (`<scope>/.scope/sandboxes/`)
 
 ### 4.2 Threads
 
-- **Créer** : choisir un driver et un cwd. Par défaut, une task (l'agent voit uniquement ses sandboxes). Sinon la racine du scope (l'agent voit les bases : à utiliser pour explorer, pas pour modifier).
+- **Créer** : choisir un driver (sinon celui de *Réglages ▸ Default driver*, voir §5 *Driver*) et un cwd. Par défaut, une task (l'agent voit uniquement ses sandboxes). Sinon la racine du scope (l'agent voit les bases : à utiliser pour explorer, pas pour modifier).
 - **Terminal embarqué** : PTY complet (SwiftTerm), 256 couleurs, resize, copier/coller, scrollback, recherche. Onglets par thread, splits horizontaux et verticaux.
 - **Environnement injecté** : `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_TASK`, `SCOPE_SOCK`, `SCOPE_HOME`, plus l'env du profil de driver.
 - **États** : `idle` · `running` · `waiting` (attend une réponse ou une permission ; une permission de Claude Code ne compte qu'une fois sa boîte de dialogue restée ~6 s sans réponse — celles qu'accordent le classifieur du mode auto, `bypassPermissions` ou un autre hook `PermissionRequest` ne passent jamais par `waiting`) · `done` (tour fini, pas encore vu) · `failed` (tour arrêté sur une erreur de l'API) · `exited`. Montrer le thread ramène `done` et `failed` à `idle`. Sans adaptateur, seuls `running` et `exited` sont connus.
@@ -256,6 +256,8 @@ Les mécanismes d'événements changent vite : à vérifier contre la doc de cha
 ```
 
 `addDir` est répété pour chaque répertoire supplémentaire du thread (§4.3), `{dir}` valant ce répertoire ; il vient après l'argv `prompt`, parce qu'un flag variadique comme `--add-dir` placé avant prendrait le prompt pour un répertoire. Absent, le thread ne voit que son cwd. Seuls les profils Claude Code le déclarent pour l'instant.
+
+**Driver.** Un thread ou une task ouvert sans nommer de driver (`⌘T`, `thread.new`, `task.new`, un schedule, une tentative, follow-main, le graphe) tourne sur le driver de *Réglages ▸ Default driver* ; vide (*Automatic*), sur le premier profil agent installé, jamais le shell (`DriverChoice`). Une seule exception : en mode *Automatic*, le `⌘T` de l'utilisateur reprend le driver qu'il a ouvert en dernier dans ce scope, pour ne pas redemander. Cette mémoire est une commodité de l'interface, pas un réglage : elle ne sert jamais à ce qu'un agent, la CLI ou le MCP ouvrent, et ne l'emporte jamais sur une préférence posée. Un thread qu'un agent ouvre n'hérite pas du driver de son parent — un agent qui veut le sien le passe (`--driver`) ; il hérite de son modèle seulement s'il tourne sur le même driver (ci-dessous). Un modèle ne remplace jamais le profil : il s'ajoute à ses flags et à son env (`claude --dangerously-skip-permissions --model …`), reprise comprise — un profil par modèle est inutile et perd les flags du profil de base.
 
 **Modèle.** `modelArgs` dit comment le driver reçoit un modèle, `{model}` valant celui du thread : ajouté après `args` au lancement et après l'argv `resume` à la reprise — avant le prompt, le flag ne prend qu'une valeur — et après un argv `headless` quand l'appel en donne un (les appels headless d'aujourd'hui, graphe et proposition de task, n'en donnent pas ; `headlessLight` garde son modèle léger). Claude Code, Codex et Cursor prennent `--model` ; le shell n'a pas de `modelArgs` et refuse un modèle. `models` liste ceux que les menus proposent (*New Thread With Driver ▸ Claude Code ▸ …*, palette, Réglages) ; tout autre nom passe quand même par *Other Model…* ou `--model`.
 

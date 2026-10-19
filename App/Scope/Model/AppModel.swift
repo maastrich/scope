@@ -540,24 +540,33 @@ final class AppModel {
         return reported
     }
 
-    /// The profile for an id, falling back to `shell`, then the first profile.
+    /// The profile for an id, else `defaultProfile`: what everything but the user's own ⌘T opens.
     func profile(id: String?) -> DriverProfile? {
         if let id, let profile = drivers.profile(id: id) { return profile }
-        return preferredProfile
+        return defaultProfile
     }
 
-    /// The driver a new thread gets when nothing says otherwise: the one last opened in this scope, then the
-    /// preference, then the first agent profile installed.
-    ///
-    /// Reaching for the last one is what makes ⌘T stop asking: a scope you drive with Claude Code keeps
-    /// giving you Claude Code, and the shell is a choice you make rather than the one you are given.
+    /// The driver a thread gets when nothing names one and the user did not ask for it in the app (an agent, the
+    /// CLI, the MCP server, a schedule, an attempt, follow-main, the graph): Settings ▸ Default driver, else the
+    /// first agent profile installed (`DriverChoice`). Never the driver last opened in a scope — that one is the
+    /// UI's shortcut, and it used to leak into every task an agent created.
+    var defaultProfile: DriverProfile? {
+        DriverChoice.resolve(preference: config.preferences.defaultDriverID, profiles: drivers.profiles)
+    }
+
+    /// The driver the user's ⌘T opens in `scopeID`: the preference when set, else the one last opened in the scope,
+    /// else the first agent profile. Reaching for the last one is what makes an *automatic* ⌘T stop asking: a scope
+    /// you drive with Claude Code keeps giving you Claude Code, and the shell is a choice you make rather than the
+    /// one you are given. A preference set in Settings wins over that memory.
+    func preferredProfile(in scopeID: ScopeID) -> DriverProfile? {
+        DriverChoice.resolve(preference: config.preferences.defaultDriverID, lastOpened: lastDriverByScope[scopeID],
+                             profiles: drivers.profiles)
+    }
+
+    /// `preferredProfile(in:)` for the scope being shown: what the empty scene and the new-task sheet offer first.
     var preferredProfile: DriverProfile? {
-        if let scope = currentScopeID, let id = lastDriverByScope[scope], let profile = drivers.profile(id: id) {
-            return profile
-        }
-        if let profile = drivers.profile(id: config.preferences.defaultDriverID) { return profile }
-        // No stored choice: an agent, not a shell — that is what the app is for.
-        return drivers.profiles.first { $0.id != "shell" } ?? drivers.profiles.first
+        guard let scope = currentScopeID else { return defaultProfile }
+        return preferredProfile(in: scope)
     }
 
     /// Id of `preferredProfile`, for the views that pass a driver id around.
@@ -1131,7 +1140,9 @@ final class AppModel {
             problems.warn("\(scope.name) is missing", detail: "Threads open once \(scope.url.path) is back.", scope: scopeID)
             return nil
         }
-        guard let profile = profile(id: driverID) else {
+        // The user's own ⌘T may fall back on the driver last opened here; anything else gets the Settings default.
+        let fallback = origin.author == .user ? preferredProfile(in: scopeID) : defaultProfile
+        guard let profile = driverID.flatMap({ drivers.profile(id: $0) }) ?? fallback else {
             problems.error("No driver profile available", detail: "Add a JSON profile to \(ScopeHome.driversURL(home: env.home).path).",
                            actions: [.reveal(ScopeHome.driversURL(home: env.home).path)])
             return nil
