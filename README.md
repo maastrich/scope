@@ -236,6 +236,9 @@ prints the verification commands' output (`codesign --verify --deep --strict`, `
    `log stream --predicate 'subsystem == "org.sparkle-project.Sparkle"'` for details.
 4. Against the real feed: install the previous GitHub release, then `Scope → Check for Updates…` after the new
    release is published (`https://github.com/maastrich/scope/releases/latest/download/appcast.xml` must resolve).
+5. The silent path (`SUAutomaticallyUpdate`): leave the old app running instead of pressing the menu item. Within
+   the hour — or at the next activation after 15 minutes — Sparkle stages the release without a dialog, the
+   "Scope 0.0.2 is ready" band appears and the Scope menu reads "Restart to Update…"; quitting installs it too.
 
 ## Versioning
 

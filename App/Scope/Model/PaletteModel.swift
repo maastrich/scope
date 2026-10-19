@@ -184,9 +184,15 @@ enum PaletteModel {
         items.append(PaletteItem(id: "settings", section: .actions, icon: "gearshape", label: "Settings…", shortcut: "⌘,") {
             CommandServices.openSettings()
         })
-        items.append(PaletteItem(id: "updates", section: .actions, icon: "arrow.down.circle", label: "Check for Updates…") {
-            CommandServices.updater?.checkForUpdates()
-        })
+        if let ready = CommandServices.updater?.readyUpdate {
+            items.append(PaletteItem(id: "updates", section: .actions, icon: "arrow.down.circle", label: "Restart to Update to \(ready.version)…") {
+                CommandServices.updater?.installAndRelaunch()
+            })
+        } else {
+            items.append(PaletteItem(id: "updates", section: .actions, icon: "arrow.down.circle", label: "Check for Updates…") {
+                CommandServices.updater?.checkForUpdates()
+            })
+        }
         items.append(PaletteItem(id: "shortcuts", section: .actions, icon: "keyboard", label: "Keyboard Shortcuts…", shortcut: "⌘/") {
             ShortcutsWindow.show()
         })

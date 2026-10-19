@@ -1547,9 +1547,12 @@ FIG_SETTINGS
 <code>{file}</code> and <code>{line}</code> are filled in; unused parts are dropped rather than left dangling.</p>
 
 <h2 id="updates">Updates</h2>
-<p>Scope ships with Sparkle. <b>Scope → Check for Updates…</b> reads a signed appcast attached to the latest
-GitHub release; updates are verified with an EdDSA signature before they are applied. Prereleases
-(<code>v1.0.0-rc.1</code>) are excluded from the stable feed.</p>
+<p>Scope ships with Sparkle and keeps itself current on its own: it checks the signed appcast attached to the
+latest GitHub release every hour, and again when you come back to the app or wake the Mac, then downloads and
+verifies the release (EdDSA signature) in the background. A ready release is installed when you quit Scope. To
+have it sooner, a band across the top of the window and <b>Scope → Restart to Update</b> relaunch the app —
+never on their own, since a relaunch hangs up every running thread. <b>Scope → Check for Updates…</b> still
+checks on demand. Prereleases (<code>v1.0.0-rc.1</code>) are excluded from the stable feed.</p>
 
 <h2 id="privacy">What Scope touches</h2>
 <ul>

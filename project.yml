@@ -144,10 +144,16 @@ targets:
         # key: an invalid/empty value makes Sparkle show "Unable to Check For Updates" at every launch
         # (scripts/package.sh refuses it), and a key can never be added later for already-installed copies.
         SUPublicEDKey: Ldp4ftmih/ALIvBpr0GLYUKO9ul5SRqGRW+35cK3Goo=
-        # Check daily without asking the user first (default without this key: ask on second launch).
+        # Check without asking the user first (default without this key: ask on second launch).
         SUEnableAutomaticChecks: true
-        SUScheduledCheckInterval: 86400 # seconds; Sparkle enforces a 3600 minimum
-        SUAutomaticallyUpdate: false    # notify, do not install silently
+        # Hourly, Sparkle's floor. With about one release a day, the daily check that was here landed a release
+        # 12 h late on average, and the owner pressed "Check for Updates…" by hand instead. `UpdaterController`
+        # also checks when the app comes to the front or the Mac wakes, at most once every 15 minutes.
+        SUScheduledCheckInterval: 3600
+        # Download and stage the update in the background, no dialog. Sparkle installs it when Scope quits; until
+        # then `UpdaterController` offers "Restart to Update" in a band and in the menu, and never relaunches on its
+        # own: a relaunch hangs up every running thread.
+        SUAutomaticallyUpdate: true
         # Do NOT set SUEnableInstallerLauncherService / SUEnableDownloaderService: Scope is not sandboxed.
     entitlements:
       path: App/Scope/Scope.entitlements

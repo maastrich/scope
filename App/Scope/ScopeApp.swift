@@ -6,7 +6,7 @@ struct ScopeApp: App {
     @State private var model: AppModel
     // Created once, with the app. Sparkle starts here (SUEnableAutomaticChecks in Info.plist drives the
     // scheduled checks; nothing to call). Pass `startingUpdater: false` and call `updater.start()` later
-    // to defer the first check (e.g. after onboarding).
+    // to defer the first check (e.g. after onboarding). In the environment for the "Restart to Update" band.
     @State private var updater = UpdaterController()
 
     init() {
@@ -19,6 +19,7 @@ struct ScopeApp: App {
         Window(BuildFlavor.displayName, id: "main") {
             RootView()
                 .environment(model)
+                .environment(updater)
                 .frame(minWidth: 1040, minHeight: 600)
                 .task { await model.bootstrap() }
         }
