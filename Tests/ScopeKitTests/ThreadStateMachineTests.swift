@@ -6,7 +6,7 @@ import Testing
 @Suite struct ThreadStateMachineTests {
     /// The whole table, one row per (state, kind) pair.
     static let table: [(ThreadState, HookEvent.Kind, ThreadState)] = {
-        // Every alive state moves the same way; only `exited` absorbs, and `session.started` moves nothing.
+        // Every alive state moves the same way; only `exited` absorbs, and the informational kinds move nothing.
         let alive: [ThreadState] = [.idle, .running, .waiting(reason: .input), .waiting(reason: .permission), .done, .failed]
         let moves: [(HookEvent.Kind, ThreadState)] = [
             (.turnStarted, .running),
@@ -19,8 +19,9 @@ import Testing
         var rows: [(ThreadState, HookEvent.Kind, ThreadState)] = []
         for state in alive {
             rows += moves.map { (state, $0.0, $0.1) }
-            rows.append((state, .sessionStarted, state))
-            rows.append((state, .turnSaid, state))
+            for informational in HookEvent.Kind.allCases where !informational.changesState {
+                rows.append((state, informational, state))
+            }
         }
         rows += HookEvent.Kind.allCases.map { (.exited, $0, .exited) }
         return rows
