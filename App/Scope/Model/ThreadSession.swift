@@ -122,6 +122,23 @@ final class ThreadSession: Identifiable {
         onRecordChanged?(record)
     }
 
+    /// The record as somebody changed it on disk (`AppModel.applyExternalThreadChanges`): what describes the thread
+    /// is taken (title, model, cwd, task, origin, role, the relaunch opt-out), what the running process knows better
+    /// than any file is kept (its state, its exits, its launches, the session id its adapter captured). Not
+    /// persisted: the file is the source here, and writing it back would only re-encode it.
+    func takeRecord(fromDisk external: ThreadRecord) {
+        var next = external
+        next.processAlive = record.processAlive
+        next.lastState = record.lastState
+        next.lastExit = record.lastExit
+        next.lastLaunchedAt = record.lastLaunchedAt
+        next.launchCount = record.launchCount
+        next.resumeID = record.resumeID
+        next.interruptedTurn = record.interruptedTurn
+        guard next != record else { return }
+        record = next
+    }
+
     /// The thread's opt-out of auto-relaunch.
     func setRelaunchesAtStartup(_ relaunches: Bool) {
         guard relaunches != record.relaunchesAtStartup else { return }

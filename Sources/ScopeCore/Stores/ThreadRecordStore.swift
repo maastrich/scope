@@ -28,6 +28,8 @@ public actor ThreadRecordStore {
     private let home: URL
 
     private var refused: Set<ThreadID> = []
+    /// The bytes of every record last read or written (`RecordLedger`): what `reloadExternalChanges` compares against.
+    private var ledger = RecordLedger<ThreadID>()
 
     public init(home: URL) {
         directory = ScopeHome.threadsURL(home: home)
@@ -81,6 +83,7 @@ public actor ThreadRecordStore {
                 record = InterruptedTurn.noting(record, now: .now)
                 record.lastState = record.lastState?.normalizedAfterRestart
                 records.append(record)
+                ledger.noteLoaded(id, data)
             } catch {
                 let message = String(describing: error)
                 let backup = try? JSONStore.quarantine(file)
@@ -107,9 +110,53 @@ public actor ThreadRecordStore {
             return
         }
         do {
-            try JSONStore.save(record, to: url(for: record.id), fractionalSeconds: true)
+            let data = try JSONStore.makeEncoder(fractionalSeconds: true).encode(record)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: url(for: record.id), options: [.atomic])
+            ledger.noteWritten(record.id, data)
         } catch {
             Log.threads.error("thread record \(record.id) write failed: \(String(describing: error))")
+        }
+    }
+
+    /// Reads the records whose file changed on disk since the store last read or wrote it, and names the ones
+    /// whose file is gone. For the watcher of `threads/` (`StateFolderWatcher`); see `TaskRecordStore` for the rules.
+    public func reloadExternalChanges() -> ExternalReload<ThreadRecord, ThreadID> {
+        var reload = ExternalReload<ThreadRecord, ThreadID>()
+        let changes = ledger.diff(files: Self.listRecords(in: directory, id: ThreadID.init(rawValue:)))
+        for (id, data) in changes.changed {
+            do {
+                let version = try JSONStore.makeDecoder().decode(VersionProbe.self, from: data).version
+                guard version <= ThreadRecord.currentVersion else {
+                    reload.skipped.append("\(id.rawValue).json: schema version \(version) is newer than this build")
+                    continue
+                }
+                let record = try JSONStore.makeDecoder(fractionalSeconds: true).decode(ThreadRecord.self, from: data)
+                guard record.id == id else {
+                    reload.skipped.append("\(id.rawValue).json: record id \(record.id) does not match the file name")
+                    continue
+                }
+                ledger.noteLoaded(id, data)
+                reload.changed.append(record)
+            } catch {
+                reload.skipped.append("\(id.rawValue).json: \(String(describing: error))")
+            }
+        }
+        for id in changes.removed {
+            ledger.noteRemoved(id)
+            reload.removed.append(id)
+        }
+        for line in reload.skipped { Log.threads.error("thread record changed on disk but was not taken: \(line, privacy: .public)") }
+        return reload
+    }
+
+    /// Every `<id>.json` of `folder` with its bytes (`nil` when unreadable); other names are not documents.
+    public static func listRecords<ID>(in folder: URL, id: (String) -> ID?) -> [(id: ID, data: Data?)] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil,
+                                                                        options: [.skipsHiddenFiles]) else { return [] }
+        return files.compactMap { file in
+            guard file.pathExtension == "json", let id = id(file.deletingPathExtension().lastPathComponent) else { return nil }
+            return (id, try? Data(contentsOf: file))
         }
     }
 
@@ -124,6 +171,7 @@ public actor ThreadRecordStore {
         }
         do {
             try FileManager.default.removeItem(at: file)
+            ledger.noteRemoved(id)
         } catch {
             Log.threads.error("thread record \(id) delete failed: \(String(describing: error))")
         }

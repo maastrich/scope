@@ -25,6 +25,9 @@ public actor ConfigStore {
 
     private let saveDelay: Duration
     private var pending: ScopeConfig?
+    /// The bytes last read from or written to the file (`RecordLedger`): what `reloadIfChanged` compares against.
+    private var ledger = RecordLedger<Int>()
+    private let fileKey = 0
     private var timer: Task<Void, Never>?
     private var generation: UInt64 = 0
 
@@ -52,6 +55,7 @@ public actor ConfigStore {
                 return (.empty, .unsupportedVersion(version))
             }
             let config = try JSONStore.makeDecoder().decode(ScopeConfig.self, from: data)
+            ledger.noteLoaded(fileKey, data)
             return (config, nil)
         } catch {
             let message = String(describing: error)
@@ -95,10 +99,44 @@ public actor ConfigStore {
         guard let config = pending else { return }
         pending = nil
         do {
-            try JSONStore.save(config, to: url)
+            let data = try JSONStore.makeEncoder().encode(config)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: [.atomic])
+            // Noted before the event the write causes is looked at: that event finds bytes the store knows.
+            ledger.noteWritten(fileKey, data)
             writeCount += 1
         } catch {
             Log.app.error("config.json write failed: \(String(describing: error))")
+        }
+    }
+
+    /// Reads the file again after something changed it on disk; `nil` when there is nothing to take.
+    ///
+    /// The bytes on disk are compared with the last ones the store read or wrote (`RecordLedger`): the store's
+    /// own writes come back as events too, and must not come back as reloads. A file that does not decode, or
+    /// that a newer Scope wrote, is left as it is and the config in memory stays: the next valid write is read
+    /// again. Never quarantines, never writes.
+    ///
+    /// A save still pending (`saveDelay` has not elapsed) wins over the disk: it is about to overwrite the file
+    /// with what the user just changed in the app, and reading the disk now would throw that away. Outside that
+    /// window the disk wins.
+    public func reloadIfChanged() -> ScopeConfig? {
+        guard pending == nil, !isReadOnly else { return nil }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard !ledger.isKnown(fileKey, data) else { return nil }
+        do {
+            let version = try JSONStore.makeDecoder().decode(VersionProbe.self, from: data).version
+            if version > ScopeConfig.currentVersion {
+                Log.app.error("config.json changed on disk to schema version \(version); this build keeps what it has")
+                return nil
+            }
+            let config = try JSONStore.makeDecoder().decode(ScopeConfig.self, from: data)
+            ledger.noteLoaded(fileKey, data)
+            Log.app.info("config.json changed on disk; reloaded")
+            return config
+        } catch {
+            Log.app.error("config.json changed on disk but does not decode; keeping the config in memory: \(String(describing: error))")
+            return nil
         }
     }
 

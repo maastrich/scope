@@ -65,6 +65,24 @@ public actor TaskManager {
         return loaded.problems
     }
 
+    /// Takes in the records somebody changed on disk behind the app (`TaskRecordStore.reloadExternalChanges`):
+    /// a topic renamed in an editor, a field fixed by hand, a file removed. The disk wins — every change the app
+    /// makes is written before it lands in memory (`mutate`, `save`), so nothing in memory is newer than the
+    /// file except a `mutate` in flight, which notices and applies itself again on top of what came in. A task
+    /// being dismantled keeps writing its own record as it goes: a hand edit landing meanwhile is overwritten by
+    /// the next step, which is the rule for that one case.
+    ///
+    /// Nothing here writes: no normalisation, no port allocation, no quarantine. The records are taken as they are.
+    public func reloadExternalChanges() async -> ExternalReload<TaskRecord, TaskID> {
+        let reload = await store.reloadExternalChanges()
+        for record in reload.changed { records[record.id] = record }
+        for id in reload.removed { records[id] = nil }
+        if !reload.isEmpty {
+            Log.tasks.info("task records changed on disk: \(reload.changed.count) reloaded, \(reload.removed.count) removed")
+        }
+        return reload
+    }
+
     /// A free block for a new live task: archived tasks give theirs back.
     private func allocatePort(excluding id: TaskID? = nil) -> Int? {
         PortAllocator.allocate(taken: records.values.filter { !$0.isArchived && $0.id != id }.compactMap(\.portBase),

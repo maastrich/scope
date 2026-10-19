@@ -1464,6 +1464,12 @@ REFERENCE = """
 └── scope.sock            <span class="c"># hook events</span></code></pre>
 <p>Every store writes atomically. A file with a newer schema version than the running build is reported and
 left alone, never overwritten; a corrupt file is quarantined next to it rather than deleted.</p>
+<p>The disk is the state. <code>config.json</code>, <code>tasks/*.json</code> and <code>threads/*.json</code> are
+watched: edit one in an editor &mdash; rename a topic, fix a field, remove a record &mdash; and the sidebar, the
+inspector, the CLI and the MCP tools follow without a restart. Scope tells its own writes from yours by the bytes
+(it keeps a fingerprint of what it last wrote or read), never writes anything back on a reload, and leaves a file
+that does not parse alone until it does, keeping what it had. A thread that is running keeps what its process
+knows (state, exits, session id) and takes the rest from the file.</p>
 
 <h2 id="palette">The command palette</h2>
 <p><kbd>⌘K</kbd> opens one field over everything: the actions of the current context, the files of the
