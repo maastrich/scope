@@ -360,7 +360,8 @@ final class ThreadSession: Identifiable {
         let starting = if case .launching = phase { true } else { false }
         return ThreadWait.Snapshot(state: displayState.name, expectingSince: expectingTurnSince,
                                    reportsTurnStart: AdapterInstaller.reportsTurnStart(profile), starting: starting,
-                                   replyAt: lastReply?.at, turnStartedAt: lastTurnStartedAt, lastPromptAt: lastPromptAt)
+                                   replyAt: lastReply?.at, turnStartedAt: lastTurnStartedAt, lastPromptAt: lastPromptAt,
+                                   agents: phase.isAlive ? activity.runningAgents() : 0)
     }
 
     /// `running`, yet the agent answered after anything that started a turn (`ThreadWait.hasOutlivedItsTurn`): the
@@ -384,6 +385,13 @@ final class ThreadSession: Identifiable {
         if event.kind == .sessionStarted { lastSessionStartedAt = event.receivedAt }
         if let reply = AgentReply.from(event) { lastReply = reply }
         setActivity(activity.apply(event, promptPending: promptPending))
+        // The last background sub-agent reported between turns: the driver is about to open a turn on its result.
+        // Expected like a prompt, so a wait does not slip through the gap — but not a prompt: the last answer stays
+        // the answer it is, and `startGrace` lets the thread go if no turn follows.
+        if event.kind == .agentEnded, !activity.inTurn, activity.runningAgents() == 0, expectingTurnSince == nil,
+           adapterState != .running {
+            expectingTurnSince = event.receivedAt
+        }
         // Each write below is skipped when it changes nothing. An observed property notifies on every set, equal
         // or not, and a hook event arrives per tool call: the toolbar and the sidebar were rebuilt each time for a
         // state that had not moved.

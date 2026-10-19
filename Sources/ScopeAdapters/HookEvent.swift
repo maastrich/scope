@@ -21,6 +21,9 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// only exists so an adapter can hand over the driver's session id (`payload["session_id"]`) as soon as the
     /// driver starts, before any turn. `turn.said` is informational too: a piece of the answer the driver is
     /// writing (Claude Code's `MessageDisplay` hook), read live by the reading column and gone once the turn ends.
+    /// `agent.started` / `agent.ended` say a sub-agent of the driver began or finished (Claude Code's
+    /// `SubagentStart` / `SubagentStop`, `payload["agent"]` its id): they move no state either, but a turn that
+    /// ends while one still runs in the background is not the end of the work (`ThreadWait`).
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
@@ -30,9 +33,17 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case threadEnded = "thread.ended"
         case sessionStarted = "session.started"
         case turnSaid = "turn.said"
+        case agentStarted = "agent.started"
+        case agentEnded = "agent.ended"
 
-        /// `true` for the events that move the thread state (everything but `session.started` and `turn.said`).
-        public var changesState: Bool { self != .sessionStarted && self != .turnSaid }
+        /// `true` for the events that move the thread state (everything but the informational ones:
+        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`).
+        public var changesState: Bool {
+            switch self {
+            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded: false
+            default: true
+            }
+        }
     }
 
     /// Value of `SCOPE_THREAD` in the driver's environment.
@@ -92,6 +103,10 @@ extension HookEvent {
     public static let saidKey = "said"
     public static let messageKey = "message"
     public static let finalKey = "final"
+
+    /// Payload key under which `scope-hook` forwards a sub-agent's id on `agent.started` / `agent.ended`
+    /// (`HookStdin.agentID`): what pairs the end with the start.
+    public static let agentKey = "agent"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

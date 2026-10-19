@@ -127,9 +127,19 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public var turnEndSentAt: Date?
     /// The answer being written, while a turn is open and the driver reports it; `nil` otherwise.
     public var saying: Saying?
+    /// The driver's sub-agents still running, by id, with when each started (`agent.started` without its
+    /// `agent.ended`). A turn can end while one runs in the background — Claude Code answers "waiting for N
+    /// background agents" and starts a new turn when they report — so the thread is not done with its work
+    /// until they are (`runningAgents(now:)`, read by `ThreadWait`). Not written to the activity file: no
+    /// sub-agent outlives the process, and a restart would carry a ghost.
+    public var agents: [String: Date] = [:]
 
-    /// Everything but `saying` and `turnCalls`, which belong to the open turn: a restart closes it as `.exited`
-    /// (`restoring`), so what it was writing and running is not worth a write per tool call.
+    /// The longest a sub-agent is believed to still run without its end being reported: an `agent.ended` lost on
+    /// the way (a hook that timed out, a kill) must not hold every later wait on the thread to its deadline.
+    public static let agentLimit: TimeInterval = 2 * 3600
+
+    /// Everything but `saying`, `turnCalls` and `agents`, which belong to the live process: a restart closes the
+    /// open turn as `.exited` (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
         case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
     }
@@ -154,6 +164,11 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// `true` while a turn is open.
     public var inTurn: Bool { turnStartedAt != nil }
 
+    /// How many sub-agents are still at work, as far as the driver said: the ones started within `agentLimit`.
+    public func runningAgents(now: Date = .now) -> Int {
+        agents.values.filter { now.timeIntervalSince($0) < Self.agentLimit }.count
+    }
+
     /// `true` for an event that arrives after its turn is over and must not reopen it:
     ///
     /// - one the driver sent before the end of the last turn, delivered late (each hook is its own process and its
@@ -169,7 +184,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
         switch event.kind {
         case .turnStarted, .inputRequested, .permissionRequested: break
-        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid: return false
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded: return false
         }
         if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
         guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
@@ -200,12 +215,16 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
             }
-        case .sessionStarted, .turnSaid:
+        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded:
             break
         default:
             next.pendingRequest = nil
         }
         switch event.kind {
+        case .agentStarted:
+            if let id = event.payload[HookEvent.agentKey], !id.isEmpty { next.agents[id] = at }
+        case .agentEnded:
+            if let id = event.payload[HookEvent.agentKey] { next.agents[id] = nil }
         case .turnSaid:
             next.say(event.payload[HookEvent.saidKey] ?? "", message: event.payload[HookEvent.messageKey],
                      final: event.payload[HookEvent.finalKey] == "true", at: at)
@@ -235,8 +254,10 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             next.close(.permissionRequested, at: at, onlyIfOpen: true)
         case .threadEnded:
             next.close(.exited, at: at, onlyIfOpen: true)
+            next.agents = [:]
         case .sessionStarted:
-            break
+            // A new session of the driver (a relaunch, a resume): whatever the previous one ran is gone with it.
+            next.agents = [:]
         }
         return next
     }

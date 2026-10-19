@@ -1094,7 +1094,7 @@ app.</p>
 <h2 id="commands">Commands</h2>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
 scope thread new [options]          <span class="c"># open a thread, print its id</span>
-scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter, --command)</span>
+scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter, --command, --wait)</span>
 scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor), or --reply</span>
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
@@ -1158,7 +1158,13 @@ the first one, <code>--timeout</code> (600 s by default) answers anyway and name
 just handed a prompt counts as at work until its driver reports on it, so a wait right after
 <code>thread send</code> or <code>task new</code> does not return before the work starts. An answer that lands
 during the wait ends it, and a thread that still reads running although its last answer is newer than anything
-that started a turn counts as done. A shell reports no turns and never settles.</p>
+that started a turn counts as done. A Claude Code turn that ends with sub-agents still running in the background
+does not end the wait: the thread is still at work until they report and it answers. For a thread in a task, the
+answer carries the task's pull request as GitHub reports it (state, checks, mergeability, review), refreshed as the
+wait ends — the same line <code>scope list tasks</code> shows in its PR column — so no <code>gh pr view</code> is
+needed to know where the work stands. A shell reports no turns and never settles.
+<code>scope thread send --wait</code> (MCP <code>wait: true</code>) types the message, then waits for the answer the
+same way: one call instead of a send and a wait.</p>
 <p><code>scope thread send</code> from a thread is a message: it lands in the other terminal under a line
 naming its sender (thread id, title, task), so the receiving agent knows whom to answer and that the request
 is not yours. <code>--no-enter</code> sends keystrokes and carries no such line. A thread may not type into
@@ -1357,6 +1363,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
   <tr><td><code>PreToolUse</code> on <code>AskUserQuestion</code> / <code>ExitPlanMode</code></td><td><span class="dot waiting"></span>waiting — <b>question</b></td></tr>
   <tr><td><code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> once a permission dialog has sat unanswered for about six seconds (an elicitation dialog is a question) — and a macOS notification when Scope is in the background. A permission that auto mode, <code>bypassPermissions</code> or another <code>PermissionRequest</code> hook grants never shows as waiting</td></tr>
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
+  <tr><td><code>SubagentStart</code>, <code>SubagentStop</code></td><td>no change; the sub-agents still running are counted, and <code>scope thread wait</code> holds while one of them runs in the background after a <code>Stop</code></td></tr>
   <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
 </table>
 <p>Two moments have no hook at all, and come from what you type into the thread instead: <b>Esc</b> or

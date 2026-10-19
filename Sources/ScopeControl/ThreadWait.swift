@@ -31,9 +31,12 @@ public enum ThreadWait {
         public var turnStartedAt: Date?
         /// When the thread was last handed a prompt, reported on or not.
         public var lastPromptAt: Date?
+        /// Sub-agents of the driver still running (`ThreadActivity.runningAgents`): a turn that ended with one in the
+        /// background is not the end of the work — the driver starts a new turn when it reports.
+        public var agents: Int
 
         public init(state: String, expectingSince: Date? = nil, reportsTurnStart: Bool = true, starting: Bool = false,
-                    replyAt: Date? = nil, turnStartedAt: Date? = nil, lastPromptAt: Date? = nil) {
+                    replyAt: Date? = nil, turnStartedAt: Date? = nil, lastPromptAt: Date? = nil, agents: Int = 0) {
             self.state = state
             self.expectingSince = expectingSince
             self.reportsTurnStart = reportsTurnStart
@@ -41,6 +44,7 @@ public enum ThreadWait {
             self.replyAt = replyAt
             self.turnStartedAt = turnStartedAt
             self.lastPromptAt = lastPromptAt
+            self.agents = agents
         }
 
         /// The last answer, unless the thread was handed a prompt after it: that answer is for something else.
@@ -58,11 +62,20 @@ public enum ThreadWait {
     ///
     /// `running` is also settled when the last answer is newer than anything that started a turn (a prompt or a tool
     /// report, for a driver that reports both): no turn is in progress, whatever put the state back to `running`.
+    ///
+    /// A sub-agent still running in the background holds the wait whatever the turn did: the answer that ended that
+    /// turn ("waiting for 3 background agents") is not the answer to the prompt, and the driver opens a new turn
+    /// once the sub-agent reports. A question, a permission or an exit still settle it: someone must act.
     public static func isSettled(_ snapshot: Snapshot, now: Date, waitingSince: Date? = nil) -> Bool {
-        if let since = waitingSince, let reply = snapshot.currentReplyAt, reply > since { return true }
         switch snapshot.state {
         case "exited", "waiting", "failed":
             return true
+        default:
+            break
+        }
+        if snapshot.agents > 0 { return false }
+        if let since = waitingSince, let reply = snapshot.currentReplyAt, reply > since { return true }
+        switch snapshot.state {
         case "running":
             return hasOutlivedItsTurn(snapshot)
         default:

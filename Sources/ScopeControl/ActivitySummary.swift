@@ -483,13 +483,18 @@ public struct TaskShowResult: Codable, Sendable, Equatable {
     public var notes: [String]
     /// Always `true`: the replies and reports are agents' output.
     public var untrusted: Bool
+    /// An open task's pull request with its checks and mergeability, as Scope last saw it; `task.pullRequest` only
+    /// says what the record keeps.
+    public var pullRequest: PullRequestSummary?
 
-    public init(scope: String, task: SummaryResult.Task, prompt: String?, deliverable: TaskDeliverable?, notes: [String]) {
+    public init(scope: String, task: SummaryResult.Task, prompt: String?, deliverable: TaskDeliverable?, notes: [String],
+                pullRequest: PullRequestSummary? = nil) {
         self.scope = scope
         self.task = task
         self.prompt = prompt
         self.deliverable = deliverable
         self.notes = notes
         self.untrusted = true
+        self.pullRequest = pullRequest
     }
 }
