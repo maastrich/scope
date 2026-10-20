@@ -66,6 +66,7 @@ enum ShortcutCatalog {
             ShortcutEntry(keys: "⌘D", title: "Changes"),
             ShortcutEntry(keys: "⇧⌘B", title: "Repository"),
             ShortcutEntry(keys: "⌃`", title: "Shell", note: "a shell of the task in the reading column; again hides it"),
+            ShortcutEntry(keys: "⌃⇧B", title: "Browser", note: "the task's dev servers in the reading column; again hides it"),
             ShortcutEntry(keys: "⇧⌘I", title: "Inbox", note: "what needs you, in every scope"),
             ShortcutEntry(keys: "⇧⌘P", title: "Pull Requests"),
             ShortcutEntry(keys: "⌥⌘I", title: "Toggle Inspector"),

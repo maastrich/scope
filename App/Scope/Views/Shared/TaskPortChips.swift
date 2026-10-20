@@ -2,7 +2,8 @@ import SwiftUI
 import ScopeCore
 
 /// `localhost:41003 ↗` for each port of the task's block something listens on: the dev servers the task is running.
-/// A click opens the browser on it. Nothing is drawn when no port is taken.
+/// A click opens it in the task's Browser pane (the system browser with ⌥, or as the preference says). Nothing is
+/// drawn when no port is taken.
 struct TaskPortChips: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -13,7 +14,7 @@ struct TaskPortChips: View {
             FlowRow(spacing: 6) {
                 ForEach(task.listeningPorts, id: \.self) { port in
                     Button {
-                        model.openPort(port)
+                        model.openPort(port, of: task)
                     } label: {
                         HStack(spacing: 3) {
                             Text("localhost:\(String(port))")
@@ -28,7 +29,7 @@ struct TaskPortChips: View {
                     }
                     .buttonStyle(.plain)
                     .cursor(.pointingHand)
-                    .help("Open http://localhost:\(String(port)) — a server of this task listens there")
+                    .help("Open http://localhost:\(String(port)) in the Browser pane — a server of this task listens there; ⌥-click for the system browser")
                     .accessibilityLabel("Open localhost port \(String(port))")
                     .usageID("task-port", label: "Open a task's port")
                 }

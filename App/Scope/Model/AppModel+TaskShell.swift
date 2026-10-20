@@ -44,6 +44,7 @@ extension AppModel {
             guard let self else { return false }
             return self.openFileLink(link, scope: record.scopeID, task: self.task(session.taskID),
                                      directory: session.reportedDirectory ?? session.cwd)
+                || self.openWebLink(link, task: self.task(session.taskID))
         }
         taskShells.add(session)
         inspector.show(.shell)

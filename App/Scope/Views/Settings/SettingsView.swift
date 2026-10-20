@@ -128,6 +128,20 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
             }
+            SettingsSection("Browser") {
+                SettingsRow("Open web links in the pane") {
+                    ScopePicker("Open web links in the pane", selection: preference(\.openWebLinks),
+                                title: model.config.preferences.openWebLinks.title) {
+                        ForEach(WebLinkDestination.allCases, id: \.self) { destination in
+                            Text(destination.title).tag(destination)
+                        }
+                    }
+                }
+                Text("Which links a port chip, a ⌘-click in a terminal or a link in a reply opens in the task's Browser pane (⌃⇧B); the others go to your default browser, where you are signed in. ⌥ while clicking sends a link to the other one.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SettingsSection("Notifications") {
                 NotificationStatusRow()
                 Toggle("Show what the agent said", isOn: preference(\.notificationsQuoteAgent))

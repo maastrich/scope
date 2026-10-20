@@ -178,6 +178,10 @@ struct ScopeCommands: Commands {
                 Button("Shell") { model?.toggleTaskShell() }
                     .keyboardShortcut("`", modifiers: .control)
                     .disabled(model?.currentTask == nil)
+                // ⌃⇧B, not ⌃B: tmux's prefix and Claude Code's background key stay the terminal's.
+                Button("Browser") { model?.toggleBrowser() }
+                    .keyboardShortcut("b", modifiers: [.control, .shift])
+                    .disabled(model?.currentTask == nil)
             }
 
             Divider()

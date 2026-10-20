@@ -193,12 +193,12 @@ extension AppModel {
         inspector.show(.reading)
     }
 
-    /// A link clicked in rendered Markdown: the browser for the web, the viewer column for a file it can find.
+    /// A link clicked in rendered Markdown: the Browser pane or the system browser for the web (`BrowserRoute`), the viewer column for a file it can find.
     /// Anything else is left alone — the text is an agent's.
     func openMarkdownLink(_ url: URL, in content: ReadingContent) {
         switch MarkdownLink.classify(url.absoluteString) {
         case .web(let web):
-            NSWorkspace.shared.open(web)
+            if !openWebLink(web.absoluteString, task: content.taskID.flatMap(task)) { NSWorkspace.shared.open(web) }
         case .file(let path):
             let taskState = content.taskID.flatMap(task)
             if !openFileLink(path, scope: content.scopeID, task: taskState, directory: content.directory) {

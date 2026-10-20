@@ -180,8 +180,8 @@ one scope, or to change the copied files, edit the scope in <code>~/.scope/confi
 <p>Every task gets its own block of ten ports, kept across restarts and never shared by two live tasks, so two
 sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too. While a thread of
 the task is alive, Scope looks every twenty seconds at which ports of the block its processes listen on, and the
-Task section and the task's hover card show each as a <code>localhost:41003 ↗</code> chip: a click opens the
-browser on it.</p>
+Task section and the task's hover card show each as a <code>localhost:41003 ↗</code> chip: a click opens it
+in the task's <a href="concepts.html#inspector">Browser pane</a> (<kbd>⌥</kbd>-click: the system browser).</p>
 <p>The same places say what the task's sandboxes take on disk, measured after each setup and every ten minutes;
 the scope's settings sheet adds the total over its open tasks and the three heaviest, and <code>scope gc
 --dry-run</code> prints the same figures. Archiving a task is what frees the space.</p>

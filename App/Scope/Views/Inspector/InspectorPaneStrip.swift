@@ -2,7 +2,7 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// The strip of panes at the right of the inspector band: Overview, Changes, Shell, Pull requests, Files, and `⋮` with the
+/// The strip of panes at the right of the inspector band: Overview, Changes, Shell, Browser, Pull requests, Files, and `⋮` with the
 /// Cards menu. A click opens the card *and* its pane when it has one (the diff for Changes, the base file for
 /// Files); Overview closes the pane and leaves the column of cards alone. It is not a tab bar: every card stays in
 /// the column whatever is lit here, and `⌘D` / `⇧⌘B` keep working.
@@ -34,6 +34,11 @@ struct InspectorPaneStrip: View {
                     model.toggleTaskShell()
                 }
                 .help("Shell (⌃`) — a shell of the task in the reading column; again hides it")
+                PaneButton(systemImage: "globe", title: "Browser", selected: viewer == .browser) {
+                    Usage.click("inspector.panes.browser", label: "Browser pane")
+                    model.toggleBrowser()
+                }
+                .help("Browser (⌃⇧B) — the task's dev servers in the reading column; again hides it")
                 PaneButton(systemImage: "arrow.triangle.pull", title: "Pull requests", badge: failingChecks(task),
                            badgeColor: PullRequestStyle.failing, selected: false) {
                     Usage.click("inspector.panes.pull-requests", label: "Pull requests pane")
