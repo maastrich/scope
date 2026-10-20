@@ -1228,7 +1228,8 @@ final class AppModel {
             let plan = try await launcher.plan(record: session.record, profile: session.profile,
                                                scope: scope.declaration, task: task(of: session)?.record, mode: mode,
                                                initialPrompt: initialPrompt,
-                                               claudeUsesTerminalPalette: config.preferences.claudeUsesTerminalPalette)
+                                               claudeUsesTerminalPalette: config.preferences.claudeUsesTerminalPalette,
+                                               readLimits: config.preferences.showTokenMeter)
             session.launch(plan)
         } catch {
             session.fail(error)
@@ -1549,6 +1550,11 @@ final class AppModel {
     // MARK: Adapter events
 
     func handle(_ event: AdapterEvent) {
+        // About the account, not the thread: the meter takes it and no session state moves.
+        if event.kind == .limitsReported {
+            receiveLimits(event)
+            return
+        }
         guard let session = session(event.threadID), session.isAlive else { return }
         // A late event changed nothing: no "needs your permission" for a thread whose turn is over.
         if session.apply(event) {

@@ -103,10 +103,14 @@ struct SidebarView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Off by default (Settings › Sidebar): ⌘T, ⇧⌘T, the palette and the agents open threads and tasks, and the
-            // list is the better use of the height.
-            if model.config.preferences.showSidebarFooter {
-                footer
+            VStack(spacing: 0) {
+                // The plan's limits, or the tokens: one quiet band above the buttons, in every scope alike.
+                UsageMeterBand()
+                // Off by default (Settings › Sidebar): ⌘T, ⇧⌘T, the palette and the agents open threads and tasks, and
+                // the list is the better use of the height.
+                if model.config.preferences.showSidebarFooter {
+                    footer
+                }
             }
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }

@@ -117,7 +117,8 @@ public enum MCPBridge {
             tasks with their branches, sandboxes and pull request (number, state, checks, mergeability, as Scope \
             last saw it) — archived ones too, marked so, which scope_task_restore brings back — and for each thread \
             its latest activity (the last tool its agent ran and on what, or how its turn ended, with how long ago) \
-            and the tokens it consumed over the last five hours. Start here to find the scope slug or task id the \
+            and the tokens it consumed over the last five hours; `limits` is the subscription's windows as Claude \
+            Code last reported them (see scope_ping). Start here to find the scope slug or task id the \
             other tools need.
             """,
             schema: """
@@ -575,7 +576,7 @@ public enum MCPBridge {
         MCPTool(
             name: "scope_ping",
             title: "Check Scope",
-            description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying.",
+            description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying. Its `limits` are the Claude subscription's windows (5-hour session, week, per model when the plan has them) as Claude Code last reported them: percentage used, when each resets, and the tightest; absent when unknown. Every thread shares them — past 80 % of a window, slow down or wait for its reset rather than open more threads.",
             schema: #"{"type":"object","properties":{},"additionalProperties":false}"#,
             readOnly: true
         ),

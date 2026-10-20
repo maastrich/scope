@@ -11,7 +11,10 @@ import ScopeAdapters
 // With `--stdin` the driver's `session_id` (or Codex's `thread-id`) is lifted into `payload["session_id"]`
 // so the app can resume the session later without parsing `raw`. The pseudo-event `notification` reads
 // stdin and picks `permission.requested` or `input.requested` from Claude Code's `notification_type`
-// (informational notifications send nothing).
+// (informational notifications send nothing). The pseudo-event `statusline` is Claude Code's status-line
+// command: it sends `limits.reported` when the payload carries `rate_limits`, then runs the status line the
+// user's own settings name on the same payload and prints its output — the one case where this program writes
+// on stdout, and only what that command wrote.
 //
 // Exit codes: 64 for a usage error (unknown event, malformed argument); 0 in every other case, including
 // "not running under Scope" and "socket unreachable", each with a one-line note on stderr. A driver hook
@@ -74,6 +77,7 @@ enum HookCLI {
           event: \(events)
           --stdin  embed standard input (the driver's hook JSON) in the message and lift its session id
           notification  read stdin and derive permission.requested / input.requested from notification_type
+          statusline    read Claude Code's status-line JSON, send limits.reported, then run the user's own status line
         """
     }
 
@@ -98,6 +102,10 @@ enum HookCLI {
                 note("expected key=value, got '\(argument)'\n" + usage)
             }
             return usageExit
+        }
+
+        if command.event == .statusline {
+            return await runStatusline(environment: environment, stdin: stdin)
         }
 
         guard let thread = environment["SCOPE_THREAD"], !thread.isEmpty else {
@@ -137,6 +145,60 @@ enum HookCLI {
             return 0
         }
         return 0
+    }
+
+    /// The status line: the user's own command is started first on the same payload — Claude Code cancels a status
+    /// line still running when the next update comes, and the user's output matters more than our copy of the
+    /// figures — then `limits.reported` goes to the socket while it runs. Under nobody (no `SCOPE_THREAD`) or nested,
+    /// the hook is only the relay to the user's command. Writes nothing itself: an empty status line stays empty.
+    static func runStatusline(environment: [String: String], stdin: FileHandle) async -> Int32 {
+        let data = stdin.readDataToEndOfFile()
+        let parsed = HookStdin.parse(data)
+        var child: Process?
+        if !ClaudeStatusline.isNested(environment: environment) {
+            let files = ClaudeStatusline.settingsFiles(projectDirectory: parsed.projectDirectory,
+                                                       configDirectory: ClaudeStatusline.configDirectory(environment: environment))
+            if let user = ClaudeStatusline.userCommand(files: files) {
+                child = startUserStatusline(user.command, input: data, environment: environment, cwd: parsed.projectDirectory)
+            }
+        }
+        if let thread = environment["SCOPE_THREAD"], !thread.isEmpty,
+           let socketPath = environment["SCOPE_SOCK"], !socketPath.isEmpty,
+           let limits = parsed.rateLimitsJSON {
+            let event = HookEvent(thread: thread, event: .limitsReported, payload: [HookEvent.limitsKey: limits], sentAt: .now)
+            do {
+                try await UnixSocketClient.send(try event.encoded(), to: socketPath, timeout: .seconds(2))
+            } catch {
+                note("could not deliver limits.reported to \(socketPath): \(error)")
+            }
+        }
+        guard let child else { return 0 }
+        child.waitUntilExit()
+        return child.terminationStatus
+    }
+
+    /// Runs the user's status-line command through `/bin/sh -c`, as Claude Code would, with its stdout as ours.
+    static func startUserStatusline(_ command: String, input: Data, environment: [String: String], cwd: String?) -> Process? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+        var env = environment
+        env[ClaudeStatusline.nestedVariable] = "1"
+        process.environment = env
+        if let cwd, FileManager.default.fileExists(atPath: cwd) { process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
+        let pipe = Pipe()
+        process.standardInput = pipe
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        do {
+            try process.run()
+        } catch {
+            note("could not run the status line '\(command)': \(error)")
+            return nil
+        }
+        pipe.fileHandleForWriting.write(input)
+        try? pipe.fileHandleForWriting.close()
+        return process
     }
 
     /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.

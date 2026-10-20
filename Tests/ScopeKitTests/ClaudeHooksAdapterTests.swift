@@ -99,6 +99,18 @@ struct ClaudeHooksAdapterTests {
         #expect(try commands(document, "Stop") == ["\(Self.hookPath) turn.ended --stdin"], "the hooks stay next to the theme")
     }
 
+    @Test("the status line relays to scope-hook statusline, and stays out when the meter is off")
+    func statuslineInSettings() throws {
+        let document = ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath)
+        let statusLine = try #require(document["statusLine"] as? [String: Any])
+        #expect(statusLine["type"] as? String == "command")
+        #expect(statusLine["command"] as? String == "\(Self.hookPath) statusline --stdin")
+        #expect(try commands(document, "Stop") == ["\(Self.hookPath) turn.ended --stdin"], "the hooks stay next to it")
+        #expect(ClaudeHooksAdapter.settings(scopeHookPath: Self.hookPath, statusline: false)["statusLine"] == nil)
+        let data = try ClaudeHooksAdapter.settingsData(scopeHookPath: Self.hookPath, statusline: false)
+        #expect(!String(decoding: data, as: UTF8.self).contains("statusLine"))
+    }
+
     @Test("install writes <home>/threads/<id>.claude-settings.json and returns --settings <path>")
     func install() throws {
         let home = try Self.temporaryHome()
