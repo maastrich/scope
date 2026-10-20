@@ -122,6 +122,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// The agent's last answer, its end kept within `replyLimit`. `thread.read` keeps answering from the full one.
     public var lastReply: AgentReply?
     public var transcriptPath: String?
+    /// What the agent plans and how far it is (`AgentPlan`), folded from the todo and plan tools it reports; `nil`
+    /// until it reports one. Kept in the file: a plan is as much the state of the work as the turns are.
+    public var plan: AgentPlan?
     /// How full the session's context window is, its model and its driver's version, as the driver last told its
     /// status line (`limits.reported`'s `context`); `nil` for a driver that reports none.
     public var contextWindow: ContextWindowReport?
@@ -145,7 +148,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// open turn as `.exited` (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
         case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
-        case contextWindow
+        case contextWindow, plan
     }
 
     /// The calls of the last turn that ended or failed, or of the one in progress: what "this turn" means to a reader.
@@ -203,6 +206,18 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         let at = event.receivedAt
         if let path = event.payload[HookEvent.transcriptKey], !path.isEmpty { next.transcriptPath = path }
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
+        // A todo list, a task or a plan is the latest word on the work whatever turn it reaches the app in.
+        let tool = event.payload[HookEvent.toolKey].flatMap { $0.isEmpty ? nil : $0 }
+        // `driver.reported` brings the task hooks (`TaskCreated`, `TaskCompleted`); its other hooks name a tool too
+        // (`PostToolUseFailure`), but a call that failed moved nothing, so the tool is not passed on.
+        if event.kind == .driverReported || (event.kind == .turnStarted && tool != nil) {
+            let reported = event.kind == .driverReported ? nil : tool
+            // `raw` is cut past a size and then no longer parses; the clamped copy under `hook` may still.
+            if let plan = AgentPlan.applying(tool: reported, raw: event.raw, to: plan, at: at)
+                ?? AgentPlan.applying(tool: reported, raw: event.payload[HookEvent.hookKey], to: plan, at: at) {
+                next.plan = plan
+            }
+        }
         if isLate(event, promptPending: promptPending) {
             // Still the last thing the agent ran, but no turn of its own.
             if event.kind == .turnStarted, let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
@@ -299,6 +314,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         next.lastTool = lastTool ?? saved.lastTool
         next.lastReply = lastReply ?? saved.lastReply
         next.transcriptPath = transcriptPath ?? saved.transcriptPath
+        next.plan = plan ?? saved.plan
         next.turnEndSentAt = turnEndSentAt ?? saved.turnEndSentAt
         next.contextWindow = contextWindow ?? saved.contextWindow
         return next

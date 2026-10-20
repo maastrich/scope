@@ -80,9 +80,9 @@ struct TaskRow: View {
                                 .foregroundStyle(Ink.tertiary)
                         }
                         if let headline = activityHeadline(threads) {
-                            ThreadActivityCaption(headline: headline)
+                            ThreadActivityCaption(headline: headline, planSummary: planSummary(threads))
                         } else {
-                            Text(TaskStatus.summary(status, facts: facts))
+                            Text(SidebarRowLayout.caption(TaskStatus.summary(status, facts: facts), planSummary: planSummary(threads)))
                                 .font(.scopeCaption)
                                 .foregroundStyle(Ink.tertiary)
                                 .lineLimit(1)
@@ -152,6 +152,12 @@ struct TaskRow: View {
         let state = only.displayState
         guard state == .running || state.needsAttention || state.isUnreadResult else { return nil }
         return only.activityHeadline(model.config.preferences.finishedThreadLine)
+    }
+
+    /// The plan of the thread at work, else of the first thread that has one in progress: the second line ends with
+    /// its `3/7 steps` (`ThreadSession.planSummary`).
+    private func planSummary(_ threads: [ThreadSession]) -> String? {
+        (threads.first { $0.isWorking && $0.planSummary != nil } ?? threads.first { $0.planSummary != nil })?.planSummary
     }
 
     private var hoverControls: some View {

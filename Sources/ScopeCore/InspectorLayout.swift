@@ -6,15 +6,16 @@ import Foundation
 /// window and the first file, and every tab hid what it held. The cards are always all there, one header each, so
 /// what exists is visible at a glance; a closed one costs one line and still says the essential in its header.
 ///
-/// Each card answers one question: where the task runs (Environment), what changed (Changes), what it shipped
-/// (Pull requests), what it produced (Artifacts), what the agent was given (Context); then the base checkout
-/// (Repository, Files, Search, History).
+/// Each card answers one question: where the task runs (Environment), what the agent means to do (Plan), what
+/// changed (Changes), what it shipped (Pull requests), what it produced (Artifacts), what the agent was given
+/// (Context); then the base checkout (Repository, Files, Search, History).
 public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable {
-    case environment, delta, pullRequest, artifacts, context, base, files, search, history
+    case environment, plan, delta, pullRequest, artifacts, context, base, files, search, history
 
     public var title: String {
         switch self {
         case .environment: "Environment"
+        case .plan: "Plan"
         case .delta: "Changes"
         case .pullRequest: "Pull requests"
         case .artifacts: "Artifacts"
@@ -29,7 +30,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// Whether the section has nothing to show without a task; it stays on screen, dimmed, so the column keeps its shape.
     public var needsTask: Bool {
         switch self {
-        case .environment, .delta, .pullRequest, .artifacts, .context: true
+        case .environment, .plan, .delta, .pullRequest, .artifacts, .context: true
         case .base, .files, .search, .history: false
         }
     }
@@ -39,7 +40,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     public var fills: Bool {
         switch self {
         case .delta, .files, .search, .history: true
-        case .environment, .pullRequest, .artifacts, .context, .base: false
+        case .environment, .plan, .pullRequest, .artifacts, .context, .base: false
         }
     }
 }

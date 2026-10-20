@@ -61,8 +61,12 @@ final class ThreadSession: Identifiable {
     private(set) var activityHeadline: ThreadActivityHeadline?
     /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
     private(set) var assistNote: AssistNote?
-    /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
+    /// Bumped when a turn opens or closes, or the agent's plan moves: what the task timeline and the Plan card redraw
+    /// on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
+    /// `3/7 steps` while the agent's plan has steps left (`AgentPlan.summary`); `nil` otherwise. Observed, and only
+    /// set when the words move: the sidebar caption ends with it.
+    private(set) var planSummary: String?
     /// How full the driver's context window is, with its model and version (`ThreadActivity.contextWindow`), observed
     /// for the Context card: set only when the report moved, so a status line that repeats itself redraws nothing.
     private(set) var contextWindow: ContextWindowReport?
@@ -447,14 +451,17 @@ final class ThreadSession: Identifiable {
         let previous = activity
         activity = next
         refreshActivityHeadline()
-        if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
+        let planMoved = next.plan != previous.plan
+        if next.turns != previous.turns || next.inTurn != previous.inTurn || planMoved { turnRevision &+= 1 }
+        let summary = next.plan.flatMap { $0.isInProgress ? $0.summary : nil }
+        if planSummary != summary { planSummary = summary }
         if next.contextWindow != contextWindow { contextWindow = next.contextWindow }
         // The context report is saved when its figure moves by a point, or the model or version changes: a status line
         // after `Stop` would otherwise live in memory only, and the gauge vanish at the next launch. Not on every
         // status line, which comes with each message.
         let contextMoved = Self.savedContext(next.contextWindow) != Self.savedContext(previous.contextWindow)
         if next.turns != previous.turns || next.lastReply != previous.lastReply
-            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved {
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved || planMoved {
             onActivityChanged?(self)
         }
     }

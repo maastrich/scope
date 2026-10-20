@@ -4,7 +4,8 @@
   "command": "claude",
   "args": [],
   "env": {
-    "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"
+    "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1",
+    "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"
   },
   "context": {
     "file": "CLAUDE.md",
@@ -76,5 +77,5 @@
   },
   "icon": "asterisk",
   "builtin": true,
-  "version": 9
+  "version": 10
 }

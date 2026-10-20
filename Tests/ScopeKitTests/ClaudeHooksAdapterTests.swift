@@ -33,7 +33,8 @@ struct ClaudeHooksAdapterTests {
         #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                     "Notification", "Stop", "StopFailure", "SessionEnd", "MessageDisplay",
                                     "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "PermissionRequest",
-                                    "PermissionDenied", "PostToolUseFailure", "PostModelSwitch"])
+                                    "PermissionDenied", "PostToolUseFailure", "PostModelSwitch", "TaskCreated",
+                                    "TaskCompleted"])
         for (event, groups) in hooks {
             #expect(groups.count == 1, Comment(rawValue: event))
             let entries = try #require(groups[0]["hooks"] as? [[String: Any]])

@@ -481,6 +481,7 @@ closing the task hangs them up.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
+  <tr><td><b>Plan</b></td><td><code>3/7 steps</code> and the step the agent is on, or <i>no plan yet</i></td><td>what the agent means to do, live: one block per thread that has a plan, its title, then one row per step — an empty circle pending, a dotted one in the accent colour with the agent's <i>Running the tests</i> while it runs, a green check once done, struck; long lists fold after eight rows. A mission task lists its milestones first, the current one open on the steps of the thread doing it. Read from the hooks (<a href="adapters.html#claude">Claude Code hooks</a>); the sidebar caption ends with <i>· 3/7 steps</i> while steps remain</td><td></td></tr>
   <tr><td><b>Changes</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
   <tr><td><b>Pull requests</b></td><td>its number and the checks — or <i>2 PRs · 1 merged · 1 checks failing</i> when the task has several</td><td>one compact row per pull request — state glyph, title, then <code>repo #n · +a −d · ✗ 1 / 4 · review</code> — the one you pick in full with every one of its checks, and at the foot what it asks of you (<i>Ready to merge</i>, <i>2 checks failing</i>, <i>Conflicts with the base</i>) with <b>Ask the agent</b>: the conflicts, the failing log or the merge go to the thread as a sentence</td><td></td></tr>
   <tr><td><b>Artifacts</b></td><td><code>REPORT.md · 3 files · 1 page</code>, else how many checkpoints, else <i>nothing yet</i></td><td>the <b>Report</b> (<code>REPORT.md</code> or the declared deliverable: age, <code>+N</code> since the last checkpoint, a Markdown preview of its opening, <b>Read</b>); <b>Files written this task · outside the repo diff</b> (every <code>Write</code>/<code>Edit</code> target and <code>&gt;</code> redirection the hooks reported that git does not track: outside the worktrees, in an ignored folder, or a binary — newest first, with turn and size, the newest image as a thumbnail, a vanished file dimmed as <i>gone</i>; a click opens it in the reading column); <b>Published</b> (the <code>https://</code> links in the threads' answers: claude.ai artifacts, GitHub PRs, issues and commits, other pages — a click opens the browser); the <b>Checkpoints</b>: time, thread, first words, <code>+N −M</code>, with <b>Show diff</b>, <b>Restore files</b> and <b>Branch from here</b> on hover. The card reads: it never copies, moves or deletes a file</td><td></td></tr>
@@ -1458,6 +1459,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
   <tr><td><code>SubagentStart</code>, <code>SubagentStop</code></td><td>no change; the sub-agents still running are counted, and <code>scope thread wait</code> holds while one of them runs in the background after a <code>Stop</code></td></tr>
   <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
+  <tr><td><code>TaskCreated</code>, <code>TaskCompleted</code></td><td>no change; the task goes into the thread's plan (the <b>Plan</b> card)</td></tr>
 </table>
 <p>Two moments have no hook at all, and come from what you type into the thread instead: <b>Esc</b> or
 <b>Ctrl-C</b> during a turn ends it (idle), and <b>Return</b> on a permission prompt resumes it (running).
@@ -1465,7 +1467,11 @@ Claude Code's <code>idle_prompt</code> notification, sent a minute after any ans
 deliberately ignored: the turn is already done, nobody is asking anything.</p>
 <p>Scope also keeps what the hooks say about the work itself: the tool each <code>PostToolUse</code> reports
 and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
-session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
+session's transcript, and the agent's plan: the todo list of <code>TodoWrite</code>, the tasks of
+<code>TaskCreate</code>, <code>TaskUpdate</code> and <code>TaskList</code>, the plan <code>ExitPlanMode</code> writes out
+of plan mode — what the <b>Plan</b> card shows. Recent versions of Claude Code no longer offer the todo and task tools
+to recent models unless <code>CLAUDE_CODE_ENABLE_TODO_TOOLS</code> is set, so the bundled Claude Code profiles set it:
+without it the agent keeps its list in prose and the card stays empty. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
 survives a restart, and goes when the thread is closed.</p>
 <h3 id="limits">Your plan's limits</h3>
 <p>A Claude subscription (Pro, Max) is not a budget of tokens: it is a rolling five-hour window and a weekly one,

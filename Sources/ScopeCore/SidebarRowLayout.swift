@@ -54,6 +54,14 @@ public enum SidebarRowLayout {
     /// The short tick from the rule towards each nested row.
     public static let ruleTick: Double = 5
 
+    /// A row's second line with the agent's plan after it: `Running the tests · 3/7 steps`. The hint rides on the
+    /// caption, in words, never as an icon or a second trailing mark; a row without a second line has no room for
+    /// it, and a plan with nothing left to do says nothing (`summary` is `nil` then).
+    public static func caption(_ text: String, planSummary: String?) -> String {
+        guard let planSummary, !planSummary.isEmpty else { return text }
+        return text.isEmpty ? planSummary : "\(text) · \(planSummary)"
+    }
+
     /// What stays drawn at the trailing edge under the hover controls: the dot's column and the gap before it.
     public static let keptUnderHover = stateDotColumn + spacing
 

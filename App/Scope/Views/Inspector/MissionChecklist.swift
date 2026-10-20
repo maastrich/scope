@@ -38,7 +38,7 @@ struct MissionChecklist: View {
     }
 }
 
-private struct MilestoneRow: View {
+struct MilestoneRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
     let number: Int
