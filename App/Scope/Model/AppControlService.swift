@@ -87,7 +87,8 @@ final class AppControlService: ControlService {
         switch call {
         case .ping:
             return .success(.ping(PingResult(app: BuildFlavor.displayName, version: model.env.appVersion,
-                                             home: model.env.home.path, automation: automation)))
+                                             home: model.env.home.path, automation: automation,
+                                             limits: model.tokenUsage.limitsSummary())))
         case .list(let params):
             return list(params)
         case .threadNew(let params):
@@ -848,7 +849,8 @@ final class AppControlService: ControlService {
         let wants = { (kind: ListParams.Kind) in params.kind == .all || params.kind == kind }
         let threads = wants(.threads) ? model.threads.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
         let tasks = wants(.tasks) ? model.tasks.filter { ids.contains($0.record.scopeID.rawValue) }.map(summary) : []
-        return .success(.list(ListResult(scopes: wants(.scopes) ? scopes : [], threads: threads, tasks: tasks)))
+        return .success(.list(ListResult(scopes: wants(.scopes) ? scopes : [], threads: threads, tasks: tasks,
+                                         limits: model.tokenUsage.limitsSummary())))
     }
 
     /// One line in the usage log per call carried out: the method, who asked (an agent or the user's own terminal) and

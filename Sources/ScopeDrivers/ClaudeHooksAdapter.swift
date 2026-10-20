@@ -24,6 +24,11 @@ import ScopeCore
 /// `MessageDisplay` exists since Claude Code 2.1.152; an older one ignores the entry with a note and keeps the
 /// rest of the file, so the reading column simply waits for `Stop` there.
 ///
+/// The same file sets `statusLine` to `scope-hook statusline` when the meter is on: the status line is the one
+/// place Claude Code hands out the subscription's `rate_limits` (percentage used and reset of each window), on every
+/// assistant message. The hook forwards them as `limits.reported`, then runs the status line the user's own settings
+/// name and prints its output, so what shows at the bottom of the terminal does not change (`ClaudeStatusline`).
+///
 /// `PreToolUse` only listens to the question tools (`ClaudeQuestionTools`): for any other tool it fires *before*
 /// the permission check, so it says nothing about whether the user is being asked.
 ///
@@ -74,7 +79,7 @@ public enum ClaudeHooksAdapter {
     /// thread wants Claude Code on the terminal's palette: `dark-ansi` / `light-ansi` colour with the 16 ANSI
     /// colours alone, which the app sets to match its appearance. It rides in this file because `--settings`
     /// is given once per launch; a second flag would drop the hooks.
-    public static func settings(scopeHookPath: String, theme: TerminalTheme? = nil) -> [String: Any] {
+    public static func settings(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true) -> [String: Any] {
         var hooks: [String: Any] = [:]
         for entry in entries {
             var group: [String: Any] = [
@@ -89,12 +94,21 @@ public enum ClaudeHooksAdapter {
         }
         var document: [String: Any] = ["hooks": hooks]
         if let theme { document["theme"] = "\(theme.rawValue)-ansi" }
+        if statusline {
+            document["statusLine"] = [
+                "type": "command",
+                "command": command(scopeHookPath: scopeHookPath, arguments: statuslineArguments),
+            ] as [String: Any]
+        }
         return document
     }
 
+    /// What the status line runs: `scope-hook statusline --stdin`.
+    public static let statuslineArguments = [HookCommandEvent.statuslineWord, "--stdin"]
+
     /// The settings document serialized (sorted keys, pretty-printed).
-    public static func settingsData(scopeHookPath: String, theme: TerminalTheme? = nil) throws -> Data {
-        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath, theme: theme),
+    public static func settingsData(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true) throws -> Data {
+        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline),
                                    options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
     }
 
@@ -117,11 +131,12 @@ public enum ClaudeHooksAdapter {
     /// Writes (or rewrites) the settings file for `threadID` and returns the arguments to append to the
     /// `claude` argv: `["--settings", <path>]`. Idempotent; rewriting keeps the file in step with the
     /// current `scope-hook` path after an app update.
-    public static func install(home: URL, threadID: ThreadID, scopeHookPath: String, theme: TerminalTheme? = nil) throws(LaunchError) -> [String] {
+    public static func install(home: URL, threadID: ThreadID, scopeHookPath: String, theme: TerminalTheme? = nil,
+                               statusline: Bool = true) throws(LaunchError) -> [String] {
         let url = settingsURL(home: home, threadID: threadID)
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try settingsData(scopeHookPath: scopeHookPath, theme: theme).write(to: url, options: .atomic)
+            try settingsData(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline).write(to: url, options: .atomic)
         } catch {
             throw .adapterSetupFailed("Could not write \(url.path): \(error.localizedDescription)")
         }
@@ -140,12 +155,14 @@ public enum ClaudeHooksAdapter {
 /// Only `claude-hooks` needs code. `codex-notify` is expressed in the profile itself through the
 /// `{scope_hook}` placeholder (`-c notify=[...]`), and `cursor-hooks` is not wired yet.
 public enum AdapterInstaller {
-    /// `theme` is the terminal palette Claude Code should draw with, `nil` to leave its own theme alone.
+    /// `theme` is the terminal palette Claude Code should draw with, `nil` to leave its own theme alone; `statusline`
+    /// whether the limits meter is on, which is what installs the status-line relay.
     public static func prepare(profile: DriverProfile, threadID: ThreadID, home: URL, scopeHookPath: String,
-                               theme: TerminalTheme? = nil) throws(LaunchError) -> [String] {
+                               theme: TerminalTheme? = nil, statusline: Bool = true) throws(LaunchError) -> [String] {
         switch profile.adapter?.kind {
         case ClaudeHooksAdapter.kind?:
-            return try ClaudeHooksAdapter.install(home: home, threadID: threadID, scopeHookPath: scopeHookPath, theme: theme)
+            return try ClaudeHooksAdapter.install(home: home, threadID: threadID, scopeHookPath: scopeHookPath, theme: theme,
+                                                  statusline: statusline)
         default:
             return []
         }

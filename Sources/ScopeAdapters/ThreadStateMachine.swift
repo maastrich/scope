@@ -90,7 +90,7 @@ extension HookEvent.Kind {
         case .inputRequested: .inputRequested
         case .permissionRequested: .permissionRequested
         case .threadEnded: .threadEnded
-        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded: nil
+        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: nil
         }
     }
 }

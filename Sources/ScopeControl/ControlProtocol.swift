@@ -829,15 +829,20 @@ public struct PingResult: Codable, Sendable, Equatable {
     public var methods: [String]
     /// What automation is allowed right now (`AutomationSettings`), for `scope doctor` and the MCP banner.
     public var automation: AutomationSettings
+    /// The subscription's limits as Claude Code last reported them; absent when unknown (API key, no thread has
+    /// answered yet). An agent near a ceiling should pace itself: the figures are the account's, shared by every thread.
+    public var limits: RateLimitsSummary?
 
     public init(app: String, version: String, home: String, rpc: Int = ControlProtocol.version,
-                methods: [String] = ControlMethod.allCases.map(\.rawValue), automation: AutomationSettings) {
+                methods: [String] = ControlMethod.allCases.map(\.rawValue), automation: AutomationSettings,
+                limits: RateLimitsSummary? = nil) {
         self.app = app
         self.version = version
         self.home = home
         self.rpc = rpc
         self.methods = methods
         self.automation = automation
+        self.limits = limits
     }
 }
 
@@ -1032,11 +1037,15 @@ public struct ListResult: Codable, Sendable, Equatable {
     public var scopes: [ScopeSummary]
     public var threads: [ThreadSummary]
     public var tasks: [TaskSummary]
+    /// The subscription's limits (`PingResult.limits`), with the threads' tokens: what is left and who spent it.
+    public var limits: RateLimitsSummary?
 
-    public init(scopes: [ScopeSummary] = [], threads: [ThreadSummary] = [], tasks: [TaskSummary] = []) {
+    public init(scopes: [ScopeSummary] = [], threads: [ThreadSummary] = [], tasks: [TaskSummary] = [],
+                limits: RateLimitsSummary? = nil) {
         self.scopes = scopes
         self.threads = threads
         self.tasks = tasks
+        self.limits = limits
     }
 }
 

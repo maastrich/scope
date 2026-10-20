@@ -23,7 +23,9 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// writing (Claude Code's `MessageDisplay` hook), read live by the reading column and gone once the turn ends.
     /// `agent.started` / `agent.ended` say a sub-agent of the driver began or finished (Claude Code's
     /// `SubagentStart` / `SubagentStop`, `payload["agent"]` its id): they move no state either, but a turn that
-    /// ends while one still runs in the background is not the end of the work (`ThreadWait`).
+    /// ends while one still runs in the background is not the end of the work (`ThreadWait`). `limits.reported`
+    /// carries the subscription's `rate_limits` as Claude Code gave them to its status line (`payload["limits"]`,
+    /// the object as compact JSON): about the account, not the thread, and read by the meter alone.
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
@@ -35,12 +37,13 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case turnSaid = "turn.said"
         case agentStarted = "agent.started"
         case agentEnded = "agent.ended"
+        case limitsReported = "limits.reported"
 
         /// `true` for the events that move the thread state (everything but the informational ones:
-        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`).
+        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`, `limits.reported`).
         public var changesState: Bool {
             switch self {
-            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded: false
+            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: false
             default: true
             }
         }
@@ -107,6 +110,10 @@ extension HookEvent {
     /// Payload key under which `scope-hook` forwards a sub-agent's id on `agent.started` / `agent.ended`
     /// (`HookStdin.agentID`): what pairs the end with the start.
     public static let agentKey = "agent"
+
+    /// Payload key of `limits.reported`: the status line's `rate_limits` object as compact JSON
+    /// (`HookStdin.rateLimitsJSON`, parsed by `RateLimits.parse`).
+    public static let limitsKey = "limits"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

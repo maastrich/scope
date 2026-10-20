@@ -1386,6 +1386,27 @@ deliberately ignored: the turn is already done, nobody is asking anything.</p>
 and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
 session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
 survives a restart, and goes when the thread is closed.</p>
+<h3 id="limits">Your plan's limits</h3>
+<p>A Claude subscription (Pro, Max) is not a budget of tokens: it is a rolling five-hour window and a weekly one,
+sometimes a weekly one per model, each a percentage that resets. That is what the toolbar meter leads with — the
+window nearest its ceiling, as <i>31% · 35 min</i>, coloured as it tightens — and its popover lists every window
+with its percentage and when it resets, the tokens under them.</p>
+<p>The figures are Claude Code's own. The JSON Claude Code hands its status line on every answer carries
+<code>rate_limits</code>: one object per window with <code>used_percentage</code> and <code>resets_at</code>, for
+claude.ai subscribers only, after the session's first answer. The per-thread settings file Scope passes on the
+command line sets the status line to <code>scope-hook statusline</code>, which forwards that object to the app and
+then runs the status line your own settings name — the project's, then <code>~/.claude/settings.json</code>, in
+Claude Code's order — on the same input, printing what it prints. So the bottom of the terminal keeps showing what
+it showed, and nothing in <code>~/.claude</code> is modified. The plan's name comes from the account Claude Code
+keeps in <code>~/.claude.json</code>, read only.</p>
+<p>Scope never guesses a percentage. Until a thread has answered, or on an API key where Claude Code reports no
+limits, the meter says the limits are unknown and shows tokens as before. The last report is kept in
+<code>~/.scope/limits.json</code> so it shows at launch, with its age; after thirty minutes without a newer one it is
+marked stale, since usage from claude.ai or another machine would not be in it. <code>scope ping</code> and
+<code>scope list</code> carry the same windows (<code>limits</code>, with each window's level and seconds to its
+reset), as do the <code>scope_ping</code> and <code>scope_list</code> MCP tools, so an agent near a ceiling can slow
+down rather than open more threads. Turning the meter off in Settings also stops installing the relay; a thread
+opened while it was off needs a relaunch to report.</p>
 <h3 id="tokens">Tokens consumed</h3>
 <p>Every 30 seconds Scope reads what each Claude Code thread's transcript gained since the last look — only the
 bytes appended, off the main thread — and sums the <code>usage</code> of each model call: input, output, cache
@@ -1395,8 +1416,9 @@ thread, since they spend the same quota. The transcripts are only read, never wr
 <p>The toolbar meter shows the last five hours across every scope; its popover adds today, the last seven days,
 each scope and the threads that spent most, with what the five hours are made of. A task's total sits beside its
 name in the inspector band and in its hover card. The figures include cache reads, which are most of any total.
-Your plan's limit is not in the transcripts, so the meter shows consumption, never what is left — unless you type a
-budget of your own per five hours (Settings ▸ General ▸ Token usage), which turns it into a gauge. The same pane can
+The tokens say who spent the limits above; where Claude Code reports no limits they are the meter's main figure,
+consumption rather than what is left — unless you type a budget of your own per five hours (Settings ▸ General ▸
+Usage), which turns it into a gauge. The same pane can
 add what the tokens would have cost at API list prices, labelled as such; it is off by default, since a subscription
 is not billed per token.</p>
 <p>The counts live in <code>~/.scope/tokens.json</code>, with where each transcript was read up to: the

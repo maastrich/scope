@@ -2,18 +2,19 @@ import SwiftUI
 import ScopeControl
 import ScopeCore
 
-/// Settings ▸ General ▸ Token usage: the toolbar meter, an optional budget of the user's own, the API-equivalent cost.
+/// Settings ▸ General ▸ Usage: the toolbar meter (plan limits first, tokens under them), an optional token budget of
+/// the user's own, the API-equivalent cost.
 struct TokenUsageSettingsSection: View {
     @Environment(AppModel.self) private var model
     @State private var budgetText = ""
     @FocusState private var budgetFocused: Bool
 
     var body: some View {
-        SettingsSection("Token usage") {
-            Toggle("Show the token meter in the toolbar", isOn: preference(\.showTokenMeter))
+        SettingsSection("Usage") {
+            Toggle("Show the usage meter in the toolbar", isOn: preference(\.showTokenMeter))
                 .toggleStyle(.scope)
-                .usageID("show-token-meter", label: "Show the token meter in the toolbar")
-            SettingsRow("Budget per 5 h", caption: "Optional. Turns the meter into a gauge against your own figure, e.g. 20M.") {
+                .usageID("show-token-meter", label: "Show the usage meter in the toolbar")
+            SettingsRow("Token budget per 5 h", caption: "Optional, for an API key: turns the token count into a gauge against your own figure, e.g. 20M.") {
                 TextField("Budget", text: $budgetText, prompt: Text("none"))
                     .textFieldStyle(.plain)
                     .font(.system(size: 12).monospacedDigit())
@@ -27,7 +28,7 @@ struct TokenUsageSettingsSection: View {
             Toggle("Show the API-equivalent cost", isOn: preference(\.showAPICost))
                 .toggleStyle(.scope)
                 .usageID("show-api-cost", label: "Show the API-equivalent cost")
-            Text("Counted from the transcripts of Claude Code threads, subagents and cache reads included. Scope cannot see your plan’s limit, so the meter shows what was consumed, never what is left. The cost is what the same tokens would cost at API list prices, not what a subscription bills.")
+            Text("With a Pro or Max subscription the meter leads with the share used of each limit — the 5-hour session, the week, a model's week when the plan has one — and when it resets, as Claude Code reports them to its status line: each Claude Code thread Scope opens relays that status line to the app before running your own, which keeps showing. Your ~/.claude settings are not modified; a thread opened while the meter was off needs a relaunch to report. Tokens are counted from the threads' transcripts, subagents and cache reads included; the cost is what they would cost at API list prices, not what a subscription bills.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)

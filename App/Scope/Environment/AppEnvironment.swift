@@ -32,6 +32,8 @@ final class AppEnvironment {
     let threadActivity: ThreadActivityStore
     /// `<home>/tokens.json`: what each thread's Claude Code transcripts reported.
     let tokenLedger: TokenLedgerStore
+    /// `<home>/limits.json`: the subscription's limits Claude Code last reported to a thread's status line.
+    let rateLimits: RateLimitsStore
     let drivers: DriverRegistry
     let shell: ShellEnvironmentResolver
     /// Replaced once `GitLocator` has found the right git (bootstrap); `/usr/bin/git` until then.
@@ -78,6 +80,7 @@ final class AppEnvironment {
         self.threadRecords = threadRecords
         self.threadActivity = ThreadActivityStore(home: home)
         self.tokenLedger = TokenLedgerStore(home: home)
+        self.rateLimits = RateLimitsStore(home: home)
         self.drivers = drivers
         self.shell = shell
         self.git = git

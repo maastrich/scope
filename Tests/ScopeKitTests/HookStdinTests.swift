@@ -134,7 +134,7 @@ struct HookStdinTests {
         #expect(notification?.resolve(stdin: HookStdin(notificationType: "auth_success")) == nil)
         #expect(HookCommandEvent(word: "Notification") == nil)
         #expect(HookCommandEvent(word: "turn.paused") == nil)
-        #expect(HookCommandEvent.allWords.count == HookEvent.Kind.allCases.count + 1)
+        #expect(HookCommandEvent.allWords.count == HookEvent.Kind.allCases.count + 2, "notification and statusline")
     }
 
     @Test("the folder of the file a tool touched says where the driver works; cwd is the fallback")

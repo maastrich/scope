@@ -46,6 +46,11 @@ public struct HookStdin: Sendable, Equatable {
     public var toolDurationMs: Int?
     /// Claude Code `SubagentStart` / `SubagentStop`: the sub-agent's own id (`agent_id`), the same on both.
     public var agentID: String?
+    /// A status-line payload: its `rate_limits` object as compact JSON (`RateLimits.extract`), `nil` when absent.
+    public var rateLimitsJSON: String?
+    /// A status-line payload: where the session works (`workspace.project_dir`, else `cwd`), where a project's own
+    /// `.claude/settings*.json` would be.
+    public var projectDirectory: String?
 
     public init(sessionID: String? = nil, notificationType: String? = nil, hookEventName: String? = nil,
                 toolName: String? = nil, error: String? = nil, directory: String? = nil,
@@ -168,6 +173,10 @@ public struct HookStdin: Sendable, Equatable {
         result.toolDurationMs = (object["duration_ms"] as? NSNumber).map(\.intValue)
         result.agentID = (object["agent_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        result.rateLimitsJSON = RateLimits.extract(statusline: data)
+        let workspace = object["workspace"] as? [String: Any]
+        result.projectDirectory = ((workspace?["project_dir"] as? String) ?? (object["cwd"] as? String))
+            .flatMap { $0.hasPrefix("/") ? $0 : nil }
         result.question = question(tool: result.toolName, input: input, message: object["message"] as? String)
         if result.hookEventName == "MessageDisplay" {
             result.displayDelta = object["delta"] as? String
@@ -227,18 +236,25 @@ public enum ClaudeQuestionTools {
 }
 
 /// The event names `scope-hook` accepts on its command line: every `HookEvent.Kind` raw value plus
-/// `notification`, which is resolved from stdin with `ClaudeNotificationMapping`.
+/// `notification`, which is resolved from stdin with `ClaudeNotificationMapping`, and `statusline`, Claude Code's
+/// status-line command, which sends `limits.reported` when the payload carries `rate_limits` and then runs the
+/// status line the user configured (`ClaudeStatusline`).
 public enum HookCommandEvent: Sendable, Equatable {
     case fixed(HookEvent.Kind)
     /// Resolved from `notification_type` on stdin (`--stdin` is implied).
     case notification
+    /// Resolved from `rate_limits` on stdin (`--stdin` is implied): `limits.reported`, or nothing to send.
+    case statusline
 
     /// The command-line word for the derived event.
     public static let notificationWord = "notification"
+    public static let statuslineWord = "statusline"
 
     public init?(word: String) {
         if word == Self.notificationWord {
             self = .notification
+        } else if word == Self.statuslineWord {
+            self = .statusline
         } else if let kind = HookEvent.Kind(rawValue: word) {
             self = .fixed(kind)
         } else {
@@ -254,15 +270,16 @@ public enum HookCommandEvent: Sendable, Equatable {
             .inputRequested
         case .fixed(let kind): kind
         case .notification: ClaudeNotificationMapping.kind(for: stdin.notificationType)
+        case .statusline: stdin.rateLimitsJSON == nil ? nil : .limitsReported
         }
     }
 
     /// `true` when stdin must be read even without `--stdin`.
-    public var needsStdin: Bool { self == .notification }
+    public var needsStdin: Bool { self == .notification || self == .statusline }
 
     /// Every accepted word, for the usage text.
     public static var allWords: [String] {
-        HookEvent.Kind.allCases.map(\.rawValue) + [notificationWord]
+        HookEvent.Kind.allCases.map(\.rawValue) + [notificationWord, statuslineWord]
     }
 }
 

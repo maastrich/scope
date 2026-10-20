@@ -109,6 +109,12 @@ public enum ScopeHome {
         home.appending(path: "scope-visits.json", directoryHint: .notDirectory)
     }
 
+    /// `<home>/limits.json` — the subscription limits Claude Code last reported (`RateLimits`), kept so the meter has a
+    /// figure at launch, dated.
+    public static func limitsURL(home: URL) -> URL {
+        home.appending(path: "limits.json", directoryHint: .notDirectory)
+    }
+
     /// `<home>/scope-logos/`: the copies of the images chosen as scope logos.
     public static func scopeLogosURL(home: URL) -> URL {
         home.appending(path: "scope-logos", directoryHint: .isDirectory)

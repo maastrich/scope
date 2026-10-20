@@ -42,9 +42,13 @@ public enum CLIRenderer {
             releases \(automation.releases.rawValue), reach \(automation.threadReach.rawValue)
             budget      \(automation.maxAgentTasks) open tasks, \(automation.maxAgentThreads) running threads\
             \(automation.depthLimit.map { ", depth ≤ \($0)" } ?? ", any depth")
+            limits      \(result.limits.map { RateLimitText.line($0, now: .now) } ?? RateLimitText.unknown)
             """
         case .list(let result):
             var blocks: [String] = []
+            if let limits = result.limits {
+                blocks.append("limits  " + RateLimitText.line(limits, now: .now))
+            }
             if !result.scopes.isEmpty {
                 blocks.append(table(["SCOPE", "PATH", "REPOS"], result.scopes.map {
                     [$0.slug + ($0.status == "ok" ? "" : " (\($0.status))"), $0.path, "\($0.repos.count)"]

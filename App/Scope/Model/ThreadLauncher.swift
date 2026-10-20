@@ -24,14 +24,16 @@ struct ThreadLauncher {
 
     /// `initialPrompt` fills `{prompt}` so the profile's `prompt` argv is appended (fresh launch only).
     /// `claudeUsesTerminalPalette` is the preference: on, Claude Code gets the terminal's theme in its settings file.
+    /// `readLimits` is the meter's: on, the same file relays Claude Code's status line so the limits reach the app.
     func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode,
-              initialPrompt: String? = nil, claudeUsesTerminalPalette: Bool = true) async throws(LaunchError) -> LaunchPlan {
+              initialPrompt: String? = nil, claudeUsesTerminalPalette: Bool = true,
+              readLimits: Bool = true) async throws(LaunchError) -> LaunchPlan {
         let shell = await env.shell.environment()
         let scopeHook = scopeHookPath(searchPATH: shell.path)
         let theme: TerminalTheme = TerminalAppearance.palette().isDark ? .dark : .light
         let adapterArguments = try AdapterInstaller.prepare(
             profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook,
-            theme: claudeUsesTerminalPalette ? theme : nil)
+            theme: claudeUsesTerminalPalette ? theme : nil, statusline: readLimits)
         let values = PlaceholderValues(
             threadID: record.id.rawValue,
             resumeID: record.resumeID,
