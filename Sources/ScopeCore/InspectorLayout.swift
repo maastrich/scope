@@ -8,9 +8,9 @@ import Foundation
 ///
 /// Each card answers one question: where the task runs (Environment), what the agent means to do (Plan), what
 /// changed (Changes), what it shipped (Pull requests), what it produced (Artifacts), what the agent was given
-/// (Context); then the base checkout (Repository, Files, Search, History).
+/// (Context), what it talks to (Connectors); then the base checkout (Repository, Files, Search, History).
 public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable {
-    case environment, plan, delta, pullRequest, artifacts, context, base, files, search, history
+    case environment, plan, delta, pullRequest, artifacts, context, connectors, base, files, search, history
 
     public var title: String {
         switch self {
@@ -20,6 +20,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
         case .pullRequest: "Pull requests"
         case .artifacts: "Artifacts"
         case .context: "Context"
+        case .connectors: "Connectors"
         case .base: "Repository"
         case .files: "Files"
         case .search: "Search"
@@ -30,7 +31,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// Whether the section has nothing to show without a task; it stays on screen, dimmed, so the column keeps its shape.
     public var needsTask: Bool {
         switch self {
-        case .environment, .plan, .delta, .pullRequest, .artifacts, .context: true
+        case .environment, .plan, .delta, .pullRequest, .artifacts, .context, .connectors: true
         case .base, .files, .search, .history: false
         }
     }
@@ -40,7 +41,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     public var fills: Bool {
         switch self {
         case .delta, .files, .search, .history: true
-        case .environment, .plan, .pullRequest, .artifacts, .context, .base: false
+        case .environment, .plan, .pullRequest, .artifacts, .context, .connectors, .base: false
         }
     }
 }
@@ -57,8 +58,12 @@ public struct InspectorSections: Codable, Sendable, Equatable {
     public var hidden: Set<InspectorSection>
 
     /// At rest very little is open: where the task runs and its changes, the base checkout of anything else. Files
-    /// never opens by itself. Every card is shown.
-    public static let defaults = InspectorSections(withTask: [.environment, .delta], withoutTask: [.base])
+    /// never opens by itself. Every card is shown but those of `hiddenByDefault`.
+    public static let defaults = InspectorSections(withTask: [.environment, .delta], withoutTask: [.base],
+                                                   hidden: hiddenByDefault)
+
+    /// Cards that start out of the column, for the Cards menu to bring in: Connectors, while it has little to show.
+    public static let hiddenByDefault: Set<InspectorSection> = [.connectors]
 
     public init(withTask: Set<InspectorSection>, withoutTask: Set<InspectorSection>, hidden: Set<InspectorSection> = []) {
         self.withTask = withTask
@@ -103,7 +108,10 @@ public struct InspectorSections: Codable, Sendable, Equatable {
         self = .defaults
     }
 
-    private enum CodingKeys: String, CodingKey { case withTask, withoutTask, hidden }
+    /// `known` lists every card the build that saved the place had. A card hidden by default that the saved place
+    /// did not know is hidden on reading it, so an update never pushes a new card into a column someone arranged;
+    /// a place saved before `known` existed knew none of them.
+    private enum CodingKeys: String, CodingKey { case withTask, withoutTask, hidden, known }
 
     // Lenient: a section this build does not know (renamed, removed) is dropped instead of failing the whole place.
     public init(from decoder: any Decoder) throws {
@@ -114,7 +122,7 @@ public struct InspectorSections: Codable, Sendable, Equatable {
         }
         self.init(withTask: sections(.withTask) ?? Self.defaults.withTask,
                   withoutTask: sections(.withoutTask) ?? Self.defaults.withoutTask,
-                  hidden: sections(.hidden) ?? [])
+                  hidden: (sections(.hidden) ?? []).union(Self.hiddenByDefault.subtracting(sections(.known) ?? [])))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -122,6 +130,7 @@ public struct InspectorSections: Codable, Sendable, Equatable {
         try container.encode(withTask.map(\.rawValue).sorted(), forKey: .withTask)
         try container.encode(withoutTask.map(\.rawValue).sorted(), forKey: .withoutTask)
         try container.encode(hidden.map(\.rawValue).sorted(), forKey: .hidden)
+        try container.encode(InspectorSection.allCases.map(\.rawValue), forKey: .known)
     }
 }
 

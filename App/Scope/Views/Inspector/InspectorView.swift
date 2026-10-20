@@ -109,6 +109,8 @@ struct InspectorView: View {
             ArtifactsCard(bodyHeight: height, onNatural: natural(for: .artifacts))
         case .context:
             ContextCard(bodyHeight: height, onNatural: natural(for: .context))
+        case .connectors:
+            ConnectorsCard(bodyHeight: height, onNatural: natural(for: .connectors))
         case .base:
             BaseSection(bodyHeight: height, onNatural: natural(for: .base))
         case .files:
