@@ -107,4 +107,18 @@ import ScopeGit
         ledger.remove(id: "y")
         #expect(ledger.isEmpty(at: t0))
     }
+
+    @Test func aShortcutOnlyClaimsItsKeyBrieflyAndNeverForAnAgent() {
+        var ledger = UndoLedger<Action>(window: 300, keyWindow: 30)
+        ledger.push(id: "mine", entry: .thread("mine"), at: t0)
+        #expect(ledger.keyed(at: t0.addingTimeInterval(10))?.id == "mine")
+        // Past the key window the toast and the palette still have it; the key goes back to the text views.
+        #expect(ledger.keyed(at: t0.addingTimeInterval(31)) == nil)
+        #expect(!ledger.isEmpty(at: t0.addingTimeInterval(31)))
+        // An agent's archive is newer: ⌘Z must not reach past it to the user's close, nor take it.
+        ledger.push(id: "agent", entry: .task("agent"), at: t0.addingTimeInterval(20), byKeyboard: false)
+        #expect(ledger.keyed(at: t0.addingTimeInterval(21)) == nil)
+        // ⇧⌘T looks at threads only: the user's close is still the newest one.
+        #expect(ledger.keyed(at: t0.addingTimeInterval(21)) { if case .thread = $0 { true } else { false } }?.id == "mine")
+    }
 }

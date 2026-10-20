@@ -370,8 +370,11 @@ extension AppModel {
     /// Archives every open task filed under `topic`: one piece of work, put away together. One after the other, so
     /// a failure is reported against the task it happened to and the rest still go.
     func archiveTopic(_ topic: String, in scope: ScopeID) async {
+        // One decision for the whole topic: no question per task, each archive undoable.
         for task in tasks(inTopic: topic, scope: scope) {
-            await archiveTask(task.id)
+            do { try await dismantleTask(task.id, .archive, by: .user) } catch {
+                dismantleFailed(task, verb: "archive", error: error)
+            }
         }
     }
 
@@ -423,7 +426,7 @@ extension AppModel {
         for session in threads(in: taskID) {
             let cwd = URL(fileURLWithPath: session.record.cwd).standardizedFileURL.path
             guard leaving.contains(where: { cwd == $0 || cwd.hasPrefix($0 + "/") }) else { continue }
-            await close(session.id, force: true)
+            await close(session.id, force: true, undoable: false)
         }
         let (record, notices) = try await env.tasks.removeBranch(taskID, branch: branch, repo: repo)
         task.update(record: record)
@@ -790,7 +793,7 @@ extension AppModel {
     private func hangUpThreads(of taskID: TaskID) async {
         cancelSetup(taskID)
         for session in threads(in: taskID) {
-            await close(session.id, force: true)
+            await close(session.id, force: true, undoable: false)
         }
     }
 

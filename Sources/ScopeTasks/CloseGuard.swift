@@ -68,25 +68,41 @@ public struct UndoLedger<Entry> {
         public var id: String
         public var entry: Entry
         public var at: Date
+        /// The user did it: ⌘Z and ⇧⌘T may take it back for `keyWindow`. An agent's close or archive is offered by
+        /// the toast and the palette only — a ⌘Z typed into a text field must not rebuild a task an agent archived.
+        public var byKeyboard: Bool
 
-        public init(id: String, entry: Entry, at: Date) {
+        public init(id: String, entry: Entry, at: Date, byKeyboard: Bool = true) {
             self.id = id
             self.entry = entry
             self.at = at
+            self.byKeyboard = byKeyboard
         }
     }
 
     public private(set) var items: [Item] = []
     public var window: TimeInterval
+    /// How long a shortcut keeps claiming its key after the action: short, since ⌘Z belongs to the text views and
+    /// ⇧⌘T to New Task the rest of the time.
+    public var keyWindow: TimeInterval
 
-    public init(window: TimeInterval) {
+    public init(window: TimeInterval, keyWindow: TimeInterval = 30) {
         self.window = window
+        self.keyWindow = keyWindow
     }
 
     /// Adds an action; one with the same id replaces the earlier entry (a thread closed, reopened and closed again).
-    public mutating func push(id: String, entry: Entry, at: Date) {
+    public mutating func push(id: String, entry: Entry, at: Date, byKeyboard: Bool = true) {
         items.removeAll { $0.id == id }
-        items.append(Item(id: id, entry: entry, at: at))
+        items.append(Item(id: id, entry: entry, at: at, byKeyboard: byKeyboard))
+    }
+
+    /// The action a shortcut would take back at `now`, if it may: the newest one matching `predicate`, done by the
+    /// user, inside `keyWindow`. `nil` leaves the key to whatever else owns it.
+    public func keyed(at now: Date, where predicate: (Entry) -> Bool = { _ in true }) -> Item? {
+        guard let newest = live(at: now).last(where: { predicate($0.entry) }),
+              newest.byKeyboard, now.timeIntervalSince(newest.at) < keyWindow else { return nil }
+        return newest
     }
 
     /// Takes the most recent action still inside its window — the one ⌘Z undoes.

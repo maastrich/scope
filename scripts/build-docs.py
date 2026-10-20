@@ -325,7 +325,7 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
-<kbd>⌘Z</kbd> or <kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
+<kbd>⌘Z</kbd> or <kbd>⇧⌘T</kbd> undoes a close for thirty seconds, Edit ▸ Undo for five minutes. A stopped thread stays stopped across a restart; only the ones still running
 when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section),
 and an agent brought back mid-turn is asked to continue its work (<b>Ask agents to continue after a restart</b>).</p>
 
@@ -339,8 +339,9 @@ with work in progress</b> in Settings, one switch for both) — and <b>Cancel</b
 Return typed for the terminal confirms nothing. A quiet thread or a finished, merged task goes in one click.</p>
 <p>Either way it can be taken back for five minutes: a toast says <i>“Title” closed — Reopen</i> or <i>“Name”
 archived — Undo</i> for ten seconds (naming the agent when one asked over <code>scope thread close</code> or
-<code>scope_task_archive</code>), and <kbd>⌘Z</kbd>, <kbd>⇧⌘T</kbd> (the last thread) or the palette do the same
-afterwards. A reopened thread picks its driver session back up when the profile knows how; a restored task comes
+<code>scope_task_archive</code>), and <b>Edit ▸ Undo</b> or the palette do the same afterwards. <kbd>⌘Z</kbd> and
+<kbd>⇧⌘T</kbd> (the last thread) work for thirty seconds after a close or archive of your own; an agent's is
+never on a shortcut, so a <kbd>⌘Z</kbd> typed in a text field stays a text undo. A reopened thread picks its driver session back up when the profile knows how; a restored task comes
 back with its sandboxes and its changes. Closing a task for good has no undo, which is why it stands behind the
 same question.</p>
 
@@ -774,7 +775,7 @@ context file lists the milestones as they stand.</p>
   <tr><td><b>Close</b></td><td>the same, then the record goes; optionally every branch of the task too</td></tr>
 </table>
 <p>No question unless something would be lost (<a href="#closing">above</a>): an agent mid-turn, uncommitted
-changes, an open pull request. An archive can be undone for five minutes (the toast, <kbd>⌘Z</kbd>, the palette).
+changes, an open pull request. An archive can be undone for five minutes (the toast, Edit ▸ Undo, the palette).
 In order: the task's threads are hung up, its teardown runs, every process still
 running under its folder (or started with its <code>SCOPE_TASK_ROOT</code>) gets SIGTERM, then SIGKILL three
 seconds later, the uncommitted changes are saved, and the worktrees are moved out of the way in an instant and
@@ -1600,7 +1601,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘R</kbd></td><td>Refresh scope</td></tr>
   <tr><td><kbd>⌘T</kbd></td><td>New thread in the current context</td></tr>
   <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or reopen the last closed thread)</td></tr>
-  <tr><td><kbd>⌘Z</kbd></td><td>Undo the last close or archive, while one can be undone</td></tr>
+  <tr><td><kbd>⌘Z</kbd></td><td>Undo your last close or archive (for 30 s; Edit ▸ Undo for 5 min)</td></tr>
   <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
   <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
   <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread, picking the driver's session back up when it can</td></tr>

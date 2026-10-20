@@ -13,11 +13,17 @@ extension AppModel {
     /// How long an action stays undoable. Longer than the toast: an agent's close is noticed late.
     static let undoWindow: Duration = .seconds(300)
 
-    /// Something — anything — can be taken back right now.
-    var canUndo: Bool { !undoLedger.isEmpty(at: .now) }
+    /// Something — anything — can be taken back right now (the Edit menu item, the palette).
+    var canUndo: Bool { _ = undoTick; return !undoLedger.isEmpty(at: .now) }
 
-    /// A thread can be reopened (⇧⌘T, the palette's *Undo Close Thread*).
-    var canUndoCloseThread: Bool { undoLedger.live(at: .now).contains { $0.entry.isClosedThread } }
+    /// A thread can be reopened (the palette's *Undo Close Thread*).
+    var canUndoCloseThread: Bool { _ = undoTick; return undoLedger.live(at: .now).contains { $0.entry.isClosedThread } }
+
+    /// ⌘Z claims its key: the newest action is the user's own and less than `keyWindow` old.
+    var undoClaimsKey: Bool { _ = undoTick; return undoLedger.keyed(at: .now).map { $0.id == undoLedger.live(at: .now).last?.id } ?? false }
+
+    /// ⇧⌘T claims its key from New Task on the same terms, for the newest closed thread.
+    var reopenClaimsKey: Bool { _ = undoTick; return undoLedger.keyed(at: .now, where: \.isClosedThread) != nil }
 
     /// The Edit menu's title for what ⌘Z would do.
     var undoTitle: String {
@@ -30,12 +36,17 @@ extension AppModel {
 
     /// Records an action just taken and shows its toast.
     func remember(_ action: UndoableAction, by requester: CloseRequester) {
-        undoLedger.push(id: action.id, entry: action, at: .now)
+        undoLedger.push(id: action.id, entry: action, at: .now, byKeyboard: !requester.isAgent)
+        undoTick &+= 1
+        // The menu reads the ledger against the clock; these wake it when a shortcut or an entry runs out.
         undoExpiry?.cancel()
         undoExpiry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(self?.undoLedger.keyWindow ?? 30))
+            self?.undoTick &+= 1
             try? await Task.sleep(for: AppModel.undoWindow)
             guard !Task.isCancelled, let self else { return }
             self.undoLedger.expire(at: .now)
+            self.undoTick &+= 1
         }
         takeUndoNotice(action.id)?.cancel()
         let notice = UndoNotice(action: action, requester: requester)
@@ -80,6 +91,7 @@ extension AppModel {
     /// longer something to undo.
     func forgetUndo(id: String) {
         undoLedger.remove(id: id)
+        undoTick &+= 1
         takeUndoNotice(id)?.cancel()
     }
 
@@ -89,6 +101,7 @@ extension AppModel {
     }
 
     private func perform(_ action: UndoableAction, via: String) {
+        undoTick &+= 1
         takeUndoNotice(action.id)?.cancel()
         let element: String
         switch action {
@@ -101,6 +114,7 @@ extension AppModel {
         }
         // The usage log counts every undo, whichever control asked for it, under one id per kind.
         let source = Usage.currentInput ?? .app
+        Usage.register("undo.\(element)", label: element == "reopen-thread" ? "Reopen a closed thread" : "Restore an archived task")
         Usage.record(source == .keyboard ? .shortcut : .click, "undo.\(element)", source: source, context: via)
     }
 

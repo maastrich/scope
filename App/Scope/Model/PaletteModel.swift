@@ -155,7 +155,7 @@ enum PaletteModel {
         }
         if model.canUndo {
             items.append(PaletteItem(id: "undo-last", section: .actions, icon: "arrow.uturn.backward", label: model.undoTitle,
-                                     shortcut: "⌘Z") { model.undoLast() })
+                                     shortcut: model.undoClaimsKey ? "⌘Z" : nil) { model.undoLast() })
         }
         items.append(PaletteItem(id: "declare", section: .actions, icon: "folder.badge.plus", label: "Declare a Scope…", shortcut: "⌘O") {
             Task {

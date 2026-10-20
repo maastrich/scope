@@ -94,7 +94,7 @@ struct ScopeCommands: Commands {
             Button("Undo Close Thread") {
                 model?.undoCloseThread()
             }
-            .keyboardShortcut(canUndoClose ? KeyboardShortcut("t", modifiers: [.command, .shift]) : nil)
+            .keyboardShortcut(reopenClaimsKey ? KeyboardShortcut("t", modifiers: [.command, .shift]) : nil)
             .disabled(!canUndoClose)
 
             Button("Close Window") {
@@ -110,13 +110,13 @@ struct ScopeCommands: Commands {
     /// (the focused thread pane); anywhere else they are no-ops.
     @CommandsBuilder
     private var editMenu: some Commands {
-        // ⌘Z takes a close or an archive back while one is inside its window (`AppModel+Undo`); the rest of the
-        // time the key stays with the text views' own undo.
+        // The item takes a close or an archive back for the whole undo window (`AppModel+Undo`); ⌘Z only for 30 s
+        // after the user's own, so the key stays with the text views' undo the rest of the time.
         CommandGroup(before: .undoRedo) {
             Button(model?.undoTitle ?? "Undo") {
                 model?.undoLast()
             }
-            .keyboardShortcut(canUndo ? KeyboardShortcut("z", modifiers: .command) : nil)
+            .keyboardShortcut(model?.undoClaimsKey == true ? KeyboardShortcut("z", modifiers: .command) : nil)
             .disabled(!canUndo)
         }
         CommandGroup(after: .pasteboard) {
@@ -156,8 +156,8 @@ struct ScopeCommands: Commands {
             Button("New Task…") {
                 model?.presentNewTask()
             }
-            // ⇧⌘T belongs to Undo Close Thread while a close can be undone (Safari-style).
-            .keyboardShortcut(canUndoClose ? nil : KeyboardShortcut("t", modifiers: [.command, .shift]))
+            // ⇧⌘T belongs to Undo Close Thread for a moment after the user closes one (Safari-style).
+            .keyboardShortcut(reopenClaimsKey ? nil : KeyboardShortcut("t", modifiers: [.command, .shift]))
             .disabled(model?.currentScope == nil || model?.currentScope?.kind == .missing)
 
             Menu("Task") {
@@ -465,6 +465,10 @@ struct ScopeCommands: Commands {
 
     private var canUndo: Bool {
         model?.canUndo == true
+    }
+
+    private var reopenClaimsKey: Bool {
+        model?.reopenClaimsKey == true
     }
 
     private var threadCount: Int {

@@ -66,6 +66,8 @@ final class AppModel {
     /// Closes and archives that can still be taken back (`AppModel+Undo`), and the toasts offering it.
     var undoLedger = UndoLedger<UndoableAction>(window: TimeInterval(AppModel.undoWindow.components.seconds))
     var undoNotices: [UndoNotice] = []
+    /// Bumped when the undo ledger changes or a window runs out, so the menu bar's shortcuts follow the clock.
+    var undoTick = 0
 
     /// Drives the sidebar highlight and, through `syncThreadFromSelection`, the scene: a thread row selects
     /// its tab, a task row its last thread, a scope or repo row shows the scope's empty view.
@@ -942,7 +944,7 @@ final class AppModel {
         scope.stopWatching()
         // The one way a resident thread goes: its scope goes with it.
         for session in threads(in: id) {
-            await close(session.id, force: true, evenResident: true)
+            await close(session.id, force: true, evenResident: true, undoable: false)
         }
         for notice in exitNotices where notice.record.scopeID == id {
             await dismissExitNotice(notice.id)
@@ -1269,7 +1271,8 @@ final class AppModel {
     /// reopened for `undoWindow` (`AppModel+Undo`). A resident thread is never closed — it is stopped at most —
     /// except when its scope is removed (`evenResident`).
     @discardableResult
-    func close(_ id: ThreadID, force: Bool, evenResident: Bool = false, by requester: CloseRequester = .user) async -> Bool {
+    func close(_ id: ThreadID, force: Bool, evenResident: Bool = false, by requester: CloseRequester = .user,
+               undoable: Bool = true) async -> Bool {
         guard let session = session(id) else { return true }
         guard evenResident || session.record.resident == nil else {
             NSSound.beep()
@@ -1298,8 +1301,11 @@ final class AppModel {
         session.onActivityChanged = nil
         await keepTimeline(of: session.record, activity: session.activity)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
-        remember(.closedThread(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
-                                            selection: restoreSelection)), by: requester)
+        // A thread hung up by its task's archive or close comes back with the task, not on its own: its worktree is gone.
+        if undoable {
+            remember(.closedThread(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
+                                                selection: restoreSelection)), by: requester)
+        }
         return true
     }
 
