@@ -11,6 +11,43 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.28.0](https://github.com/maastrich/scope/releases/tag/v0.28.0) - 2026-10-20
+
+### Added
+
+- **tasks:** several branches in one task, each in its own worktree ([#81](https://github.com/maastrich/scope/pull/81)) by @maastrich
+- **usage:** show the subscription's limits ahead of token counts ([#79](https://github.com/maastrich/scope/pull/79)) by @maastrich
+- **inspector:** cards instead of flat sections, and a pane strip in the band ([#83](https://github.com/maastrich/scope/pull/83)) by @maastrich
+- **sidebar:** compact rows grouped by state, one indicator per row ([#84](https://github.com/maastrich/scope/pull/84)) by @maastrich
+- **inspector:** a Shell pane of the task in the reading column ([#85](https://github.com/maastrich/scope/pull/85)) by @maastrich
+- **inspector:** compact pull request rows with check tallies, and what each one asks of you ([#86](https://github.com/maastrich/scope/pull/86)) by @maastrich
+- **inspector:** the Context card shows the files given to the agent, its skills, model and context gauge ([#88](https://github.com/maastrich/scope/pull/88)) by @maastrich
+- **inspector:** the Artifacts card shows the report, files outside the diff and published pages ([#89](https://github.com/maastrich/scope/pull/89)) by @maastrich
+- **adapters:** keep what Claude Code reports between turns, from its hooks and its transcript ([#95](https://github.com/maastrich/scope/pull/95)) by @maastrich
+- **inspector:** setup, listening processes and agent time in the Environment card ([#87](https://github.com/maastrich/scope/pull/87)) by @maastrich
+- **inspector:** a Plan card with the agent's steps, live ([#93](https://github.com/maastrich/scope/pull/93)) by @maastrich
+- show a Claude Code thread's MCP servers, compactions, model, mode and pull requests ([#96](https://github.com/maastrich/scope/pull/96)) by @maastrich
+- show and stop a Claude Code thread's background work ([#97](https://github.com/maastrich/scope/pull/97)) by @maastrich
+- show a Claude Code thread's sub-agents in the sidebar, a Subagents card and the CLI ([#100](https://github.com/maastrich/scope/pull/100)) by @maastrich
+- **inspector:** a Connectors card with the MCP servers of the task's Claude Code threads ([#99](https://github.com/maastrich/scope/pull/99)) by @maastrich
+- show what a waiting Claude Code thread asks, and answer it from Scope ([#102](https://github.com/maastrich/scope/pull/102)) by @maastrich
+
+### Fixed
+
+- **tests:** drive the debounce timers with a test clock so a slow runner cannot split a burst ([#82](https://github.com/maastrich/scope/pull/82)) by @maastrich
+- **sidebar:** no destructive control under the pointer, ask only when something is lost, undo any close ([#90](https://github.com/maastrich/scope/pull/90)) by @maastrich
+- **tasks:** never auto-archive a merged task that is still working ([#94](https://github.com/maastrich/scope/pull/94)) by @maastrich
+- **scene:** wrap the empty scope's driver buttons instead of pushing the scene over the sidebar ([#98](https://github.com/maastrich/scope/pull/98)) by @maastrich
+- **hooks:** stop losing hook events the app was slow to accept ([#101](https://github.com/maastrich/scope/pull/101)) by @maastrich
+
+### Documentation
+
+- **research:** what Scope can borrow from Claude Code Desktop's right panel and sidebar ([#80](https://github.com/maastrich/scope/pull/80)) by @maastrich
+- **research:** an embedded browser in Scope ([#91](https://github.com/maastrich/scope/pull/91)) by @maastrich
+- refocus Scope on Claude Code and inventory what it exposes ([#92](https://github.com/maastrich/scope/pull/92)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.27.0...v0.28.0
+
 ## [0.27.0](https://github.com/maastrich/scope/releases/tag/v0.27.0) - 2026-10-19
 
 ### Added
