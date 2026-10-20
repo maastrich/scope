@@ -188,7 +188,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
         switch event.kind {
         case .turnStarted, .inputRequested, .permissionRequested: break
-        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: return false
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
+             .driverReported: return false
         }
         if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
         guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
@@ -219,7 +220,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
             }
-        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported:
+        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .driverReported:
             break
         default:
             next.pendingRequest = nil
@@ -273,6 +274,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
                 }
                 next.contextWindow = report
             }
+        case .driverReported:
+            break
         }
         return next
     }

@@ -40,6 +40,7 @@ import Testing
         ("session.started", .sessionStarted),
         ("agent.started", .agentStarted),
         ("agent.ended", .agentEnded),
+        ("driver.reported", .driverReported),
         ("limits.reported", .limitsReported),
     ])
     func everyKindDecodesFromItsWireString(wire: String, kind: HookEvent.Kind) throws {
@@ -52,12 +53,13 @@ import Testing
     }
 
     @Test func allCasesCoverTheStateEventsPlusTheInformationalOnes() {
-        #expect(HookEvent.Kind.allCases.count == 11)
+        #expect(HookEvent.Kind.allCases.count == 12)
         #expect(HookEvent.Kind.allCases.filter(\.changesState).count == 6)
         #expect(!HookEvent.Kind.sessionStarted.changesState)
         #expect(!HookEvent.Kind.limitsReported.changesState)
         #expect(!HookEvent.Kind.turnSaid.changesState)
         #expect(!HookEvent.Kind.agentStarted.changesState && !HookEvent.Kind.agentEnded.changesState)
+        #expect(!HookEvent.Kind.driverReported.changesState)
     }
 
     @Test func sessionIDTravelsInThePayload() throws {

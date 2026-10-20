@@ -50,6 +50,12 @@ final class ThreadSession: Identifiable {
     /// What the driver has been doing, folded from its events (`ThreadActivity`). Changes on every tool call, so not
     /// observed either; `AppModel+Activity` loads and saves it.
     @ObservationIgnored private(set) var activity = ThreadActivity()
+    /// Claude Code's own state beyond the turn: background work, sub-agents, the permission mode… (`ClaudeSession`).
+    /// Observed, and only set when it moves; fed by every hook event, late ones included, and by the transcript.
+    private(set) var claude = ClaudeSession()
+    /// Where the transcript was last read up to (`AppModel+ClaudeSession`).
+    @ObservationIgnored var transcriptTail = ClaudeTranscriptTail()
+    @ObservationIgnored var transcriptTailReading = false
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
@@ -379,6 +385,8 @@ final class ThreadSession: Identifiable {
     @discardableResult
     func apply(_ event: AdapterEvent) -> Bool {
         guard phase.isAlive else { return false }
+        // Before the turn logic: what Claude Code reports between turns is still news here.
+        if let facts = ClaudeHookFacts.from(event) { updateClaude { $0.apply(facts) } }
         // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
@@ -419,6 +427,19 @@ final class ThreadSession: Identifiable {
     func receiveStatus(_ event: AdapterEvent) {
         guard event.kind == .limitsReported, event.payload[HookEvent.contextKey] != nil else { return }
         setActivity(activity.apply(event))
+    }
+
+    /// Folds what the transcript gained.
+    func applyTranscript(_ records: [ClaudeTranscriptRecord]) {
+        guard !records.isEmpty else { return }
+        updateClaude { $0.apply(records) }
+    }
+
+    /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call.
+    private func updateClaude(_ change: (inout ClaudeSession) -> Void) {
+        var next = claude
+        change(&next)
+        if next != claude { claude = next }
     }
 
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.

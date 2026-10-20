@@ -32,7 +32,8 @@ struct ClaudeHooksAdapterTests {
         let hooks = try hooks(document)
         #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                                     "Notification", "Stop", "StopFailure", "SessionEnd", "MessageDisplay",
-                                    "SubagentStart", "SubagentStop"])
+                                    "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "PermissionRequest",
+                                    "PermissionDenied", "PostToolUseFailure", "PostModelSwitch"])
         for (event, groups) in hooks {
             #expect(groups.count == 1, Comment(rawValue: event))
             let entries = try #require(groups[0]["hooks"] as? [[String: Any]])
@@ -58,6 +59,9 @@ struct ClaudeHooksAdapterTests {
         #expect(try commands(document, "SessionEnd") == ["\(Self.hookPath) thread.ended --stdin"])
         #expect(try commands(document, "SubagentStart") == ["\(Self.hookPath) agent.started --stdin"])
         #expect(try commands(document, "SubagentStop") == ["\(Self.hookPath) agent.ended --stdin"])
+        for event in ClaudeHooksAdapter.informational {
+            #expect(try commands(document, event) == ["\(Self.hookPath) driver.reported --stdin"], Comment(rawValue: event))
+        }
         // Only Notification and PreToolUse carry a matcher: the "someone must act" types, the question tools.
         let hooks = try hooks(document)
         for (event, groups) in hooks where event != "Notification" && event != "PreToolUse" {
