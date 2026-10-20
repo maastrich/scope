@@ -205,3 +205,65 @@ import Testing
         #expect(BrowserNetworkEntry(url: "http://x/", type: "fetch", method: "POST", failed: true).rendered.hasPrefix("POST fail"))
     }
 }
+
+/// M3: before and after.
+@Suite struct BrowserCompareTests {
+    private func canvas(_ width: Int, _ height: Int, paint: [(x: Int, y: Int, w: Int, h: Int)] = []) -> [UInt8] {
+        var bytes = [UInt8](repeating: 255, count: width * height * 4)
+        for box in paint {
+            for y in box.y..<(box.y + box.h) {
+                for x in box.x..<(box.x + box.w) {
+                    let i = (y * width + x) * 4
+                    bytes[i] = 0; bytes[i + 1] = 0; bytes[i + 2] = 0
+                }
+            }
+        }
+        return bytes
+    }
+
+    @Test func identicalImagesHaveNothingToShow() {
+        let a = canvas(64, 48)
+        #expect(ImageDiff.compare(a, a, width: 64, height: 48) == ImageDiff.Result(fraction: 0, regions: []))
+    }
+
+    @Test func changesGroupIntoRegionsAndCountAsAShare() {
+        let a = canvas(128, 64)
+        // Two separate blocks, and a faint change under the threshold that must not count.
+        var b = canvas(128, 64, paint: [(x: 4, y: 4, w: 10, h: 10), (x: 90, y: 40, w: 20, h: 8)])
+        b[(60 * 128 + 60) * 4] = 240
+        let result = ImageDiff.compare(a, b, width: 128, height: 64)
+        #expect(result.regions == [ImageDiff.Region(x: 0, y: 0, width: 16, height: 16), ImageDiff.Region(x: 80, y: 32, width: 32, height: 16)])
+        #expect(abs(result.fraction - Double(100 + 160) / Double(128 * 64)) < 0.0001)
+        // Touching cells merge into one box.
+        let c = canvas(64, 64, paint: [(x: 10, y: 10, w: 30, h: 4)])
+        #expect(ImageDiff.compare(a.prefix(64 * 64 * 4).map { $0 }, c, width: 64, height: 64).regions == [ImageDiff.Region(x: 0, y: 0, width: 48, height: 16)])
+    }
+
+    @Test func eachPortGoesToTheDeepestWorktreeHoldingItsProcess() {
+        let listeners = [ListeningPorts.Listener(port: 41_000, pid: 10), ListeningPorts.Listener(port: 41_001, pid: 11),
+                         ListeningPorts.Listener(port: 41_002, pid: 12)]
+        let worktrees = [PortWorktrees.Worktree(key: "web", path: "/s/t/web"), PortWorktrees.Worktree(key: "web@base-main", path: "/s/t/web@base-main")]
+        let map = PortWorktrees.map(listeners: listeners, directories: [10: "/s/t/web/app", 11: "/s/t/web@base-main", 12: "/elsewhere"],
+                                    worktrees: worktrees)
+        #expect(map == [41_000: "web", 41_001: "web@base-main"])
+    }
+
+    @Test func compareParsesAndSaysWhatDiffers() throws {
+        #expect(try ScopeCLI.parse(["browser", "compare", "/checkout", "--before", "1", "--after", "41000"])
+                == .call(.browser(BrowserParams(action: .compare, url: "/checkout", before: 1, after: 41_000)), ScopeCLI.Options()))
+        #expect(MCPBridge.call(tool: "scope_browser_compare", arguments: Data(#"{"path":"/checkout","before":1}"#.utf8))
+                == .success(.browser(BrowserParams(action: .compare, url: "/checkout", before: 1))))
+        #expect(BrowserAction.compare.isReadOnly)
+        var comparison = BrowserComparison(before: "http://localhost:41001/", after: "http://localhost:41000/", beforeWorktree: "web · base-main",
+                                           width: 1280, height: 800, fraction: 0.041,
+                                           regions: [.init(x: 0, y: 0, width: 16, height: 16), .init(x: 32, y: 32, width: 16, height: 16),
+                                                     .init(x: 64, y: 64, width: 16, height: 16)],
+                                           beforeImage: "/b.jpg", afterImage: "/a.jpg")
+        #expect(comparison.summary == "3 regions differ · 4.1 %")
+        comparison.regions = []
+        #expect(comparison.summary == "identical")
+        var result = BrowserResult(task: "t", slug: "s", action: .compare, message: "compared /")
+        result.comparison = comparison
+        #expect(BrowserText.render(result).contains("before http://localhost:41001/  (web · base-main)"))
+    }
+}

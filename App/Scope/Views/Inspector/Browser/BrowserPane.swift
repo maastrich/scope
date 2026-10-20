@@ -17,7 +17,10 @@ struct BrowserPane: View {
         VStack(spacing: 0) {
             band
             Divider()
-            if let session = model.currentBrowserTab {
+            if let task = model.currentTask, model.browser.showingComparison.contains(task.id),
+               let comparison = model.browser.comparisons[task.id] {
+                BrowserCompareView(comparison: comparison)
+            } else if let session = model.currentBrowserTab {
                 if session.kind == .agent {
                     BrowserAgentBand(session: session)
                     Divider()
@@ -84,7 +87,22 @@ struct BrowserPane: View {
             }
             tabs
             Spacer(minLength: 4)
-            if let session = model.currentBrowserTab, session.url != nil {
+            if let task = model.currentTask {
+                if model.browser.comparing.contains(task.id) {
+                    ProgressView().controlSize(.mini)
+                        .help("Capturing both sides…")
+                } else {
+                    Button {
+                        model.compareInPane(task)
+                    } label: {
+                        Image(systemName: "rectangle.split.2x1")
+                    }
+                    .help("Compare — this route on the base branch's server and on the task's, side by side")
+                    .accessibilityLabel("Compare with the base branch")
+                    .usageID("browser.compare", label: "Compare the base branch and the task")
+                }
+            }
+            if let session = model.currentBrowserTab, session.url != nil, !showsComparison {
                 Button {
                     model.openBrowserTabInSystem(session)
                 } label: {
@@ -108,8 +126,9 @@ struct BrowserPane: View {
 
     private var tabs: some View {
         HStack(spacing: 2) {
-            TabStrip(selection: selection, items: model.currentBrowserTabs.map { (value: $0.id, title: $0.tabTitle) })
-            if let session = model.currentBrowserTab {
+            TabStrip(selection: selection, items: model.currentBrowserTabs.map { (value: $0.id, title: $0.tabTitle) }
+                     + (hasComparison ? [(value: Self.compareTab, title: "Compare")] : []))
+            if let session = model.currentBrowserTab, !showsComparison {
                 Button {
                     model.closeBrowserTab(session.id)
                 } label: {
@@ -133,10 +152,27 @@ struct BrowserPane: View {
         .fixedSize()
     }
 
+    private static let compareTab = "compare"
+
+    private var hasComparison: Bool {
+        model.currentTask.map { model.browser.comparisons[$0.id] != nil } ?? false
+    }
+
+    private var showsComparison: Bool {
+        model.currentTask.map { model.browser.showingComparison.contains($0.id) } ?? false
+    }
+
     private var selection: Binding<String> {
         Binding(
-            get: { model.currentBrowserTab?.id ?? "" },
-            set: { model.selectBrowserTab($0) }
+            get: { showsComparison ? Self.compareTab : model.currentBrowserTab?.id ?? "" },
+            set: { value in
+                guard let task = model.currentTask else { return }
+                if value == Self.compareTab {
+                    model.browser.showComparison(true, of: task.id)
+                } else {
+                    model.selectBrowserTab(value)
+                }
+            }
         )
     }
 
@@ -448,6 +484,86 @@ private struct BrowserActionLog: View {
             }
         }
         .background(Surface.ground)
+    }
+}
+
+/// Before and after, side by side at one viewport, the regions that differ outlined on the after side.
+private struct BrowserCompareView: View {
+    let comparison: BrowserStore.Comparison
+
+    var body: some View {
+        let result = comparison.result
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text(comparison.path)
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Ink.primary)
+                Text("· \(result.width)×\(result.height) · same viewport · \(comparison.at.formatted(date: .omitted, time: .shortened))")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(result.summary)
+                    .font(.scopeCaption.weight(.semibold))
+                    .foregroundStyle(result.regions.isEmpty ? Ink.secondary : Color("WarningText"))
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background((result.regions.isEmpty ? Fill.quiet : Color("WarningText").opacity(0.12)),
+                                in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                    .fixedSize()
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Surface.panel)
+            Divider()
+            GeometryReader { proxy in
+                let half = (proxy.size.width - 1) / 2
+                HStack(spacing: 0) {
+                    side(label: result.beforeWorktree ?? "before", url: result.before, image: comparison.before, regions: [], width: half)
+                    Divider()
+                    side(label: result.afterWorktree ?? "after", url: result.after, image: comparison.after, regions: result.regions, width: half)
+                }
+            }
+        }
+    }
+
+    private func side(label: String, url: String, image: NSImage, regions: [ImageDiff.Region], width: CGFloat) -> some View {
+        let scale = width / CGFloat(comparison.result.width)
+        return VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(URL(string: url).map { "\($0.host ?? ""):\($0.port.map(String.init) ?? "")\($0.path)" } ?? url)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+            .foregroundStyle(Ink.secondary)
+            .padding(.horizontal, 8)
+            .frame(height: 26)
+            Divider()
+            ScrollView {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: width, height: CGFloat(comparison.result.height) * scale)
+                    .overlay(alignment: .topLeading) {
+                        ForEach(Array(regions.enumerated()), id: \.offset) { _, region in
+                            RoundedRectangle(cornerRadius: 3)
+                                .strokeBorder(Color("WarningText"), lineWidth: 2)
+                                .background(Color("WarningText").opacity(0.06))
+                                .frame(width: CGFloat(region.width) * scale + 6, height: CGFloat(region.height) * scale + 6)
+                                .offset(x: CGFloat(region.x) * scale - 3, y: CGFloat(region.y) * scale - 3)
+                        }
+                    }
+            }
+        }
+        .frame(width: width)
     }
 }
 

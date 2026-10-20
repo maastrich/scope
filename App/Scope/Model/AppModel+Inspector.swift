@@ -190,7 +190,7 @@ extension AppModel {
         case .shell:
             return currentTask.map { !taskShells.sessions(of: $0.id).isEmpty } ?? false
         case .browser:
-            return currentTask.map { !browser.sessions(of: $0.id).isEmpty } ?? false
+            return currentTask.map { !browser.sessions(of: $0.id).isEmpty || browser.comparisons[$0.id] != nil } ?? false
         }
     }
 

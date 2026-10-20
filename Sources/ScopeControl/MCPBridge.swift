@@ -718,6 +718,27 @@ public enum MCPBridge {
             readOnly: true
         ),
         MCPTool(
+            name: "scope_browser_compare",
+            title: "Compare a route on two branches",
+            description: """
+            Captures the same route on two servers of the task — before (the base branch, served from a secondary \
+            worktree: `scope task branch add base-main --from main`, then its dev server on another port of the \
+            block) and after (the task's sandbox) — at one 1280×800 viewport, each in a fresh view of the task's \
+            store, and diffs them: an image of the two side by side with the changed regions outlined, how many \
+            regions differ and the share of pixels. Without ports, Scope picks the one a secondary worktree serves \
+            and the one the sandbox serves. The user sees the result in the Browser pane's Compare view.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "path":{"type":"string","description":"The route on both servers, e.g. /checkout (default /)."},\
+            "before":{"type":"integer","description":"Port (or index 0–9) of the base branch's server."},\
+            "after":{"type":"integer","description":"Port (or index 0–9) of the task's server."},\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
             name: "scope_ping",
             title: "Check Scope",
             description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying. Its `limits` are the Claude subscription's windows (5-hour session, week, per model when the plan has them) as Claude Code last reported them: percentage used, when each resets, and the tightest; absent when unknown. Every thread shares them — past 80 % of a window, slow down or wait for its reset rather than open more threads.",
@@ -995,10 +1016,13 @@ public enum MCPBridge {
         var submit: Bool?
         var selector: String?
         var timeout: Int?
+        var path: String?
+        var before: Int?
+        var after: Int?
 
         func params(_ action: BrowserAction) -> BrowserParams {
-            BrowserParams(action: action, task: task, scope: scope, url: url, port: port, all: all, ref: ref, text: text,
-                          clear: clear, submit: submit, selector: selector, timeout: timeout)
+            BrowserParams(action: action, task: task, scope: scope, url: url ?? path, port: port, all: all, ref: ref, text: text,
+                          clear: clear, submit: submit, selector: selector, timeout: timeout, before: before, after: after)
         }
     }
 
