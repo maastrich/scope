@@ -90,7 +90,7 @@ public struct AgentPlan: Codable, Sendable, Equatable {
     /// a todo list, a plan or tasks, so a renamed tool keeps feeding the card.
     public static let knownTools: Set<String> = ["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "ExitPlanMode",
                                                  "EnterPlanMode"]
-    /// Claude Code hooks about a task of the list, fired outside any tool call (`plan.updated`).
+    /// Claude Code hooks about a task of the list, fired outside any tool call (`driver.reported`).
     public static let taskHooks: Set<String> = ["TaskCreated", "TaskCompleted"]
 
     /// The task tools read by id; any other tool is read only for a whole list or a plan, so a renamed tool still

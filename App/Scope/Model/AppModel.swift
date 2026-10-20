@@ -230,8 +230,14 @@ final class AppModel {
     @ObservationIgnored var replyHistoryJobs: [ThreadID: Task<Void, Never>] = [:]
     /// The background pull request refresh (`startPullRequestRefresh`) and when each task is next due.
     @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
+    /// Follows the Claude Code transcripts (`AppModel+ClaudeSession`).
+    @ObservationIgnored var claudeTranscriptReader: Task<Void, Never>?
     /// The loop behind `AppModel+Ports`.
     @ObservationIgnored var portScanner: Task<Void, Never>?
+    /// The tasks whose Environment card is open — their listening processes are read with the ports — and the `lsof`
+    /// runs in flight, per task.
+    @ObservationIgnored var processWatchers: Set<TaskID> = []
+    @ObservationIgnored var processRuns: [TaskID: Task<Void, Never>] = [:]
     /// The loop behind `AppModel+DiskUsage`, and the one-off measurements in flight, per task.
     @ObservationIgnored var diskUsageRefresher: Task<Void, Never>?
     @ObservationIgnored var diskUsageRuns: [TaskID: Task<Void, Never>] = [:]
@@ -595,6 +601,7 @@ final class AppModel {
         // Kicked off, not awaited: the probe can take seconds on a slow rc file.
         startShellProbe()
         startTokenMeter()
+        startClaudeTranscriptReader()
         let driverTask = Task { [env] () -> LoadedDrivers in
             do {
                 try await env.drivers.installBuiltins()
@@ -1548,6 +1555,7 @@ final class AppModel {
             if event.kind == .turnEnded || event.kind == .turnFailed { scheduleCheckpoint(after: session) }
             refreshReading(for: session, turnEnded: event.kind == .turnEnded || event.kind == .turnFailed)
         }
+        readClaudeTranscriptSoon(session)
         flushDeliveries(for: session)
         acknowledgeShownResult()
     }

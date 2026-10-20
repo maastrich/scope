@@ -117,7 +117,8 @@ struct TaskVersionFacts {
     }
 }
 
-/// The closed Task header: the branch, `↑N`, and the base lag in warning colour when there is one.
+/// The closed Environment header: the branch, `↑N`, the base lag in warning colour when there is one, and a setup
+/// still running or failed.
 struct TaskVersionSummary: View {
     let task: TaskState
 
@@ -137,6 +138,18 @@ struct TaskVersionSummary: View {
                 Text("base behind \(facts.behind)")
                     .foregroundStyle(Color("WarningText"))
                     .fixedSize()
+            }
+            switch task.record.setupState {
+            case .running:
+                Text("· setup running")
+                    .foregroundStyle(ThreadStateStyle.running)
+                    .fixedSize()
+            case .failed:
+                Text("· setup failed")
+                    .foregroundStyle(PullRequestStyle.failing)
+                    .fixedSize()
+            case .notRun, .succeeded, .skipped:
+                EmptyView()
             }
         }
     }

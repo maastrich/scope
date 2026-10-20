@@ -21,7 +21,7 @@ extension ThreadNotificationContent.Said {
             if let started, started > reply.at { return nil }
             return .reply(reply.text)
         case .turnStarted, .turnFailed, .permissionRequested, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
-             .planUpdated:
+             .driverReported:
             return nil
         }
     }

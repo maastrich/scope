@@ -191,8 +191,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
         switch event.kind {
         case .turnStarted, .inputRequested, .permissionRequested: break
-        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .planUpdated:
-            return false
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
+             .driverReported: return false
         }
         if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
         guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
@@ -208,9 +208,15 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
         // A todo list, a task or a plan is the latest word on the work whatever turn it reaches the app in.
         let tool = event.payload[HookEvent.toolKey].flatMap { $0.isEmpty ? nil : $0 }
-        if event.kind == .planUpdated || (event.kind == .turnStarted && tool != nil),
-           let plan = AgentPlan.applying(tool: tool, raw: event.raw, to: plan, at: at) {
-            next.plan = plan
+        // `driver.reported` brings the task hooks (`TaskCreated`, `TaskCompleted`); its other hooks name a tool too
+        // (`PostToolUseFailure`), but a call that failed moved nothing, so the tool is not passed on.
+        if event.kind == .driverReported || (event.kind == .turnStarted && tool != nil) {
+            let reported = event.kind == .driverReported ? nil : tool
+            // `raw` is cut past a size and then no longer parses; the clamped copy under `hook` may still.
+            if let plan = AgentPlan.applying(tool: reported, raw: event.raw, to: plan, at: at)
+                ?? AgentPlan.applying(tool: reported, raw: event.payload[HookEvent.hookKey], to: plan, at: at) {
+                next.plan = plan
+            }
         }
         if isLate(event, promptPending: promptPending) {
             // Still the last thing the agent ran, but no turn of its own.
@@ -229,7 +235,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
             }
-        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .planUpdated:
+        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .driverReported:
             break
         default:
             next.pendingRequest = nil
@@ -283,7 +289,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
                 }
                 next.contextWindow = report
             }
-        case .planUpdated:
+        case .driverReported:
             break
         }
         return next

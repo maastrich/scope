@@ -242,12 +242,12 @@ import Testing
                  response: ["success": true, "taskId": id, "updatedFields": ["status"]], seconds)
     }
 
-    /// A task hook (`TaskCreated`, `TaskCompleted`), forwarded as `plan.updated` with its stdin in `raw`.
+    /// A task hook (`TaskCreated`, `TaskCompleted`), forwarded as `driver.reported` with its stdin in `raw`.
     static func taskHook(_ name: String, id: String, subject: String, _ seconds: TimeInterval) -> AdapterEvent {
         let object: [String: Any] = ["session_id": "s1", "hook_event_name": name, "task_id": id,
                                      "task_subject": subject, "task_description": "Details"]
         let raw = String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self)
-        return AdapterEvent(threadID: thread, kind: .planUpdated, raw: raw, receivedAt: at(seconds))
+        return AdapterEvent(threadID: thread, kind: .driverReported, raw: raw, receivedAt: at(seconds))
     }
 
     static func fold(_ events: [AdapterEvent]) -> ThreadActivity {
