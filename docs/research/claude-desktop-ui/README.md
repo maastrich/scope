@@ -153,6 +153,9 @@ inactif (issue #89531, Scope fait mieux avec quatre formes et des couleurs 3:1),
   `merged` plutôt qu'un point ; un seul indicateur de droite par ligne. Les compteurs `+N −M` **quittent la
   ligne** : à 264 pt ils tronquent le nom de la task (*Plusieurs b…*, *Recherche UI : s…*), et Claude Code
   Desktop n'en met aucun dans sa sidebar. Ils restent dans la carte de survol, l'en-tête de Changes et la bande.
+  Pour la densité, le défaut devrait être la **ligne compacte** (28 pt : glyphe d'état, nom, un point), la
+  seconde ligne n'apparaissant que sur une task qui attend ou travaille (ce que le SPEC permet déjà pour les
+  tasks à un thread) ; le digest *Since …* se replie en une ligne.
 - **Shell** : un pane de la colonne de lecture, pas un thread. Un `zsh` dans la sandbox avec `SCOPE_*` injectés,
   onglets pour les commandes longues, pop-out plus tard. Il ne crée pas de record de thread.
 
