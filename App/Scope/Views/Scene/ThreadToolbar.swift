@@ -1,5 +1,7 @@
 import Foundation
+import ScopeAdapters
 import ScopeCore
+import ScopeDrivers
 
 /// What the window title says about the current thread: the driver as the title, `scope · cwd` as the
 /// subtitle. Drawn by the system as the window's own title (`navigationTitle` / `navigationSubtitle`), which
@@ -32,10 +34,13 @@ enum ThreadTitle {
         return "\(runs(session)) · \(abbreviatedDirectory(currentDirectory(session)))"
     }
 
-    /// `Claude Code (claude-fable-5-1)`: the driver, and the model when one was chosen for the thread.
+    /// `Claude Code (Fable 5.1) · Plan mode`: the driver, the model it runs on now — after a `/model`, else as its
+    /// status line or the thread's choice says — and the permission mode unless it is the default one.
     static func runs(_ session: ThreadSession) -> String {
-        guard let model = session.record.model else { return session.profile.name }
-        return "\(session.profile.name) (\(model))"
+        let model = ModelLabel.name(session.claude.model.id) ?? session.contextWindow?.modelName
+            ?? ModelLabel.name(session.contextWindow?.modelID) ?? ModelLabel.name(session.record.model)
+        let driver = model.map { "\(session.profile.name) (\($0))" } ?? session.profile.name
+        return [driver, ClaudePermissionMode.label(session.claude.permissionMode)].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// `@acme · auth-refresh · …/api/auth-refresh`: the scope, the task that owns the thread when one does, the

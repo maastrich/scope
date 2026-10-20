@@ -1021,7 +1021,8 @@ final class AppControlService: ControlService {
             activity: session.resumingAfterRestart
                 ? InterruptedTurn.activityLine
                 : ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
-            tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue])
+            tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue]),
+            session: ClaudeSessionSummary.make(session.claude)
         )
     }
 
