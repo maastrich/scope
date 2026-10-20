@@ -117,7 +117,7 @@ struct BrowserPane: View {
     private var footer: some View {
         let scopeName = model.currentTask.flatMap { model.scope($0.scopeID)?.name } ?? "this scope"
         return HStack(spacing: 10) {
-            Text("Your data store for \(scopeName) · apart from Safari and from agents")
+            Text("Store of \(scopeName) · apart from Safari and agents")
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .help("Cookies and storage of these pages are kept for every task of \(scopeName), in WebKit's store for Scope, and nowhere else. Web Inspector: Safari ▸ Develop ▸ this Mac.")
@@ -269,7 +269,7 @@ private struct BrowserFailureView: View {
 
     private var detail: String {
         if isLocal {
-            return "Start the dev server in the task — on its own port with `--port $SCOPE_PORT` (\(model.currentTask?.record.portBlock.map { String($0.base) } ?? "the task's port")) — then try again.\n\(failure.message)"
+            return "Start the dev server in the task on its own port — --port $SCOPE_PORT, here \(model.currentTask?.record.portBlock.map { String($0.base) } ?? "the task's port") — then try again.\n\(failure.message)"
         }
         return failure.message
     }
