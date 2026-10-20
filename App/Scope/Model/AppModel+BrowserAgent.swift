@@ -29,6 +29,11 @@ extension AppModel {
     }
 
     func performBrowser(_ params: BrowserParams, in task: TaskState, by driver: String) async -> Result<BrowserResult, ControlError> {
+        // Compare captures in views of its own: no agent tab to open for it.
+        if params.action == .compare {
+            Usage.register("browser.agent.compare", label: "Agent browser: compare")
+            return await compareBrowser(params, in: task)
+        }
         let session = agentBrowser(of: task)
         guard !session.isStopped else {
             return .failure(.denied("the user stopped the browser of \(task.record.slug)",
@@ -97,9 +102,9 @@ extension AppModel {
                 }
                 return .success(answer)
             }
-            let title = session.title.isEmpty ? "" : " (\(session.title))"
-            return .success(result(loaded ? "opened \(session.url?.absoluteString ?? target.absoluteString)\(title)"
-                                          : "still loading \(target.absoluteString) after 30 s", loading: !loaded))
+            // The message names what the agent asked for; where the page took the tab, and its title, are in the frame.
+            return .success(result(loaded ? "opened \(target.absoluteString)" : "still loading \(target.absoluteString) after 30 s",
+                                   loading: !loaded))
         default:
             break
         }
@@ -108,12 +113,12 @@ extension AppModel {
         }
         if session.isLoading { _ = await session.waitUntilLoaded(timeout: .seconds(10)) }
         switch params.action {
-        case .open:
+        case .open, .compare:
             return .failure(.failed("unreachable"))
         case .read:
             do {
                 let page = try await session.readPage()
-                var answer = result("read \(page.url)")
+                var answer = result("read the page")
                 answer.page = page.render()
                 return .success(answer)
             } catch {
@@ -128,7 +133,7 @@ extension AppModel {
                     .timeSeparator(.omitted).dateTimeSeparator(.standard)).replacingOccurrences(of: ":", with: "")
                 let file = folder.appending(path: "\(stamp)-\(UUID().uuidString.prefix(4).lowercased()).jpg")
                 try shot.data.write(to: file)
-                var answer = result("screenshot of \(session.url?.absoluteString ?? "the page")")
+                var answer = result("screenshot taken")
                 answer.screenshot = file.path
                 answer.width = shot.width
                 answer.height = shot.height
@@ -171,9 +176,9 @@ extension AppModel {
                 guard answer["ok"] as? Bool == true else {
                     return .failure(.notFound(answer["error"] as? String ?? "could not type into \(ref)"))
                 }
-                let value = (answer["value"] as? String).map { " — it now reads “\($0.prefix(200))”" } ?? ""
-                if answer["submitted"] as? Bool == true { return await settle("typed into \(ref) and submitted\(value)") }
-                return .success(result("typed into \(ref)\(value)"))
+                // The field's value is the page's to rewrite: read it with scope_browser_read, inside the frame.
+                if answer["submitted"] as? Bool == true { return await settle("typed into \(ref) and submitted") }
+                return .success(result("typed into \(ref)"))
             } catch {
                 return .failure(.failed("could not type into \(ref)", detail: String(describing: error)))
             }
@@ -190,14 +195,18 @@ extension AppModel {
         BrowserSitePolicy.normalized(config.preferences.automationSettings.browserBlocked + task.browserBlocked)
     }
 
-    /// The rules WebKit enforces on the agent's tab, compiled once per distinct list.
+    /// The rules WebKit enforces on the agent's tab.
     func applyAgentRules(to session: BrowserSession, of task: TaskState) async {
         session.downloadsFolder = env.home.appending(path: "browser/downloads/\(task.id.rawValue)", directoryHint: .isDirectory)
+        session.applyRules(await agentRuleList(for: task))
+    }
+
+    /// `task`'s agent rules compiled, once per distinct list; `nil` when nothing is restricted.
+    func agentRuleList(for task: TaskState) async -> WKContentRuleList? {
         let settings = config.preferences.automationSettings
         guard let json = BrowserSitePolicy.contentRules(sites: settings.browserSites, block: task.record.portBlock,
                                                         blocked: blockedHosts(of: task)) else {
-            session.applyRules(nil)
-            return
+            return nil
         }
         // Stable across launches, so WebKit's store keeps one compiled list per distinct rule set.
         let identifier = "scope-agent-" + SHA256.hash(data: Data(json.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
@@ -213,7 +222,7 @@ extension AppModel {
                 list = nil
             }
         }
-        session.applyRules(list)
+        return list
     }
 
     /// *Block … for this task* on the pane's notice: the host joins the task's list, the rules follow at once.

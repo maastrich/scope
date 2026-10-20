@@ -21,11 +21,13 @@ public enum BrowserAction: String, Codable, Sendable, CaseIterable {
     case wait
     /// The requests the page made since the last look: URL, type, duration; status for fetch/XHR only.
     case network
+    /// The same route on two servers — the base branch's and the task's — captured at one viewport and diffed.
+    case compare
 
     /// Reading the page changes nothing: no approval is ever asked for these.
     public var isReadOnly: Bool {
         switch self {
-        case .read, .screenshot, .console, .wait, .network: true
+        case .read, .screenshot, .console, .wait, .network, .compare: true
         case .open, .click, .type: false
         }
     }
@@ -55,10 +57,14 @@ public struct BrowserParams: Codable, Sendable, Equatable {
     public var selector: String?
     /// `wait`: seconds before giving up (default 10, at most 30).
     public var timeout: Int?
+    /// `compare`: the server of the left side (the base branch's) and of the right side (the task's): ports of the
+    /// block or their index. Default: a port served from a secondary worktree, and one from the task's sandbox.
+    public var before: Int?
+    public var after: Int?
 
     public init(action: BrowserAction, task: String? = nil, scope: String? = nil, url: String? = nil, port: Int? = nil,
                 all: Bool? = nil, ref: String? = nil, text: String? = nil, clear: Bool? = nil, submit: Bool? = nil,
-                selector: String? = nil, timeout: Int? = nil) {
+                selector: String? = nil, timeout: Int? = nil, before: Int? = nil, after: Int? = nil) {
         self.action = action
         self.task = task
         self.scope = scope
@@ -71,6 +77,8 @@ public struct BrowserParams: Codable, Sendable, Equatable {
         self.submit = submit
         self.selector = selector
         self.timeout = timeout
+        self.before = before
+        self.after = after
     }
 
     /// `wait`'s bound, in seconds.
@@ -125,6 +133,44 @@ public struct BrowserNetworkEntry: Codable, Sendable, Equatable {
     }
 }
 
+/// Two captures of one route, and where they differ.
+public struct BrowserComparison: Codable, Sendable, Equatable {
+    public var before: String
+    public var after: String
+    /// The worktree each side is served from (`scope@main`, `scope`), when Scope could tell.
+    public var beforeWorktree: String?
+    public var afterWorktree: String?
+    public var width: Int
+    public var height: Int
+    /// Changed pixels over all pixels, 0…1.
+    public var fraction: Double
+    public var regions: [ImageDiff.Region]
+    public var beforeImage: String
+    public var afterImage: String
+
+    public init(before: String, after: String, beforeWorktree: String? = nil, afterWorktree: String? = nil, width: Int, height: Int,
+                fraction: Double, regions: [ImageDiff.Region], beforeImage: String, afterImage: String) {
+        self.before = before
+        self.after = after
+        self.beforeWorktree = beforeWorktree
+        self.afterWorktree = afterWorktree
+        self.width = width
+        self.height = height
+        self.fraction = fraction
+        self.regions = regions
+        self.beforeImage = beforeImage
+        self.afterImage = afterImage
+    }
+
+    /// `3 regions differ · 4.1 %`, or `identical`.
+    public var summary: String {
+        if regions.isEmpty { return "identical" }
+        let percent = fraction * 100
+        let figure = percent < 0.1 ? "<0.1" : String(format: percent < 10 ? "%.1f" : "%.0f", percent)
+        return "\(regions.count) \(regions.count == 1 ? "region differs" : "regions differ") · \(figure) %"
+    }
+}
+
 /// The answer of every browser action: where the tab stands, and what the action brought back.
 public struct BrowserResult: Codable, Sendable, Equatable {
     public var task: String
@@ -142,6 +188,8 @@ public struct BrowserResult: Codable, Sendable, Equatable {
     public var console: [BrowserConsoleLine]?
     /// `network`: the requests, oldest first.
     public var network: [BrowserNetworkEntry]?
+    /// `compare`: both sides and where they differ; `screenshot` is the two side by side, regions outlined.
+    public var comparison: BrowserComparison?
     /// `screenshot`: the JPEG's path, and its size in pixels.
     public var screenshot: String?
     public var width: Int?
@@ -272,9 +320,9 @@ public struct BrowserPage: Codable, Sendable, Equatable {
             .filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    /// A page cannot close the frame early: its own `</untrusted-page>` loses its slash.
+    /// A page cannot close a frame early: any `</untrusted-…>` it writes loses its slash.
     static func defuse(_ text: String) -> String {
-        text.replacingOccurrences(of: "</untrusted-page", with: "<\u{2215}untrusted-page", options: .caseInsensitive)
+        text.replacingOccurrences(of: "</untrusted", with: "<\u{2215}untrusted", options: .caseInsensitive)
     }
 
     static func attribute(_ text: String) -> String {
@@ -294,8 +342,15 @@ public enum BrowserText {
     /// What an agent reads for `result`; the CLI prints the same.
     public static func render(_ result: BrowserResult) -> String {
         var lines = [result.message]
-        if let url = result.url { lines.append("url    \(url)" + (result.loading ? "  (still loading)" : "")) }
-        if let title = result.title, !title.isEmpty { lines.append("title  \(BrowserPage.oneLine(title))") }
+        // Where the tab stands is the page's to say — a redirect, pushState, its <title> — so it is framed too.
+        var meta: [String] = []
+        if let url = result.url { meta.append("url    \(url)" + (result.loading ? "  (still loading)" : "")) }
+        if let title = result.title, !title.isEmpty { meta.append("title  \(BrowserPage.oneLine(title))") }
+        if !meta.isEmpty {
+            lines.append("<untrusted-page-meta>")
+            lines.append(contentsOf: meta.map(BrowserPage.defuse))
+            lines.append("</untrusted-page-meta>")
+        }
         if let path = result.screenshot {
             lines.append("image  \(path)" + (result.width.map { w in result.height.map { "  (\(w)×\($0))" } ?? "" } ?? ""))
         }
@@ -307,6 +362,16 @@ public enum BrowserText {
                 lines.append(contentsOf: console.map { BrowserPage.defuse($0.rendered) })
                 lines.append("</untrusted-console>")
             }
+        }
+        if let comparison = result.comparison {
+            lines.append("before \(comparison.before)" + (comparison.beforeWorktree.map { "  (\($0))" } ?? ""))
+            lines.append("after  \(comparison.after)" + (comparison.afterWorktree.map { "  (\($0))" } ?? ""))
+            lines.append("diff   \(comparison.summary) at \(comparison.width)×\(comparison.height)")
+            for region in comparison.regions.prefix(12) {
+                lines.append("       x \(region.x) y \(region.y)  \(region.width)×\(region.height)")
+            }
+            lines.append("images \(comparison.beforeImage)")
+            lines.append("       \(comparison.afterImage)")
         }
         if let network = result.network {
             if network.isEmpty {

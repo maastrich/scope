@@ -66,6 +66,7 @@ scope browser read|screenshot|console <span class="c"># the page as text, a JPEG
 scope browser click &lt;ref&gt;           <span class="c"># click what read called e12</span>
 scope browser type &lt;ref&gt; &lt;text&gt;     <span class="c"># type into a field (--clear, --submit)</span>
 scope browser wait|network          <span class="c"># until a --selector or --text shows, or the page is quiet; its requests</span>
+scope browser compare [/route]      <span class="c"># the route on the base branch's server and the task's, diffed (--before, --after)</span>
 scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
 scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
@@ -230,7 +231,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,
 <code>scope_task_restore_checkpoint</code>, <code>scope_browser_open</code>, <code>scope_browser_read</code>,
 <code>scope_browser_screenshot</code>, <code>scope_browser_console</code>, <code>scope_browser_click</code>,
-<code>scope_browser_type</code>, <code>scope_browser_wait</code>, <code>scope_browser_network</code>, <code>scope_gc</code>, <code>scope_release</code>,
+<code>scope_browser_type</code>, <code>scope_browser_wait</code>, <code>scope_browser_network</code>,
+<code>scope_browser_compare</code>, <code>scope_gc</code>, <code>scope_release</code>,
 <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single

@@ -256,6 +256,11 @@ blocked; WebKit enforces it on every page and every request of the agent's tab. 
 localhost, a card says so, with <i>Block … for This Task</i>; nothing waits on you. <b>Stop</b> in the agent's band
 (<kbd>Esc</kbd> while it works) ends its running call and refuses the next ones until you let it continue; the
 footer's <i>Actions</i> lists everything it did. Downloads land under <code>SCOPE_HOME/browser/downloads/</code>.</p>
+<p><b>Before and after.</b> Add the base branch beside the task (<code>scope task branch add base-main --from main</code>)
+and start its dev server on another port of the block; the pane's <b>Compare</b> button — or
+<code>scope_browser_compare</code> for the agent — captures the same route on both servers at one 1280×800 viewport and
+shows them side by side, the regions that differ outlined, with how many and what share of the page. Scope tells which
+worktree serves which port from the directory of the process listening on it.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>

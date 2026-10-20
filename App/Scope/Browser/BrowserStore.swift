@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import ScopeControl
 import ScopeCore
 import ScopeTasks
 
@@ -47,6 +49,7 @@ final class BrowserStore {
 
     func select(_ id: String) {
         tabs.select(id)
+        if let task = sessions[id]?.taskID { showingComparison.remove(task) }
     }
 
     @discardableResult
@@ -59,10 +62,37 @@ final class BrowserStore {
 
     /// Every tab of the task, its views torn down: what an archive or a close does.
     func removeAll(of task: TaskID) {
+        comparisons[task] = nil
+        showingComparison.remove(task)
         for tab in tabs.closeAll(of: task.rawValue) {
             sessions.removeValue(forKey: tab.id)?.tearDown()
         }
     }
 
     var allSessions: [BrowserSession] { tabs.tabs.compactMap { sessions[$0.id] } }
+
+    // MARK: Compare
+
+    /// The last before/after of a task, for the pane's Compare view.
+    struct Comparison {
+        var path: String
+        var at: Date
+        var result: BrowserComparison
+        var before: NSImage
+        var after: NSImage
+    }
+
+    private(set) var comparisons: [TaskID: Comparison] = [:]
+    /// Tasks whose pane shows the Compare view rather than a tab.
+    private(set) var showingComparison: Set<TaskID> = []
+    /// Tasks with a comparison being captured, for the button's spinner.
+    var comparing: Set<TaskID> = []
+
+    func setComparison(_ comparison: Comparison, of task: TaskID) {
+        comparisons[task] = comparison
+    }
+
+    func showComparison(_ shown: Bool, of task: TaskID) {
+        if shown { showingComparison.insert(task) } else { showingComparison.remove(task) }
+    }
 }

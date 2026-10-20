@@ -28,17 +28,24 @@ extension AppModel {
         guard !candidates.isEmpty else { return }
         let inputs = candidates.map { task in
             (id: task.id, root: task.record.rootURL, block: task.record.portBlock!,
-             launchFiles: task.activeSandboxes.map { URL(fileURLWithPath: $0.sandboxPath).appending(path: ".claude/launch.json") })
+             launchFiles: task.activeSandboxes.map { URL(fileURLWithPath: $0.sandboxPath).appending(path: ".claude/launch.json") },
+             // Every spelling of each path: a process reports `/private/tmp/…` for a worktree recorded as `/tmp/…`.
+             worktrees: task.activeSandboxes.flatMap { sandbox in
+                 ProcessSweep.spellings(URL(fileURLWithPath: sandbox.sandboxPath)).map { PortWorktrees.Worktree(key: sandbox.sandboxKey, path: $0) }
+             })
         }
         let readings = await Task.detached(priority: .utility) {
             inputs.map { input in
-                let pids = ProcessSweep.processes(under: [input.root]).map(\.pid)
-                let listeners = ListeningPorts.listeners(of: pids)
+                let processes = ProcessSweep.processes(under: [input.root])
+                let listeners = ListeningPorts.listeners(of: processes.map(\.pid))
+                let directories = Dictionary(processes.compactMap { match in match.directory.map { (match.pid, $0) } },
+                                             uniquingKeysWith: { first, _ in first })
                 let launch = input.launchFiles.flatMap { url in
                     (try? Data(contentsOf: url)).map(LaunchConfig.servers) ?? []
                 }
                 return (id: input.id, ports: input.block.ports(in: listeners), others: input.block.otherServerPorts(in: listeners),
-                        launch: launch)
+                        launch: launch,
+                        owners: PortWorktrees.map(listeners: listeners, directories: directories, worktrees: input.worktrees))
             }
         }.value
         for reading in readings {
@@ -46,6 +53,7 @@ extension AppModel {
             if task.listeningPorts != reading.ports { task.listeningPorts = reading.ports }
             if task.otherPorts != reading.others { task.otherPorts = reading.others }
             if task.launchServers != reading.launch { task.launchServers = reading.launch }
+            if task.portWorktrees != reading.owners { task.portWorktrees = reading.owners }
             // The processes go with the ports: same pass, same twenty seconds, only for a card that shows them.
             if processWatchers.contains(task.id) { refreshListeningProcesses(of: task) }
         }
