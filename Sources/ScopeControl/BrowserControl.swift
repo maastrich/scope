@@ -320,9 +320,9 @@ public struct BrowserPage: Codable, Sendable, Equatable {
             .filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    /// A page cannot close the frame early: its own `</untrusted-page>` loses its slash.
+    /// A page cannot close a frame early: any `</untrusted-…>` it writes loses its slash.
     static func defuse(_ text: String) -> String {
-        text.replacingOccurrences(of: "</untrusted-page", with: "<\u{2215}untrusted-page", options: .caseInsensitive)
+        text.replacingOccurrences(of: "</untrusted", with: "<\u{2215}untrusted", options: .caseInsensitive)
     }
 
     static func attribute(_ text: String) -> String {
@@ -342,8 +342,15 @@ public enum BrowserText {
     /// What an agent reads for `result`; the CLI prints the same.
     public static func render(_ result: BrowserResult) -> String {
         var lines = [result.message]
-        if let url = result.url { lines.append("url    \(url)" + (result.loading ? "  (still loading)" : "")) }
-        if let title = result.title, !title.isEmpty { lines.append("title  \(BrowserPage.oneLine(title))") }
+        // Where the tab stands is the page's to say — a redirect, pushState, its <title> — so it is framed too.
+        var meta: [String] = []
+        if let url = result.url { meta.append("url    \(url)" + (result.loading ? "  (still loading)" : "")) }
+        if let title = result.title, !title.isEmpty { meta.append("title  \(BrowserPage.oneLine(title))") }
+        if !meta.isEmpty {
+            lines.append("<untrusted-page-meta>")
+            lines.append(contentsOf: meta.map(BrowserPage.defuse))
+            lines.append("</untrusted-page-meta>")
+        }
         if let path = result.screenshot {
             lines.append("image  \(path)" + (result.width.map { w in result.height.map { "  (\(w)×\($0))" } ?? "" } ?? ""))
         }

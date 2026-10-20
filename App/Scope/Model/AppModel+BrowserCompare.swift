@@ -47,9 +47,18 @@ extension AppModel {
               let afterURL = URL(string: "http://localhost:\(ports.after)\(path)") else {
             return .failure(.badRequest("“\(path)” is not a path"))
         }
+        // The same fence as the agent's tab: where agents may browse, what is blocked.
+        let settings = config.preferences.automationSettings
+        for url in [beforeURL, afterURL] {
+            if let refusal = BrowserSitePolicy.refusal(for: url, sites: settings.browserSites, block: task.record.portBlock,
+                                                        blocked: blockedHosts(of: task)) {
+                return .failure(.denied(refusal, detail: "The user decides where agents browse: Settings ▸ Automation ▸ Browser."))
+            }
+        }
+        let rules = await agentRuleList(for: task)
         let store = BrowserStoreID.agent(home: env.home, task: task.id.rawValue)
-        async let left = capture(beforeURL, store: store, task: task)
-        async let right = capture(afterURL, store: store, task: task)
+        async let left = capture(beforeURL, store: store, task: task, rules: rules)
+        async let right = capture(afterURL, store: store, task: task, rules: rules)
         let images: (CGImage, CGImage)
         do {
             images = try await (left, right)
@@ -119,9 +128,10 @@ extension AppModel {
     }
 
     /// One side: a fresh view on the task's agent store at the compare viewport, loaded and captured.
-    private func capture(_ url: URL, store: UUID, task: TaskState) async throws -> CGImage {
+    private func capture(_ url: URL, store: UUID, task: TaskState, rules: WKContentRuleList?) async throws -> CGImage {
         let session = BrowserSession(taskID: task.id, storeID: store, url: nil, kind: .agent)
         defer { session.tearDown() }
+        session.applyRules(rules)
         _ = session.webView
         session.webView.setFrameSize(Self.compareSize)
         let loaded = await session.loadAndWait(url, timeout: .seconds(20))
