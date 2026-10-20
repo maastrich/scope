@@ -104,7 +104,7 @@ public enum ProcessSweep {
         return path
     }
 
-    private static func allPids() -> [pid_t] {
+    static func allPids() -> [pid_t] {
         let estimate = proc_listallpids(nil, 0)
         guard estimate > 0 else { return [] }
         var pids = [pid_t](repeating: 0, count: Int(estimate) + 64)
@@ -112,7 +112,7 @@ public enum ProcessSweep {
         return count > 0 ? Array(pids.prefix(Int(count))) : []
     }
 
-    private static func bsdInfo(_ pid: pid_t) -> proc_bsdinfo? {
+    static func bsdInfo(_ pid: pid_t) -> proc_bsdinfo? {
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? info : nil
