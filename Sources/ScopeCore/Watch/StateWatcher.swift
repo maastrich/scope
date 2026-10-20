@@ -19,12 +19,13 @@ public final class StateFolderWatcher: Sendable {
     ///   - folder: the directory, watched for its direct entries (deeper paths are ignored).
     ///   - names: which file names count; the rest never wakes the consumer.
     ///   - delay: silence required after the last event before `onChange` runs.
+    ///   - clock: what measures that silence; tests drive one by hand.
     ///   - onChange: runs once per burst, off the main actor.
     public init(folder: URL, names: @escaping @Sendable (String) -> Bool, delay: Duration = .milliseconds(300),
-                onChange: @escaping @Sendable () async -> Void) {
+                clock: any Clock<Duration> = ContinuousClock(), onChange: @escaping @Sendable () async -> Void) {
         self.folder = folder
         self.names = names
-        debouncer = Debouncer(delay: delay, action: onChange)
+        debouncer = Debouncer(delay: delay, clock: clock, action: onChange)
     }
 
     deinit { stop() }
@@ -95,14 +96,17 @@ public final class StateFileWatcher: Sendable {
         var file: DispatchSourceFileSystemObject?
     }
 
-    public init(file: URL, delay: Duration = .milliseconds(300), onChange: @escaping @Sendable () async -> Void) {
+    public init(file: URL, delay: Duration = .milliseconds(300), clock: any Clock<Duration> = ContinuousClock(),
+                onChange: @escaping @Sendable () async -> Void) {
         self.file = file
-        debouncer = Debouncer(delay: delay, action: onChange)
+        debouncer = Debouncer(delay: delay, clock: clock, action: onChange)
     }
 
     deinit { stop() }
 
     /// Starts watching. The directory must exist; the file may not. No-op when running.
+    ///
+    /// Both sources are armed before this returns: a write that follows `start()` is never missed.
     public func start() {
         let started = state.withLock { state -> Bool in
             guard state == nil else { return false }
@@ -110,7 +114,7 @@ public final class StateFileWatcher: Sendable {
             return true
         }
         guard started else { return }
-        queue.async { [self] in
+        queue.sync { [self] in
             arm(directory: true)
             arm(directory: false)
         }
