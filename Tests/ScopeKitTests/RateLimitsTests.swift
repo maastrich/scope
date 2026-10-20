@@ -64,7 +64,11 @@ struct RateLimitsTests {
         let with = HookStdin.parse(Data(Self.statusline.utf8))
         #expect(HookCommandEvent.statusline.resolve(stdin: with) == .limitsReported)
         #expect(with.projectDirectory == "/w/repo")
-        let without = HookStdin.parse(Data(#"{"cwd":"/w","model":{"id":"x"}}"#.utf8))
+        // A model alone is still worth a report (the Context card names it); a bare cwd is not.
+        let modelOnly = HookStdin.parse(Data(#"{"cwd":"/w","model":{"id":"x"}}"#.utf8))
+        #expect(modelOnly.rateLimitsJSON == nil)
+        #expect(HookCommandEvent.statusline.resolve(stdin: modelOnly) == .limitsReported)
+        let without = HookStdin.parse(Data(#"{"cwd":"/w"}"#.utf8))
         #expect(HookCommandEvent.statusline.resolve(stdin: without) == nil)
         #expect(without.projectDirectory == "/w")
         #expect(!HookEvent.Kind.limitsReported.changesState)

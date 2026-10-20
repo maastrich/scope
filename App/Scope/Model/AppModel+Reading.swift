@@ -132,6 +132,31 @@ extension AppModel {
         ))
     }
 
+    /// A context file of `task` — the one Scope wrote, or the repository's own — from the Context card. Read on the
+    /// spot: it is a page of Markdown, and the agent may have just rewritten it.
+    func readContextFile(_ entry: TaskContextFiles.Entry, of task: TaskState) {
+        guard let markdown = try? String(contentsOf: entry.url, encoding: .utf8) else {
+            problems.warn("Cannot read \(entry.name)", detail: "The file at \(entry.url.path) could not be read.")
+            return
+        }
+        Usage.click("task.read-context-file", label: "Read a task's context file")
+        let modified = (try? entry.url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        showReading(ReadingContent(
+            kind: .contextFile(task.id, entry.url.path), title: "\(task.name) · \(entry.name)", at: modified, markdown: markdown,
+            directory: entry.url.deletingLastPathComponent().path, taskID: task.id, scopeID: task.scopeID
+        ))
+    }
+
+    /// What `task`'s agent was given to read, as the Context card lists it: the context files where its threads
+    /// start, Scope's own first, then the repository's; and the skills its sandboxes hold.
+    func contextFiles(of task: TaskState) -> [TaskContextFiles.Entry] {
+        TaskContextFiles.offered(task: task.record, declared: contextFileNames, probe: TaskContextFiles.diskProbe)
+    }
+
+    func skills(of task: TaskState) -> [String] {
+        TaskContextFiles.skills(task: task.record, children: TaskContextFiles.diskChildren, isSkill: TaskContextFiles.diskIsSkill)
+    }
+
     /// The reading column stands on its own: it opens beside the terminal whether the inspector is shown or not
     /// (`RootView`), so reading an answer never brings the inspector along.
     func showReading(_ content: ReadingContent) {

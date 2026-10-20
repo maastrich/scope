@@ -192,8 +192,9 @@ extension AppModel {
             return
         }
         if attemptsCompared == attempt.group { globalSheet = nil }
+        // The user chose this one: the others go without a question each, each still undoable.
         for sibling in siblings {
-            await archiveTask(sibling.id)
+            try? await dismantleTask(sibling.id, .archive, by: .user)
         }
         selection = .task(task.id)
     }

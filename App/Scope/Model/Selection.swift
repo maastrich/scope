@@ -67,7 +67,7 @@ enum NewThreadTarget {
     case task(TaskState)
 }
 
-/// A thread closed by the user, kept for 30 s so ⇧⌘T can bring it back (`AppModel.undoCloseThread`).
+/// A closed thread, kept for `AppModel.undoWindow` so ⌘Z, ⇧⌘T or the toast can bring it back (`AppModel+Undo`).
 struct ClosedThread: Identifiable {
     let record: ThreadRecord
     let profile: DriverProfile

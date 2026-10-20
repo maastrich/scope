@@ -325,9 +325,25 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
-<kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
+<kbd>⌘Z</kbd> or <kbd>⇧⌘T</kbd> undoes a close for thirty seconds, Edit ▸ Undo for five minutes. A stopped thread stays stopped across a restart; only the ones still running
 when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section),
 and an agent brought back mid-turn is asked to continue its work (<b>Ask agents to continue after a restart</b>).</p>
+
+<h3 id="closing">Closing a thread, without regret</h3>
+<p>Nothing destructive sits under the pointer in the sidebar: a row's hover controls are <b>Open in Editor</b>
+(tasks) and a <b>…</b> menu, and <b>Close Thread</b>, <b>Archive</b> and <b>Close Task</b> live in that menu, in
+the context menu, in the menu bar (<kbd>⌘W</kbd>, Thread ▸ Task) and in the palette. Scope asks before closing
+or archiving only when something would be lost — an agent in the middle of a turn, a shell with a process still
+running, uncommitted changes, an open pull request (<b>Ask before closing a thread mid-turn or archiving a task
+with work in progress</b> in Settings, one switch for both) — and <b>Cancel</b> is the default button, so a
+Return typed for the terminal confirms nothing. A quiet thread or a finished, merged task goes in one click.</p>
+<p>Either way it can be taken back for five minutes: a toast says <i>“Title” closed — Reopen</i> or <i>“Name”
+archived — Undo</i> for ten seconds (naming the agent when one asked over <code>scope thread close</code> or
+<code>scope_task_archive</code>), and <b>Edit ▸ Undo</b> or the palette do the same afterwards. <kbd>⌘Z</kbd> and
+<kbd>⇧⌘T</kbd> (the last thread) work for thirty seconds after a close or archive of your own; an agent's is
+never on a shortcut, so a <kbd>⌘Z</kbd> typed in a text field stays a text undo. A reopened thread picks its driver session back up when the profile knows how; a restored task comes
+back with its sandboxes and its changes. Closing a task for good has no undo, which is why it stands behind the
+same question.</p>
 
 <h3 id="residents">Orchestrator and terminal</h3>
 <p>Every scope keeps two threads at its root that you never open yourself: an <b>Orchestrator</b> — an agent to
@@ -468,7 +484,7 @@ closing the task hangs them up.</p>
   <tr><td><b>Changes</b></td><td><code>+N −M</code></td><td>the changed files of the task, the working tree, or the branch vs <code>origin</code></td><td><kbd>⌘D</kbd></td></tr>
   <tr><td><b>Pull requests</b></td><td>its number and the checks — or <i>2 PRs · 1 merged · 1 checks failing</i> when the task has several</td><td>one compact row per pull request — state glyph, title, then <code>repo #n · +a −d · ✗ 1 / 4 · review</code> — the one you pick in full with every one of its checks, and at the foot what it asks of you (<i>Ready to merge</i>, <i>2 checks failing</i>, <i>Conflicts with the base</i>) with <b>Ask the agent</b>: the conflicts, the failing log or the merge go to the thread as a sentence</td><td></td></tr>
   <tr><td><b>Artifacts</b></td><td>what was kept at archive, how many checkpoints</td><td>the deliverable kept when the task was archived, with <b>Read</b>; the <b>Checkpoints</b>: time, thread, first words, <code>+N −M</code>, with <b>Show diff</b>, <b>Restore files</b> and <b>Branch from here</b> on hover</td><td></td></tr>
-  <tr><td><b>Context</b></td><td>the model of the task's thread</td><td>the brief (four lines, <b>Read in full</b> for the rest), the mission checklist, and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply; a turn that left a checkpoint has a dot under its bar</td><td></td></tr>
+  <tr><td><b>Context</b></td><td>the model of the task's thread and how full its context window is (<code>Fable 5.1 · 38 %</code>), else how long the brief is</td><td>the brief (four lines, <b>Read in full</b> for the rest, the topic as a chip), the mission checklist; <b>Given to the agent</b>: one line per context file where the threads start — the ones Scope wrote under each name the installed drivers read, and the repository's own — with its size, a click reading it in the reading column, then the skills the sandboxes hold (<code>.claude/skills</code>) as chips; <b>Model</b>: the model and the driver's version, a context gauge with its percentage when the driver reports one (Claude Code's status line does, relayed by <code>scope-hook statusline</code>), and under it what the task's threads consumed — tokens read, written, share from the cache; and the task's timeline: agent time, time waiting on you and elapsed time, then one lane per thread with its turns as bars, the waits between them tinted (answer, permission, unread result), failed turns in red, and the task's events as ticks (created, PR opened, checks red or green, merged, archived); quiet hours fold into a labelled break; hover a bar for when, how long, how it ended and the first words of the reply; a turn that left a checkpoint has a dot under its bar</td><td></td></tr>
   <tr><td><b>Repository</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
   <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
@@ -766,7 +782,9 @@ context file lists the milestones as they stand.</p>
   <tr><td><b>Archive</b></td><td>removes every worktree (the <a href="#branches">added branches</a> included), keeps the branches and the record</td></tr>
   <tr><td><b>Close</b></td><td>the same, then the record goes; optionally every branch of the task too</td></tr>
 </table>
-<p>One click, no question. In order: the task's threads are hung up, its teardown runs, every process still
+<p>No question unless something would be lost (<a href="#closing">above</a>): an agent mid-turn, uncommitted
+changes, an open pull request. An archive can be undone for five minutes (the toast, Edit ▸ Undo, the palette).
+In order: the task's threads are hung up, its teardown runs, every process still
 running under its folder (or started with its <code>SCOPE_TASK_ROOT</code>) gets SIGTERM, then SIGKILL three
 seconds later, the uncommitted changes are saved, and the worktrees are moved out of the way in an instant and
 deleted in the background. The row leaves the sidebar as soon as you click; a second click joins the archive in
@@ -1600,7 +1618,8 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌘O</kbd></td><td>Declare a scope…</td></tr>
   <tr><td><kbd>⌘R</kbd></td><td>Refresh scope</td></tr>
   <tr><td><kbd>⌘T</kbd></td><td>New thread in the current context</td></tr>
-  <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or undo the last close)</td></tr>
+  <tr><td><kbd>⇧⌘T</kbd></td><td>New task… (or reopen the last closed thread)</td></tr>
+  <tr><td><kbd>⌘Z</kbd></td><td>Undo your last close or archive (for 30 s; Edit ▸ Undo for 5 min)</td></tr>
   <tr><td><kbd>⌘W</kbd> / <kbd>⇧⌘W</kbd></td><td>Close thread / close window</td></tr>
   <tr><td><kbd>⌘.</kbd></td><td>Stop the thread</td></tr>
   <tr><td><kbd>⌥⌘R</kbd></td><td>Relaunch the thread, picking the driver's session back up when it can</td></tr>
