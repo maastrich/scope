@@ -145,7 +145,7 @@ public struct ClaudeSubagents: Sendable, Equatable {
         switch facts.event {
         case "SessionStart":
             guard facts.body["source"]?.string != "compact" else { return }
-            epoch = facts.at
+            epoch = max(epoch ?? facts.at, facts.at)
         case "SessionEnd":
             for index in agents.indices where agents[index].state.isRunning {
                 agents[index].state = .interrupted
@@ -160,10 +160,13 @@ public struct ClaudeSubagents: Sendable, Equatable {
             let index = entry(agentID: id, toolUseID: nil, at: nil)
             agents[index].type = agents[index].type ?? type
             agents[index].transcriptPath = facts.agentTranscriptPath ?? agents[index].transcriptPath
-            if agents[index].result == nil, let message = facts.body["last_assistant_message"]?.nonEmptyString {
+            if agents[index].result == nil || agents[index].state.isRunning,
+               let message = facts.body["last_assistant_message"]?.nonEmptyString {
                 agents[index].result = Self.excerpt(message)
             }
-            if agents[index].state.isRunning || agents[index].state == .interrupted {
+            // A background sub-agent stops at every answer, the interim ones too (`isInterim`): its notification
+            // says when it is done. A foreground one is done when it stops.
+            if agents[index].background != true, agents[index].state.isRunning || agents[index].state == .interrupted {
                 agents[index].state = .completed
                 agents[index].endedAt = agents[index].endedAt ?? facts.at
             }
@@ -174,6 +177,15 @@ public struct ClaudeSubagents: Sendable, Equatable {
         default:
             return
         }
+        settle()
+    }
+
+    /// The thread's process started at `date`: the latest of this and the last `SessionStart` is the `epoch`. The app
+    /// knows when it spawned the process even when no `SessionStart` reached it (a resumed session may send none
+    /// before its first prompt).
+    public mutating func processStarted(at date: Date) {
+        guard epoch.map({ date > $0 }) ?? true else { return }
+        epoch = date
         settle()
     }
 
@@ -337,12 +349,18 @@ public struct ClaudeSubagents: Sendable, Equatable {
         let index = entry(agentID: notification.taskID, toolUseID: notification.toolUseID, at: nil)
         var agent = agents[index]
         agent.background = agent.background ?? true
-        switch notification.status {
-        case "failed": agent.state = .failed
-        case "killed", "stopped": agent.state = .stopped
-        default: agent.state = .completed
+        if Self.isInterim(notification) {
+            // Its report so far: the same id reports again once its own background work is over.
+            agent.state = .running
+            agent.endedAt = nil
+        } else {
+            switch notification.status {
+            case "failed": agent.state = .failed
+            case "killed", "stopped": agent.state = .stopped
+            default: agent.state = .completed
+            }
+            agent.endedAt = notification.at ?? agent.endedAt
         }
-        agent.endedAt = notification.at ?? agent.endedAt
         agent.durationMs = notification.durationMs ?? agent.durationMs
         agent.tokens = notification.tokens ?? agent.tokens
         agent.toolUses = notification.toolUses ?? agent.toolUses
@@ -351,6 +369,12 @@ public struct ClaudeSubagents: Sendable, Equatable {
         agent.worktreeBranch = notification.worktreeBranch ?? agent.worktreeBranch
         agents[index] = agent
         return true
+    }
+
+    /// A sub-agent that answered while a command or agent of its own still runs in the background: Claude Code writes
+    /// `completed`, with `Agent "…" is waiting on its own background work` as the summary.
+    static func isInterim(_ notification: ClaudeTaskNotification) -> Bool {
+        notification.summary?.contains("waiting on its own background work") == true
     }
 
     /// The entry `agentID` or `toolUseID` names, if any.

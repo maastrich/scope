@@ -31,4 +31,8 @@ enum ClaudeSubagentFixtures {
 
     /// A background sub-agent stopped by the agent, without usage.
     static let agentKilled = #"{"parentUuid":"<id>","isSidechain":false,"promptId":"<id>","type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>a0000000000000004</task-id>\n<tool-use-id>toolu_agent4</tool-use-id>\n<output-file><path></output-file>\n<status>killed</status>\n<summary>Agent \"<text>\" was stopped</summary>\n</task-notification>"},"uuid":"<id>","timestamp":"2026-10-20T10:06:00.000Z","origin":{"kind":"task-notification"},"sessionId":"<id>","version":"2.1.304"}"#
+
+    /// A background sub-agent that answered while its own background command still ran: Claude Code says `completed`,
+    /// and reports again under the same id once that command is over.
+    static let agentInterim = #"{"parentUuid":"<id>","isSidechain":false,"promptId":"<id>","type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>a0000000000000001</task-id>\n<tool-use-id>toolu_agent1</tool-use-id>\n<output-file><path></output-file>\n<status>completed</status>\n<summary>Agent \"<text>\" is waiting on its own background work</summary>\n<note><text></note>\n<result><interim></result>\n<usage><subagent_tokens>45857</subagent_tokens><tool_uses>2</tool_uses><duration_ms>6000</duration_ms></usage>\n</task-notification>"},"uuid":"<id>","timestamp":"2026-10-20T10:01:00.000Z","origin":{"kind":"task-notification"},"sessionId":"<id>","version":"2.1.304"}"#
 }

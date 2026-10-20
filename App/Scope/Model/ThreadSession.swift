@@ -456,7 +456,12 @@ final class ThreadSession: Identifiable {
     /// Folds what the transcript gained.
     func applyTranscript(_ records: [ClaudeTranscriptRecord]) {
         guard !records.isEmpty else { return }
-        updateClaude { $0.apply(records) }
+        let started = if case .alive(_, let since) = phase { since } else { Date?.none }
+        updateClaude { session in
+            // Before the records: what a relaunch reads back from an earlier process is not running any more.
+            if let started { session.subagents.processStarted(at: started) }
+            session.apply(records)
+        }
     }
 
     /// What the configuration declares for the session's MCP servers (`ClaudeMCPConfig`).

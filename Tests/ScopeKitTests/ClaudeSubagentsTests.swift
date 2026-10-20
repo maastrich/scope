@@ -51,12 +51,13 @@ import Testing
         #expect(agent.endedAt != nil)
     }
 
-    @Test func aSubagentStopKeepsTheNotificationsWord() throws {
+    @Test func aBackgroundSubagentsStopWaitsForItsNotification() throws {
         var subagents = ClaudeSubagents()
         subagents.apply(Self.facts(F.postToolUseAsync))
         subagents.apply(Self.facts(F.subagentStop, at: Self.t0.addingTimeInterval(60)))
         var agent = try #require(subagents.agents.first)
-        #expect(agent.state == .completed)
+        // A background sub-agent's stop may be an interim answer: only its notification ends it.
+        #expect(agent.state == .running)
         #expect(agent.result == "<last message>")
         #expect(agent.transcriptPath == "/p/session/subagents/agent-a0000000000000001.jsonl")
         // The notification's report is the one Claude Code hands the session: it replaces the last message.
@@ -165,6 +166,20 @@ import Testing
         #expect(ClaudeSubagentMeta(json: Data(#"{"spawnDepth":"x","model":3}"#.utf8))?.spawnDepth == nil)
     }
 
+    @Test func anInterimReportKeepsItRunning() throws {
+        var subagents = ClaudeSubagents()
+        var tail = ClaudeTranscriptTail()
+        subagents.apply([N.agentToolUse, N.agentLaunched, F.agentInterim].flatMap { tail.records(Data($0.utf8)) })
+        var agent = try #require(subagents.agents.first)
+        #expect(agent.state == .running)
+        #expect(agent.result == "<interim>")
+        #expect(agent.endedAt == nil)
+        subagents.apply(tail.records(Data(N.agentFinished.utf8)))
+        agent = try #require(subagents.agents.first)
+        #expect(agent.state == .completed)
+        #expect(agent.result == "<text>")
+    }
+
     @Test func aStoppedSubagent() throws {
         var subagents = ClaudeSubagents()
         subagents.apply(Self.records([F.agentKilled]))
@@ -206,6 +221,18 @@ import Testing
         finished.apply(Self.facts(F.sessionStart("resume"), at: relaunch))
         finished.apply(Self.records(Self.transcript))
         #expect(finished.agents.first?.state == .completed)
+    }
+
+    @Test func theProcessStartIsAnEpochWithoutAnyHook() {
+        // A resumed session that sends no `SessionStart`: the app's own launch time is enough.
+        var subagents = ClaudeSubagents()
+        let launch = Date(timeIntervalSince1970: 1_800_000_000)
+        subagents.processStarted(at: launch)
+        subagents.apply(Self.records([N.agentToolUse, N.agentLaunched]))
+        #expect(subagents.agents.first?.state == .interrupted)
+        // An older start never moves the epoch back.
+        subagents.processStarted(at: Self.t0)
+        #expect(subagents.epoch == launch)
     }
 
     @Test func aCompactionIsNotANewProcess() {
