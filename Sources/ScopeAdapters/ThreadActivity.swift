@@ -122,6 +122,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// The agent's last answer, its end kept within `replyLimit`. `thread.read` keeps answering from the full one.
     public var lastReply: AgentReply?
     public var transcriptPath: String?
+    /// What the agent plans and how far it is (`AgentPlan`), folded from the todo and plan tools it reports; `nil`
+    /// until it reports one. Kept in the file: a plan is as much the state of the work as the turns are.
+    public var plan: AgentPlan?
     /// When the driver sent the event that closed the last turn as ended or failed (`AdapterEvent.sentAt`): anything
     /// it sent before that belongs to that turn, however late it reaches the app (see `isLate(_:)`).
     public var turnEndSentAt: Date?
@@ -141,7 +144,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// Everything but `saying`, `turnCalls` and `agents`, which belong to the live process: a restart closes the
     /// open turn as `.exited` (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
-        case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
+        case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt, plan
     }
 
     /// The calls of the last turn that ended or failed, or of the one in progress: what "this turn" means to a reader.
@@ -198,6 +201,11 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         let at = event.receivedAt
         if let path = event.payload[HookEvent.transcriptKey], !path.isEmpty { next.transcriptPath = path }
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
+        // A todo list or a plan is the latest word on the work whatever turn it reaches the app in.
+        if event.kind == .turnStarted, let tool = event.payload[HookEvent.toolKey], !tool.isEmpty,
+           let plan = AgentPlan.applying(tool: tool, raw: event.raw, to: plan, at: at) {
+            next.plan = plan
+        }
         if isLate(event, promptPending: promptPending) {
             // Still the last thing the agent ran, but no turn of its own.
             if event.kind == .turnStarted, let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
@@ -283,6 +291,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         next.lastTool = lastTool ?? saved.lastTool
         next.lastReply = lastReply ?? saved.lastReply
         next.transcriptPath = transcriptPath ?? saved.transcriptPath
+        next.plan = plan ?? saved.plan
         next.turnEndSentAt = turnEndSentAt ?? saved.turnEndSentAt
         return next
     }

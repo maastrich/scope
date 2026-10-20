@@ -55,8 +55,12 @@ final class ThreadSession: Identifiable {
     private(set) var activityHeadline: ThreadActivityHeadline?
     /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
     private(set) var assistNote: AssistNote?
-    /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
+    /// Bumped when a turn opens or closes, or the agent's plan moves: what the task timeline and the Plan card redraw
+    /// on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
+    /// `3/7 steps` while the agent's plan has steps left (`AgentPlan.summary`); `nil` otherwise. Observed, and only
+    /// set when the words move: the sidebar caption ends with it.
+    private(set) var planSummary: String?
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
     /// transcript) — not on each tool call, which only moves `lastTool`.
     @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
@@ -416,9 +420,12 @@ final class ThreadSession: Identifiable {
         let previous = activity
         activity = next
         refreshActivityHeadline()
-        if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
+        let planMoved = next.plan != previous.plan
+        if next.turns != previous.turns || next.inTurn != previous.inTurn || planMoved { turnRevision &+= 1 }
+        let summary = next.plan.flatMap { $0.isInProgress ? $0.summary : nil }
+        if planSummary != summary { planSummary = summary }
         if next.turns != previous.turns || next.lastReply != previous.lastReply
-            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || planMoved {
             onActivityChanged?(self)
         }
     }

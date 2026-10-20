@@ -60,4 +60,13 @@ import Testing
         #expect(fade.hidden == 0)
         #expect(fade.clearFrom == fade.kept)
     }
+
+    /// The plan rides on the caption, after what the agent is doing; nothing is added when there is no plan in
+    /// progress, and a caption with nothing else says the plan alone.
+    @Test func thePlanSummaryEndsTheCaption() {
+        #expect(SidebarRowLayout.caption("Running the tests", planSummary: "3/7 steps") == "Running the tests · 3/7 steps")
+        #expect(SidebarRowLayout.caption("Running the tests", planSummary: nil) == "Running the tests")
+        #expect(SidebarRowLayout.caption("Running the tests", planSummary: "") == "Running the tests")
+        #expect(SidebarRowLayout.caption("", planSummary: "3/7 steps") == "3/7 steps")
+    }
 }
