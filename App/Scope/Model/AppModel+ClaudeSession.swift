@@ -13,6 +13,46 @@ extension AppModel {
     /// The pause after a hook event before reading: the transcript line is often written just after the hook runs.
     static let claudeTranscriptSettle: Duration = .milliseconds(300)
 
+    /// The pause before asking `gh` about a pull request a thread just reported: `gh pr create` and a `pr-link`
+    /// arrive within moments of each other, and one look covers both.
+    static let claudePullRequestSettle: Duration = .seconds(2)
+
+    func wireClaudeSession(_ session: ThreadSession) {
+        session.onClaudeSessionStarted = { [weak self] session, cwd in
+            self?.readMCPConfiguration(for: session, cwd: cwd)
+        }
+        session.onClaudePullRequests = { [weak self] session, entries in
+            self?.claudeReportedPullRequests(entries, from: session)
+        }
+    }
+
+    /// Reads which MCP servers the configuration declares for `cwd` — `~/.claude.json` is large, so off the main
+    /// thread, and only at a session start, never on the transcript's tick.
+    func readMCPConfiguration(for session: ThreadSession, cwd: String) {
+        Task { [weak session] in
+            let declarations = await Task.detached(priority: .utility) {
+                ClaudeMCPConfig.read(claudeJSON: ClaudeMCPConfig.defaultClaudeJSON(), cwd: cwd)
+            }.value
+            session?.declareMCPServers(declarations)
+        }
+    }
+
+    /// A thread opened or merged a pull request: its task's pull requests are asked about now rather than at the
+    /// next background pass, minutes away. One reported before this launch is not news.
+    func claudeReportedPullRequests(_ entries: [ClaudeSessionPullRequests.Entry], from session: ThreadSession) {
+        guard let task = task(of: session), !task.isArchived,
+              entries.contains(where: { ($0.at ?? .distantPast) >= claudeSessionWatchStart }) else { return }
+        let id = task.id
+        claudePullRequestRefreshes[id]?.cancel()
+        claudePullRequestRefreshes[id] = Task { [weak self] in
+            try? await Task.sleep(for: Self.claudePullRequestSettle)
+            guard !Task.isCancelled, let self, let task = self.task(id), !task.isArchived else { return }
+            self.claudePullRequestRefreshes[id] = nil
+            await self.refreshTaskPullRequest(task)
+            await self.archiveIfMerged(task)
+        }
+    }
+
     func startClaudeTranscriptReader() {
         guard claudeTranscriptReader == nil else { return }
         claudeTranscriptReader = Task { [weak self] in
