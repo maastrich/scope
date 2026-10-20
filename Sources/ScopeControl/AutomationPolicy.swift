@@ -246,9 +246,10 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // thread; a schedule may create a task: the same approval as creating one.
                 approval = settings.tasks
             case .browser:
-                // The task's own browser, on a store of its own: which task is the question, and
-                // `mayDriveBrowser` answers it once the app has found it.
-                return .allow
+                // The task's own browser, on a store of its own: which task is the question, and `mayDriveBrowser`
+                // answers it once the app has found it. Looking is free; acting is the browser approval's.
+                if case .browser(let params) = call, params.action.isReadOnly { return .allow }
+                approval = settings.browser
             case .taskBranchAdd, .taskBranchRemove:
                 // A branch and a worktree written into the user's repository, or a worktree removed: what creating
                 // and archiving a task do, under the same approval. No budget: a worktree opens no agent, and the

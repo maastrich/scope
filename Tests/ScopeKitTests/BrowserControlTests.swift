@@ -112,3 +112,96 @@ import Testing
         #expect(target(nil) == nil)
     }
 }
+
+/// M2: acting in the page, where agents may go, and what the user blocks.
+@Suite struct BrowserActingTests {
+    @Test func actionsParseFromTheCLIAndTheTools() throws {
+        let cases: [([String], String, String, BrowserParams)] = [
+            (["browser", "click", "e2"], "scope_browser_click", #"{"ref":"e2"}"#, BrowserParams(action: .click, ref: "e2")),
+            (["browser", "type", "e1", "12 rue des Lilas", "--clear", "--submit"], "scope_browser_type",
+             #"{"ref":"e1","text":"12 rue des Lilas","clear":true,"submit":true}"#,
+             BrowserParams(action: .type, ref: "e1", text: "12 rue des Lilas", clear: true, submit: true)),
+            (["browser", "wait", "--selector", "#done", "--timeout", "5"], "scope_browser_wait", ##"{"selector":"#done","timeout":5}"##,
+             BrowserParams(action: .wait, selector: "#done", timeout: 5)),
+            (["browser", "network", "--all"], "scope_browser_network", #"{"all":true}"#, BrowserParams(action: .network, all: true)),
+        ]
+        for (argv, tool, json, expected) in cases {
+            #expect(try ScopeCLI.parse(argv) == .call(.browser(expected), ScopeCLI.Options()))
+            #expect(MCPBridge.call(tool: tool, arguments: Data(json.utf8)) == .success(.browser(expected)))
+        }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["browser", "type", "e1"]) }
+        #expect(throws: ScopeCLI.UsageError.self) { try ScopeCLI.parse(["browser", "click"]) }
+        #expect(BrowserParams(action: .wait, timeout: 90).waitSeconds == 30)
+        #expect(BrowserParams(action: .wait).waitSeconds == 10)
+    }
+
+    @Test func lookingIsFreeActingTakesTheBrowserApproval() {
+        let own = ThreadID(rawValue: "3f9a2c17be04")!
+        var settings = AutomationSettings()
+        settings.browser = .ask
+        let policy = AutomationPolicy(settings: settings)
+        for action in BrowserAction.allCases {
+            let decision = policy.decide(.browser(BrowserParams(action: action)), from: .thread(own, depth: 0))
+            if action.isReadOnly {
+                #expect(decision == .allow)
+            } else {
+                guard case .ask = decision else { Issue.record("\(action) should ask"); continue }
+            }
+        }
+        settings.browser = .deny
+        guard case .refuse = AutomationPolicy(settings: settings).decide(.browser(BrowserParams(action: .click, ref: "e1")),
+                                                                          from: .thread(own, depth: 0)) else {
+            Issue.record("a denied browser approval let a click through")
+            return
+        }
+        #expect(AutomationPolicy(settings: settings).decide(.browser(BrowserParams(action: .click)), from: .user) == .allow)
+    }
+
+    @Test func theSettingsDecodeWithDefaultsAndNormalizeHosts() throws {
+        let decoded = try JSONDecoder().decode(AutomationSettings.self, from: Data(#"{"browserBlocked":["https://JS.Stripe.com/v3"," ","js.stripe.com"]}"#.utf8))
+        #expect(decoded.browser == .allow)
+        #expect(decoded.browserSites == .any)
+        #expect(decoded.browserBlocked == ["js.stripe.com"])
+        let odd = try JSONDecoder().decode(AutomationSettings.self, from: Data(#"{"browserSites":"mars","browser":"maybe"}"#.utf8))
+        #expect(odd.browserSites == .any && odd.browser == .allow)
+    }
+
+    @Test func whereAnAgentMayGo() {
+        let block = PortBlock(base: 41_000)
+        func refusal(_ url: String, _ sites: BrowserSites, blocked: [String] = []) -> String? {
+            BrowserSitePolicy.refusal(for: URL(string: url)!, sites: sites, block: block, blocked: blocked)
+        }
+        #expect(refusal("https://example.com", .any) == nil)
+        #expect(refusal("https://cdn.js.stripe.com/x", .any, blocked: ["js.stripe.com"]) == "cdn.js.stripe.com is blocked for agents (js.stripe.com)")
+        #expect(refusal("https://notjs.stripe.com/x", .any, blocked: ["js.stripe.com"]) == nil)
+        #expect(refusal("http://localhost:5173", .localhost) == nil)
+        #expect(refusal("https://example.com", .localhost) != nil)
+        #expect(refusal("http://localhost:41004/a", .taskPorts) == nil)
+        #expect(refusal("http://localhost:5173", .taskPorts) != nil)
+    }
+
+    @Test func theContentRulesBlockAllButWhatIsAllowedWithoutAlternation() throws {
+        #expect(BrowserSitePolicy.contentRules(sites: .any, block: nil, blocked: []) == nil)
+        let json = try #require(BrowserSitePolicy.contentRules(sites: .taskPorts, block: PortBlock(base: 41_000, size: 2), blocked: ["js.stripe.com"]))
+        let rules = try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: [String: String]]])
+        #expect(rules.first?["action"]?["type"] == "block")
+        #expect(rules.first?["trigger"]?["url-filter"] == ".*")
+        // WebKit's url-filter has no `|`: one rule per alternative.
+        #expect(rules.allSatisfy { !($0["trigger"]?["url-filter"] ?? "").contains("|") })
+        let allowed = rules.filter { $0["action"]?["type"] == "ignore-previous-rules" }.compactMap { $0["trigger"]?["url-filter"] }
+        #expect(allowed.contains(#"^https?://localhost:41000/"#))
+        #expect(allowed.contains(#"^https?://127\.0\.0\.1:41001/"#))
+        #expect(!allowed.contains { $0.contains("41002") })
+        #expect(rules.last?["trigger"]?["url-filter"] == #"^[a-z]+://([^/:]*\.)?js\.stripe\.com[:/]"#)
+        for filter in rules.compactMap({ $0["trigger"]?["url-filter"] }) {
+            #expect((try? NSRegularExpression(pattern: filter)) != nil)
+        }
+    }
+
+    @Test func networkEntriesSayWhatWebKitKnows() {
+        #expect(BrowserNetworkEntry(url: "http://localhost:41000/api/promo", type: "fetch", method: "GET", status: 404, milliseconds: 12).rendered
+                == "GET  404  fetch          12 ms    http://localhost:41000/api/promo")
+        #expect(BrowserNetworkEntry(url: "http://localhost:41000/app.js", type: "script", milliseconds: 3).rendered.hasPrefix("     —    script"))
+        #expect(BrowserNetworkEntry(url: "http://x/", type: "fetch", method: "POST", failed: true).rendered.hasPrefix("POST fail"))
+    }
+}

@@ -65,6 +65,9 @@ final class TaskState: Identifiable {
     var otherPorts: [Int] = []
     /// What `.claude/launch.json` in its sandboxes declares, read on the same pass.
     var launchServers: [LaunchConfig.Server] = []
+    /// Hosts the user blocked for this task's agent browser from the pane (*Block … for this task*), on top of the
+    /// ones Settings blocks everywhere. Kept while the app runs.
+    var browserBlocked: [String] = []
     /// The processes behind `listeningPorts`, read while the Environment card is open (`AppModel+Ports`).
     var listeningProcesses: [ListeningProcesses.Process] = []
     /// The setup commands of the task's repositories, each once; `nil` until resolved (`AppModel.loadSetupCommands`).

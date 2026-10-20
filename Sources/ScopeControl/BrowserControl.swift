@@ -13,6 +13,22 @@ public enum BrowserAction: String, Codable, Sendable, CaseIterable {
     case screenshot
     /// What the page logged (`console.*`, uncaught errors) since the last read of it.
     case console
+    /// Click the element a `read` gave a ref to — through the DOM (`isTrusted` false).
+    case click
+    /// Type into a field a `read` gave a ref to, optionally clearing it first and submitting its form after.
+    case type
+    /// Wait for a selector, a text, or the network to go quiet.
+    case wait
+    /// The requests the page made since the last look: URL, type, duration; status for fetch/XHR only.
+    case network
+
+    /// Reading the page changes nothing: no approval is ever asked for these.
+    public var isReadOnly: Bool {
+        switch self {
+        case .read, .screenshot, .console, .wait, .network: true
+        case .open, .click, .type: false
+        }
+    }
 }
 
 /// `browser` — one action on the agent tab of a task.
@@ -25,18 +41,40 @@ public struct BrowserParams: Codable, Sendable, Equatable {
     public var url: String?
     /// `open`: a port — a number of the block (41003), or its index in the block (0–9).
     public var port: Int?
-    /// `console`: every line kept, not only the new ones.
+    /// `console`, `network`: every entry kept, not only the new ones.
     public var all: Bool?
+    /// `click`, `type`: the element's ref from the last `read` (`e12`).
+    public var ref: String?
+    /// `type`: what to type. `wait`: a text to wait for on the page.
+    public var text: String?
+    /// `type`: empty the field first.
+    public var clear: Bool?
+    /// `type`: submit the field's form once typed (as Enter would).
+    public var submit: Bool?
+    /// `wait`: a CSS selector to wait for.
+    public var selector: String?
+    /// `wait`: seconds before giving up (default 10, at most 30).
+    public var timeout: Int?
 
     public init(action: BrowserAction, task: String? = nil, scope: String? = nil, url: String? = nil, port: Int? = nil,
-                all: Bool? = nil) {
+                all: Bool? = nil, ref: String? = nil, text: String? = nil, clear: Bool? = nil, submit: Bool? = nil,
+                selector: String? = nil, timeout: Int? = nil) {
         self.action = action
         self.task = task
         self.scope = scope
         self.url = url
         self.port = port
         self.all = all
+        self.ref = ref
+        self.text = text
+        self.clear = clear
+        self.submit = submit
+        self.selector = selector
+        self.timeout = timeout
     }
+
+    /// `wait`'s bound, in seconds.
+    public var waitSeconds: Int { min(30, max(1, timeout ?? 10)) }
 }
 
 /// One line a page logged.
@@ -56,6 +94,37 @@ public struct BrowserConsoleLine: Codable, Sendable, Equatable {
     }
 }
 
+/// One request the page made.
+public struct BrowserNetworkEntry: Codable, Sendable, Equatable {
+    public var url: String
+    /// `navigation`, `script`, `css`, `img`, `fetch`, `xmlhttprequest`…
+    public var type: String
+    public var method: String?
+    /// Only for fetch/XHR, read by a wrapper inside the page: WebKit gives no status for the rest.
+    public var status: Int?
+    public var milliseconds: Int?
+    /// The request failed outright (network error, blocked).
+    public var failed: Bool
+
+    public init(url: String, type: String, method: String? = nil, status: Int? = nil, milliseconds: Int? = nil, failed: Bool = false) {
+        self.url = url
+        self.type = type
+        self.method = method
+        self.status = status
+        self.milliseconds = milliseconds
+        self.failed = failed
+    }
+
+    /// `GET 404  fetch  12 ms  http://localhost:41000/api/promo`.
+    public var rendered: String {
+        let method = (self.method ?? "").padding(toLength: 4, withPad: " ", startingAt: 0)
+        let status = failed ? "fail" : (self.status.map(String.init) ?? "—").padding(toLength: 4, withPad: " ", startingAt: 0)
+        let type = self.type.padding(toLength: 14, withPad: " ", startingAt: 0)
+        let ms = milliseconds.map { "\($0) ms" } ?? ""
+        return "\(method) \(status) \(type) \(ms.padding(toLength: 8, withPad: " ", startingAt: 0)) \(url)"
+    }
+}
+
 /// The answer of every browser action: where the tab stands, and what the action brought back.
 public struct BrowserResult: Codable, Sendable, Equatable {
     public var task: String
@@ -71,6 +140,8 @@ public struct BrowserResult: Codable, Sendable, Equatable {
     public var page: String?
     /// `console`: the lines, oldest first.
     public var console: [BrowserConsoleLine]?
+    /// `network`: the requests, oldest first.
+    public var network: [BrowserNetworkEntry]?
     /// `screenshot`: the JPEG's path, and its size in pixels.
     public var screenshot: String?
     public var width: Int?
@@ -235,6 +306,15 @@ public enum BrowserText {
                 lines.append("<untrusted-console>")
                 lines.append(contentsOf: console.map { BrowserPage.defuse($0.rendered) })
                 lines.append("</untrusted-console>")
+            }
+        }
+        if let network = result.network {
+            if network.isEmpty {
+                lines.append("network: nothing new")
+            } else {
+                lines.append("<untrusted-network>")
+                lines.append(contentsOf: network.map { BrowserPage.defuse($0.rendered) })
+                lines.append("</untrusted-network>")
             }
         }
         if let page = result.page {

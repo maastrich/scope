@@ -60,6 +60,7 @@ extension AppModel {
             guard let self, let task = self.task(session.taskID) else { return }
             self.openBrowserTab(url, in: task)
         }
+        session.downloadsFolder = env.home.appending(path: "browser/downloads/\(task.id.rawValue)", directoryHint: .isDirectory)
         browser.add(session)
         inspector.show(.browser)
         return session

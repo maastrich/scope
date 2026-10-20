@@ -246,6 +246,16 @@ processes serve (5173 without <code>--port $SCOPE_PORT</code>), else what <code>
 interfere, framed as <code>&lt;untrusted-page&gt;</code> with hidden text marked; <i>screenshot</i> writes a JPEG
 (1280 px wide at most) under <code>SCOPE_HOME/browser/shots/</code> and the agent gets the image itself;
 <i>console</i> gives what was logged since its last look.</p>
+<p>They act too: <code>scope_browser_click</code> on a ref, <code>scope_browser_type</code> into a field (and
+<code>submit</code> its form), <code>scope_browser_wait</code> for a selector, a text or a quiet page,
+<code>scope_browser_network</code> for the requests (with a status for fetch and XHR only — WebKit gives none for the
+rest). Clicks go through the page's DOM, so what needs a real gesture of yours — a popup, a file picker, the
+clipboard — does not happen. <b>Settings ▸ Automation ▸ Browser</b> says whether acting needs your approval (reading
+never does), where agents may browse — the task's ports, localhost, or anywhere, the default — and which sites are
+blocked; WebKit enforces it on every page and every request of the agent's tab. When an agent's page goes outside
+localhost, a card says so, with <i>Block … for This Task</i>; nothing waits on you. <b>Stop</b> in the agent's band
+(<kbd>Esc</kbd> while it works) ends its running call and refuses the next ones until you let it continue; the
+footer's <i>Actions</i> lists everything it did. Downloads land under <code>SCOPE_HOME/browser/downloads/</code>.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
