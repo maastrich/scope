@@ -51,6 +51,7 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
   <tr><td><code>SubagentStart</code>, <code>SubagentStop</code></td><td>no change; the sub-agents still running are counted, and <code>scope thread wait</code> holds while one of them runs in the background after a <code>Stop</code></td></tr>
   <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
+  <tr><td><code>TaskCreated</code>, <code>TaskCompleted</code></td><td>no change; the task goes into the thread's plan (the <b>Plan</b> card)</td></tr>
 </table>
 <p>Two moments have no hook at all, and come from what you type into the thread instead: <b>Esc</b> or
 <b>Ctrl-C</b> during a turn ends it (idle), and <b>Return</b> on a permission prompt resumes it (running).
@@ -58,7 +59,11 @@ Claude Code's <code>idle_prompt</code> notification, sent a minute after any ans
 deliberately ignored: the turn is already done, nobody is asking anything.</p>
 <p>Scope also keeps what the hooks say about the work itself: the tool each <code>PostToolUse</code> reports
 and what it was about, when each turn started and how it ended, the last answer, and where Claude Code writes the
-session's transcript. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
+session's transcript, and the agent's plan: the todo list of <code>TodoWrite</code>, the tasks of
+<code>TaskCreate</code>, <code>TaskUpdate</code> and <code>TaskList</code>, the plan <code>ExitPlanMode</code> writes out
+of plan mode — what the <b>Plan</b> card shows. Recent versions of Claude Code no longer offer the todo and task tools
+to recent models unless <code>CLAUDE_CODE_ENABLE_TODO_TOOLS</code> is set, so the bundled Claude Code profiles set it:
+without it the agent keeps its list in prose and the card stays empty. It lives beside the thread's record, in <code>~/.scope/threads/&lt;id&gt;.activity.json</code>,
 survives a restart, and goes when the thread is closed.</p>
 <h3 id="limits">Your plan's limits</h3>
 <p>A Claude subscription (Pro, Max) is not a budget of tokens: it is a rolling five-hour window and a weekly one,
