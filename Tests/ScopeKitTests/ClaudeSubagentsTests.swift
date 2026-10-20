@@ -280,6 +280,29 @@ import Testing
         #expect(subagents.agents.last?.agentID == "b\(ClaudeSubagents.limit + 4)")
     }
 
+    @Test func theSidebarShowsWhatRunsAndWhatJustFinished() throws {
+        var subagents = ClaudeSubagents()
+        subagents.apply(Self.facts(F.sessionStart("startup")))
+        subagents.apply(Self.facts(F.postToolUseSync, at: Self.t0.addingTimeInterval(1)))
+        subagents.apply(Self.facts(F.postToolUseAsync, at: Self.t0.addingTimeInterval(2)))
+        let ended = try #require(subagents.agent("a0000000000000002")?.endedAt)
+        #expect(subagents.sidebar(now: ended.addingTimeInterval(10), alive: true).agents.map(\.id) == ["a0000000000000002", "a0000000000000001"])
+        #expect(subagents.nextSidebarChange(after: ended) == ended.addingTimeInterval(ClaudeSubagents.linger))
+        let later = ended.addingTimeInterval(ClaudeSubagents.linger + 1)
+        #expect(subagents.sidebar(now: later, alive: true).agents.map(\.id) == ["a0000000000000001"])
+        #expect(subagents.nextSidebarChange(after: later) == nil)
+        #expect(subagents.sidebar(now: later, alive: false).agents.isEmpty)
+        for index in 0..<6 {
+            let stdin = F.postToolUseAsync
+                .replacingOccurrences(of: "a0000000000000001", with: "a20\(index)")
+                .replacingOccurrences(of: "toolu_agent1", with: "toolu_r\(index)")
+            subagents.apply(Self.facts(stdin, at: later))
+        }
+        let crowded = subagents.sidebar(now: later, alive: true)
+        #expect(crowded.agents.count == ClaudeSubagents.sidebarLimit)
+        #expect(crowded.more == 7 - ClaudeSubagents.sidebarLimit)
+    }
+
     @Test func pathsBesideTheSessionTranscript() {
         let session = "/Users/x/.claude/projects/p/1234.jsonl"
         #expect(ClaudeSubagents.transcriptURL(agentID: "a1", sessionTranscript: session).path

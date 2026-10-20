@@ -53,6 +53,8 @@ final class ThreadSession: Identifiable {
     /// Claude Code's own state beyond the turn: background work, sub-agents, the permission mode… (`ClaudeSession`).
     /// Observed, and only set when it moves; fed by every hook event, late ones included, and by the transcript.
     private(set) var claude = ClaudeSession()
+    /// The sub-agent the Subagents card shows the detail of, picked there or from its sidebar row.
+    var focusedSubagent: String?
     /// Where the transcript was last read up to (`AppModel+ClaudeSession`).
     @ObservationIgnored var transcriptTail = ClaudeTranscriptTail()
     @ObservationIgnored var transcriptTailReading = false

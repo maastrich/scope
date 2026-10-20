@@ -236,6 +236,38 @@ public struct ClaudeSubagents: Sendable, Equatable {
         transcriptURL(agentID: agentID, sessionTranscript: sessionTranscript).deletingPathExtension().appendingPathExtension("meta.json")
     }
 
+    // MARK: Sidebar
+
+    /// How long a finished sub-agent stays under its thread in the sidebar.
+    public static let linger: TimeInterval = 90
+    /// Most sub-agent rows under one thread.
+    public static let sidebarLimit = 4
+
+    /// The sub-agents the sidebar hangs under the thread, oldest launch first: the running ones, then those that
+    /// finished within `linger`, at most `sidebarLimit`; `more` counts the running ones left out. None once the
+    /// thread's process is gone: the inspector still lists them.
+    public func sidebar(now: Date, alive: Bool) -> (agents: [Agent], more: Int) {
+        guard alive else { return ([], 0) }
+        let running = agents.filter(\.state.isRunning)
+        let recent = agents.filter { agent in
+            guard !agent.state.isRunning, let end = agent.endedAt else { return false }
+            return now.timeIntervalSince(end) < Self.linger
+        }
+        let shown = Array(running.prefix(Self.sidebarLimit)) + Array(recent.suffix(max(0, Self.sidebarLimit - running.count)))
+        let ids = Set(shown.map(\.id))
+        return (agents.filter { ids.contains($0.id) }, max(0, running.count - Self.sidebarLimit))
+    }
+
+    /// When the sidebar next changes on its own (a finished sub-agent's `linger` running out); `nil` when nothing
+    /// lingers.
+    public func nextSidebarChange(after now: Date) -> Date? {
+        agents.compactMap { agent -> Date? in
+            guard !agent.state.isRunning, let end = agent.endedAt else { return nil }
+            let expiry = end.addingTimeInterval(Self.linger)
+            return expiry > now ? expiry : nil
+        }.min()
+    }
+
     // MARK: Waiting
 
     /// How many sub-agents are still at work, for `thread.wait`: the ones the hooks saw start and not stop

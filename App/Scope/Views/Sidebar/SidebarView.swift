@@ -29,6 +29,14 @@ struct SidebarView: View {
     @State private var scopeSwitchAnimation = Self.keyboardSwitch
 
     private static let keyboardSwitch = Animation.easeOut(duration: 0.12)
+    /// The time the sub-agent rows are drawn at (`SubagentRows`): moved when a finished sub-agent's time under its
+    /// thread runs out, and otherwise left alone so the list is not redrawn on a timer.
+    @State private var subagentClock = Date.now
+
+    /// When a finished sub-agent next leaves its thread's rows, across the scope's threads; `nil` when none lingers.
+    private var nextSubagentChange: Date? {
+        model.threads.compactMap { $0.claude.subagents.nextSidebarChange(after: subagentClock) }.min()
+    }
 
     private var filter: String { model.searchUI.sidebarFilter.trimmingCharacters(in: .whitespaces) }
     private var isFiltering: Bool { !filter.isEmpty }
@@ -107,6 +115,11 @@ struct SidebarView: View {
             UsageMeterBand()
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
+        .task(id: nextSubagentChange) {
+            guard let next = nextSubagentChange else { return }
+            try? await Task.sleep(for: .seconds(max(0.5, next.timeIntervalSinceNow)))
+            if !Task.isCancelled { subagentClock = .now }
+        }
         // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
         // the keyboard (the command palette already behaves this way).
         //
@@ -378,6 +391,10 @@ struct SidebarView: View {
     private func taskRows(_ task: TaskState, depth: Int = 0) -> some View {
         TaskRow(task: task, depth: depth)
             .tag(SidebarItem.task(task.id))
+        // The task row stands for its only thread: that thread's sub-agents hang from it.
+        if model.threads(in: task.id).count == 1, let only = model.threads(in: task.id).first {
+            SubagentRows(session: only, depth: depth + 1, now: subagentClock)
+        }
         // The task row stands for its only thread, and for all of them while collapsed: their reply field goes under it.
         if let replying = model.messageUI.replyingTo, model.threads(in: task.id).contains(where: { $0.id == replying }),
            model.threads(in: task.id).count == 1 || !(task.isExpanded || isFiltering) {
@@ -389,6 +406,7 @@ struct SidebarView: View {
                 ThreadRow(session: session, depth: depth + 1,
                           nesting: SidebarNesting(parentDepth: depth, isLast: session.id == threads.last?.id))
                     .tag(SidebarItem.thread(session.id))
+                SubagentRows(session: session, depth: depth + 2, now: subagentClock)
                 if model.messageUI.replyingTo == session.id {
                     InlineReplySlot(thread: session.id, depth: depth + 1)
                 }
@@ -420,6 +438,7 @@ struct SidebarView: View {
                     // Depth 1 so its title lines up with the task names it sits among.
                     ThreadRow(session: session, depth: 1)
                         .tag(SidebarItem.thread(session.id))
+                    SubagentRows(session: session, depth: 2, now: subagentClock)
                     if model.messageUI.replyingTo == session.id {
                         InlineReplySlot(thread: session.id, depth: 1)
                     }
@@ -437,6 +456,7 @@ struct SidebarView: View {
         ForEach(model.residents(in: scope.id).filter { matches($0.title) }) { session in
             ThreadRow(session: session, depth: 1)
                 .tag(SidebarItem.thread(session.id))
+            SubagentRows(session: session, depth: 2, now: subagentClock)
             if model.messageUI.replyingTo == session.id {
                 InlineReplySlot(thread: session.id, depth: 1)
             }
@@ -455,6 +475,7 @@ struct SidebarView: View {
                 ForEach(threads) { session in
                     ThreadRow(session: session, depth: 1, nesting: SidebarNesting(parentDepth: 0, isLast: session.id == threads.last?.id))
                         .tag(SidebarItem.thread(session.id))
+                    SubagentRows(session: session, depth: 2, now: subagentClock)
                     if model.messageUI.replyingTo == session.id {
                         InlineReplySlot(thread: session.id, depth: 1)
                     }
