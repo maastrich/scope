@@ -1257,7 +1257,11 @@ just handed a prompt counts as at work until its driver reports on it, so a wait
 <code>thread send</code> or <code>task new</code> does not return before the work starts. An answer that lands
 during the wait ends it, and a thread that still reads running although its last answer is newer than anything
 that started a turn counts as done. A Claude Code turn that ends with sub-agents still running in the background
-does not end the wait: the thread is still at work until they report and it answers. Shell commands and Monitors
+does not end the wait: the thread is still at work until they report and it answers — a sub-agent whose end the
+session's transcript already shows no longer counts, nor does one launched by a process that is gone. The answer
+lists each thread's sub-agents still running and the last five that finished (<code>subagents</code>: type,
+description, state, duration, tokens, tool calls); <code>scope thread read</code> lists them all with the start of
+each one's report, and <code>scope list threads</code> counts them in a SUBAGENTS column. Shell commands and Monitors
 it left running in the background — a dev server, a watcher — never hold it: the answer lists them (id, state,
 command, exit code, output file, and any <code>/loop</code> wake-up or cron), as do <code>scope list threads</code>
 and <code>scope thread read</code>; read the output file rather than waiting. For a thread in a task, the

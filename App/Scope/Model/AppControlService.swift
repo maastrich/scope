@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ScopeAdapters
 import ScopeControl
 import ScopeCore
 import ScopeDrivers
@@ -157,6 +158,8 @@ final class AppControlService: ControlService {
                 read(session, params).map { payload in
                     guard case .read(var result) = payload else { return payload }
                     result.background = session.backgroundReport()
+                    result.subagents = SubagentList.summaries(session.claude.subagents, now: .now, alive: session.isAlive,
+                                                              recent: nil, withResults: true)
                     return .read(result)
                 }
             }
@@ -528,7 +531,9 @@ final class AppControlService: ControlService {
             let task = taskOf(session)
             return ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
                                           settled: settled, reply: session.lastReply, lastPromptAt: session.lastPromptAt,
-                                          agents: session.waitSnapshot.agents, task: task?.record.id.rawValue,
+                                          agents: session.waitSnapshot.agents,
+                                          subagents: SubagentList.summaries(session.claude.subagents, now: .now, alive: session.isAlive),
+                                          task: task?.record.id.rawValue,
                                           pullRequest: task.flatMap(pullRequestSummary), background: session.backgroundReport())
         }
         return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
@@ -1032,7 +1037,8 @@ final class AppControlService: ControlService {
                 : ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
             tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue]),
             session: ClaudeSessionSummary.make(session.claude),
-            background: session.backgroundReport()
+            background: session.backgroundReport(),
+            subagents: SubagentList.summaries(session.claude.subagents, now: .now, alive: session.isAlive)
         )
     }
 

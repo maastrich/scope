@@ -126,9 +126,11 @@ import Testing
     }
 
     @Test func blocksTakeTheirOwnHeightAndListsShareTheRestByWeight() {
-        let heights = Layout.bodyHeights(available: 700, items: items([.base: 60, .delta: 0, .files: 0]),
+        // Tall enough that the lighter list stays above its minimum whatever the number of card headers.
+        let available = headers + 60 + 4 * Layout.minimumFill * 2
+        let heights = Layout.bodyHeights(available: available, items: items([.base: 60, .delta: 0, .files: 0]),
                                          weights: [.delta: 3, .files: 1])
-        let rest = 700 - headers - 60
+        let rest = available - headers - 60
         #expect(heights[.base] == 60)
         #expect(abs((heights[.delta] ?? 0) - rest * 0.75) < 0.001)
         #expect(abs((heights[.files] ?? 0) - rest * 0.25) < 0.001)

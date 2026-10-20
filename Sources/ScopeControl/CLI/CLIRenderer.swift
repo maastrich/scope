@@ -62,13 +62,16 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                // The column only when some thread has something running in the background.
+                // The columns only when some thread has something running in the background, or launched sub-agents.
                 let background = result.threads.contains { ($0.background ?? []).contains(where: \.isRunning) }
+                let subagents = result.threads.contains { !($0.subagents ?? []).isEmpty }
                 blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "MODE", "STATE", "SCOPE", "TASK", "TOKENS", "BY"]
-                                        + (background ? ["BACKGROUND"] : []) + ["ACTIVITY"], result.threads.map {
+                                        + (background ? ["BACKGROUND"] : []) + (subagents ? ["SUBAGENTS"] : []) + ["ACTIVITY"],
+                                    result.threads.map {
                     [$0.id, $0.title, $0.driver, $0.session?.model ?? $0.model ?? "", $0.session?.modeColumn ?? "", $0.state, $0.scopeSlug,
                      $0.task ?? "", $0.tokens ?? "", openedBy($0)]
-                        + (background ? [backgroundColumn($0.background)] : []) + [activityColumn($0)]
+                        + (background ? [backgroundColumn($0.background)] : [])
+                        + (subagents ? [SubagentList.column($0.subagents)] : []) + [activityColumn($0)]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -126,6 +129,7 @@ public enum CLIRenderer {
             if let older = result.olderCursor {
                 lines.append("older lines: cursor \(older) (scope thread read \(result.thread) --cursor \(older))")
             }
+            lines += subagents(result.subagents, withResults: true)
             return lines.joined(separator: "\n")
         case .wait(let result):
             var lines = [result.complete
@@ -140,6 +144,7 @@ public enum CLIRenderer {
                 if let background = BackgroundWorkReport.line(entry.background, now: .now) {
                     lines.append(background + " — not waited on")
                 }
+                lines += subagents(entry.subagents, withResults: false)
                 if let pr = entry.pullRequest { lines.append("pull request \(pr.line) \(pr.url.absoluteString)" + (entry.task.map { " · task \($0)" } ?? "")) }
                 if let reply = entry.reply {
                     lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
@@ -471,6 +476,20 @@ public enum CLIRenderer {
     }
 
     /// Untrusted text between the markers, the warning first: tool descriptions get skimmed, this does not.
+    /// A thread's sub-agents, one line each, the reports under them: descriptions and reports are the agent's words,
+    /// so the block is quoted like a reply.
+    static func subagents(_ summaries: [SubagentSummary]?, withResults: Bool) -> [String] {
+        guard let summaries, !summaries.isEmpty else { return [] }
+        var body: [String] = []
+        for summary in summaries {
+            body.append("\(summary.id)  \(summary.line)")
+            if withResults, let result = summary.result {
+                body += result.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }
+            }
+        }
+        return ["sub-agents (\(SubagentList.column(summaries))):"] + quoted(body.joined(separator: "\n"))
+    }
+
     static func quoted(_ text: String) -> [String] {
         [ThreadTranscript.untrustedNotice, ThreadTranscript.openMarker] + (text.isEmpty ? [] : [text])
             + [ThreadTranscript.closeMarker]

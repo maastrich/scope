@@ -81,6 +81,18 @@ import Testing
         #expect(!settled("running", agents: 1))
         #expect(settled("idle", agents: 0))
         #expect(!settled("idle", agents: 1, reply: 5, waitingFor: 60), "the answer that ended that turn says it is waiting")
+        // The last sub-agent reported after that interim answer, and the turn on its report is open: not the end.
+        let interim = ThreadWait.Snapshot(state: "running", replyAt: Self.ago(30), turnStartedAt: Self.ago(1), agents: 0,
+                                          subagentsEndedAt: Self.ago(2))
+        #expect(!ThreadWait.isSettled(interim, now: Self.now, waitingSince: Self.ago(60)))
+        // Nor while that turn is expected and not started yet.
+        let expected = ThreadWait.Snapshot(state: "done", expectingSince: Self.ago(2), replyAt: Self.ago(30), agents: 0,
+                                           subagentsEndedAt: Self.ago(2))
+        #expect(!ThreadWait.isSettled(expected, now: Self.now, waitingSince: Self.ago(60)))
+        // The answer on its report ends the wait.
+        let answered = ThreadWait.Snapshot(state: "done", replyAt: Self.ago(1), turnStartedAt: Self.ago(1.5), agents: 0,
+                                           subagentsEndedAt: Self.ago(2))
+        #expect(ThreadWait.isSettled(answered, now: Self.now, waitingSince: Self.ago(60)))
         #expect(settled("waiting", agents: 1), "a question or a permission: someone must act")
         #expect(settled("exited", agents: 1) && settled("failed", agents: 1))
         let entry = ThreadWaitResult.Entry(thread: "3f9a2c17be04", title: "api", state: "idle", settled: false, agents: 2)
