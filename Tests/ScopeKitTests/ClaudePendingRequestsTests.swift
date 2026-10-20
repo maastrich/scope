@@ -70,6 +70,18 @@ import Testing
         #expect(pending.requests.isEmpty)
     }
 
+    @Test("a turn's end replayed from the transcript's start does not clear what is asked now")
+    func replayedTurnEnd() throws {
+        var pending = Self.final(ClaudePendingFixtures.write)
+        let asked = try #require(pending.current).askedAt
+        pending.apply([.turnDuration(ClaudeTurnDuration(durationMs: 1000, pendingBackgroundAgents: 0,
+                                                        at: asked.addingTimeInterval(-60)))])
+        #expect(pending.current != nil)
+        pending.apply([.turnDuration(ClaudeTurnDuration(durationMs: 1000, pendingBackgroundAgents: 0,
+                                                        at: asked.addingTimeInterval(2)))])
+        #expect(pending.requests.isEmpty)
+    }
+
     @Test("an MCP permission names its tool, its server and the rule offered")
     func mcpPermission() throws {
         let steps = Self.replay(ClaudePendingFixtures.mcp)
@@ -170,6 +182,18 @@ import Testing
         #expect(steps[5].waitReason == .permission, "still waiting on the second one")
         #expect(steps[6].current?.command == "echo probe beta")
         #expect(steps[7].requests.isEmpty)
+    }
+
+    @Test("the first of two stacked permissions answered at a key: its tool report leaves the second asked")
+    func stackedAnsweredByKey() {
+        var pending = Self.replay(Array(ClaudePendingFixtures.stacked.prefix(7))).last!
+        #expect(pending.current?.command == "echo probe alpha")
+        let key = pending.userTyped([0x31])
+        #expect(key == .approved)
+        #expect(pending.current?.command == "echo probe beta")
+        pending.apply(ClaudeHookFacts(body: JSONValue(json: ClaudePendingFixtures.stacked[7])!, at: .now))
+        #expect(pending.current?.command == "echo probe beta")
+        #expect(pending.waitReason == .permission)
     }
 
     @Test("a tool report whose input was clamped differently still finds its permission by tool")
@@ -275,5 +299,35 @@ import Testing
         #expect(first.command?.count == ClaudePendingRequest.textLimit)
         let second = try #require(Self.final([payload]).requests.first)
         #expect(first.id == second.id)
+    }
+}
+
+/// `claude agents --json` as Claude Code 2.1.304 printed it with a permission dialog up (ids and paths replaced).
+@Suite struct ClaudeAgentsReportTests {
+    static let output = #"""
+    [
+      {"id": "cd1b1247", "cwd": "/w", "kind": "background", "startedAt": 1786799328166, "sessionId": "s-bg", "name": "<text>", "state": "blocked"},
+      {"pid": 2180, "cwd": "/w", "kind": "interactive", "startedAt": 1792477900541, "sessionId": "s-idle", "name": "<text>", "status": "idle"},
+      {"pid": 64314, "cwd": "/w", "kind": "interactive", "startedAt": 1792494441244, "sessionId": "s-asks", "name": "<text>", "status": "waiting", "waitingFor": "permission prompt"},
+      {"pid": 7, "kind": "interactive", "sessionId": "s-input", "status": "waiting", "waitingFor": "input needed"},
+      {"pid": 8, "status": "busy"}
+    ]
+    """#
+
+    @Test("only a session waiting on a permission dialog counts")
+    func waitsOnPermission() {
+        let report = ClaudeAgentsReport(json: Data(Self.output.utf8))
+        #expect(report.sessions.map(\.sessionID) == ["s-bg", "s-idle", "s-asks", "s-input"])
+        #expect(report.sessions[2].pid == 64314)
+        #expect(report.waitsOnPermission(sessionID: "s-asks"))
+        #expect(!report.waitsOnPermission(sessionID: "s-input"))
+        #expect(!report.waitsOnPermission(sessionID: "s-idle"))
+        #expect(!report.waitsOnPermission(sessionID: "unknown"))
+    }
+
+    @Test("output that is not the expected JSON reads as no session")
+    func tolerant() {
+        #expect(ClaudeAgentsReport(json: Data("error: unknown command".utf8)).sessions.isEmpty)
+        #expect(ClaudeAgentsReport(json: Data(#"{"sessions":[]}"#.utf8)).sessions.isEmpty)
     }
 }

@@ -108,8 +108,9 @@ public struct ClaudePendingRequests: Sendable, Equatable {
         if requests.count > Self.limit { requests.removeFirst(requests.count - Self.limit) }
     }
 
-    /// Drops the request a tool report is about: by `tool_use_id`, else by the tool and its exact input, else — the
-    /// input as clamped on the wire can differ between two hooks — the oldest one for the same tool.
+    /// Drops the request a tool report is about: by `tool_use_id`, else by the tool and its exact input, else — when
+    /// the report's input was cut on the wire (`…`), so it can differ from the request's — the oldest one for the
+    /// same tool. Only then: the report of a request already answered at a key must not take the next one with it.
     mutating func resolve(tool: String?, toolUseID: String?, input: JSONValue?) {
         if let toolUseID, let index = requests.firstIndex(where: { $0.toolUseID == toolUseID }) {
             requests.remove(at: index)
@@ -120,7 +121,7 @@ public struct ClaudePendingRequests: Sendable, Equatable {
             requests.remove(at: index)
             return
         }
-        guard let tool else { return }
+        guard let tool, input?.jsonString.contains("…") == true else { return }
         if let index = requests.firstIndex(where: { $0.tool == tool && $0.toolUseID == nil }) {
             requests.remove(at: index)
         }
@@ -141,8 +142,14 @@ public struct ClaudePendingRequests: Sendable, Equatable {
             switch record {
             case .toolCall(let call):
                 requests.removeAll { $0.toolUseID == call.id }
-            case .turnDuration:
-                requests.removeAll()
+            case .turnDuration(let turn):
+                // A transcript read from its start again (a relaunch, a resumed session) replays every turn's end:
+                // only one written after a request was asked can have ended it.
+                if let end = turn.at {
+                    requests.removeAll { $0.askedAt <= end }
+                } else {
+                    requests.removeAll()
+                }
             default:
                 break
             }
@@ -188,6 +195,11 @@ public struct ClaudePendingRequests: Sendable, Equatable {
     /// The request is no longer asked (answered from Scope).
     public mutating func remove(id: String) {
         requests.removeAll { $0.id == id }
+    }
+
+    /// A permission described and not confirmed yet: what `ClaudeAgentsReport` is asked about.
+    public var awaitsConfirmation: Bool {
+        requests.contains { $0.kind == .permission && !$0.shown }
     }
 
     /// `PermissionRequest` described it and the session is waiting on a permission dialog right now (`claude agents`):

@@ -477,7 +477,9 @@ final class ThreadSession: Identifiable {
         // driver is about to open a turn on its result, expected as after `agent.ended` in `apply(_:)`.
         // "No" in a permission dialog fires no hook: the turn just ends, which only the transcript says. The thread
         // then waits on nothing.
-        let turnEnded = records.contains { if case .turnDuration = $0 { true } else { false } }
+        // Only a turn end written after the wait began: a transcript read from its start replays every earlier one.
+        let waitBegan = activity.turns.last?.endedAt ?? .distantFuture
+        let turnEnded = records.contains { if case .turnDuration(let turn) = $0 { (turn.at ?? .distantPast) > waitBegan } else { false } }
         if turnEnded, phase.isAlive, adapterState == .waiting(reason: .permission), claude.pending.current == nil {
             setAdapterState(.idle)
         }
@@ -518,6 +520,17 @@ final class ThreadSession: Identifiable {
         let reported = next.pullRequests.changes(since: previous.pullRequests)
         if !reported.isEmpty { onClaudePullRequests?(self, reported) }
     }
+
+    /// `claude agents` says the dialog of the permission described last is up (`AppModel.confirmPermissionSoon`).
+    func confirmPermission() -> Bool {
+        var confirmed = false
+        updateClaude { confirmed = $0.pending.confirmPermission() }
+        return confirmed
+    }
+
+    /// The permission request a notification was last posted for: `permission_prompt` arriving after
+    /// `claude agents` already said so must not ring a second time.
+    @ObservationIgnored var notifiedRequestID: String?
 
     /// Scope typed an answer to `id`: it is no longer asked, whatever the hooks say next.
     func answered(_ id: String) {

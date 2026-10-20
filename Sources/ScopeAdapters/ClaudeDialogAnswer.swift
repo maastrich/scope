@@ -113,12 +113,24 @@ public enum ClaudeDialogAnswer: Sendable, Equatable, Codable {
                   let region = dialog(lines, marker: "Enter to select"),
                   !region.contains(where: { $0.contains("Review your answers") }),
                   region.contains(where: { $0.contains(prefix(first.question)) }),
-                  region.contains(where: { $0.range(of: "1. " + option.label, options: .literal) != nil })
+                  region.contains(where: { line in Self.isFirstOption(line, label: option.label) })
             else { return .notOnScreen }
             return nil
         case .plan, .elicitation:
             return .notAnswerable(request.kind)
         }
+    }
+
+    /// `❯ 1. Red`, or `1. [ ] Lint` for a multiple choice.
+    static func isFirstOption(_ line: String, label: String) -> Bool {
+        var rest = Substring(line)
+        if rest.hasPrefix("❯") { rest = rest.dropFirst().drop { $0 == " " } }
+        guard rest.hasPrefix("1. ") else { return false }
+        rest = rest.dropFirst(3)
+        if rest.hasPrefix("["), let close = rest.firstIndex(of: "]") {
+            rest = rest[rest.index(after: close)...].drop { $0 == " " }
+        }
+        return rest.hasPrefix(normalized(label))
     }
 
     /// The dialog at the bottom of the screen: from the last line holding `marker` down to the bottom, and up to the
@@ -163,7 +175,10 @@ public enum ClaudeDialogAnswer: Sendable, Equatable, Codable {
         String(normalized(text).prefix(40)).trimmingCharacters(in: .whitespaces)
     }
 
+    /// A row with its blanks made one space. The emulator hands back NUL for the cells a TUI skipped with the cursor
+    /// rather than wrote spaces in — between the words of a dialog, as often as not.
     static func normalized(_ line: String) -> String {
-        line.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        line.split { $0.isWhitespace || $0 == "\0" || $0.asciiValue.map { $0 < 0x20 || $0 == 0x7f } == true }
+            .joined(separator: " ")
     }
 }

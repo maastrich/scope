@@ -59,6 +59,26 @@ import Testing
     Enter to select · ↑/↓ to navigate · Esc to cancel
     """.components(separatedBy: "\n")
 
+    static let multiScreen = """
+    ────────────────────────────────────────────────────────────
+    ←  ☐ Checks  ✔ Submit  →
+
+    Which checks should run?
+
+    ❯ 1. [ ] Lint
+             Style
+      2. [ ] Tests
+             Unit tests
+      3. [ ] Build
+             Compile
+      4. [ ] Type something
+         Submit
+    ────────────────────────────────────────────────────────────
+      5. Chat about this
+
+    Enter to select · ↑/↓ to navigate · Esc to cancel
+    """.components(separatedBy: "\n")
+
     static let reviewScreen = """
     ←  ☒ Checks  ✔ Submit  →
 
@@ -145,6 +165,14 @@ import Testing
         #expect(ClaudeDialogAnswer.check(single, screen: Self.reviewScreen) == .notOnScreen)
         #expect(ClaudeDialogAnswer.check(single, screen: Self.promptScreen) == .notOnScreen)
         #expect(ClaudeDialogAnswer.check(try Self.bash(), screen: Self.questionScreen) == .notOnScreen)
+        #expect(ClaudeDialogAnswer.check(try Self.multi(), screen: Self.multiScreen) == nil)
+        #expect(ClaudeDialogAnswer.check(try Self.multi(), screen: Self.questionScreen) == .notOnScreen)
+    }
+
+    @Test("blank cells the emulator hands back as NUL read as spaces")
+    func nulCells() throws {
+        let screen = Self.stackedScreen.map { $0.replacingOccurrences(of: " ", with: "\0") }
+        #expect(ClaudeDialogAnswer.check(try Self.request(Array(ClaudePendingFixtures.stacked[2...6])), screen: screen) == nil)
     }
 
     @Test("a dialog that closed and scrolled up is not the one on screen")

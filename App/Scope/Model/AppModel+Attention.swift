@@ -76,14 +76,18 @@ extension AppModel {
                                                                ? .from(event, activity: session.activity,
                                                                        pending: session.claude.pending.current) : nil)
         else { return }
+        // Said already, from `claude agents`, before `permission_prompt` came.
+        let asked = kind == .permissionRequested ? session.claude.pending.current : nil
+        if let asked, session.notifiedRequestID == asked.id { return }
         // A permission Scope can answer gets Allow / Deny instead of a Reply, whose ↩ would pick the dialog's
         // highlighted Yes. Allow only when the banner shows the whole command.
-        if kind == .permissionRequested, let request = session.claude.pending.current, request.kind == .permission,
-           ClaudeDialogAnswer.isAnswerable(request) {
+        if let request = asked, request.kind == .permission, ClaudeDialogAnswer.isAnswerable(request) {
             let whole = request.command.map { !content.body.hasSuffix("…") && !$0.contains("\n") } ?? true
             notifier.post(content, threadID: session.id, permission: request.id, allows: whole)
+            session.notifiedRequestID = request.id
             return
         }
+        if let asked { session.notifiedRequestID = asked.id }
         // A finished turn the assistant read as blocking gets a *Not blocking* answer on its notification.
         notifier.post(content, threadID: session.id, triaged: event.kind == .turnEnded && triage?.interrupts == true)
     }

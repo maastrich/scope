@@ -1,6 +1,7 @@
 import Foundation
 import ScopeAdapters
 import ScopeCore
+import ScopeDrivers
 
 /// Answering what a Claude Code thread asks from Scope (`ClaudePendingRequests`): Allow / Deny a permission, pick a
 /// question's options. The answer is typed as the keys a person would press (`ClaudeDialogAnswer`), and only after the
@@ -54,4 +55,31 @@ extension AppModel {
                           threadID: thread)
         }
     }
+
+    // MARK: Waiting, at once
+
+    /// A permission was described and nobody decided it within `ClaudeAgentsReport.settle` (another hook, auto mode):
+    /// asks Claude Code whether the session now waits on its dialog, and if so shows it waiting — with what it asks —
+    /// without the six seconds `permission_prompt` takes. One `claude agents --json` per such permission.
+    func confirmPermissionSoon(_ session: ThreadSession) {
+        guard session.claude.pending.awaitsConfirmation, let sessionID = session.claude.sessionID else { return }
+        let shellResolver = env.shell
+        let home = env.home
+        Task { [weak self, weak session] in
+            try? await Task.sleep(for: ClaudeAgentsReport.settle)
+            guard let session, session.isAlive, session.claude.pending.awaitsConfirmation else { return }
+            let shell = await shellResolver.environment()
+            let runner = SubprocessHeadlessRunner(path: shell.path, shell: shell.shell)
+            guard let result = try? await runner.run(argv: ClaudeAgentsReport.argv, cwd: home, timeout: .seconds(5)),
+                  ClaudeAgentsReport(json: result.stdout).waitsOnPermission(sessionID: sessionID),
+                  session.isAlive, session.claude.pending.awaitsConfirmation, session.confirmPermission()
+            else { return }
+            // As if `permission_prompt` had come: the state, the activity, the notification.
+            self?.handle(AdapterEvent(threadID: session.id, kind: .permissionRequested,
+                                      payload: [HookEvent.viaKey: Self.viaAgents]))
+        }
+    }
+
+    /// `HookEvent.viaKey` of the event `confirmPermissionSoon` stands in for `permission_prompt` with.
+    static let viaAgents = "claude-agents"
 }
