@@ -34,7 +34,7 @@ struct ClaudeHooksAdapterTests {
                                     "Notification", "Stop", "StopFailure", "SessionEnd", "MessageDisplay",
                                     "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "PermissionRequest",
                                     "PermissionDenied", "PostToolUseFailure", "PostModelSwitch", "TaskCreated",
-                                    "TaskCompleted"])
+                                    "TaskCompleted", "Elicitation", "ElicitationResult"])
         for (event, groups) in hooks {
             #expect(groups.count == 1, Comment(rawValue: event))
             let entries = try #require(groups[0]["hooks"] as? [[String: Any]])
