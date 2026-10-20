@@ -10,9 +10,10 @@ struct TaskPortChips: View {
     var compact = false
 
     var body: some View {
-        if !task.listeningPorts.isEmpty {
+        if !task.listeningPorts.isEmpty || !task.otherPorts.isEmpty {
             FlowRow(spacing: 6) {
-                ForEach(task.listeningPorts, id: \.self) { port in
+                // The block's first, then what the task serves elsewhere (5173 without --port $SCOPE_PORT).
+                ForEach(task.listeningPorts + task.otherPorts, id: \.self) { port in
                     Button {
                         model.openPort(port, of: task)
                     } label: {

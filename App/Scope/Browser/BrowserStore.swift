@@ -20,14 +20,24 @@ final class BrowserStore {
         tabs.selectedTab(of: task.rawValue).flatMap { sessions[$0.id] }
     }
 
+    /// The tab the task's agents drive, if one was opened.
+    func agentSession(of task: TaskID) -> BrowserSession? {
+        sessions(of: task).first { $0.kind == .agent }
+    }
+
     /// The task's tab already on `url`'s server.
     func session(of task: TaskID, serving url: URL) -> BrowserSession? {
-        tabs.tab(of: task.rawValue, serving: url).flatMap { sessions[$0.id] }
+        // The agent's tab is its own: a link the user clicks never lands in it.
+        sessions(of: task).filter { $0.kind == .user }.first { tab in tab.url.map { BrowserRoute.sameServer($0, url) } ?? false }
+            .map { candidate in
+                tabs.tab(of: task.rawValue, serving: url).flatMap { sessions[$0.id] }.flatMap { $0.kind == .user ? $0 : nil } ?? candidate
+            }
     }
 
     func add(_ session: BrowserSession) {
         sessions[session.id] = session
-        tabs.open(session.id, in: session.taskID.rawValue, url: session.url)
+        tabs.open(session.id, in: session.taskID.rawValue, url: session.url, agent: session.kind == .agent,
+                  select: session.kind == .user)
         let previous = session.onNavigate
         session.onNavigate = { [weak self] session, url in
             self?.tabs.update(session.id, url: url)

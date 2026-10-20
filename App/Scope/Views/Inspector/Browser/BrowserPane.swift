@@ -10,12 +10,17 @@ struct BrowserPane: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var leading: AnyView?
     var trailing: AnyView?
+    @State private var showsConsole = false
 
     var body: some View {
         VStack(spacing: 0) {
             band
             Divider()
             if let session = model.currentBrowserTab {
+                if session.kind == .agent {
+                    BrowserAgentBand(session: session)
+                    Divider()
+                }
                 BrowserAddressBar(session: session, block: model.currentTask?.record.portBlock)
                     .id(session.id)
                 Divider()
@@ -27,6 +32,16 @@ struct BrowserPane: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    if session.kind == .agent {
+                        Rectangle().strokeBorder(Origin.agent.opacity(0.7), lineWidth: 2).allowsHitTesting(false)
+                    }
+                }
+                if showsConsole {
+                    Divider()
+                    BrowserConsoleView(session: session)
+                        .frame(height: 140)
+                }
             } else {
                 Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -116,11 +131,36 @@ struct BrowserPane: View {
 
     private var footer: some View {
         let scopeName = model.currentTask.flatMap { model.scope($0.scopeID)?.name } ?? "this scope"
+        let session = model.currentBrowserTab
+        let agent = session?.kind == .agent
         return HStack(spacing: 10) {
-            Text("Store of \(scopeName) · apart from Safari and agents")
+            if let session {
+                Button {
+                    showsConsole.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Console")
+                        let errors = session.console.filter { $0.level == "error" }.count
+                        if errors > 0 {
+                            Text("\(errors)")
+                                .foregroundStyle(PullRequestStyle.failing)
+                        } else if !session.console.isEmpty {
+                            Text("\(session.console.count)")
+                        }
+                    }
+                    .font(.system(size: 10.5, weight: showsConsole ? .semibold : .regular))
+                    .foregroundStyle(showsConsole ? Ink.primary : Ink.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("What the page logged: console.* and uncaught errors")
+                .usageID("browser.console", label: "Browser console")
+            }
+            Text(agent ? "Agent store · none of your cookies" : "Store of \(scopeName) · apart from Safari and agents")
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .help("Cookies and storage of these pages are kept for every task of \(scopeName), in WebKit's store for Scope, and nowhere else. Web Inspector: Safari ▸ Develop ▸ this Mac.")
+                .help(agent
+                      ? "The agents of this task browse on a data store of the task's own, removed when the task is archived: none of your sign-ins, none of your tabs."
+                      : "Cookies and storage of these pages are kept for every task of \(scopeName), in WebKit's store for Scope, and nowhere else. Web Inspector: Safari ▸ Develop ▸ this Mac.")
             Spacer(minLength: 4)
             Text("⌘L address · ⌘R reload · ⌃⇧B toggles")
                 .fixedSize()
@@ -225,6 +265,103 @@ private struct BrowserAddressBar: View {
         session.load(url)
         focused = false
         session.webView.window?.makeFirstResponder(session.webView)
+    }
+}
+
+/// The band over the agent's tab: which thread drives it and what it did last. The page is the agent's, on its
+/// own store; the user watches, and their own tabs stay as they were.
+private struct BrowserAgentBand: View {
+    let session: BrowserSession
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .semibold))
+            if let activity = session.agentActivity {
+                Text(activity.thread)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .lineLimit(1)
+                Text("browser_\(activity.action)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Ink.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(activity.at, style: .relative)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .monospacedDigit()
+                    .fixedSize()
+            } else {
+                Text("Agent tab")
+                    .font(.system(size: 11.5, weight: .semibold))
+                Spacer(minLength: 4)
+            }
+        }
+        .foregroundStyle(Origin.agent)
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(Origin.agent.opacity(0.1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("An agent drives this tab")
+    }
+}
+
+/// What the page logged, newest last, errors in red.
+private struct BrowserConsoleView: View {
+    let session: BrowserSession
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    if session.console.isEmpty {
+                        Text("Nothing logged yet")
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
+                            .padding(.top, 6)
+                    }
+                    ForEach(Array(session.console.enumerated()), id: \.offset) { index, line in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(symbol(line.level))
+                                .foregroundStyle(color(line.level))
+                                .frame(width: 10)
+                            Text(line.text)
+                                .foregroundStyle(line.level == "error" ? PullRequestStyle.failing
+                                                 : line.level == "warn" ? Color("WarningText") : Ink.primary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if let source = line.source {
+                                Text(source).foregroundStyle(Ink.tertiary)
+                            }
+                        }
+                        .font(.system(size: 11, design: .monospaced))
+                        .id(index)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+            }
+            .onChange(of: session.console.count) { _, count in
+                if count > 0 { proxy.scrollTo(count - 1, anchor: .bottom) }
+            }
+        }
+        .background(Surface.ground)
+    }
+
+    private func symbol(_ level: String) -> String {
+        switch level {
+        case "error": "×"
+        case "warn": "⚠"
+        default: "›"
+        }
+    }
+
+    private func color(_ level: String) -> Color {
+        switch level {
+        case "error": PullRequestStyle.failing
+        case "warn": Color("WarningText")
+        default: Ink.tertiary
+        }
     }
 }
 

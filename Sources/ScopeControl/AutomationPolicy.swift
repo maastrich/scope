@@ -245,6 +245,10 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // Undoing a task removes worktrees and can delete a branch; a rebase rewrites one and may open a
                 // thread; a schedule may create a task: the same approval as creating one.
                 approval = settings.tasks
+            case .browser:
+                // The task's own browser, on a store of its own: which task is the question, and
+                // `mayDriveBrowser` answers it once the app has found it.
+                return .allow
             case .taskBranchAdd, .taskBranchRemove:
                 // A branch and a worktree written into the user's repository, or a worktree removed: what creating
                 // and archiving a task do, under the same approval. No budget: a worktree opens no agent, and the
@@ -344,6 +348,27 @@ public struct AutomationPolicy: Sendable, Equatable {
         }
     }
 
+    /// Whether `origin` may drive the agent browser of the task `taskID`, whose threads are `taskThreads`: you may, and
+    /// so may an agent whose own thread runs in that task. Not another task's browser — its pages, its store — and not
+    /// an agent outside Scope, which has no task.
+    public static func mayDriveBrowser(of taskID: String, taskThreads: [ThreadID], from origin: ControlOrigin) -> ControlError? {
+        switch origin {
+        case .user:
+            return nil
+        case .strangerThread(let raw):
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+        case .thread(let own, _):
+            guard taskThreads.contains(own) else {
+                return .denied("an agent may only drive the browser of its own task",
+                               detail: "The task \(taskID) is not the one your thread runs in. Open a thread in it, or ask its own thread.")
+            }
+            return nil
+        case .externalAgent:
+            return .denied("an agent outside Scope has no task browser",
+                           detail: "The browser belongs to a task and its threads; run from a thread of that task.")
+        }
+    }
+
     /// Who is asking, in the words of a refusal.
     static func describe(_ origin: ControlOrigin, depth: Int) -> String {
         switch origin {
@@ -394,6 +419,8 @@ public struct AutomationPolicy: Sendable, Equatable {
             "add a worktree on \(params.branch) to " + (params.task.map { "the task “\($0)”" } ?? "its own task")
                 + (params.repo.map { " (\($0))" } ?? "")
         case .taskBranchList(let params): "list the worktrees of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+        case .browser(let params):
+            "\(params.action.rawValue) the browser of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
         case .taskBranchRemove(let params):
             "remove the worktree on \(params.branch) from " + (params.task.map { "the task “\($0)”" } ?? "its own task")
         }
