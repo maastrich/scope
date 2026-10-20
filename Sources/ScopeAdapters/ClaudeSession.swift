@@ -20,6 +20,8 @@ public struct ClaudeSession: Sendable, Equatable {
     public var permissionMode: String?
     /// The reasoning effort the last tool hook ran at (`effort.level`).
     public var effort: String?
+    /// Background shells, Monitors, the `/loop` wake-up and the crons (`ClaudeBackgroundWork`).
+    public var background = ClaudeBackgroundWork()
 
     public init() {}
 
@@ -38,6 +40,7 @@ public struct ClaudeSession: Sendable, Equatable {
             if let mode = facts.permissionMode { permissionMode = mode }
             if let effort = facts.effort { self.effort = effort }
         }
+        background.apply(facts)
     }
 
     /// Folds what the transcript gained, in file order.
@@ -50,5 +53,6 @@ public struct ClaudeSession: Sendable, Equatable {
                 break
             }
         }
+        background.apply(records)
     }
 }
