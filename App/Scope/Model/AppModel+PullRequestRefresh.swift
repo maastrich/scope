@@ -82,9 +82,10 @@ extension AppModel {
               PullRequestSet.aggregateState(task.record.pullRequests.map(\.state)) == "merged" else { return }
         // Everything but git first: a task held by its threads or its children costs no `rev-list` every tick.
         guard MergedTaskArchive.decide(await mergedArchiveFacts(of: task, countingCommits: false)) == .archive else { return }
-        let facts = await mergedArchiveFacts(of: task)
-        // The git reads suspended: whatever moved meanwhile (an archive, a restore) wins.
-        guard !task.isArchived, !task.isDismantling, MergedTaskArchive.decide(facts) == .archive else { return }
+        guard MergedTaskArchive.decide(await mergedArchiveFacts(of: task)) == .archive else { return }
+        // The git reads suspended: whatever moved meanwhile (an archive, a restore, a turn that started) wins.
+        guard !task.isArchived, !task.isDismantling,
+              MergedTaskArchive.decide(await mergedArchiveFacts(of: task, countingCommits: false)) == .archive else { return }
         let merged = task.record.pullRequests.filter(\.isMerged)
         let what = merged.count == 1 ? "pull request merged" : "\(merged.count) pull requests merged"
         do {
@@ -124,29 +125,14 @@ extension AppModel {
             enabled: config.preferences.archiveMergedTasks, keptOpenAfterMerge: task.record.keptOpenAfterMerge)
     }
 
-    /// Commits of the sandbox's `HEAD` that would be lost with it; `nil` when git cannot say.
-    ///
-    /// Past the head of a pull request of its branch when GitHub reported one: that stays right once the merged
-    /// branch is deleted from the remote and pruned, which a squash merge with auto-delete always does. Otherwise
-    /// against the branch's upstream, and with neither, whatever no remote has.
+    /// `GitClient.unpushedCommits`, past the heads of the task's pull requests in this repository — whichever
+    /// branch they were on: a fork's, or one the sandbox visited before.
     private func unpushedCommits(in repo: TaskRepo, of task: TaskState) async -> Int? {
-        let client = await env.git.client(for: task.baseURL(for: repo))
-        let c = ["-C", repo.sandboxURL.path]
-        func count(_ arguments: [String]) async -> Int? {
-            guard let result = try? await client.run(c + ["rev-list", "--count"] + arguments, timeout: .seconds(30),
-                                                     allowFailure: true), result.succeeded else { return nil }
-            return Int(result.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
+        let first = task.record.repos.first?.repoRelativePath ?? "."
         let heads = task.record.pullRequests.filter { link in
-            link.headRefName == repo.branch && TaskRepo.normalize(link.repo ?? task.record.repos.first?.repoRelativePath ?? ".")
-                == TaskRepo.normalize(repo.repoRelativePath)
+            TaskRepo.normalize(link.repo ?? first) == TaskRepo.normalize(repo.repoRelativePath)
         }.compactMap(\.headRefOid)
-        if !heads.isEmpty {
-            // Past every head the branch had in a pull request; one this clone never fetched cannot say.
-            if let past = await count(["HEAD"] + heads.map { "^" + $0 }) { return past }
-        }
-        if let ahead = await count(["@{upstream}..HEAD"]) { return ahead }
-        return await count(["HEAD", "--not", "--remotes"])
+        return await env.git.client(for: task.baseURL(for: repo)).unpushedCommits(at: repo.sandboxURL, pullRequestHeads: heads)
     }
 
     /// When what is shown of one pull request was read: its own `gh` answer, else the PRs panel's list.
