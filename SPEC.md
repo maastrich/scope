@@ -1,6 +1,8 @@
 # Scope — Spec v0.2
 
 > App macOS native, open-source. Une salle de contrôle pour agents de code en ligne de commande : tu déclares un dossier comme *scope*, tu y lances des *threads* (Claude Code, Codex, Cursor, n'importe quel *driver*), chaque *task* travaille dans une *sandbox* isolée, la *base* reste intacte, et tu vois le *delta* de n'importe quel repo à tout moment.
+>
+> **Focus Claude Code.** Scope se concentre sur Claude Code : c'est le driver pour lequel il est construit, et il en montre et en pilote tout ce qu'il expose (sous-agents, tâches de fond, demandes en attente, serveurs MCP, compactions…) pour qu'on suive chaque agent sans lire son terminal. Les autres drivers (Codex, Cursor, shell) continuent de marcher tels quels, sans ces features ; on ne cherche plus la parité avec eux.
 
 Convention d'écriture : **Scope** (majuscule) désigne l'app, *scope* (minuscule) désigne un dossier déclaré.
 
@@ -14,7 +16,7 @@ Convention d'écriture : **Scope** (majuscule) désigne l'app, *scope* (minuscul
 
 **Principes**
 
-1. **Driver agnostic.** Le terminal lance un binaire, point. Claude Code, Codex, Cursor ou un shell nu sont des profils. Tout ce qui est spécifique à un driver est un adaptateur optionnel.
+1. **Claude Code d'abord.** Le terminal lance un binaire, et Claude Code, Codex, Cursor ou un shell nu restent des profils. Mais une feature n'a plus besoin d'exister pour tous les drivers pour être livrée : ce que Claude Code expose (hooks, transcript, status line) est lu à fond, et ce qui en sort n'apparaît que sur ses threads. Les autres drivers gardent ce qu'ils ont, sans promesse de parité. Inventaire des sources : `docs/research/claude-native.md`.
 2. **Aucune structure imposée.** Un scope est n'importe quel dossier : une org GitHub clonée, un dossier de projets, un seul repo. Scope n'écrit rien dedans par défaut.
 3. **La base est intouchable.** Aucun agent n'écrit dans le checkout principal. Les tasks vivent dans des sandboxes. Une seule exception, voulue par l'utilisateur et réversible par construction : *Try in my checkout* (§4.5), désactivée par défaut, refusée aux agents quoi qu'il arrive — la base est stashée et détachée sur la branche d'une task, puis remise exactement où elle était.
 4. **Git est l'API.** Deltas, branches, worktrees : Scope orchestre `git`, ne le remplace pas.
@@ -238,13 +240,15 @@ Des prompts que Scope envoie de lui-même, sur une règle, pendant qu'il tourne 
 
 Les mécanismes d'événements changent vite : à vérifier contre la doc de chaque outil au moment de l'implémentation.
 
+**Claude Code est le driver de référence.** Les profils Claude Code (`claude-code`, `claude-code-bypass`) reçoivent toutes les features construites sur ses hooks, son transcript et sa *status line* : sous-agents, tâches de fond, contenu des demandes en attente, serveurs MCP, compactions, mode de permission. Les autres colonnes du tableau décrivent un support maintenu tel quel : il n'est ni retiré ni étendu, et une feature propre à Claude Code n'a pas d'équivalent à leur trouver. Ce qui suit vaut pour Claude Code sauf mention contraire ; la liste de ce qu'il expose et de ce que Scope en fait est dans `docs/research/claude-native.md`.
+
 | | Claude Code | Codex CLI | Cursor CLI | Générique |
 |---|---|---|---|---|
 | Commande | `claude` | `codex` | `cursor-agent` | `$SHELL -l` |
 | Contexte lu | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md`, `.cursor/rules` | — |
 | Projection | `CLAUDE.md` généré ou flag de contexte | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
 | Reprise | `claude --resume <id>` | `codex resume` | `cursor-agent --resume` | — |
-| Événements | hooks (`Notification`, `Stop`, `UserPromptSubmit`) via settings de thread | `notify` via override `-c` | hooks `.cursor/hooks.json` | aucun |
+| Événements | hooks (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `StopFailure`, `SubagentStart/Stop`, `MessageDisplay`, `SessionEnd`) et *status line* via settings de thread, plus le transcript | `notify` via override `-c` | hooks `.cursor/hooks.json` | aucun |
 | Headless (graph) | `claude -p --output-format json` | `codex exec` | `cursor-agent -p` | — |
 
 ```json
