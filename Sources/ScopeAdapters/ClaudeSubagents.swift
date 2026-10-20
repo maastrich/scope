@@ -78,9 +78,10 @@ public struct ClaudeSubagents: Sendable, Equatable {
             state.isRunning && !alive ? .interrupted : state
         }
 
-        /// How long it ran: what Claude Code measured, else from its start to its end or to `now` while it runs.
+        /// How long it ran: what Claude Code measured, else from its start to its end or to `now` while it runs —
+        /// always the clock while it runs, since an interim report's figure stops at that report.
         public func duration(now: Date) -> TimeInterval? {
-            if let durationMs { return TimeInterval(durationMs) / 1000 }
+            if let durationMs, !state.isRunning || startedAt == nil { return TimeInterval(durationMs) / 1000 }
             guard let startedAt else { return nil }
             guard let end = endedAt ?? (state.isRunning ? now : nil) else { return nil }
             return max(0, end.timeIntervalSince(startedAt))

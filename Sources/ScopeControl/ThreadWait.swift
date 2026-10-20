@@ -34,9 +34,13 @@ public enum ThreadWait {
         /// Sub-agents of the driver still running (`ThreadActivity.runningAgents`): a turn that ended with one in the
         /// background is not the end of the work — the driver starts a new turn when it reports.
         public var agents: Int
+        /// When its last running sub-agent finished: an answer older than that was written while it still ran
+        /// ("waiting for 1 background agent"), and the one on its report is still to come.
+        public var subagentsEndedAt: Date?
 
         public init(state: String, expectingSince: Date? = nil, reportsTurnStart: Bool = true, starting: Bool = false,
-                    replyAt: Date? = nil, turnStartedAt: Date? = nil, lastPromptAt: Date? = nil, agents: Int = 0) {
+                    replyAt: Date? = nil, turnStartedAt: Date? = nil, lastPromptAt: Date? = nil, agents: Int = 0,
+                    subagentsEndedAt: Date? = nil) {
             self.state = state
             self.expectingSince = expectingSince
             self.reportsTurnStart = reportsTurnStart
@@ -45,6 +49,7 @@ public enum ThreadWait {
             self.turnStartedAt = turnStartedAt
             self.lastPromptAt = lastPromptAt
             self.agents = agents
+            self.subagentsEndedAt = subagentsEndedAt
         }
 
         /// The last answer, unless the thread was handed a prompt after it: that answer is for something else.
@@ -65,7 +70,9 @@ public enum ThreadWait {
     ///
     /// A sub-agent still running in the background holds the wait whatever the turn did: the answer that ended that
     /// turn ("waiting for 3 background agents") is not the answer to the prompt, and the driver opens a new turn
-    /// once the sub-agent reports. A question, a permission or an exit still settle it: someone must act.
+    /// once the sub-agent reports. A question, a permission or an exit still settle it: someone must act. Nor does
+    /// an answer that lands during the wait end it when it was written before the last sub-agent finished
+    /// (`subagentsEndedAt`): the driver is about to answer on its report.
     public static func isSettled(_ snapshot: Snapshot, now: Date, waitingSince: Date? = nil) -> Bool {
         switch snapshot.state {
         case "exited", "waiting", "failed":
@@ -74,7 +81,9 @@ public enum ThreadWait {
             break
         }
         if snapshot.agents > 0 { return false }
-        if let since = waitingSince, let reply = snapshot.currentReplyAt, reply > since { return true }
+        // An answer written while a sub-agent still ran is not the one on its report.
+        if let since = waitingSince, let reply = snapshot.currentReplyAt, reply > since,
+           !(snapshot.subagentsEndedAt.map { $0 > reply } ?? false) { return true }
         switch snapshot.state {
         case "running":
             return hasOutlivedItsTurn(snapshot)

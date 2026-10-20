@@ -174,6 +174,9 @@ import Testing
         #expect(agent.state == .running)
         #expect(agent.result == "<interim>")
         #expect(agent.endedAt == nil)
+        // Its duration runs on: the report's own figure stopped when it was written.
+        let started = try #require(agent.startedAt)
+        #expect(agent.duration(now: started.addingTimeInterval(100)) == 100)
         subagents.apply(tail.records(Data(N.agentFinished.utf8)))
         agent = try #require(subagents.agents.first)
         #expect(agent.state == .completed)
