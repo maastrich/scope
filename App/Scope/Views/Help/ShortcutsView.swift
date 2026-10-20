@@ -63,15 +63,15 @@ enum ShortcutCatalog {
         ShortcutGroup(title: "Go", entries: [
             ShortcutEntry(keys: "⌘E", title: "Open in Editor"),
             ShortcutEntry(keys: "⇧⌘E", title: "Open Task in Editor"),
-            ShortcutEntry(keys: "⌘D", title: "Delta"),
-            ShortcutEntry(keys: "⇧⌘B", title: "Base"),
+            ShortcutEntry(keys: "⌘D", title: "Changes"),
+            ShortcutEntry(keys: "⇧⌘B", title: "Repository"),
             ShortcutEntry(keys: "⇧⌘I", title: "Inbox", note: "what needs you, in every scope"),
             ShortcutEntry(keys: "⇧⌘P", title: "Pull Requests"),
             ShortcutEntry(keys: "⌥⌘I", title: "Toggle Inspector"),
             ShortcutEntry(keys: "⌃⌘S", title: "Toggle Sidebar"),
             ShortcutEntry(keys: "⌃⌘R", title: "Show / Hide Repositories", note: "the Repositories section of the sidebar"),
         ]),
-        ShortcutGroup(title: "Delta", entries: [
+        ShortcutGroup(title: "Changes", entries: [
             ShortcutEntry(keys: "j / k", title: "Next / previous file", note: "the Delta list or the diff must have focus"),
             ShortcutEntry(keys: "] / [", title: "Next / previous hunk"),
         ]),

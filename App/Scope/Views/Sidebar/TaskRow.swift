@@ -258,7 +258,7 @@ struct TaskContextMenu: View {
             model.openTaskInEditor(task)
         }
         .keyboardShortcut("e", modifiers: [.command, .shift])
-        Button("See Delta") {
+        Button("See Changes") {
             model.selection = .task(task.id)
             model.showInspector(.delta)
         }

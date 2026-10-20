@@ -4,14 +4,13 @@ import ScopeAssist
 import ScopeCore
 import ScopeTasks
 
-/// The band at the top of the inspector, level with the window toolbar: what the column is about. A task's name and
-/// scope, with copy / open in editor / reveal on hover; without a task, the repository the Base sections show.
+/// The band at the top of the inspector, level with the window toolbar: what the column is about, and the pane
+/// strip. A task's name and scope; without a task, the repository the Repository cards show.
 ///
-/// The rest of what used to sit in the task's summary band — the version strip, the prompt, the repo rows, the pull
-/// request chip — moved into the Task and Pull Request sections, whose closed headers keep the essential.
+/// Copy / open in editor / reveal moved to the Environment card's header, the version strip, the prompt, the repo
+/// rows and the pull request chip into the cards, whose closed headers keep the essential.
 struct InspectorSubjectBand: View {
     @Environment(AppModel.self) private var model
-    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -34,31 +33,7 @@ struct InspectorSubjectBand: View {
                     ArchiveHintChip(task: task, hint: hint)
                 }
                 Spacer(minLength: 4)
-                HStack(spacing: 2) {
-                    // The name is how the task is referred to in a prompt; ⌥ gives the slug `scope --task` takes.
-                    CopyButton(label: "Copy task name") {
-                        NSEvent.modifierFlags.contains(.option) ? task.record.slug : task.name
-                    }
-                    .help("Copy the task name — ⌥-click copies the slug “\(task.record.slug)”")
-                    Button {
-                        model.openTaskInEditor(task)
-                    } label: {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    }
-                    .help("Open Task in Editor (⇧⌘E)")
-                    .accessibilityLabel("Open \(task.name) in Editor")
-                    Button {
-                        Reveal.inFinder(task.record.rootURL)
-                    } label: {
-                        Image(systemName: "folder")
-                    }
-                    .help("Reveal in Finder")
-                    .accessibilityLabel("Reveal \(task.name) in Finder")
-                }
-                .buttonStyle(.icon)
-                .font(.system(size: 12))
-                .foregroundStyle(Ink.secondary)
-                .opacity(hovering ? 1 : 0)
+                InspectorPaneStrip()
             } else if let repo = model.baseRepo {
                 Image(systemName: "square.stack.3d.up")
                     .font(.system(size: 12))
@@ -72,9 +47,7 @@ struct InspectorSubjectBand: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.tertiary)
                 Spacer(minLength: 4)
-                Text("No task selected")
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.tertiary)
+                InspectorPaneStrip()
             } else {
                 Text("Nothing selected")
                     .font(.scopeCaption)
@@ -82,11 +55,11 @@ struct InspectorSubjectBand: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
         .frame(height: 30)
         .frame(maxWidth: .infinity)
         .background(Surface.panel)
-        .onHover { hovering = $0 }
     }
 }
 
@@ -128,218 +101,6 @@ private struct ArchiveHintChip: View {
     }
 }
 
-/// The Task section: closed, the branch and where it stands (commits ahead, base moved on); open, the version strip,
-/// the prompt the task was opened with and one row per repository with its sandbox state and `+N −M`.
-struct TaskSection: View {
-    @Environment(AppModel.self) private var model
-    let bodyHeight: Double?
-    var onNatural: (Double) -> Void
-
-    var body: some View {
-        let task = model.currentTask
-        CollapsibleSection(section: .task, bodyHeight: bodyHeight, onNatural: onNatural) {
-            if let task { TaskVersionSummary(task: task) }
-        } actions: {
-            if let task, !task.isArchived {
-                Button {
-                    model.addBranchFromUI(task)
-                } label: {
-                    Image(systemName: "arrow.triangle.branch")
-                }
-                .buttonStyle(.iconTight)
-                .foregroundStyle(Ink.secondary)
-                .help("Add Branch… — a second worktree of a repository of the task, on a branch of its own")
-                .accessibilityLabel("Add a branch to \(task.name)")
-                .usageID("inspector.task.add-branch", label: "Add a branch to the task")
-            }
-        } content: {
-            if let task {
-                VStack(alignment: .leading, spacing: 0) {
-                    if !task.record.trying.isEmpty {
-                        TryBanner(task: task, sessions: task.record.trying, placement: "inspector.task")
-                            .padding(.bottom, 8)
-                    }
-                    TaskBriefExcerpt(task: task)
-                    if let mission = task.record.mission {
-                        MissionChecklist(task: task, mission: mission)
-                    }
-                    TaskVersionStrip(task: task)
-                    ForEach(task.activeSandboxes, id: \.sandboxKey) { repo in
-                        TaskRepoRow(task: task, repo: repo)
-                    }
-                    TaskServersRow(task: task)
-                    TaskTimelineView(task: task)
-                        .padding(.top, 8)
-                        .usageID("timeline", label: "Task timeline")
-                    TaskCheckpointsList(task: task)
-                        .usageID("task-checkpoints", label: "Task checkpoints")
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-            }
-        }
-    }
-
-    static let pullRequestRefreshInterval: Duration = .seconds(60)
-}
-
-/// The servers the task is running and what its sandboxes weigh, under the repository rows: the port chips
-/// (`AppModel+Ports`) and the disk caption (`AppModel+DiskUsage`). Nothing is drawn until one of them has something.
-private struct TaskServersRow: View {
-    let task: TaskState
-
-    var body: some View {
-        if !task.listeningPorts.isEmpty || task.diskUsage != nil {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                TaskPortChips(task: task)
-                Spacer(minLength: 0)
-                TaskDiskCaption(task: task)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Ink.tertiary)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .padding(.top, 4)
-            .usageID("task-servers", label: "Task servers and disk")
-        }
-    }
-}
-
-/// The task's checkpoints under the timeline, newest first: when, which thread and turn, the reply's first words,
-/// `+N −M` against the one before; on hover, Show diff / Restore files / Branch from here. Nothing asks: a restore
-/// checkpoints what it replaces, so the list itself is the undo.
-private struct TaskCheckpointsList: View {
-    let task: TaskState
-    @State private var showAll = false
-
-    static let shortCount = 6
-
-    var body: some View {
-        let all = Array(task.checkpoints.reversed())
-        if !all.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 4) {
-                    Text("Checkpoints")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Ink.tertiary)
-                    Text("\(all.count)")
-                        .font(.system(size: 10).monospacedDigit())
-                        .foregroundStyle(Ink.tertiary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.bottom, 2)
-                ForEach(showAll ? all : Array(all.prefix(Self.shortCount))) { checkpoint in
-                    TaskCheckpointRow(task: task, checkpoint: checkpoint)
-                }
-                if all.count > Self.shortCount {
-                    Button(showAll ? "Show fewer" : "Show all \(all.count)") { showAll.toggle() }
-                        .buttonStyle(.plain)
-                        .font(.scopeCaption)
-                        .foregroundStyle(Ink.secondary)
-                        .padding(.top, 2)
-                        .usageID("task.checkpoints-show-all", label: "Show every checkpoint")
-                }
-            }
-            .padding(.top, 8)
-        }
-    }
-}
-
-private struct TaskCheckpointRow: View {
-    @Environment(AppModel.self) private var model
-    let task: TaskState
-    let checkpoint: TaskCheckpoint
-    @State private var hovering = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(when)
-                .font(.system(size: 10.5).monospacedDigit())
-                .foregroundStyle(Ink.tertiary)
-                .fixedSize()
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 4) {
-                    Text(who)
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
-                    if let turn = checkpoint.turn {
-                        Text("turn \(turn)")
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.tertiary)
-                    }
-                }
-                Text(checkpoint.headline)
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer(minLength: 0)
-            // Always in the hierarchy (keyboard focus and VoiceOver reach them); revealed on hover.
-            HStack(spacing: 8) {
-                Button {
-                    Task { await model.readCheckpointDiff(checkpoint, of: task) }
-                } label: {
-                    Image(systemName: "plus.forwardslash.minus").font(.system(size: 12))
-                }
-                .help("Show diff — this checkpoint against the sandbox now, in the reading column")
-                .accessibilityLabel("Show the diff of checkpoint \(checkpoint.number)")
-                .usageID("task.checkpoint-diff", label: "Show a checkpoint's diff")
-                Button {
-                    Task { await model.restoreCheckpointFromUI(checkpoint, of: task) }
-                } label: {
-                    Image(systemName: "arrow.uturn.backward").font(.system(size: 12))
-                }
-                .help("Restore files — the sandbox files as this checkpoint had them; the branch stays, and the files as they are now become a checkpoint first")
-                .accessibilityLabel("Restore the files of checkpoint \(checkpoint.number)")
-                .usageID("task.checkpoint-restore", label: "Restore a checkpoint's files")
-                Button {
-                    Task { await model.branchFromCheckpoint(checkpoint, of: task) }
-                } label: {
-                    Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
-                }
-                .help("Branch from here — creates \(task.branch)-cp\(checkpoint.number) at this checkpoint, without checking it out")
-                .accessibilityLabel("Branch from checkpoint \(checkpoint.number)")
-                .usageID("task.checkpoint-branch", label: "Branch from a checkpoint")
-            }
-            .buttonStyle(.iconTight)
-            .foregroundStyle(Ink.secondary)
-            .opacity(hovering ? 1 : 0)
-            DeltaCounts(additions: checkpoint.additions, deletions: checkpoint.deletions)
-        }
-        .padding(.horizontal, 6)
-        .frame(height: 30)
-        .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: 5))
-        .padding(.horizontal, -6)
-        .onHover { hovering = $0 }
-        .help(tooltip)
-    }
-
-    private var when: String {
-        Calendar.current.isDateInToday(checkpoint.at)
-            ? checkpoint.at.formatted(date: .omitted, time: .shortened)
-            : checkpoint.at.formatted(.dateTime.month(.abbreviated).day().hour().minute())
-    }
-
-    private var who: String {
-        switch checkpoint.reason {
-        case .beforeRestore: "Before restore"
-        case .beforeCopy: "Before copy"
-        case .turn: checkpoint.threadTitle ?? "Thread"
-        }
-    }
-
-    private var tooltip: String {
-        var text = "Checkpoint \(checkpoint.number) · " + checkpoint.at.formatted(date: .abbreviated, time: .shortened)
-        text += "\n" + checkpoint.repos.map { repo in
-            let name = task.record.sandbox(key: repo.repoRelativePath)?.sandboxLabel(scopeName: task.record.scopeName)
-                ?? (repo.repoRelativePath == "." ? task.record.scopeName : repo.repoRelativePath)
-            return "\(name) @ \(repo.commit.prefix(7))" + (repo.skipped.isEmpty ? "" : " (left out: \(repo.skipped.joined(separator: ", ")))")
-        }.joined(separator: "\n")
-        return text
-    }
-}
-
 /// What every task-wide number reads: the first summarised repository for the base and fork commit, the sum of the
 /// commits made, the largest lag of a base.
 @MainActor
@@ -357,7 +118,7 @@ struct TaskVersionFacts {
 }
 
 /// The closed Task header: the branch, `↑N`, and the base lag in warning colour when there is one.
-private struct TaskVersionSummary: View {
+struct TaskVersionSummary: View {
     let task: TaskState
 
     var body: some View {
@@ -437,7 +198,7 @@ struct TaskVersionStrip: View {
                     .padding(.horizontal, 6)
                     .frame(height: 18)
                     .background(Color("WarningText").opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
-                    .help("The base gained \(behind) \(behind == 1 ? "commit" : "commits") since the task forked; see Delta ▸ Base vs origin")
+                    .help("The base gained \(behind) \(behind == 1 ? "commit" : "commits") since the task forked; see Changes ▸ Base vs origin")
             }
         }
         .padding(.horizontal, 6)
@@ -449,10 +210,10 @@ struct TaskVersionStrip: View {
     }
 }
 
-/// One worktree of the task: the repository, its branch when it is not the task's own, the sandbox state, `+N −M`,
-/// a state dot, and (on hover) Open in Editor / See Delta — plus New Thread and Remove on a branch added beside
-/// the primary sandbox.
-private struct TaskRepoRow: View {
+/// One worktree of the task, one line of the Environment card: a box glyph, the repository, its branch when it is
+/// not the task's own, the sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / See Changes — plus
+/// New Thread and Remove on a branch added beside the primary sandbox.
+struct TaskRepoRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
     let repo: TaskRepo
@@ -460,6 +221,7 @@ private struct TaskRepoRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            CardRowGlyph("shippingbox")
             Text(repoName)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
@@ -521,8 +283,8 @@ private struct TaskRepoRow: View {
                 }
                 .buttonStyle(.iconTight)
                 .foregroundStyle(Ink.secondary)
-                .help("See Delta (⌘D)")
-                .accessibilityLabel("See Delta of \(repoName)")
+                .help("See Changes (⌘D)")
+                .accessibilityLabel("See the changes of \(repoName)")
             }
             .opacity(hovering ? 1 : 0)
             Text(stateCaption)
@@ -536,7 +298,7 @@ private struct TaskRepoRow: View {
                 .accessibilityLabel(stateCaption)
         }
         .padding(.horizontal, 6)
-        .frame(height: 24)
+        .frame(height: 26)
         .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: 5))
         .padding(.horizontal, -6)
         .onHover { hovering = $0 }
@@ -570,6 +332,21 @@ private struct TaskRepoRow: View {
         case .clean: ThreadStateStyle.done
         case .none: ThreadStateStyle.idle
         }
+    }
+}
+
+/// The 16 pt monochrome glyph at the left of a card row: one per fact, as in the mockups.
+struct CardRowGlyph: View {
+    let systemImage: String
+
+    init(_ systemImage: String) { self.systemImage = systemImage }
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 11.5))
+            .foregroundStyle(Ink.secondary)
+            .frame(width: 16)
+            .accessibilityHidden(true)
     }
 }
 

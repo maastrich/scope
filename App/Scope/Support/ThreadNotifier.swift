@@ -57,7 +57,7 @@ final class ThreadNotifier {
         guard !categoryRegistered else { return }
         categoryRegistered = true
         let goTo = UNNotificationAction(identifier: Self.goToThreadAction, title: "Go to Thread", options: [.foreground])
-        let delta = UNNotificationAction(identifier: Self.seeDeltaAction, title: "See Delta", options: [.foreground])
+        let delta = UNNotificationAction(identifier: Self.seeDeltaAction, title: "See Changes", options: [.foreground])
         // No `.foreground`: answering from the banner is the point, the app stays where it is.
         let reply = UNTextInputNotificationAction(identifier: Self.replyAction, title: "Reply", options: [],
                                                   textInputButtonTitle: "Send", textInputPlaceholder: "Answer the thread")
