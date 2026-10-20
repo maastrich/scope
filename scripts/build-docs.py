@@ -446,7 +446,7 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
 <p>The right-hand panel, all about the selection. A band at the top names the task and carries the <b>pane
-strip</b> — Overview, Changes (badge: changed files), Pull requests (badge: failing checks), Files, and <code>⋮</code>
+strip</b> — Overview, Changes (badge: changed files), Shell, Pull requests (badge: failing checks), Files, and <code>⋮</code>
 for the Cards menu — then a column of cards, one header each: closed, a card costs one line and its header still says
 the essential at its right; open, it shows the rest. Each card answers one question and says one thing per line: a
 glyph, a name, a value. Several can be open at once — the lists share the height, and you drag the gap between two of
@@ -454,6 +454,14 @@ them (double-click it to even them out). The cards hold lists only: a diff or a 
 between the terminal and the inspector, the height of the window and half the terminal's width by default (drag its
 edge, double-click it to go back to half; ✕ or Esc closes it). A button of the strip opens its card <i>and</i> its
 pane when it has one; Overview closes the pane. It is not a tab bar: every card stays in the column.</p>
+<p>The same column holds the task's <b>Shell</b> pane (<kbd>⌃`</kbd>, or <i>Shell</i> in the Task menu and the
+palette): your login shell in the task's working directory, with the <code>SCOPE_*</code> variables a thread gets —
+<code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code>, <code>SCOPE_PORT</code>, <code>SCOPE_HOME</code>, <code>SCOPE_SOCK</code> — so
+<code>scope</code> and your scripts see the task. It is not a thread: nothing in the sidebar, nothing on disk. Tabs hold
+several shells (<b>+</b> opens one, ✕ closes it; a tab says the running command when the terminal reports it, else
+the shell's name) and the footer says what was injected. <kbd>⌃`</kbd> shows and hides the pane; <kbd>⌘D</kbd> puts the
+diff over it and <kbd>⌃`</kbd> brings it back. Hiding the pane leaves its shells running; closing a tab, archiving or
+closing the task hangs them up.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the ports something listens on, the disk the sandboxes take; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
@@ -1602,6 +1610,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌥Space</kbd></td><td>From any app: the <a href="concepts.html#quick-panel">quick panel</a> — Ask a scope's orchestrator (<kbd>⌃1</kbd>–<kbd>⌃9</kbd> picks the scope) or the Inbox; configurable</td></tr>
   <tr><td><kbd>⌥⇧Space</kbd></td><td>From any app: show the window, or hide Scope when it is in front; configurable</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Changes / Repository / Pull requests</td></tr>
+  <tr><td><kbd>⌃`</kbd></td><td>The task's shell pane: show, or hide it again</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
   <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>
   <tr><td><kbd>⌘M</kbd></td><td>Maximize the thread: it fills the window, <kbd>⌘M</kbd> again restores (minimize is <kbd>⌥⌘M</kbd>)</td></tr>

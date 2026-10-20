@@ -42,6 +42,8 @@ final class AppModel {
     let review: ReviewModel
     /// Which inspector sections are open, how they share the height, what the viewer shows.
     let inspector = InspectorModel()
+    /// The shells of the tasks' shell panes (`AppModel+TaskShell`).
+    let taskShells = TaskShellStore()
     /// Tokens Claude Code threads consumed (`AppModel+TokenUsage`).
     let tokenUsage = TokenUsageModel()
     /// What moved in a scope while the owner looked elsewhere (`AppModel+ReturnDigest`).
@@ -202,7 +204,7 @@ final class AppModel {
     @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
-    @ObservationIgnored private var launcher: ThreadLauncher
+    @ObservationIgnored var launcher: ThreadLauncher
     /// Threads being closed by the user (`close`) or by termination: their exit is not a live exit.
     @ObservationIgnored private var closingThreads: Set<ThreadID> = []
     @ObservationIgnored private(set) var isTerminating = false
@@ -1630,6 +1632,7 @@ final class AppModel {
         for session in threads where session.isAlive {
             session.stop(escalateAfter: 1.5)
         }
+        stopAllTaskShells()
         stampCurrentVisit()
         env.uiState.flush()
         await env.config.flush()

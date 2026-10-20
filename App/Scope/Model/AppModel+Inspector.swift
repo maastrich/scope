@@ -86,6 +86,8 @@ extension AppModel {
             return inspector.pathPreview != nil
         case .reading:
             return inspector.reading != nil
+        case .shell:
+            return currentTask.map { !taskShells.sessions(of: $0.id).isEmpty } ?? false
         }
     }
 
