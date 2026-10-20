@@ -120,8 +120,9 @@ import Testing
         defer { server.stop() }
         try await Self.sendRetrying(Data("warm-up".utf8), to: path)
 
-        // Before the fix, a few in a hundred went missing even on an idle listener.
-        for index in 0..<200 { try await UnixSocketClient.send(Data("event \(index)".utf8), to: path) }
+        // Before the fix, a few in a hundred went missing even on an idle listener. A loaded machine can refuse a
+        // connection outright (`.unreachable`, nothing sent), which the retry absorbs; a send that succeeded must land.
+        for index in 0..<200 { try await Self.sendRetrying(Data("event \(index)".utf8), to: path) }
         #expect(await Self.waitUntil { inbox.count == 201 })
     }
 
