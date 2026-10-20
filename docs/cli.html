@@ -111,7 +111,10 @@ just handed a prompt counts as at work until its driver reports on it, so a wait
 <code>thread send</code> or <code>task new</code> does not return before the work starts. An answer that lands
 during the wait ends it, and a thread that still reads running although its last answer is newer than anything
 that started a turn counts as done. A Claude Code turn that ends with sub-agents still running in the background
-does not end the wait: the thread is still at work until they report and it answers. For a thread in a task, the
+does not end the wait: the thread is still at work until they report and it answers. Shell commands and Monitors
+it left running in the background — a dev server, a watcher — never hold it: the answer lists them (id, state,
+command, exit code, output file, and any <code>/loop</code> wake-up or cron), as do <code>scope list threads</code>
+and <code>scope thread read</code>; read the output file rather than waiting. For a thread in a task, the
 answer carries the task's pull request as GitHub reports it (state, checks, mergeability, review), refreshed as the
 wait ends — the same line <code>scope list tasks</code> shows in its PR column — so no <code>gh pr view</code> is
 needed to know where the work stands. A shell reports no turns and never settles.

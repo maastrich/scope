@@ -431,6 +431,17 @@ public struct ClaudeBackgroundWork: Sendable, Equatable {
 
     // MARK: Output file
 
+    /// The file `task` writes to: the one Claude Code named, else the one it would have written
+    /// (`derivedOutputFile`) when that exists.
+    public static func outputFile(of task: Task, transcriptPath: String?, uid: UInt32 = getuid(),
+                                  exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> String? {
+        if let named = task.outputFile { return named }
+        guard let transcriptPath, let derived = derivedOutputFile(taskID: task.id, transcriptPath: transcriptPath, uid: uid) else {
+            return nil
+        }
+        return exists(derived) ? derived : nil
+    }
+
     /// Where Claude Code writes a background task's output when nothing said: `<tmp>/claude-<uid>/<project>/<session>/
     /// tasks/<id>.output`, the project and session read off the transcript's path
     /// (`~/.claude/projects/<project>/<session>.jsonl`). A guess: check the file exists before trusting it.

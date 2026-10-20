@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 25
+    public static let version = 26
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -333,7 +333,10 @@ public struct SkillInstaller: Sendable {
         shell, and Cursor, never report turns, so a wait on them always runs to its deadline; read their terminal.
         A Claude Code thread whose turn ended with sub-agents still running in the background ("waiting for 3
         background agents") is still at work: the wait holds until they report and it answers (`agents` says how
-        many are running). For a thread in a task, each entry also carries the task's pull request as GitHub
+        many are running). Shell commands and Monitors it left running in the background — a dev server, a
+        watcher — never hold the wait: the entry lists them under `background` (id, state, command, exit code,
+        `outputFile`, and the `/loop` wake-up or crons it scheduled), and `scope list threads` / `scope thread read`
+        show the same. Read the output file instead of waiting on them. For a thread in a task, each entry also carries the task's pull request as GitHub
         reports it — `pullRequest`: state, checks, mergeability, review — refreshed as the wait ends. Read it there
         instead of running `gh pr view` or `gh pr checks`; `scope list tasks` shows the same in its PR column, and
         `scope task show` too.
