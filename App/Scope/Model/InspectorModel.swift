@@ -9,6 +9,8 @@ enum InspectorViewer: Hashable, Sendable {
     case path
     /// Markdown to read: an agent's answer, a task's deliverable or brief (`ReadingContent`).
     case reading
+    /// The task's shell pane (`TaskShellPane`): a login shell of the task, tabs for several.
+    case shell
 }
 
 /// A file opened from a link in a terminal: every file the link can mean (`FileLinkResolver`), which one is shown,

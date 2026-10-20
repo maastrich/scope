@@ -55,7 +55,7 @@ private struct InlineReplyRow: View {
                 .font(.system(size: 10))
                 .foregroundStyle(Ink.tertiary)
         }
-        .padding(.leading, CGFloat(depth) * SidebarMetrics.indent + SidebarMetrics.glyphSlot + SidebarMetrics.spacing)
+        .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .padding(.vertical, 4)
         .onAppear {
             excerpt = UserMessage.replyExcerpt(session.activity.lastReply ?? session.lastReply,

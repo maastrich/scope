@@ -40,8 +40,16 @@ import ScopeCore
         #expect(SidebarGroup.allCases.sorted() == [.needsYou, .working, .finished, .quiet, .dormant])
     }
 
-    @Test func sidebarPreferencesDefaultToDetailedRowsAsATree() throws {
+    /// A fresh install starts compact and by state; a config that already names a choice keeps it.
+    @Test func sidebarPreferencesDefaultToCompactRowsByState() throws {
         let preferences = try JSONDecoder().decode(Preferences.self, from: Data("{}".utf8))
+        #expect(preferences.sidebarRows == .compact)
+        #expect(preferences.sidebarArrangement == .byState)
+    }
+
+    @Test func aSavedSidebarChoiceIsKept() throws {
+        let json = Data(#"{"sidebarRows":"detailed","sidebarArrangement":"tree"}"#.utf8)
+        let preferences = try JSONDecoder().decode(Preferences.self, from: json)
         #expect(preferences.sidebarRows == .detailed)
         #expect(preferences.sidebarArrangement == .tree)
     }

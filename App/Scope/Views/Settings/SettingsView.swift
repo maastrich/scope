@@ -262,12 +262,6 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Toggle("Swipe sideways on the sidebar to switch scope", isOn: preference(\.swipeBetweenScopes))
                     .toggleStyle(.scope)
-                Toggle("Show New Thread and New Task buttons", isOn: preference(\.showSidebarFooter))
-                    .toggleStyle(.scope)
-                    .usageID("show-sidebar-footer", label: "Show New Thread and New Task buttons")
-                Text("Under the list. ⌘T, ⇧⌘T, the palette and the agents open threads and tasks whether the buttons show or not.")
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if model.scopes.count > 1 {
                     SettingsRow("Scope order") {

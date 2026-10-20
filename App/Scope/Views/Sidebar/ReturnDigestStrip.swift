@@ -4,8 +4,8 @@ import ScopeCore
 import ScopeTasks
 
 /// "Since 11:40 — 2 turns finished · 1 question for you · PR merged on token-refresh": what moved in the scope
-/// while the owner looked elsewhere (`ReturnDigest`, `AppModel+ReturnDigest`). A quiet band under the scope's
-/// header, never a toast: it takes no focus and goes on its own — at the first selection change, after ten seconds
+/// while the owner looked elsewhere (`ReturnDigest`, `AppModel+ReturnDigest`). One quiet line under the scope's
+/// header, truncated at its end rather than wrapped, never a toast: it takes no focus and goes on its own — at the first selection change, after ten seconds
 /// on screen with the app in front, or with its ×. Each fragment reveals what it names.
 struct ReturnDigestStrip: View {
     @Environment(AppModel.self) private var model
@@ -34,43 +34,30 @@ struct ReturnDigestStrip: View {
         @State private var appActive = NSApplication.shared.isActive
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 10, weight: .medium))
+            HStack(spacing: 5) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Ink.tertiary)
+                Text(line)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .tint(Fill.selected)
+                    .environment(\.openURL, OpenURLAction(handler: open))
+                    .help(shown.digest.fragments.map(\.text).joined(separator: " · "))
+                Spacer(minLength: 4)
+                Button {
+                    model.returnDigests.dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Ink.tertiary)
-                    Text(Self.sinceLabel(shown.digest.since))
-                        .font(.scopeCaption.weight(.medium))
-                        .foregroundStyle(Ink.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Button {
-                        model.returnDigests.dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Ink.tertiary)
-                    }
-                    .buttonStyle(.iconTight)
-                    .usageID("dismiss", label: "Dismiss what moved")
-                    .help("Dismiss")
-                    .accessibilityLabel("Dismiss what moved since your last visit")
                 }
-                FlowLayout(spacing: 2) {
-                    ForEach(shown.digest.fragments) { fragment in
-                        FragmentButton(fragment: fragment)
-                    }
-                    if shown.digest.overflow > 0 {
-                        Text("+\(shown.digest.overflow) more")
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.tertiary)
-                            .padding(.horizontal, 3)
-                            .padding(.vertical, 2)
-                    }
-                }
-                .padding(.leading, -3)
+                .buttonStyle(.iconTight)
+                .usageID("dismiss", label: "Dismiss what moved")
+                .help("Dismiss")
+                .accessibilityLabel("Dismiss what moved since your last visit")
             }
-            .padding(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 6))
+            .padding(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 6))
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Surface.panel, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Surface.stroke))
@@ -92,49 +79,49 @@ struct ReturnDigestStrip: View {
             }
         }
 
-        /// "Since 11:40", "Since yesterday 18:02", "Since Mon 09:15", "Since 3 Oct".
-        static func sinceLabel(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
-            let time = date.formatted(date: .omitted, time: .shortened)
-            if calendar.isDate(date, inSameDayAs: now) { return "Since \(time)" }
-            if calendar.isDateInYesterday(date) { return "Since yesterday \(time)" }
-            if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
-                return "Since \(date.formatted(.dateTime.weekday(.abbreviated))) \(time)"
-            }
-            return "Since \(date.formatted(.dateTime.day().month(.abbreviated)))"
-        }
-    }
-
-    private struct FragmentButton: View {
-        @Environment(AppModel.self) private var model
-        let fragment: ReturnDigest.Fragment
-
-        var body: some View {
-            Button {
-                if let target = fragment.target { model.open(target) }
-            } label: {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Self.color(fragment.kind))
-                        .frame(width: 6, height: 6)
-                    Text(fragment.text)
-                        .lineLimit(1)
+        /// One line: *Since 11:40 — 1 question for you · checks failing on api-cache · 2 turns finished · +1 more*.
+        /// A fragment with somewhere to go is a link; the scheme is private to this view and `open` resolves it.
+        /// One `Text`, so the whole thing truncates at the end instead of each fragment being squeezed.
+        private var line: AttributedString {
+            var line = AttributedString(Self.sinceLabel(shown.digest.since) + " — ")
+            line.font = .scopeCaption.weight(.medium)
+            line.foregroundColor = Ink.secondary
+            for (index, fragment) in shown.digest.fragments.enumerated() {
+                if index > 0 { line += Self.separator }
+                var piece = AttributedString(fragment.text)
+                piece.font = .scopeCaption
+                if fragment.target != nil {
+                    piece.link = URL(string: "scope-digest://\(index)")
+                } else {
+                    piece.foregroundColor = Ink.tertiary
                 }
-                .font(.scopeCaption)
+                line += piece
             }
-            .buttonStyle(.scopeLink)
-            .disabled(fragment.target == nil)
-            .usageID(fragment.kind.rawValue, label: Self.usageLabel(fragment.kind))
-            .help(Self.help(fragment))
+            if shown.digest.overflow > 0 {
+                line += Self.separator
+                var more = AttributedString("+\(shown.digest.overflow) more")
+                more.font = .scopeCaption
+                more.foregroundColor = Ink.tertiary
+                line += more
+            }
+            return line
         }
 
-        static func color(_ kind: ReturnDigest.Fragment.Kind) -> Color {
-            switch kind {
-            case .questions: ThreadStateStyle.waiting
-            case .checksFailing, .turnsFailed: PullRequestStyle.failing
-            case .checksPassing: PullRequestStyle.passing
-            case .merged, .turnsFinished: ThreadStateStyle.done
-            case .opened, .closed: Ink.tertiary
-            }
+        private static var separator: AttributedString {
+            var dot = AttributedString(" · ")
+            dot.font = .scopeCaption
+            dot.foregroundColor = Ink.tertiary
+            return dot
+        }
+
+        private func open(_ url: URL) -> OpenURLAction.Result {
+            guard url.scheme == "scope-digest", let index = url.host().flatMap(Int.init),
+                  shown.digest.fragments.indices.contains(index), let target = shown.digest.fragments[index].target
+            else { return .discarded }
+            Usage.click("sidebar.return-digest.\(shown.digest.fragments[index].kind.rawValue)",
+                        label: Self.usageLabel(shown.digest.fragments[index].kind))
+            model.open(target)
+            return .handled
         }
 
         static func usageLabel(_ kind: ReturnDigest.Fragment.Kind) -> String {
@@ -150,13 +137,15 @@ struct ReturnDigestStrip: View {
             }
         }
 
-        static func help(_ fragment: ReturnDigest.Fragment) -> String {
-            switch fragment.target {
-            case .thread: "Show the thread"
-            case .task: "Show the task"
-            case .url: "Open the pull request on GitHub"
-            case nil: fragment.text
+        /// "Since 11:40", "Since yesterday 18:02", "Since Mon 09:15", "Since 3 Oct".
+        static func sinceLabel(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+            let time = date.formatted(date: .omitted, time: .shortened)
+            if calendar.isDate(date, inSameDayAs: now) { return "Since \(time)" }
+            if calendar.isDateInYesterday(date) { return "Since yesterday \(time)" }
+            if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
+                return "Since \(date.formatted(.dateTime.weekday(.abbreviated))) \(time)"
             }
+            return "Since \(date.formatted(.dateTime.day().month(.abbreviated)))"
         }
     }
 }

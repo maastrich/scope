@@ -23,8 +23,8 @@ public enum TerminalTheme: String, Sendable, Equatable, CaseIterable {
 public enum TerminalEnvironment {
     /// The variables Scope injects into every thread so hooks and tools can find their way back.
     public struct ScopeVariables: Sendable, Equatable {
-        /// `SCOPE_THREAD` — the thread id.
-        public var thread: String
+        /// `SCOPE_THREAD` — the thread id; nil for a task's shell pane, which is no thread (`TaskShell`).
+        public var thread: String?
         /// `SCOPE_SCOPE` — the scope slug.
         public var scope: String
         /// `SCOPE_SCOPE_ROOT` — the scope root path.
@@ -36,7 +36,7 @@ public enum TerminalEnvironment {
         /// `SCOPE_HOME`
         public var home: String
 
-        public init(thread: String, scope: String, scopeRoot: String, task: String? = nil, sock: String, home: String) {
+        public init(thread: String?, scope: String, scopeRoot: String, task: String? = nil, sock: String, home: String) {
             self.thread = thread
             self.scope = scope
             self.scopeRoot = scopeRoot
@@ -45,15 +45,16 @@ public enum TerminalEnvironment {
             self.home = home
         }
 
-        /// `SCOPE_THREAD`, `SCOPE_SCOPE`, `SCOPE_SCOPE_ROOT`, `SCOPE_TASK` (omitted if nil), `SCOPE_SOCK`, `SCOPE_HOME`.
+        /// `SCOPE_THREAD` (omitted if nil), `SCOPE_SCOPE`, `SCOPE_SCOPE_ROOT`, `SCOPE_TASK` (omitted if nil), `SCOPE_SOCK`,
+        /// `SCOPE_HOME`.
         public var asDictionary: [String: String] {
             var variables = [
-                "SCOPE_THREAD": thread,
                 "SCOPE_SCOPE": scope,
                 "SCOPE_SCOPE_ROOT": scopeRoot,
                 "SCOPE_SOCK": sock,
                 "SCOPE_HOME": home,
             ]
+            if let thread { variables["SCOPE_THREAD"] = thread }
             if let task { variables["SCOPE_TASK"] = task }
             return variables
         }

@@ -396,7 +396,8 @@ goes either way (<b>Go to Parent Task</b>, <b>Tasks Started From Here</b>).</p>
 </ul>
 <p>A task with a single thread says the same while its agent works, waits or has a result you have not read; after
 that its own status (its pull request, its checks) takes the line back. The toolbar under the thread's path says what
-the agent is doing while it works or waits. Compact rows stay one line.</p>
+the agent is doing while it works or waits. Compact rows — the default — stay one line, except a task that is waiting
+for you or working: it takes the second line for as long as that lasts.</p>
 
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
@@ -406,13 +407,21 @@ the agent is doing while it works or waits. Compact rows stay one line.</p>
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
-<p>A task row carries one glyph instead: the most pressing thing about the task, picked in this order —
-waiting on you, running, setup running, setup failed, done, conflicts, checks failing, checks running, checks
-passed, draft pull request, pull request open, changed, clean. Each has its own symbol shape, so it reads without
-colour and on the selection highlight. The row's other side is the task's <code>+N −M</code>; rest the pointer on
-it for the branch, the repositories, the pull request and its checks, the age and the prompt. A task with a
-single thread is a single row — selecting it shows that thread's terminal — and its threads only appear nested
-from the second one on.</p>
+<p>A task row carries the same dot — the most urgent of its threads — and nothing in front of its name: no driver
+icon on a thread row, no status glyph on a task row, since the terminal on the right says which driver runs and the
+group the row sits in says what state it is in. The task's status glyph lives on in its hover card: the most pressing
+thing about the task, picked in this order — waiting on you, running, setup running, setup failed, done, conflicts,
+checks failing, checks running, checks passed, draft pull request, pull request open, changed, clean. The end of the
+row is one mark: the state dot of its threads, or a <code>merged</code> chip once its pull requests have landed. The <code>+N −M</code> counts live in the hover card and
+the inspector, not in the row, so the name keeps the width; rest the pointer on the row for the branch, the
+repositories, the pull request and its checks, the counts, the age and the prompt. A task with a single thread is a
+single row — selecting it shows that thread's terminal — and its threads only appear nested from the second one on,
+along a thin rule hanging from the task's chevron.</p>
+<p>Rows are arranged <b>by state</b> by default — <i>Needs you</i>, <i>Working</i>, <i>Finished, not read</i>,
+<i>Quiet</i>, <i>Dormant</i>, each header with its count, empty groups skipped — so what wants you is at the top.
+<kbd>⌃⌘G</kbd> (or <b>Settings ▸ Sidebar ▸ Arrange</b>) switches to the tree, where tasks keep their order and sit
+under their topic; <kbd>⌃⌘L</kbd> switches between compact and detailed rows. A choice already saved is kept
+across updates: only a fresh install starts by state with compact rows.</p>
 <p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
 you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p><b>Since your last visit.</b> Coming back to a scope — switching to it, or bringing the app back after 20
@@ -437,7 +446,7 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
 <p>The right-hand panel, all about the selection. A band at the top names the task and carries the <b>pane
-strip</b> — Overview, Changes (badge: changed files), Pull requests (badge: failing checks), Files, and <code>⋮</code>
+strip</b> — Overview, Changes (badge: changed files), Shell, Pull requests (badge: failing checks), Files, and <code>⋮</code>
 for the Cards menu — then a column of cards, one header each: closed, a card costs one line and its header still says
 the essential at its right; open, it shows the rest. Each card answers one question and says one thing per line: a
 glyph, a name, a value. Several can be open at once — the lists share the height, and you drag the gap between two of
@@ -445,6 +454,14 @@ them (double-click it to even them out). The cards hold lists only: a diff or a 
 between the terminal and the inspector, the height of the window and half the terminal's width by default (drag its
 edge, double-click it to go back to half; ✕ or Esc closes it). A button of the strip opens its card <i>and</i> its
 pane when it has one; Overview closes the pane. It is not a tab bar: every card stays in the column.</p>
+<p>The same column holds the task's <b>Shell</b> pane (<kbd>⌃`</kbd>, or <i>Shell</i> in the Task menu and the
+palette): your login shell in the task's working directory, with the <code>SCOPE_*</code> variables a thread gets —
+<code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code>, <code>SCOPE_PORT</code>, <code>SCOPE_HOME</code>, <code>SCOPE_SOCK</code> — so
+<code>scope</code> and your scripts see the task. It is not a thread: nothing in the sidebar, nothing on disk. Tabs hold
+several shells (<b>+</b> opens one, ✕ closes it; a tab says the running command when the terminal reports it, else
+the shell's name) and the footer says what was injected. <kbd>⌃`</kbd> shows and hides the pane; <kbd>⌘D</kbd> puts the
+diff over it and <kbd>⌃`</kbd> brings it back. Hiding the pane leaves its shells running; closing a tab, archiving or
+closing the task hangs them up.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the ports something listens on, the disk the sandboxes take; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
@@ -508,8 +525,7 @@ TASKS = """
 names the branch the way your repository already names branches.</p>
 
 <h2 id="create">Creating a task</h2>
-<p><kbd>⇧⌘T</kbd>, <b>New Task…</b> in the palette, or the <b>New Task</b> button under the sidebar once
-<i>Settings › Sidebar</i> shows it (it is hidden by default). The first step asks for two things: what
+<p><kbd>⇧⌘T</kbd>, or <b>New Task…</b> in the palette. The first step asks for two things: what
 you want done, and which driver should do it. Nothing else — the repositories, the branch and the folder come
 from the prompt.</p>
 FIG_PROMPT
@@ -995,7 +1011,7 @@ the clean rebase, or the message to the thread, on demand. A scope may set its o
 (<code>followMain</code> on the scope's declaration).</p>
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
 pull request was closed without merging, says so in its row — <code>idle 4d</code>, <code>PR closed</code>, ahead of
-what its agent last did, or at the end of a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
+what its agent last did, or after the name on a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
 """
 
 GRAPH = """
@@ -1594,6 +1610,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌥Space</kbd></td><td>From any app: the <a href="concepts.html#quick-panel">quick panel</a> — Ask a scope's orchestrator (<kbd>⌃1</kbd>–<kbd>⌃9</kbd> picks the scope) or the Inbox; configurable</td></tr>
   <tr><td><kbd>⌥⇧Space</kbd></td><td>From any app: show the window, or hide Scope when it is in front; configurable</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Changes / Repository / Pull requests</td></tr>
+  <tr><td><kbd>⌃`</kbd></td><td>The task's shell pane: show, or hide it again</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
   <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>
   <tr><td><kbd>⌘M</kbd></td><td>Maximize the thread: it fills the window, <kbd>⌘M</kbd> again restores (minimize is <kbd>⌥⌘M</kbd>)</td></tr>
@@ -1665,7 +1682,7 @@ FIGURES = {
     "FIG_AGENT_DELTA": figure("agent-delta", "The whole window: a task's thread on the left, the task's diff in the inspector on the right."),
     "FIG_DELTA": figure("delta-files", "Delta groups the changed files by repository."),
     "FIG_DELTA_PANEL": figure("delta-panel", "Delta: files by repository, the diff, and commit / push / create PR."),
-    "FIG_SIDEBAR": figure("sidebar", "The sidebar: loose threads, then each task with its threads; repositories on demand."),
+    "FIG_SIDEBAR": figure("sidebar", "The sidebar: what needs you first, then what is working, finished, quiet; each task with its threads under it; repositories on demand."),
     "FIG_SETTINGS": figure("settings", "Settings → General.", "shot narrow"),
     "FIG_PROMPT": figure("newtask-prompt", "Step one: the request, the driver, the repositories."),
     "FIG_LOADING": figure("newtask-loading", "The driver runs headless while the derived name stands in."),
