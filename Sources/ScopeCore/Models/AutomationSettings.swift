@@ -76,6 +76,15 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
     public var releases: Approval
     /// How long the app waits for the user to answer an `ask` before refusing, in seconds.
     public var approvalTimeout: Int
+    /// An agent acting in its task's browser — opening a page, clicking, typing. Reading, screenshots and the console
+    /// are never asked about. `allow` by default: the agent's store holds none of the user's cookies, so the browser
+    /// opens no door its `curl` had not.
+    public var browser: Approval
+    /// Where an agent's browser may go (`BrowserSites`); everywhere by default, as its `curl` may.
+    public var browserSites: BrowserSites
+    /// Hosts no agent browser loads anything from — pages and subresources alike (`BrowserSitePolicy`). Each entry
+    /// covers its subdomains.
+    public var browserBlocked: [String]
 
     public static let defaultApprovalTimeout = 120
     /// Generous for an orchestrator fanning work out and its tasks splitting theirs; low enough that a loop stops
@@ -90,7 +99,8 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
                 maxAgentTasks: Int = AutomationSettings.defaultMaxAgentTasks,
                 maxAgentThreads: Int = AutomationSettings.defaultMaxAgentThreads,
                 threads: Approval = .allow, tasks: Approval = .allow, releases: Approval = .ask,
-                approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout) {
+                approvalTimeout: Int = AutomationSettings.defaultApprovalTimeout,
+                browser: Approval = .allow, browserSites: BrowserSites = .any, browserBlocked: [String] = []) {
         self.agentsMayDrive = agentsMayDrive
         self.threadReach = threadReach
         self.commandReach = commandReach
@@ -101,6 +111,9 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         self.tasks = tasks
         self.releases = releases
         self.approvalTimeout = max(5, approvalTimeout)
+        self.browser = browser
+        self.browserSites = browserSites
+        self.browserBlocked = BrowserSitePolicy.normalized(browserBlocked)
     }
 
     public static func clampBudget(_ value: Int) -> Int {
@@ -114,7 +127,7 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case agentsMayDrive, threadReach, commandReach, depthLimit, maxAgentTasks, maxAgentThreads, threads, tasks, releases,
-             approvalTimeout
+             approvalTimeout, browser, browserSites, browserBlocked
     }
 
     /// `maxDepth` was the ceiling when it was the only guard, 1 by default. Settings wrote the whole block on any
@@ -146,5 +159,8 @@ public struct AutomationSettings: Codable, Sendable, Equatable {
         tasks = (try? container.decodeIfPresent(Approval.self, forKey: .tasks)).flatMap { $0 } ?? defaults.tasks
         releases = (try? container.decodeIfPresent(Approval.self, forKey: .releases)).flatMap { $0 } ?? defaults.releases
         approvalTimeout = max(5, try container.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? defaults.approvalTimeout)
+        browser = (try? container.decodeIfPresent(Approval.self, forKey: .browser)).flatMap { $0 } ?? defaults.browser
+        browserSites = (try? container.decodeIfPresent(BrowserSites.self, forKey: .browserSites)).flatMap { $0 } ?? defaults.browserSites
+        browserBlocked = BrowserSitePolicy.normalized((try? container.decodeIfPresent([String].self, forKey: .browserBlocked)).flatMap { $0 } ?? [])
     }
 }

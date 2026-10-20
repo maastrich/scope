@@ -105,6 +105,11 @@ public enum ScopeCLI {
       scope browser read                  the page as text, interactive elements with refs, framed as untrusted
       scope browser screenshot            a JPEG of the viewport, written under Scope's home; prints its path
       scope browser console [--all]       what the page logged since the last look (--all: every line kept)
+      scope browser click <ref>           click the element read gave that ref (e12), through the DOM
+      scope browser type <ref> <text>     type into that field (--clear first, --submit its form after)
+      scope browser wait [--selector S] [--text T] [--timeout s]
+                                          until the selector or the text shows, else until the page is quiet
+      scope browser network [--all]       the requests since the last look; status for fetch/XHR only
                                           (browser: --task <id|slug> for another task than the caller's own)
       scope schedule list                 the scheduled prompts of every scope (--scope for one): rule, target,
                                           next fire, last run
@@ -313,16 +318,34 @@ public enum ScopeCLI {
                         throw UsageError(message: "browser open: --port takes a number, not “\(text)”", usage: usage)
                     }
                     parameters.port = port
-                case "--all" where action == .console: parameters.all = true
+                case "--all" where action == .console || action == .network: parameters.all = true
+                case "--clear" where action == .type: parameters.clear = true
+                case "--submit" where action == .type: parameters.submit = true
+                case "--selector" where action == .wait: parameters.selector = try value()
+                case "--text" where action == .wait: parameters.text = try value()
+                case "--timeout" where action == .wait:
+                    let text = try value()
+                    guard let seconds = Int(text), seconds > 0 else {
+                        throw UsageError(message: "browser wait: --timeout takes seconds, not “\(text)”", usage: usage)
+                    }
+                    parameters.timeout = seconds
                 default: return false
                 }
                 return true
             })
-            if action == .open {
+            switch action {
+            case .open:
                 guard words.count <= 1 else { throw UsageError(message: "browser open takes at most one URL", usage: usage) }
                 parameters.url = words.first
-            } else if !words.isEmpty {
-                throw UsageError(message: "browser \(word) takes no argument", usage: usage)
+            case .click:
+                guard words.count == 1 else { throw UsageError(message: "browser click takes one ref (e12)", usage: usage) }
+                parameters.ref = words[0]
+            case .type:
+                guard words.count == 2 else { throw UsageError(message: "browser type takes a ref and the text", usage: usage) }
+                parameters.ref = words[0]
+                parameters.text = words[1]
+            default:
+                guard words.isEmpty else { throw UsageError(message: "browser \(word) takes no argument", usage: usage) }
             }
             return .call(.browser(parameters), shared)
         case "list":

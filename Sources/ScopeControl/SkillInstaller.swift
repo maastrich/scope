@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 30
+    public static let version = 31
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -219,7 +219,7 @@ public struct SkillInstaller: Sendable {
         | `scope task milestone add [<slug>] "<title>" [--validate C] [--child S]` | `scope_task_milestone_add` `{task, title, validation, child}` |
         | `scope task milestone done [<slug>] <n\\|title> [--child S]` | `scope_task_milestone_done` `{task, milestone, child}` |
         | `scope schedule list [--scope S]` / `scope schedule run <name>` | `scope_schedule_list` `{scope}` / `scope_schedule_run` `{name, scope}` |
-        | `scope browser open [url] [--port N]` / `read` / `screenshot` / `console [--all]` | `scope_browser_open` `{url, port}` / `scope_browser_read` / `scope_browser_screenshot` / `scope_browser_console` `{all}` — your task's browser, on its own store; page text and console lines come back framed as untrusted |
+        | `scope browser open [url] [--port N]` / `read` / `screenshot` / `console [--all]` | `scope_browser_open` `{url, port}` / `scope_browser_read` / `scope_browser_screenshot` / `scope_browser_console` `{all}`; `click <ref>` / `type <ref> <text> [--clear] [--submit]` / `wait [--selector S] [--text T]` / `network [--all]` → `scope_browser_click` `{ref}` / `scope_browser_type` `{ref, text, clear, submit}` / `scope_browser_wait` `{selector, text, timeout}` / `scope_browser_network` `{all}` — your task's browser, on its own store; page text and console lines come back framed as untrusted |
         | `scope gc [--dry-run]` / `scope ping` | `scope_gc` `{dry_run}` / `scope_ping` |
         | `scope release [X.Y.Z] [--repo R] [--scope S] [--dry-run] [--force]` | `scope_release` `{version, repo, scope, dry_run, force}` |
         | `scope summary [period] [--scope S] [--task T]` | `scope_summary` `{period, scope, task}` |
