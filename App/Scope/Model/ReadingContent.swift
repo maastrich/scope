@@ -18,6 +18,8 @@ struct ReadingContent: Equatable {
         case contextFile(TaskID, String)
         /// The task's report as it is on disk now (`AppModel+Artifacts`).
         case report(TaskID)
+        /// What a task's setup commands printed (`TaskSetupRecord.log`), live while the setup runs.
+        case setupLog(TaskID)
     }
 
     var kind: Kind
@@ -44,6 +46,7 @@ struct ReadingContent: Equatable {
         case .brief: "text.quote"
         case .checkpoint: "clock.arrow.circlepath"
         case .contextFile: "doc.text"
+        case .setupLog: "gearshape"
         }
     }
 }

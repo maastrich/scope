@@ -234,6 +234,10 @@ final class AppModel {
     @ObservationIgnored var claudeTranscriptReader: Task<Void, Never>?
     /// The loop behind `AppModel+Ports`.
     @ObservationIgnored var portScanner: Task<Void, Never>?
+    /// The tasks whose Environment card is open — their listening processes are read with the ports — and the `lsof`
+    /// runs in flight, per task.
+    @ObservationIgnored var processWatchers: Set<TaskID> = []
+    @ObservationIgnored var processRuns: [TaskID: Task<Void, Never>] = [:]
     /// The loop behind `AppModel+DiskUsage`, and the one-off measurements in flight, per task.
     @ObservationIgnored var diskUsageRefresher: Task<Void, Never>?
     @ObservationIgnored var diskUsageRuns: [TaskID: Task<Void, Never>] = [:]

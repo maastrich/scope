@@ -61,6 +61,19 @@ public enum SetupLog {
     public static func tail(_ text: String, lines: Int = 40) -> String {
         text.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
     }
+
+    /// The commands a log says were run — the `[repo] $ command` headers `TaskManager.runSetup` writes — each once,
+    /// in order. What the Environment card shows beside *Setup* for a task whose commands are not resolved yet.
+    public static func commands(in log: String) -> [String] {
+        var seen = Set<String>()
+        var commands: [String] = []
+        for line in log.split(whereSeparator: \.isNewline) {
+            guard line.hasPrefix("["), let marker = line.range(of: "] $ ") else { continue }
+            let command = line[marker.upperBound...].trimmingCharacters(in: .whitespaces)
+            if !command.isEmpty, seen.insert(command).inserted { commands.append(command) }
+        }
+        return commands
+    }
 }
 
 /// The setup and teardown commands of one repository of a task, and the files copied into its sandbox.
