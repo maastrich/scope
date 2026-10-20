@@ -72,22 +72,67 @@ extension AppModel {
     }
 
     /// Settings ▸ Tasks ▸ Archive a task when its pull request merges: through the sidebar's own archive, one quiet
-    /// notice with Restore. Only once every pull request of the task is merged or closed, and one merged: a task
-    /// with two pull requests waits for the second. A thread still running holds it until the next refresh; a
-    /// restored task stays.
+    /// notice with Restore and the undo toast (no ⌘Z: the user did not ask for it). Only once every pull request of the task is merged or closed, and one merged: a task
+    /// with two pull requests waits for the second. Then only once nothing holds it (`MergedTaskArchive`): a thread
+    /// at work or waiting, a task launched from it still open, changes not committed or not pushed, a turn started
+    /// since the merge. A restored task stays.
     func archiveIfMerged(_ task: TaskState) async {
-        guard !task.isArchived else { return }
-        let decision = MergedTaskArchive.decide(
-            pullRequestStates: task.record.pullRequests.map(\.state), threads: threads(in: task.id).map(\.displayState),
-            enabled: config.preferences.archiveMergedTasks, keptOpenAfterMerge: task.record.keptOpenAfterMerge)
-        guard decision == .archive else { return }
+        guard !task.isArchived,
+              config.preferences.archiveMergedTasks, !task.record.keptOpenAfterMerge,
+              PullRequestSet.aggregateState(task.record.pullRequests.map(\.state)) == "merged" else { return }
+        // Everything but git first: a task held by its threads or its children costs no `rev-list` every tick.
+        guard MergedTaskArchive.decide(await mergedArchiveFacts(of: task, countingCommits: false)) == .archive else { return }
+        guard MergedTaskArchive.decide(await mergedArchiveFacts(of: task)) == .archive else { return }
+        // The git reads suspended: whatever moved meanwhile (an archive, a restore, a turn that started) wins.
+        guard !task.isArchived, !task.isDismantling,
+              MergedTaskArchive.decide(await mergedArchiveFacts(of: task, countingCommits: false)) == .archive else { return }
         let merged = task.record.pullRequests.filter(\.isMerged)
         let what = merged.count == 1 ? "pull request merged" : "\(merged.count) pull requests merged"
         do {
-            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): \(what)")
+            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): \(what)", by: .automatic(what))
         } catch {
             dismantleFailed(task, verb: "archive", error: error)
         }
+    }
+
+    /// What `MergedTaskArchive` weighs, read from the threads, the task tree and each sandbox. Without
+    /// `countingCommits`, every sandbox is taken as pushed.
+    func mergedArchiveFacts(of task: TaskState, countingCommits: Bool = true, now: Date = .now) async -> MergedTaskArchive.Facts {
+        let threads = threads(in: task.id).map { session -> MergedTaskArchive.Thread in
+            let activity = session.activity
+            let launching = if case .launching = session.phase { true } else { false }
+            let starts = activity.turns.compactMap(\.startedAt) + [activity.turnStartedAt].compactMap { $0 }
+            return MergedTaskArchive.Thread(
+                state: session.displayState, runningAgents: activity.runningAgents(now: now), launching: launching,
+                interrupted: activity.turns.last?.outcome == .exited || (activity.inTurn && !session.phase.isAlive),
+                lastTurnStartedAt: starts.max())
+        }
+        let children = MergedTaskArchive.openDescendants(
+            of: task.id, in: tasks.map { (id: $0.id, parent: $0.record.parentTask, isArchived: $0.isArchived) })
+        var sandboxes: [MergedTaskArchive.Sandbox] = []
+        for repo in task.record.activeSandboxes {
+            let summary = task.summary(for: repo)
+            if summary?.sandbox == .missing {
+                sandboxes.append(.init(dirty: false, unpushed: 0))
+                continue
+            }
+            let unpushed = countingCommits ? await unpushedCommits(in: repo, of: task) : 0
+            sandboxes.append(.init(dirty: summary.map(\.isDirty), unpushed: unpushed))
+        }
+        return MergedTaskArchive.Facts(
+            pullRequests: task.record.pullRequests.map { .init(state: $0.state, mergedAt: $0.mergedAt) },
+            threads: threads, openChildren: children.count, sandboxes: sandboxes,
+            enabled: config.preferences.archiveMergedTasks, keptOpenAfterMerge: task.record.keptOpenAfterMerge)
+    }
+
+    /// `GitClient.unpushedCommits`, past the heads of the task's pull requests in this repository — whichever
+    /// branch they were on: a fork's, or one the sandbox visited before.
+    private func unpushedCommits(in repo: TaskRepo, of task: TaskState) async -> Int? {
+        let first = task.record.repos.first?.repoRelativePath ?? "."
+        let heads = task.record.pullRequests.filter { link in
+            TaskRepo.normalize(link.repo ?? first) == TaskRepo.normalize(repo.repoRelativePath)
+        }.compactMap(\.headRefOid)
+        return await env.git.client(for: task.baseURL(for: repo)).unpushedCommits(at: repo.sandboxURL, pullRequestHeads: heads)
     }
 
     /// When what is shown of one pull request was read: its own `gh` answer, else the PRs panel's list.

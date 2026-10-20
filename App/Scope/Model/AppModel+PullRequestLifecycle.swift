@@ -73,6 +73,7 @@ extension AppModel {
             return known.state != link.state || known.title != link.title || known.openedAt != link.openedAt
                 || known.mergedAt != link.mergedAt || known.closedAt != link.closedAt || known.repo != link.repo
                 || known.headRefName != link.headRefName || known.baseRefName != link.baseRefName
+                || (link.headRefOid != nil && known.headRefOid != link.headRefOid)
         }
         if !stale.isEmpty { await link(stale, to: task) }
         for pr in live { await recordChecks(of: pr, for: task) }

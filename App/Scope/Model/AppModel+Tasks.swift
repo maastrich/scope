@@ -609,8 +609,8 @@ extension AppModel {
 
     /// Archive or close for the control socket and the automatic archive: no question, the failure goes back to the
     /// caller instead of the problem list. `notice` is the title of a notice posted whatever was saved
-    /// (`archiveIfMerged`), with Restore on an archive; `requester` is who the undo toast names, `nil` for an
-    /// automatic archive, which keeps to its notice.
+    /// (`archiveIfMerged`), with Restore on an archive; `requester` is who the undo toast names, `nil` for
+    /// no toast.
     @discardableResult
     func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode, notice: String? = nil,
                        by requester: CloseRequester? = nil) async throws -> DismantleOutcome {
