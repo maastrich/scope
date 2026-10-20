@@ -95,6 +95,7 @@ struct PlanCard: View {
     /// The live threads of `task` that have a plan, the ones at work first, the freshest plan next.
     private func plans(of task: TaskState) -> [(session: ThreadSession, plan: AgentPlan)] {
         model.threads(in: task.id)
+            .filter(\.isAlive)
             // Read here so the card redraws when a plan moves (`ThreadSession.setActivity` bumps the revision).
             .map { session -> (ThreadSession, AgentPlan?, Int) in (session, session.activity.plan, session.turnRevision) }
             .compactMap { session, plan, _ in plan.map { (session: session, plan: $0) } }

@@ -339,4 +339,20 @@ import Testing
         let plan = try #require(AgentPlan.applying(tool: "TaskCreate", raw: raw, to: nil, at: Self.at(1)))
         #expect(plan.steps.map(\.id) == ["7"])
     }
+
+    /// Tools named like plan tools but about other things — background jobs, sub-agents, Scope's own MCP task calls —
+    /// leave the plan alone even when their response holds a `task` with an id, or their input a `taskId`.
+    @Test func toolsAboutOtherKindsOfTasksLeaveThePlanAlone() {
+        let task: [String: Any] = ["task": ["id": "x", "name": "y", "title": "z"]]
+        let activity = Self.fold([
+            Self.taskCall("TaskStop", input: ["task_id": "b1"], response: task, 1),
+            Self.taskCall("TaskOutput", input: ["task_id": "b1"], response: task, 2),
+            Self.taskCall("mcp__scope__scope_task_new", input: ["prompt": "p"], response: task, 3),
+            Self.taskCall("mcp__scope__scope_task_show", input: ["taskId": "x", "status": "done"], response: task, 4),
+            Self.taskCall("update_task_status", input: ["taskId": "x", "status": "done", "title": "T"], response: task, 5),
+        ])
+        #expect(activity.plan == nil)
+        #expect(!AgentPlan.isCandidate(tool: "TaskStop"))
+        #expect(!AgentPlan.isCandidate(tool: "mcp__scope__scope_task_new"))
+    }
 }

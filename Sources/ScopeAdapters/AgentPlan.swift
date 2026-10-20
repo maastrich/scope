@@ -93,8 +93,16 @@ public struct AgentPlan: Codable, Sendable, Equatable {
     /// Claude Code hooks about a task of the list, fired outside any tool call (`plan.updated`).
     public static let taskHooks: Set<String> = ["TaskCreated", "TaskCompleted"]
 
+    /// The task tools read by id; any other tool is read only for a whole list or a plan, so a renamed tool still
+    /// feeds the card but no other tool's `task` or `taskId` can slip a step in.
+    public static let taskTools: Set<String> = ["TaskCreate", "TaskUpdate", "TaskList"]
+    /// Named like a plan tool, about something else: Claude Code's background jobs and sub-agents.
+    public static let notPlanTools: Set<String> = ["Task", "Agent", "TaskOutput", "TaskStop", "TaskGet"]
+
     public static func isCandidate(tool: String) -> Bool {
         if knownTools.contains(tool) { return true }
+        // An MCP tool (Scope's own `scope_task_*` among them) speaks of other things that happen to be called tasks.
+        guard !tool.hasPrefix("mcp__"), !notPlanTools.contains(tool) else { return false }
         let lowered = tool.lowercased()
         return lowered.contains("todo") || lowered.contains("plan") || lowered.contains("task")
     }
@@ -109,7 +117,7 @@ public struct AgentPlan: Codable, Sendable, Equatable {
         }
         guard let tool, isCandidate(tool: tool), let input = object["tool_input"] as? [String: Any] else { return nil }
         let response = jsonObject(object["tool_response"])
-        return applying(input: input, response: response, to: current, at: at)
+        return applying(input: input, response: taskTools.contains(tool) ? response : nil, to: current, at: at)
     }
 
     /// A `tool_response` as an object: Claude Code gives the structured output, older versions a JSON string.
@@ -119,7 +127,7 @@ public struct AgentPlan: Codable, Sendable, Equatable {
         return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
     }
 
-    /// The same, from the parsed `tool_input` and `tool_response`.
+    /// The same, from the parsed `tool_input` and, for a task tool alone, its `tool_response`.
     public static func applying(input: [String: Any], response: [String: Any]? = nil, to current: AgentPlan?,
                                 at: Date) -> AgentPlan? {
         if let plan = input["plan"] as? String, !plan.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -142,9 +150,6 @@ public struct AgentPlan: Codable, Sendable, Equatable {
             next.steps = steps
             next.source = .todos
             next.updatedAt = at
-            return next
-        }
-        if input["taskId"] != nil, let next = applyingTasks(input: input, response: [:], to: current, at: at) {
             return next
         }
         return nil
