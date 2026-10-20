@@ -1,19 +1,25 @@
 import Foundation
 
-/// One collapsible section of the inspector column, top to bottom.
+/// One card of the inspector column, top to bottom.
 ///
 /// The inspector used to be three tabs, Base holding a second row of three more: two rows of tabs stood between the
-/// window and the first file, and every tab hid what it held. The sections are always all there, one header each, so
+/// window and the first file, and every tab hid what it held. The cards are always all there, one header each, so
 /// what exists is visible at a glance; a closed one costs one line and still says the essential in its header.
+///
+/// Each card answers one question: where the task runs (Environment), what changed (Changes), what it shipped
+/// (Pull requests), what it produced (Artifacts), what the agent was given (Context); then the base checkout
+/// (Repository, Files, Search, History).
 public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable {
-    case task, delta, pullRequest, base, files, search, history
+    case environment, delta, pullRequest, artifacts, context, base, files, search, history
 
     public var title: String {
         switch self {
-        case .task: "Task"
-        case .delta: "Delta"
-        case .pullRequest: "Pull Request"
-        case .base: "Base"
+        case .environment: "Environment"
+        case .delta: "Changes"
+        case .pullRequest: "Pull requests"
+        case .artifacts: "Artifacts"
+        case .context: "Context"
+        case .base: "Repository"
         case .files: "Files"
         case .search: "Search"
         case .history: "History"
@@ -23,7 +29,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// Whether the section has nothing to show without a task; it stays on screen, dimmed, so the column keeps its shape.
     public var needsTask: Bool {
         switch self {
-        case .task, .delta, .pullRequest: true
+        case .environment, .delta, .pullRequest, .artifacts, .context: true
         case .base, .files, .search, .history: false
         }
     }
@@ -33,26 +39,30 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     public var fills: Bool {
         switch self {
         case .delta, .files, .search, .history: true
-        case .task, .pullRequest, .base: false
+        case .environment, .pullRequest, .artifacts, .context, .base: false
         }
     }
 }
 
-/// Which sections are open, kept per scope (`ScopePlace`).
+/// Which cards are open and which are shown at all, kept per scope (`ScopePlace`).
 ///
-/// Two sets, because a task and the lack of one call for different panels: with a task the changes are the subject,
-/// without one the base checkout is. Opening Files on a repo row must not open it on the next task, and the reverse.
+/// Two sets of open cards, because a task and the lack of one call for different panels: with a task the changes
+/// are the subject, without one the base checkout is. Opening Files on a repo row must not open it on the next task,
+/// and the reverse. `hidden` holds the cards taken out of the column through the Cards menu; a hidden card is
+/// neither drawn nor open, and revealing it (⌘D on a hidden Changes) shows it again.
 public struct InspectorSections: Codable, Sendable, Equatable {
     public var withTask: Set<InspectorSection>
     public var withoutTask: Set<InspectorSection>
+    public var hidden: Set<InspectorSection>
 
-    /// At rest very little is open: the changes of a task, the base checkout of anything else. Files never opens by
-    /// itself.
-    public static let defaults = InspectorSections(withTask: [.delta], withoutTask: [.base])
+    /// At rest very little is open: where the task runs and its changes, the base checkout of anything else. Files
+    /// never opens by itself. Every card is shown.
+    public static let defaults = InspectorSections(withTask: [.environment, .delta], withoutTask: [.base])
 
-    public init(withTask: Set<InspectorSection>, withoutTask: Set<InspectorSection>) {
+    public init(withTask: Set<InspectorSection>, withoutTask: Set<InspectorSection>, hidden: Set<InspectorSection> = []) {
         self.withTask = withTask
         self.withoutTask = withoutTask.filter { !$0.needsTask }
+        self.hidden = hidden
     }
 
     public func open(hasTask: Bool) -> Set<InspectorSection> {
@@ -60,7 +70,7 @@ public struct InspectorSections: Codable, Sendable, Equatable {
     }
 
     public func isOpen(_ section: InspectorSection, hasTask: Bool) -> Bool {
-        (hasTask || !section.needsTask) && open(hasTask: hasTask).contains(section)
+        (hasTask || !section.needsTask) && !hidden.contains(section) && open(hasTask: hasTask).contains(section)
     }
 
     /// A section that needs a task cannot be opened without one: the request is dropped, not kept for later.
@@ -73,7 +83,26 @@ public struct InspectorSections: Codable, Sendable, Equatable {
         }
     }
 
-    private enum CodingKeys: String, CodingKey { case withTask, withoutTask }
+    public func isVisible(_ section: InspectorSection) -> Bool { !hidden.contains(section) }
+
+    /// The cards of the column, in order, the hidden ones left out.
+    public var visible: [InspectorSection] { InspectorSection.allCases.filter { !hidden.contains($0) } }
+
+    /// Hiding the last visible card is refused: an empty column says nothing and has no header to bring one back.
+    public mutating func setVisible(_ section: InspectorSection, _ isVisible: Bool) {
+        if isVisible {
+            hidden.remove(section)
+        } else if visible.count > 1 {
+            hidden.insert(section)
+        }
+    }
+
+    /// Every card back, and the open ones as at first launch.
+    public mutating func reset() {
+        self = .defaults
+    }
+
+    private enum CodingKeys: String, CodingKey { case withTask, withoutTask, hidden }
 
     // Lenient: a section this build does not know (renamed, removed) is dropped instead of failing the whole place.
     public init(from decoder: any Decoder) throws {
@@ -83,13 +112,15 @@ public struct InspectorSections: Codable, Sendable, Equatable {
             return Set(raw.compactMap(InspectorSection.init(rawValue:)))
         }
         self.init(withTask: sections(.withTask) ?? Self.defaults.withTask,
-                  withoutTask: sections(.withoutTask) ?? Self.defaults.withoutTask)
+                  withoutTask: sections(.withoutTask) ?? Self.defaults.withoutTask,
+                  hidden: sections(.hidden) ?? [])
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(withTask.map(\.rawValue).sorted(), forKey: .withTask)
         try container.encode(withoutTask.map(\.rawValue).sorted(), forKey: .withoutTask)
+        try container.encode(hidden.map(\.rawValue).sorted(), forKey: .hidden)
     }
 }
 
@@ -110,7 +141,10 @@ public enum InspectorSectionLayout {
         }
     }
 
-    public static let headerHeight: Double = 22
+    /// A card's header: 28 pt, taller than the 22 pt band it replaced, because a card title reads at body size.
+    public static let headerHeight: Double = 28
+    /// The air between two cards, and around the column.
+    public static let cardGap: Double = 8
     /// The least a list keeps: a few rows, so an open list never collapses into a header that looks closed.
     public static let minimumFill: Double = 72
     /// The least a block keeps when the column is short; under that it scrolls inside its own height.

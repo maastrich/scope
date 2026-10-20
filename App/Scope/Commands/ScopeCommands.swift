@@ -317,12 +317,12 @@ struct ScopeCommands: Commands {
 
             Divider()
 
-            Button("Delta") { model?.showInspector(.delta) }
+            Button("Changes") { model?.showInspector(.delta) }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(model == nil)
-            Button("Pull Request") { model?.showInspector(.pullRequest) }
+            Button("Pull Requests") { model?.showInspector(.pullRequest) }
                 .disabled(model == nil)
-            Button("Base") { model?.showInspector(.base) }
+            Button("Repository") { model?.showInspector(.base) }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
                 .disabled(model == nil)
 
@@ -340,8 +340,8 @@ struct ScopeCommands: Commands {
 
             Divider()
 
-            // Plain-key shortcuts of the Delta section (they need the list or the diff focused); listed here to be found.
-            Menu("Delta") {
+            // Plain-key shortcuts of the Changes card (they need the list or the diff focused); listed here to be found.
+            Menu("Changes") {
                 Button("Next File (j)") { model?.delta.selectNextFile(1); model?.inspector.show(.diff) }
                 Button("Previous File (k)") { model?.delta.selectNextFile(-1); model?.inspector.show(.diff) }
                 Divider()

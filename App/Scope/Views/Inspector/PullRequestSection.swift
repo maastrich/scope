@@ -173,15 +173,13 @@ struct PullRequestSection: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 if let issue = task.record.issue { issueRow(issue) }
-                Text(task.record.issue == nil
-                     ? "No pull request yet. Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it."
-                     : "No pull request yet. The one that closes the issue should say so (Closes \(task.record.issue?.label ?? "")); Scope binds the task to it.")
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                CardEmptyState(title: "No pull request yet",
+                               detail: task.record.issue == nil
+                                   ? "Push the branch and open one — from the thread or on GitHub — and Scope binds the task to it."
+                                   : "The one that closes the issue should say so (Closes \(task.record.issue?.label ?? "")); Scope binds the task to it.")
                 lagLine(task)
             }
-            .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            .padding(EdgeInsets(top: 2, leading: 10, bottom: 6, trailing: 10))
         }
     }
 

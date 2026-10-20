@@ -26,12 +26,30 @@ extension AppModel {
         setSection(section, open: !isSectionOpen(section))
     }
 
+    func isSectionVisible(_ section: InspectorSection) -> Bool {
+        inspector.sections.isVisible(section)
+    }
+
+    /// The Cards menu: a card taken out of the column, or put back as it was left.
+    func setSection(_ section: InspectorSection, visible: Bool) {
+        guard isSectionVisible(section) != visible else { return }
+        inspector.sections.setVisible(section, visible)
+        persistUIState()
+    }
+
+    func resetSections() {
+        inspector.sections.reset()
+        persistUIState()
+    }
+
     /// ⌘D, ⇧⌘B, a task's menu, a notification: open the section — never close it — and give it the keyboard.
     func revealSection(_ section: InspectorSection) {
         inspectorShown = true
         // A request nothing can take now must not wait: it would take the keyboard from the terminal whenever the
         // section next appears.
         guard isSectionAvailable(section) else { return }
+        // A hidden card asked for by name comes back: ⌘D means the changes, wherever the column had them.
+        setSection(section, visible: true)
         setSection(section, open: true)
         inspector.requestFocus(section)
     }

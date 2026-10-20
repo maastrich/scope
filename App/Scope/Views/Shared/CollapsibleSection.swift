@@ -2,13 +2,15 @@ import AppKit
 import SwiftUI
 import ScopeCore
 
-/// One section of the inspector column, VSCode-style: a 22 pt header with a chevron and a short title, then the body
-/// when open. Closed, the header carries the section's summary, so leaving it closed loses nothing essential.
+/// One card of the inspector column: a 28 pt header with a chevron, a sentence-case title and — closed — the
+/// card's summary at the right, then the body when open. Leaving a card closed loses nothing essential.
 ///
-/// What sits in the header is split by how often it is needed. `accessories` are state the eye needs at rest (the
-/// Delta mode, the repository picker, Pull when the base is behind) and stay visible; `actions` are things you reach
-/// for (refresh, open in editor, reveal) and appear over the summary while the pointer is on the header — a row of
-/// buttons that always shows costs a line of height for a click made once in a while.
+/// A card is a bordered panel on the ground (`Surface.panel`, 1 pt `Surface.stroke`, radius 8) with
+/// `InspectorSectionLayout.cardGap` of air to the next, so the column reads as a stack of answers rather than a table
+/// of contents. What sits in the header is split by how often it is needed. `accessories` are state the eye needs at
+/// rest (the Changes mode, the repository picker, Pull when the base is behind) and stay visible; `actions` are things
+/// you reach for (refresh, open in editor, reveal) and appear over the summary while the pointer is on the header — a
+/// row of buttons that always shows costs a line of height for a click made once in a while.
 ///
 /// A list (`InspectorSection.fills`) takes exactly the height the column gives it; a block scrolls inside its height
 /// and reports the height its content asks for through `onNatural`, which is how the column sizes it.
@@ -23,7 +25,7 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
     /// The menu command that opens and focuses the section (`command.delta`), for the ⌘-held hint on its header.
     var command: String? = nil
     var onNatural: (Double) -> Void = { _ in }
-    /// Set when an open list sits above this one: the header's top edge is then the sash between the two.
+    /// Set when an open list sits above this one: the gap over the card is then the sash between the two.
     var sash: SectionSash?
     @ViewBuilder var summary: Summary
     @ViewBuilder var accessories: Accessories
@@ -31,11 +33,12 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
     @ViewBuilder var content: Content
     @State private var hovering = false
 
+    static var cornerRadius: CGFloat { 8 }
+
     var body: some View {
         let available = model.isSectionAvailable(section)
         let open = available && model.isSectionOpen(section)
         VStack(spacing: 0) {
-            Divider()
             header(open: open, available: available)
             if open, let bodyHeight {
                 Group {
@@ -58,6 +61,17 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
                 .onDisappear { Usage.closed(usageArea) }
             }
         }
+        .background(Surface.panel)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .strokeBorder(Surface.stroke, lineWidth: 1)
+        }
+        .overlay(alignment: .top) {
+            // Centred on the gap above the card, so the grip reaches into neither header.
+            if let sash { SashHandle(sash: sash).offset(y: -InspectorSectionLayout.cardGap / 2) }
+        }
+        .opacity(available ? 1 : 0.6)
         .usageArea(usageArea)
     }
 
@@ -69,17 +83,15 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
             if available {
                 accessories
             }
+            Spacer(minLength: 4)
+            trailing(open: open, available: available)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 8)
+        .padding(.leading, 10)
+        .padding(.trailing, 10)
         .frame(height: InspectorSectionLayout.headerHeight)
         .frame(maxWidth: .infinity)
         .background(Surface.panel)
-        .opacity(available ? 1 : 0.55)
         .onHover { hovering = $0 }
-        .overlay(alignment: .top) {
-            if let sash { SashHandle(sash: sash) }
-        }
         .help(available ? help : "")
         .accessibilityElement(children: .contain)
         .accessibilityLabel(section.title)
@@ -87,50 +99,22 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
         .accessibilityAction(named: open ? "Collapse" : "Expand") { model.toggleSection(section) }
     }
 
-    /// Chevron, title and summary: the part of the header a click folds. The accessories sit outside it, so opening
-    /// the mode or repository menu does not fold the section under the pointer.
+    /// Chevron and title: the part of the header a click folds. The accessories sit outside it, so opening the mode
+    /// or repository menu does not fold the section under the pointer.
     private func toggleArea(open: Bool, available: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Image(systemName: open ? "chevron.down" : "chevron.right")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Ink.tertiary)
                 .frame(width: 10)
                 .accessibilityHidden(true)
-            Text(section.title.uppercased())
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.4)
-                .foregroundStyle(open ? Ink.primary : Ink.secondary)
+            Text(section.title)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Ink.primary)
                 .lineLimit(1)
                 .fixedSize()
-            ZStack(alignment: .trailing) {
-                HStack(spacing: 6) {
-                    if !available {
-                        Text(unavailable)
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.tertiary)
-                    } else if !open {
-                        summary
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .clipped()
-                if available {
-                    // Always in the hierarchy (Tab and VoiceOver reach them), drawn over the summary on hover.
-                    HStack(spacing: 2) { actions }
-                        .buttonStyle(.iconTight)
-                        .foregroundStyle(Ink.secondary)
-                        .font(.system(size: 11))
-                        .padding(.leading, 8)
-                        .background(Surface.panel)
-                        .opacity(hovering ? 1 : 0)
-                        .allowsHitTesting(hovering)
-                }
-            }
-            // ⌘D / ⇧⌘B after the title, over the summary, while ⌘ is held.
-            .keyHints(.custom(.leading, .zero)) { command.flatMap { CommandKeyHints.shared.keys(for: $0) }.map { [$0] } ?? [] }
+                // ⌘D / ⇧⌘B after the title, while ⌘ is held.
+                .keyHints(.custom(.trailing, .zero)) { command.flatMap { CommandKeyHints.shared.keys(for: $0) }.map { [$0] } ?? [] }
         }
         .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -139,6 +123,43 @@ struct CollapsibleSection<Summary: View, Accessories: View, Actions: View, Conte
             Usage.click(UsageID.join(usageArea, "header"), label: "\(section.title) header")
             model.toggleSection(section)
         }
+    }
+
+    /// The right of the header: the summary while closed (or the reason the card is empty), the actions drawn over
+    /// it while the pointer is on the header. A click here folds the card too, unless it lands on an action.
+    private func trailing(open: Bool, available: Bool) -> some View {
+        ZStack(alignment: .trailing) {
+            HStack(spacing: 6) {
+                if !available {
+                    Text(unavailable)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                } else if !open {
+                    summary
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard available else { return }
+                model.toggleSection(section)
+            }
+            if available {
+                // Always in the hierarchy (Tab and VoiceOver reach them), drawn over the summary on hover.
+                HStack(spacing: 2) { actions }
+                    .buttonStyle(.iconTight)
+                    .foregroundStyle(Ink.secondary)
+                    .font(.system(size: 11))
+                    .padding(.leading, 8)
+                    .background(Surface.panel)
+                    .opacity(hovering ? 1 : 0)
+                    .allowsHitTesting(hovering)
+            }
+        }
+        .layoutPriority(-1)
     }
 }
 
@@ -151,8 +172,7 @@ struct SectionSash {
     var reset: () -> Void
 }
 
-/// The grip on the top edge of a header under another open list: `Sash` across the width, centred on the rule the
-/// header draws, so the rule itself stays the 1 pt line it is.
+/// The grip over a card under another open list: `Sash` across the width, centred on the gap between the two cards.
 struct SashHandle: View {
     let sash: SectionSash
 
