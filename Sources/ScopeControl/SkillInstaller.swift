@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 25
+    public static let version = 26
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -370,7 +370,8 @@ public struct SkillInstaller: Sendable {
         `--model` (`model`) on `thread new` and `task new` picks the model the driver runs on, through the
         profile's `modelArgs` (Claude Code, Codex and Cursor take one; a shell does not). Left out, a thread of your
         own driver inherits your model, else the scope's default, else the driver's default from Settings, else
-        the driver decides. `scope list threads` shows each thread's model.
+        the driver decides. `scope list threads` shows each thread's model — for Claude Code the one its session runs
+        on now — and its permission mode (`MODE`; `session` in JSON, with compactions and MCP servers that failed).
 
         ## The orchestrator and the terminal
 
