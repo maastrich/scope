@@ -27,6 +27,14 @@ enum ClaudePendingFixtures {
         permissionPrompt,
     ]
 
+    /// Edit of an existing file, every occurrence: *1. Yes / 2. Yes, and switch to accept edits / 3. No* under
+    /// "Do you want to make this edit to existing.txt?".
+    static let edit = [
+        prompt,
+        #"{"session_id":"s1","transcript_path":"/t.jsonl","cwd":"/w","permission_mode":"default","hook_event_name":"PermissionRequest","tool_name":"Edit","tool_input":{"file_path":"/w/existing.txt","old_string":"<text>","new_string":"<text>","replace_all":true},"permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]}"#,
+        permissionPrompt,
+    ]
+
     /// An MCP tool call: `mcp_server` on both hooks, a rule offered for the tool.
     static let mcp = [
         prompt,

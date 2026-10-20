@@ -60,7 +60,13 @@ extension AppModel {
 
     /// A permission was described and nobody decided it within `ClaudeAgentsReport.settle` (another hook, auto mode):
     /// asks Claude Code whether the session now waits on its dialog, and if so shows it waiting — with what it asks —
-    /// without the six seconds `permission_prompt` takes. One `claude agents --json` per such permission.
+    /// without the six seconds `permission_prompt` takes.
+    ///
+    /// The dialog is up while another `PermissionRequest` hook (a companion app) still decides, so a session that waits
+    /// at one second may be answered at three. Until `permission_prompt` takes over, the session is asked again each
+    /// second (`ClaudeAgentsReport.followUps` times at most): one that no longer waits had it decided elsewhere, and the
+    /// thread goes back to work instead of waiting for the tool to end. A handful of `claude agents --json` per
+    /// permission left undecided, never more.
     func confirmPermissionSoon(_ session: ThreadSession) {
         guard session.claude.pending.awaitsConfirmation, let sessionID = session.claude.sessionID else { return }
         let shellResolver = env.shell
@@ -70,13 +76,30 @@ extension AppModel {
             guard let session, session.isAlive, session.claude.pending.awaitsConfirmation else { return }
             let shell = await shellResolver.environment()
             let runner = SubprocessHeadlessRunner(path: shell.path, shell: shell.shell)
-            guard let result = try? await runner.run(argv: ClaudeAgentsReport.argv, cwd: home, timeout: .seconds(5)),
-                  ClaudeAgentsReport(json: result.stdout).waitsOnPermission(sessionID: sessionID),
-                  session.isAlive, session.claude.pending.awaitsConfirmation, session.confirmPermission()
+            /// `nil` when Claude Code could not be asked: no evidence either way.
+            func waits() async -> Bool? {
+                guard let result = try? await runner.run(argv: ClaudeAgentsReport.argv, cwd: home, timeout: .seconds(5)),
+                      result.exitCode == 0 else { return nil }
+                return ClaudeAgentsReport(json: result.stdout).waitsOnPermission(sessionID: sessionID)
+            }
+            guard await waits() == true, session.isAlive, session.claude.pending.awaitsConfirmation,
+                  let confirmed = session.confirmPermission()
             else { return }
+            session.confirmedEarly = confirmed
             // As if `permission_prompt` had come: the state, the activity, the notification.
             self?.handle(AdapterEvent(threadID: session.id, kind: .permissionRequested,
                                       payload: [HookEvent.viaKey: Self.viaAgents]))
+            for _ in 0..<ClaudeAgentsReport.followUps {
+                try? await Task.sleep(for: ClaudeAgentsReport.settle)
+                guard session.isAlive, session.confirmedEarly == confirmed,
+                      session.claude.pending.current?.id == confirmed else { return }
+                if await waits() == false {
+                    guard session.confirmedEarly == confirmed else { return }
+                    session.decidedElsewhere(confirmed)
+                    self?.clearNotifications(for: session.id)
+                    return
+                }
+            }
         }
     }
 

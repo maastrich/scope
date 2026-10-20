@@ -175,6 +175,30 @@ import Testing
         #expect(ClaudeDialogAnswer.check(try Self.request(Array(ClaudePendingFixtures.stacked[2...6])), screen: screen) == nil)
     }
 
+    @Test("an Edit dialog is told by its file name, below its diff")
+    func editScreen() throws {
+        let edit = try Self.request(ClaudePendingFixtures.edit)
+        let screen = """
+        ⏺ Update(existing.txt)
+        ────────────────────────────────────────────────────────────
+         Edit file
+         existing.txt
+        ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+          1 -hello world
+          1 +bye world
+          2  second line
+        ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+         Do you want to make this edit to existing.txt?
+         ❯ 1. Yes
+           2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)
+           3. No
+
+         Esc to cancel · Tab to amend
+        """.components(separatedBy: "\n")
+        #expect(ClaudeDialogAnswer.check(edit, screen: screen) == nil)
+        #expect(ClaudeDialogAnswer.check(edit, screen: Self.stackedScreen) == .notOnScreen)
+    }
+
     @Test("a dialog that closed and scrolled up is not the one on screen")
     func closedDialog() throws {
         let scrolled = Self.stackedScreen + Array(repeating: "⏺ more output", count: 20) + Self.promptScreen

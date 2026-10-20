@@ -76,7 +76,9 @@ extension AppModel {
                                                                ? .from(event, activity: session.activity,
                                                                        pending: session.claude.pending.current) : nil)
         else { return }
-        // Said already, from `claude agents`, before `permission_prompt` came.
+        // A permission confirmed early by `claude agents` shows at once in the app but does not ring: a companion's own
+        // `PermissionRequest` hook may be asking the same person right now. `permission_prompt` rings, six seconds in.
+        if event.payload[HookEvent.viaKey] == Self.viaAgents { return }
         let asked = kind == .permissionRequested ? session.claude.pending.current : nil
         if let asked, session.notifiedRequestID == asked.id { return }
         // A permission Scope can answer gets Allow / Deny instead of a Reply, whose ↩ would pick the dialog's

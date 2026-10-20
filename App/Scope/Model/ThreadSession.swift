@@ -413,6 +413,8 @@ final class ThreadSession: Identifiable {
             updateClaude { $0.apply(facts) }
             if facts.event == "SessionStart" { onClaudeSessionStarted?(self, facts.body["cwd"]?.nonEmptyString ?? record.cwd) }
         }
+        // `permission_prompt` came: the dialog sat six seconds, the early confirmation needs no more checking.
+        if event.kind == .permissionRequested, event.payload[HookEvent.viaKey] == HookEvent.viaNotification { confirmedEarly = nil }
         // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
@@ -521,11 +523,24 @@ final class ThreadSession: Identifiable {
         if !reported.isEmpty { onClaudePullRequests?(self, reported) }
     }
 
-    /// `claude agents` says the dialog of the permission described last is up (`AppModel.confirmPermissionSoon`).
-    func confirmPermission() -> Bool {
-        var confirmed = false
+    /// `claude agents` says the dialog of the permission described last is up (`AppModel.confirmPermissionSoon`):
+    /// the id of the request it confirmed.
+    func confirmPermission() -> String? {
+        var confirmed: String?
         updateClaude { confirmed = $0.pending.confirmPermission() }
         return confirmed
+    }
+
+    /// The request `claude agents` confirmed before `permission_prompt` did, while that notification has not come:
+    /// another hook may still decide it (`AppModel.confirmPermissionSoon`).
+    @ObservationIgnored var confirmedEarly: String?
+
+    /// The session no longer waits on the permission `claude agents` had confirmed early: another hook decided it.
+    /// Its tool runs (or was refused) and no hook says so before it ends.
+    func decidedElsewhere(_ id: String) {
+        confirmedEarly = nil
+        updateClaude { $0.pending.remove(id: id) }
+        if adapterState == .waiting(reason: .permission), claude.pending.waitReason == nil { setAdapterState(.running) }
     }
 
     /// The permission request a notification was last posted for: `permission_prompt` arriving after

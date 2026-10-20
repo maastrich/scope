@@ -204,10 +204,11 @@ public struct ClaudePendingRequests: Sendable, Equatable {
 
     /// `PermissionRequest` described it and the session is waiting on a permission dialog right now (`claude agents`):
     /// shown without waiting for `permission_prompt`. `false` when there was nothing to confirm.
+    /// Returns the id of the request confirmed, `nil` when there was nothing to confirm.
     @discardableResult
-    public mutating func confirmPermission() -> Bool {
-        guard let index = requests.firstIndex(where: { $0.kind == .permission && !$0.shown }) else { return false }
+    public mutating func confirmPermission() -> String? {
+        guard let index = requests.firstIndex(where: { $0.kind == .permission && !$0.shown }) else { return nil }
         requests[index].shown = true
-        return true
+        return requests[index].id
     }
 }

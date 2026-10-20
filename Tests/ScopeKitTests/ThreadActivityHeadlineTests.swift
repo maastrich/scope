@@ -201,6 +201,8 @@ import Testing
                                                 pending: Self.asked(Array(ClaudePendingFixtures.write[2...3])))
         #expect(write?.text == "Asks to write notes.txt")
         #expect(write?.detail == "/w/notes.txt")
+        let edit = ThreadActivityHeadline.make(ThreadActivity(), state: waiting, pending: Self.asked(ClaudePendingFixtures.edit))
+        #expect(edit?.text == "Asks to edit existing.txt")
         let input = ThreadState.waiting(reason: .input)
         let two = ThreadActivityHeadline.make(ThreadActivity(), state: input,
                                               pending: Self.asked([ClaudePendingFixtures.twoQuestions]))

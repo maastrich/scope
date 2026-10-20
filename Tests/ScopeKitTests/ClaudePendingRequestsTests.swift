@@ -62,6 +62,16 @@ import Testing
         #expect(request.suggestions == ["switch to acceptEdits (session)"])
     }
 
+    @Test("an Edit permission names the file and an edit of every occurrence")
+    func editPermission() throws {
+        let request = try #require(Self.final(ClaudePendingFixtures.edit).current)
+        #expect(request.tool == "Edit")
+        #expect(request.filePath == "/w/existing.txt")
+        #expect(request.edit == "edit (every occurrence)")
+        #expect(request.headline == "Edit existing.txt")
+        #expect(request.suggestions == ["switch to acceptEdits (session)"])
+    }
+
     @Test("a No in the dialog fires no hook: the transcript's end of turn clears it")
     func deniedClearsAtTurnEnd() {
         var pending = Self.final(ClaudePendingFixtures.write)
@@ -242,10 +252,10 @@ import Testing
         var pending = Self.replay(Array(ClaudePendingFixtures.bash.prefix(3))).last!
         #expect(pending.current == nil)
         let r8 = pending.confirmPermission()
-        #expect(r8)
+        #expect(r8 != nil && r8 == pending.current?.id)
         #expect(pending.current?.command == "echo probe hello")
         let r9 = pending.confirmPermission()
-        #expect(!r9)
+        #expect(r9 == nil)
     }
 
     @Test("a fresh session forgets what the last one asked; a resume keeps it")
@@ -323,6 +333,16 @@ import Testing
         #expect(!report.waitsOnPermission(sessionID: "s-input"))
         #expect(!report.waitsOnPermission(sessionID: "s-idle"))
         #expect(!report.waitsOnPermission(sessionID: "unknown"))
+    }
+
+    /// A companion's `PermissionRequest` hook allowing after three seconds (Claude Code 2.1.304): the session reads
+    /// `waiting` from the moment the dialog opens, alongside that hook, then `busy` once it answered.
+    @Test("a session another hook answered no longer waits on its permission")
+    func decidedByAnotherHook() {
+        let deciding = #"[{"pid":1,"kind":"interactive","sessionId":"s","status":"waiting","waitingFor":"permission prompt"}]"#
+        let decided = #"[{"pid":1,"kind":"interactive","sessionId":"s","status":"busy"}]"#
+        #expect(ClaudeAgentsReport(json: Data(deciding.utf8)).waitsOnPermission(sessionID: "s"))
+        #expect(!ClaudeAgentsReport(json: Data(decided.utf8)).waitsOnPermission(sessionID: "s"))
     }
 
     @Test("output that is not the expected JSON reads as no session")
