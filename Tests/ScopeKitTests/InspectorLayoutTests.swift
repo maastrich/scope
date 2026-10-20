@@ -17,7 +17,7 @@ import Testing
         #expect(sections.open(hasTask: false) == [.base])
         #expect(!sections.isOpen(.files, hasTask: true))
         #expect(!sections.isOpen(.files, hasTask: false))
-        #expect(sections.visible == InspectorSection.allCases)
+        #expect(sections.visible == InspectorSection.allCases.filter { $0 != .connectors })
     }
 
     /// The Plan card is a block about the task, right after Environment: closed at rest, dimmed without a task.
@@ -28,6 +28,39 @@ import Testing
         #expect(!InspectorSection.plan.fills)
         #expect(!InspectorSections.defaults.isOpen(.plan, hasTask: true))
         #expect(!InspectorSections.defaults.isOpen(.plan, hasTask: false))
+    }
+
+    /// Connectors is a task block after Context, out of the column until the Cards menu brings it in.
+    @Test func theConnectorsCardIsAHiddenTaskBlockAfterContext() {
+        #expect(InspectorSection.allCases.firstIndex(of: .connectors) == InspectorSection.allCases.firstIndex(of: .context)! + 1)
+        #expect(InspectorSection.connectors.title == "Connectors")
+        #expect(InspectorSection.connectors.needsTask)
+        #expect(!InspectorSection.connectors.fills)
+        #expect(!InspectorSections.defaults.isVisible(.connectors))
+        var sections = InspectorSections.defaults
+        sections.setVisible(.connectors, true)
+        #expect(sections.isVisible(.connectors))
+        sections.reset()
+        #expect(!sections.isVisible(.connectors))
+    }
+
+    /// A place saved before the card existed — `hidden: []` and no `known` — must not suddenly show it.
+    @Test func aPlaceSavedBeforeTheConnectorsCardKeepsItHidden() throws {
+        let json = Data(#"{"withTask":["delta"],"withoutTask":["base"],"hidden":[]}"#.utf8)
+        let sections = try JSONDecoder().decode(InspectorSections.self, from: json)
+        #expect(sections.hidden == [.connectors])
+        let withOthers = Data(#"{"withTask":[],"withoutTask":[],"hidden":["search"]}"#.utf8)
+        #expect(try JSONDecoder().decode(InspectorSections.self, from: withOthers).hidden == [.search, .connectors])
+    }
+
+    /// Once a place knows the card, what its owner chose stands: shown stays shown.
+    @Test func aConnectorsCardShownByChoiceStaysShown() throws {
+        var sections = InspectorSections.defaults
+        sections.setVisible(.connectors, true)
+        let data = try JSONEncoder().encode(sections)
+        let decoded = try JSONDecoder().decode(InspectorSections.self, from: data)
+        #expect(decoded.isVisible(.connectors))
+        #expect(decoded == sections)
     }
 
     @Test func aHiddenCardIsNeitherVisibleNorOpen() {
@@ -78,7 +111,7 @@ import Testing
         let sections = try JSONDecoder().decode(InspectorSections.self, from: json)
         #expect(sections.withTask == [.delta, .files])
         #expect(sections.withoutTask == InspectorSections.defaults.withoutTask)
-        #expect(sections.hidden.isEmpty)
+        #expect(sections.hidden == [.connectors])
     }
 
     @Test func roundTrips() throws {
@@ -93,9 +126,11 @@ import Testing
     }
 
     @Test func blocksTakeTheirOwnHeightAndListsShareTheRestByWeight() {
-        let heights = Layout.bodyHeights(available: 700, items: items([.base: 60, .delta: 0, .files: 0]),
+        // Tall enough that the lighter list stays above its minimum whatever the number of card headers.
+        let available = headers + 60 + 4 * Layout.minimumFill * 2
+        let heights = Layout.bodyHeights(available: available, items: items([.base: 60, .delta: 0, .files: 0]),
                                          weights: [.delta: 3, .files: 1])
-        let rest = 700 - headers - 60
+        let rest = available - headers - 60
         #expect(heights[.base] == 60)
         #expect(abs((heights[.delta] ?? 0) - rest * 0.75) < 0.001)
         #expect(abs((heights[.files] ?? 0) - rest * 0.25) < 0.001)
