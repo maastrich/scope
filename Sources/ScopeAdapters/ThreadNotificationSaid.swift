@@ -20,7 +20,8 @@ extension ThreadNotificationContent.Said {
             let started = [activity.turnStartedAt, activity.turns.last?.startedAt].compactMap(\.self).max()
             if let started, started > reply.at { return nil }
             return .reply(reply.text)
-        case .turnStarted, .turnFailed, .permissionRequested, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported:
+        case .turnStarted, .turnFailed, .permissionRequested, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
+             .planUpdated:
             return nil
         }
     }

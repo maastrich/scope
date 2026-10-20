@@ -2,9 +2,12 @@ import Foundation
 
 /// What a thread's agent plans to do and how far it is, folded from the tool calls its hooks already report: the
 /// todo list Claude Code keeps with `TodoWrite` (each item with its `content`, its `status` and, while it runs, its
-/// `activeForm`), and the plan it writes out of plan mode (`ExitPlanMode`'s `plan`, markdown whose first heading is
-/// the title and whose numbered or checkbox items are the steps). The latest plan wins: a `TodoWrite` replaces the
-/// list, a plan sets the title and, while there is no list, the steps.
+/// `activeForm`); the task list newer versions keep instead, one task at a time (`TaskCreate` answers the new task's
+/// `id`, `TaskUpdate` moves one by `taskId`, `TaskList` answers them all, and the `TaskCreated` / `TaskCompleted`
+/// hooks say the same outside a tool call); and the plan it writes out of plan mode (`ExitPlanMode`'s `plan`,
+/// markdown whose first heading is the title and whose numbered or checkbox items are the steps). The latest plan
+/// wins: a `TodoWrite` or a `TaskList` replaces the list, a task call moves its one step, a plan sets the title and,
+/// while there is no list, the steps.
 ///
 /// Read from the `PostToolUse` payload (`tool_input`) rather than from a tool's name alone: the driver may rename
 /// the tool, so any call whose input holds an array of objects with a text and a status is a list of steps, and any
@@ -17,13 +20,16 @@ public struct AgentPlan: Codable, Sendable, Equatable {
     }
 
     public struct Step: Codable, Sendable, Equatable, Hashable {
+        /// The driver's own id for a step that has one (a task of `TaskCreate`): what a later update names it by.
+        public var id: String?
         public var text: String
         public var status: Status
         /// The present-tense form the agent gave the step for while it runs (`Running the tests` for `Run the
         /// tests`), when it gave one.
         public var activeForm: String?
 
-        public init(text: String, status: Status, activeForm: String? = nil) {
+        public init(id: String? = nil, text: String, status: Status, activeForm: String? = nil) {
+            self.id = id
             self.text = text
             self.status = status
             self.activeForm = activeForm
@@ -38,6 +44,8 @@ public struct AgentPlan: Codable, Sendable, Equatable {
     /// Where the steps came from: a todo list replaces anything, a plan only replaces steps that came from a plan.
     public enum Source: String, Codable, Sendable {
         case todos
+        /// One task at a time, by id (`TaskCreate`, `TaskUpdate`, `TaskList`, the task hooks).
+        case tasks
         case plan
     }
 
@@ -80,7 +88,10 @@ public struct AgentPlan: Codable, Sendable, Equatable {
 
     /// Tools whose `PostToolUse` is read for a plan, by name — and, past these, any tool whose name says it is about
     /// a todo list, a plan or tasks, so a renamed tool keeps feeding the card.
-    public static let knownTools: Set<String> = ["TodoWrite", "ExitPlanMode", "EnterPlanMode"]
+    public static let knownTools: Set<String> = ["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "ExitPlanMode",
+                                                 "EnterPlanMode"]
+    /// Claude Code hooks about a task of the list, fired outside any tool call (`plan.updated`).
+    public static let taskHooks: Set<String> = ["TaskCreated", "TaskCompleted"]
 
     public static func isCandidate(tool: String) -> Bool {
         if knownTools.contains(tool) { return true }
@@ -88,17 +99,29 @@ public struct AgentPlan: Codable, Sendable, Equatable {
         return lowered.contains("todo") || lowered.contains("plan") || lowered.contains("task")
     }
 
-    /// The plan after a call to `tool` whose hook stdin was `raw`; `nil` when the call says nothing about a plan
-    /// (an unknown shape, a truncated or missing stdin). `current` is the plan so far, if any.
-    public static func applying(tool: String, raw: String?, to current: AgentPlan?, at: Date) -> AgentPlan? {
-        guard isCandidate(tool: tool), let raw,
-              let object = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any],
-              let input = object["tool_input"] as? [String: Any] else { return nil }
-        return applying(input: input, to: current, at: at)
+    /// The plan after a hook whose stdin was `raw`: a call to `tool` (`PostToolUse`), or with no tool a task hook
+    /// (`TaskCreated`, `TaskCompleted`). `nil` when it says nothing about a plan (an unknown shape, a truncated or
+    /// missing stdin). `current` is the plan so far, if any.
+    public static func applying(tool: String?, raw: String?, to current: AgentPlan?, at: Date) -> AgentPlan? {
+        guard let raw, let object = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any] else { return nil }
+        if let hook = object["hook_event_name"] as? String, taskHooks.contains(hook) {
+            return applyingTaskHook(object, completed: hook == "TaskCompleted", to: current, at: at)
+        }
+        guard let tool, isCandidate(tool: tool), let input = object["tool_input"] as? [String: Any] else { return nil }
+        let response = jsonObject(object["tool_response"])
+        return applying(input: input, response: response, to: current, at: at)
     }
 
-    /// The same, from the parsed `tool_input`.
-    public static func applying(input: [String: Any], to current: AgentPlan?, at: Date) -> AgentPlan? {
+    /// A `tool_response` as an object: Claude Code gives the structured output, older versions a JSON string.
+    static func jsonObject(_ value: Any?) -> [String: Any]? {
+        if let object = value as? [String: Any] { return object }
+        guard let text = value as? String else { return nil }
+        return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
+    }
+
+    /// The same, from the parsed `tool_input` and `tool_response`.
+    public static func applying(input: [String: Any], response: [String: Any]? = nil, to current: AgentPlan?,
+                                at: Date) -> AgentPlan? {
         if let plan = input["plan"] as? String, !plan.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let parsed = parsePlan(markdown: plan)
             var next = current ?? AgentPlan(updatedAt: at)
@@ -111,6 +134,9 @@ public struct AgentPlan: Codable, Sendable, Equatable {
             next.updatedAt = at
             return next
         }
+        if let response, let next = applyingTasks(input: input, response: response, to: current, at: at) {
+            return next
+        }
         if let steps = parseSteps(input: input) {
             var next = current ?? AgentPlan(updatedAt: at)
             next.steps = steps
@@ -118,7 +144,87 @@ public struct AgentPlan: Codable, Sendable, Equatable {
             next.updatedAt = at
             return next
         }
+        if input["taskId"] != nil, let next = applyingTasks(input: input, response: [:], to: current, at: at) {
+            return next
+        }
         return nil
+    }
+
+    // MARK: Task tools
+
+    /// `TaskList` (`tasks[]` in the response: the whole list), `TaskCreate` (`task` in the response: one new step),
+    /// `TaskUpdate` (`taskId` in the input: one step moved, or removed when its status is `deleted`). `nil` when the
+    /// call has none of these shapes, or names a step the plan does not hold and gives it no text.
+    static func applyingTasks(input: [String: Any], response: [String: Any], to current: AgentPlan?, at: Date) -> AgentPlan? {
+        if let tasks = response["tasks"] as? [[String: Any]] {
+            let known = Dictionary((current?.steps ?? []).compactMap { step in step.id.map { ($0, step) } }) { first, _ in first }
+            let steps = tasks.compactMap { task -> Step? in
+                guard let id = string(task["id"]), let text = text(of: task),
+                      let status = (task["status"] as? String).flatMap(Status.init(loose:)) else { return nil }
+                return Step(id: id, text: text, status: status, activeForm: known[id]?.activeForm)
+            }
+            guard steps.count == tasks.count else { return nil }
+            return withTaskSteps(current, at: at) { $0 = steps }
+        }
+        if let task = response["task"] as? [String: Any], let id = string(task["id"]),
+           let text = text(of: task) ?? text(of: input) {
+            return upsert(id: id, text: text, status: nil, activeForm: string(input["activeForm"]), in: current, at: at)
+        }
+        if let id = string(input["taskId"]) ?? string(response["taskId"]) {
+            let word = input["status"] as? String
+            if word?.lowercased() == "deleted" {
+                guard current?.steps.contains(where: { $0.id == id }) == true else { return nil }
+                return withTaskSteps(current, at: at) { $0.removeAll { $0.id == id } }
+            }
+            return upsert(id: id, text: text(of: input), status: word.flatMap(Status.init(loose:)),
+                          activeForm: string(input["activeForm"]), in: current, at: at)
+        }
+        return nil
+    }
+
+    /// `TaskCreated` / `TaskCompleted`: `task_id`, `task_subject`, `task_description`.
+    static func applyingTaskHook(_ object: [String: Any], completed: Bool, to current: AgentPlan?, at: Date) -> AgentPlan? {
+        guard let id = string(object["task_id"]) else { return nil }
+        let text = [object["task_subject"], object["task_description"]].lazy.compactMap { $0 as? String }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+        return upsert(id: id, text: text, status: completed ? .completed : nil, activeForm: nil, in: current, at: at)
+    }
+
+    /// The step `id` moved, or added at the end (pending) when the plan does not hold it yet and `text` names it.
+    static func upsert(id: String, text: String?, status: Status?, activeForm: String?, in current: AgentPlan?, at: Date) -> AgentPlan? {
+        let holds = current?.source == .tasks && current?.steps.contains { $0.id == id } == true
+        guard holds || text != nil else { return nil }
+        return withTaskSteps(current, at: at) { steps in
+            if let index = steps.firstIndex(where: { $0.id == id }) {
+                if let text { steps[index].text = text }
+                if let status { steps[index].status = status }
+                if let activeForm { steps[index].activeForm = activeForm }
+            } else if let text {
+                steps.append(Step(id: id, text: text, status: status ?? .pending, activeForm: activeForm))
+            }
+        }
+    }
+
+    /// `current` with its steps changed by `change`. Steps that did not come from tasks (a todo list, a plan's
+    /// items) are dropped first: the agent has moved to its task list, and a task id means nothing among them.
+    static func withTaskSteps(_ current: AgentPlan?, at: Date, _ change: (inout [Step]) -> Void) -> AgentPlan {
+        var next = current ?? AgentPlan(updatedAt: at)
+        if next.source != .tasks { next.steps = [] }
+        change(&next.steps)
+        next.source = .tasks
+        next.updatedAt = at
+        return next
+    }
+
+    static func string(_ value: Any?) -> String? {
+        if let text = value as? String { return text.isEmpty ? nil : text }
+        if let number = value as? NSNumber { return number.stringValue }
+        return nil
+    }
+
+    static func text(of object: [String: Any]) -> String? {
+        textKeys.lazy.compactMap { object[$0] as? String }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
     }
 
     // MARK: Parsing
@@ -145,9 +251,7 @@ public struct AgentPlan: Codable, Sendable, Equatable {
     static func parseStep(_ value: Any) -> Step? {
         guard let object = value as? [String: Any], let rawStatus = object["status"] as? String,
               let status = Status(loose: rawStatus) else { return nil }
-        let text = textKeys.lazy.compactMap { object[$0] as? String }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
-        guard let text else { return nil }
+        guard let text = text(of: object) else { return nil }
         let activeForm = activeFormKeys.lazy.compactMap { object[$0] as? String }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
         return Step(text: text, status: status, activeForm: activeForm)

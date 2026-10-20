@@ -39,9 +39,11 @@ struct ThreadRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if detailed, let headline {
-                    ThreadActivityCaption(headline: headline, readReply: headline.opensReply ? { model.readReply(of: session) } : nil)
+                    ThreadActivityCaption(headline: headline, readReply: headline.opensReply ? { model.readReply(of: session) } : nil,
+                                          planSummary: session.planSummary)
                 } else if detailed {
-                    Text([session.displayState.displayLabel, caption].compactMap { $0 }.joined(separator: " · "))
+                    Text(SidebarRowLayout.caption([session.displayState.displayLabel, caption].compactMap { $0 }.joined(separator: " · "),
+                                                  planSummary: session.planSummary))
                         .font(.scopeCaption)
                         .foregroundStyle(captionInk)
                         .lineLimit(1)

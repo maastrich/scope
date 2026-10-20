@@ -20,6 +20,11 @@ import ScopeCore
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 /// | `MessageDisplay`                      | `turn.said`             | unchanged (the answer, as it is written) |
 /// | `SubagentStart` / `SubagentStop`      | `agent.started` / `agent.ended` | unchanged (a sub-agent running in the background holds `thread.wait`) |
+/// | `TaskCreated` / `TaskCompleted`       | `plan.updated`          | unchanged (a task of the agent's list, for its `AgentPlan`) |
+///
+/// The agent's plan is read from the same events: `PostToolUse` of `TodoWrite`, `TaskCreate`, `TaskUpdate`,
+/// `TaskList` and `ExitPlanMode` (their input and response are in `raw`), and the two task hooks above, which also
+/// fire for a task a teammate creates or completes.
 ///
 /// `MessageDisplay` exists since Claude Code 2.1.152; an older one ignores the entry with a note and keeps the
 /// rest of the file, so the reading column simply waits for `Stop` there.
@@ -68,6 +73,8 @@ public enum ClaudeHooksAdapter {
         Entry(event: "MessageDisplay", matcher: nil, arguments: ["turn.said", "--stdin"]),
         Entry(event: "SubagentStart", matcher: nil, arguments: ["agent.started", "--stdin"]),
         Entry(event: "SubagentStop", matcher: nil, arguments: ["agent.ended", "--stdin"]),
+        Entry(event: "TaskCreated", matcher: nil, arguments: ["plan.updated", "--stdin"]),
+        Entry(event: "TaskCompleted", matcher: nil, arguments: ["plan.updated", "--stdin"]),
     ]
 
     /// `<home>/threads/<thread-id>.claude-settings.json`

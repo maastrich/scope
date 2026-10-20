@@ -25,6 +25,12 @@ struct DriverProfileTests {
         #expect(!shell.canResume)
         #expect(!shell.acceptsInitialPrompt)
 
+        // Recent Claude Code keeps its todo and task tools from recent models unless asked: the Plan card reads them.
+        for id in ["claude-code", "claude-code-bypass"] {
+            let profile = try #require(profiles.first { $0.id == id })
+            #expect(profile.env["CLAUDE_CODE_ENABLE_TODO_TOOLS"] == "1", Comment(rawValue: id))
+        }
+
         let claude = try #require(profiles.first { $0.id == "claude-code" })
         #expect(claude.command == "claude")
         #expect(claude.resume == ["claude", "--resume", "{resume_id}"])

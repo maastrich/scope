@@ -25,7 +25,9 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// `SubagentStart` / `SubagentStop`, `payload["agent"]` its id): they move no state either, but a turn that
     /// ends while one still runs in the background is not the end of the work (`ThreadWait`). `limits.reported`
     /// carries the subscription's `rate_limits` as Claude Code gave them to its status line (`payload["limits"]`,
-    /// the object as compact JSON): about the account, not the thread, and read by the meter alone.
+    /// the object as compact JSON): about the account, not the thread, and read by the meter alone. `plan.updated`
+    /// says the driver's own task list moved outside a tool call (Claude Code's `TaskCreated` / `TaskCompleted`
+    /// hooks, the task in `raw`): it feeds the thread's `AgentPlan` and moves no state.
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
@@ -38,12 +40,13 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case agentStarted = "agent.started"
         case agentEnded = "agent.ended"
         case limitsReported = "limits.reported"
+        case planUpdated = "plan.updated"
 
         /// `true` for the events that move the thread state (everything but the informational ones:
-        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`, `limits.reported`).
+        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`, `limits.reported`, `plan.updated`).
         public var changesState: Bool {
             switch self {
-            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: false
+            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .planUpdated: false
             default: true
             }
         }

@@ -187,7 +187,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     public func isLate(_ event: AdapterEvent, promptPending: Bool = false) -> Bool {
         switch event.kind {
         case .turnStarted, .inputRequested, .permissionRequested: break
-        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: return false
+        case .turnEnded, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .planUpdated:
+            return false
         }
         if let sent = event.sentAt, let end = turnEndSentAt, sent < end { return true }
         guard !promptPending, !inTurn, let last = turns.last, last.outcome == .ended || last.outcome == .failed else { return false }
@@ -201,8 +202,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         let at = event.receivedAt
         if let path = event.payload[HookEvent.transcriptKey], !path.isEmpty { next.transcriptPath = path }
         if let reply = AgentReply.from(event) { next.lastReply = Self.bounded(reply) }
-        // A todo list or a plan is the latest word on the work whatever turn it reaches the app in.
-        if event.kind == .turnStarted, let tool = event.payload[HookEvent.toolKey], !tool.isEmpty,
+        // A todo list, a task or a plan is the latest word on the work whatever turn it reaches the app in.
+        let tool = event.payload[HookEvent.toolKey].flatMap { $0.isEmpty ? nil : $0 }
+        if event.kind == .planUpdated || (event.kind == .turnStarted && tool != nil),
            let plan = AgentPlan.applying(tool: tool, raw: event.raw, to: plan, at: at) {
             next.plan = plan
         }
@@ -223,7 +225,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             if let tool = event.payload[HookEvent.toolKey], !tool.isEmpty {
                 next.pendingRequest = Tool(name: tool, target: event.payload[HookEvent.targetKey], at: at)
             }
-        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported:
+        case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .planUpdated:
             break
         default:
             next.pendingRequest = nil
@@ -266,7 +268,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         case .sessionStarted:
             // A new session of the driver (a relaunch, a resume): whatever the previous one ran is gone with it.
             next.agents = [:]
-        case .limitsReported:
+        case .limitsReported, .planUpdated:
             break
         }
         return next

@@ -11,6 +11,8 @@ struct ThreadActivityCaption: View {
     let headline: ThreadActivityHeadline
     /// Set for a finished turn: a click on the caption opens the answer in the reading column.
     var readReply: (() -> Void)?
+    /// `3/7 steps` while the agent's plan has steps left: the caption ends with it (`SidebarRowLayout.caption`).
+    var planSummary: String? = nil
     @State private var hovering = false
 
     /// Minutes are the finest unit worth reading after the first one.
@@ -19,10 +21,11 @@ struct ThreadActivityCaption: View {
     var body: some View {
         if let since = headline.since {
             TimelineView(.periodic(from: .now, by: Self.tick)) { context in
-                caption("\(headline.text) · \(ThreadActivityHeadline.ago(since, now: context.date))")
+                caption(SidebarRowLayout.caption("\(headline.text) · \(ThreadActivityHeadline.ago(since, now: context.date))",
+                                                 planSummary: planSummary))
             }
         } else {
-            caption(headline.text)
+            caption(SidebarRowLayout.caption(headline.text, planSummary: planSummary))
         }
     }
 
