@@ -452,6 +452,11 @@ final class ThreadSession: Identifiable {
         updateClaude { $0.mcpServers.declare(declarations) }
     }
 
+    /// Scope is about to signal background task `id` (`AppModel.stopBackgroundTask`).
+    func markBackgroundStopRequested(_ id: String) {
+        updateClaude { $0.background.markStopRequested(id) }
+    }
+
     /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call.
     private func updateClaude(_ change: (inout ClaudeSession) -> Void) {
         var next = claude
@@ -573,6 +578,8 @@ final class ThreadSession: Identifiable {
         assistNote = nil
         resumingAfterRestart = false
         setActivity(activity.closingOpenTurn(at: .now))
+        // Whatever the session ran in the background died with it.
+        updateClaude { $0.background.sessionEnded(at: .now) }
         record.lastExit = status
         record.lastState = .exited
         record.processAlive = false

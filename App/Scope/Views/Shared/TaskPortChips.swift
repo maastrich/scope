@@ -40,6 +40,8 @@ struct TaskPortChips: View {
 /// Children laid out left to right, wrapping to the next line when the width runs out.
 struct FlowRow: Layout {
     var spacing: CGFloat = 6
+    /// Each row centred in the width rather than flush left: for a row of buttons under a centred heading.
+    var centered = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -59,17 +61,28 @@ struct FlowRow: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-        for subview in subviews {
+        // Rows first, then each one placed: a centred row needs its width before its first child goes down.
+        var rows: [[(index: Int, size: CGSize)]] = [[]]
+        var x: CGFloat = 0
+        for (index, subview) in subviews.enumerated() {
             let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
+            if x > 0, x + size.width > bounds.width {
+                rows.append([])
+                x = 0
             }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            rows[rows.count - 1].append((index, size))
             x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
+        }
+        var y = bounds.minY
+        for row in rows where !row.isEmpty {
+            let width = row.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(row.count - 1)
+            var x = centered ? bounds.minX + max(0, (bounds.width - width) / 2) : bounds.minX
+            let rowHeight = row.map(\.size.height).max() ?? 0
+            for item in row {
+                subviews[item.index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(item.size))
+                x += item.size.width + spacing
+            }
+            y += rowHeight + spacing
         }
     }
 }

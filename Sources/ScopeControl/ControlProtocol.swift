@@ -1012,10 +1012,14 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     /// What its Claude Code session reports about itself: mode, model, compactions, MCP servers in trouble. Absent for
     /// another driver, and until the session says anything.
     public var session: ClaudeSessionSummary?
+    /// What its Claude Code session runs or has scheduled in the background (`BackgroundWorkReport`): running first,
+    /// then the latest finished. Absent when there is none.
+    public var background: [BackgroundTaskSummary]?
 
     public init(id: String, title: String, driver: String, model: String? = nil, scope: String, scopeSlug: String, task: String?,
                 cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
-                resident: String? = nil, activity: String? = nil, tokens: String? = nil, session: ClaudeSessionSummary? = nil) {
+                resident: String? = nil, activity: String? = nil, tokens: String? = nil, session: ClaudeSessionSummary? = nil,
+                background: [BackgroundTaskSummary]? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -1033,6 +1037,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.activity = activity
         self.tokens = tokens
         self.session = session
+        self.background = background
     }
 }
 
@@ -1330,6 +1335,8 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     public var olderCursor: Int?
     /// Always `true`: what a terminal shows was written by programs and people the reader does not control.
     public var untrusted: Bool
+    /// What the thread runs or has scheduled in the background (`ThreadSummary.background`).
+    public var background: [BackgroundTaskSummary]?
 
     public init(thread: String, title: String, state: String, page: ThreadTranscript.Page, note: String? = nil) {
         self.thread = thread
@@ -1382,9 +1389,13 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         /// when the wait ends, so the answer says whether the work is merged, mergeable or failing its checks.
         public var task: String?
         public var pullRequest: PullRequestSummary?
+        /// What the thread left running or scheduled in the background. Reported, never waited on: a dev server or a
+        /// Monitor does not hold the wait (`BackgroundWorkReport`); read its `outputFile`, or stop it, as needed.
+        public var background: [BackgroundTaskSummary]?
 
         public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil,
-                    lastPromptAt: Date? = nil, agents: Int = 0, task: String? = nil, pullRequest: PullRequestSummary? = nil) {
+                    lastPromptAt: Date? = nil, agents: Int = 0, task: String? = nil, pullRequest: PullRequestSummary? = nil,
+                    background: [BackgroundTaskSummary]? = nil) {
             self.thread = thread
             self.title = title
             self.state = state
@@ -1395,6 +1406,7 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
             self.agents = agents > 0 ? agents : nil
             self.task = task
             self.pullRequest = pullRequest
+            self.background = background
         }
     }
 

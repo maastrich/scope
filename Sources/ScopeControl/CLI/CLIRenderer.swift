@@ -62,9 +62,13 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "MODE", "STATE", "SCOPE", "TASK", "TOKENS", "BY", "ACTIVITY"], result.threads.map {
+                // The column only when some thread has something running in the background.
+                let background = result.threads.contains { ($0.background ?? []).contains(where: \.isRunning) }
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "MODE", "STATE", "SCOPE", "TASK", "TOKENS", "BY"]
+                                        + (background ? ["BACKGROUND"] : []) + ["ACTIVITY"], result.threads.map {
                     [$0.id, $0.title, $0.driver, $0.session?.model ?? $0.model ?? "", $0.session?.modeColumn ?? "", $0.state, $0.scopeSlug,
-                     $0.task ?? "", $0.tokens ?? "", openedBy($0), activityColumn($0)]
+                     $0.task ?? "", $0.tokens ?? "", openedBy($0)]
+                        + (background ? [backgroundColumn($0.background)] : []) + [activityColumn($0)]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -117,6 +121,7 @@ public enum CLIRenderer {
                 lines = ["thread \(result.thread) — \(result.title) · \(range) (\(result.state))"]
             }
             if let note = result.note { lines.append(note) }
+            if let background = BackgroundWorkReport.line(result.background, now: .now) { lines.append(background) }
             lines += quoted(result.text)
             if let older = result.olderCursor {
                 lines.append("older lines: cursor \(older) (scope thread read \(result.thread) --cursor \(older))")
@@ -132,6 +137,9 @@ public enum CLIRenderer {
                 if !entry.settled { status += ", still at work" }
                 if let agents = entry.agents { status += ": \(agents) sub-agent\(agents == 1 ? "" : "s") running in the background" }
                 lines.append("thread \(entry.thread) — \(entry.title) (\(status))")
+                if let background = BackgroundWorkReport.line(entry.background, now: .now) {
+                    lines.append(background + " — not waited on")
+                }
                 if let pr = entry.pullRequest { lines.append("pull request \(pr.line) \(pr.url.absoluteString)" + (entry.task.map { " · task \($0)" } ?? "")) }
                 if let reply = entry.reply {
                     lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
@@ -155,6 +163,12 @@ public enum CLIRenderer {
         case .taskBranches(let result):
             return branches(result)
         }
+    }
+
+    /// `2 running`: what a thread runs in the background, for `scope list threads`.
+    static func backgroundColumn(_ entries: [BackgroundTaskSummary]?) -> String {
+        let running = (entries ?? []).filter(\.isRunning).count
+        return running == 0 ? "" : "\(running) running"
     }
 
     /// `scope task branch list`: one line per worktree, the task's own marked, with its pull requests.

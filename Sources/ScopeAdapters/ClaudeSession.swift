@@ -28,6 +28,8 @@ public struct ClaudeSession: Sendable, Equatable {
     public var model = ClaudeSessionModel()
     /// Pull requests the session opened, merged or linked (`ClaudeSessionPullRequests`).
     public var pullRequests = ClaudeSessionPullRequests()
+    /// Background shells, Monitors, the `/loop` wake-up and the crons (`ClaudeBackgroundWork`).
+    public var background = ClaudeBackgroundWork()
 
     public init() {}
 
@@ -50,6 +52,7 @@ public struct ClaudeSession: Sendable, Equatable {
         compactions.apply(facts)
         model.apply(facts)
         pullRequests.apply(facts)
+        background.apply(facts)
     }
 
     /// Folds what the transcript gained, in file order.
@@ -65,5 +68,6 @@ public struct ClaudeSession: Sendable, Equatable {
         mcpServers.apply(records)
         compactions.apply(records)
         pullRequests.apply(records)
+        background.apply(records)
     }
 }
