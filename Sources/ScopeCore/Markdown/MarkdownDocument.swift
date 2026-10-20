@@ -49,7 +49,7 @@ public indirect enum MarkdownBlock: Sendable, Equatable {
     /// such: a newer notation degrades to readable text, never to a paragraph that swallows its tags.
     case raw(String)
 
-    var plainText: String {
+    public var plainText: String {
         switch self {
         case .heading(_, let text), .paragraph(let text), .code(_, let text), .raw(let text): text
         case .quote(let blocks): blocks.map(\.plainText).joined(separator: "\n")
