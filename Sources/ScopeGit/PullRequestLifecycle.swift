@@ -111,6 +111,14 @@ public enum PullRequestPrompts {
         return text
     }
 
+    /// Hands a green pull request to the thread to merge: the owner lets the agent do the git.
+    public static func readyToMerge(pullRequest number: Int, base: String, reviewNeeded: Bool) -> String {
+        var text = "Pull request #\(number) is green and mergeable into \(base)."
+        if reviewNeeded { text += " It still shows as needing a review; check the repository's rules first." }
+        text += " Squash-merge it when nothing is left to push, then say what landed."
+        return text
+    }
+
     public static func fixConflicts(pullRequest number: Int, base: String, branch: String) -> String {
         """
         Pull request #\(number) has conflicts with \(base). Bring \(base) into \(branch): run \

@@ -118,4 +118,34 @@ import ScopeGit
         #expect(VisitedBranches.parse(reflogSubjects: many, current: "b2", limit: 3).count == 3)
         #expect(VisitedBranches.parse(reflogSubjects: [], current: "x").isEmpty)
     }
+
+    @Test func theTallyCountsWhatCountsAndCaptionsIt() {
+        let runs = [PullRequestCheck(name: "build", state: .passing), PullRequestCheck(name: "test", state: .failing),
+                    PullRequestCheck(name: "lint", state: .pending), PullRequestCheck(name: "label", state: .skipped),
+                    PullRequestCheck(name: "docs", state: .passing)]
+        let tally = PullRequestSet.tally(runs)
+        #expect(tally == .init(passed: 2, failed: 1, pending: 1, skipped: 1))
+        #expect(tally.total == 4 && tally.caption == "✗ 1 / 4" && tally.checks == .failing)
+        #expect(PullRequestSet.CheckTally(passed: 1, pending: 1).caption == "● 1 / 2")
+        #expect(PullRequestSet.CheckTally(passed: 4).caption == "✓ 4 / 4")
+        #expect(PullRequestSet.CheckTally(skipped: 2).caption == nil)
+        #expect(PullRequestSet.tally([]).checks == .none)
+    }
+
+    @Test func theVerdictTakesTheMostBlockingFact() {
+        typealias Set_ = PullRequestSet
+        let green = Set_.CheckTally(passed: 4)
+        #expect(Set_.verdict(state: .merged, isDraft: false, mergeable: .conflicting, tally: green, review: .none) == .merged)
+        #expect(Set_.verdict(state: .open, isDraft: true, mergeable: .conflicting, tally: green, review: .none) == .conflicting)
+        #expect(Set_.verdict(state: .open, isDraft: true, mergeable: .mergeable, tally: .init(passed: 3, failed: 2), review: .approved) == .checksFailing(2))
+        #expect(Set_.verdict(state: .open, isDraft: false, mergeable: .mergeable, tally: green, review: .changesRequested) == .changesRequested)
+        #expect(Set_.verdict(state: .open, isDraft: true, mergeable: .mergeable, tally: green, review: .approved) == .draft)
+        #expect(Set_.verdict(state: .open, isDraft: false, mergeable: .mergeable, tally: .init(passed: 1, pending: 3), review: .approved) == .checksRunning)
+        #expect(Set_.verdict(state: .open, isDraft: false, mergeable: .mergeable, tally: green, review: .reviewRequired) == .reviewNeeded)
+        #expect(Set_.verdict(state: .open, isDraft: false, mergeable: .mergeable, tally: green, review: .approved) == .ready)
+        // Nothing read yet: no checks, mergeability unknown.
+        #expect(Set_.verdict(state: .open, isDraft: false, mergeable: .unknown, tally: .init(), review: .none) == .open)
+        #expect(Set_.Verdict.checksFailing(1).label == "1 check failing")
+        #expect(Set_.Verdict.ready.asksTheAgent && !Set_.Verdict.draft.asksTheAgent)
+    }
 }
