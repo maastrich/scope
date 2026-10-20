@@ -158,6 +158,8 @@ final class AppControlService: ControlService {
                 read(session, params).map { payload in
                     guard case .read(var result) = payload else { return payload }
                     result.background = session.backgroundReport()
+                    // What blocks it, for an orchestrator that cannot see the dialog.
+                    result.pendingRequest = model.pendingRequest(of: session.id)
                     result.subagents = SubagentList.summaries(session.claude.subagents, now: .now, alive: session.isAlive,
                                                               recent: nil, withResults: true)
                     return .read(result)
@@ -534,7 +536,8 @@ final class AppControlService: ControlService {
                                           agents: session.waitSnapshot.agents,
                                           subagents: SubagentList.summaries(session.claude.subagents, now: .now, alive: session.isAlive),
                                           task: task?.record.id.rawValue,
-                                          pullRequest: task.flatMap(pullRequestSummary), background: session.backgroundReport())
+                                          pullRequest: task.flatMap(pullRequestSummary), background: session.backgroundReport(),
+                                          pendingRequest: model.pendingRequest(of: session.id))
         }
         return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
                                                waited: Int(Date.now.timeIntervalSince(started).rounded()))))

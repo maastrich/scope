@@ -174,6 +174,17 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             return
         }
+        if action == ThreadNotifier.allowAction || action == ThreadNotifier.denyAction {
+            let requestID = response.notification.request.content.userInfo[ThreadNotifier.requestKey] as? String
+            let allow = action == ThreadNotifier.allowAction
+            await MainActor.run {
+                let id = allow ? "notification.allow" : "notification.deny"
+                Usage.register(id, label: allow ? "Allow" : "Deny")
+                Usage.record(.notification, id, source: .notification)
+                AppServices.model?.answerPermissionFromNotification(threadID, requestID: requestID, allow: allow)
+            }
+            return
+        }
         if action == ThreadNotifier.notBlockingAction {
             await MainActor.run {
                 Usage.register("notification.not-blocking", label: "Not blocking")

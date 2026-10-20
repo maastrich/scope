@@ -1,4 +1,5 @@
 import SwiftUI
+import ScopeAdapters
 import ScopeCore
 import ScopeTasks
 
@@ -157,7 +158,17 @@ struct InboxActions: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if item.kind.isThreadItem {
+            if let request = answerablePermission {
+                // Named, never an icon: allowing is a decision, not a shortcut. Reply would type into the dialog.
+                Button("Deny") { answer(request, .deny) }
+                    .buttonStyle(.scopeGhost)
+                    .help("Deny — like Esc in the terminal's dialog")
+                    .usageID("deny", label: "Deny a permission from the Inbox")
+                Button("Allow") { answer(request, .allow) }
+                    .buttonStyle(.scopeSecondary)
+                    .help("Allow once: \(request.command ?? request.headline)")
+                    .usageID("allow", label: "Allow a permission from the Inbox")
+            } else if item.kind.isThreadItem, !model.inboxItemShowsADialog(item) {
                 action("arrowshape.turn.up.left", "Reply (r)", id: "reply") { model.inbox.replyingTo = item.id }
             }
             if !compact {
@@ -194,6 +205,23 @@ struct InboxActions: View {
         }
         .buttonStyle(.iconTight)
         .foregroundStyle(Ink.secondary)
+    }
+
+    /// The permission this item waits on, when Scope can answer it.
+    private var answerablePermission: ClaudePendingRequest? {
+        guard item.kind == .permission, let thread = item.threadID, let request = model.pendingRequest(of: thread),
+              request.kind == .permission, ClaudeDialogAnswer.isAnswerable(request) else { return nil }
+        return request
+    }
+
+
+    private func answer(_ request: ClaudePendingRequest, _ answer: ClaudeDialogAnswer) {
+        guard let thread = item.threadID else { return }
+        if case .failure = model.answerPendingRequest(thread, requestID: request.id, with: answer) {
+            // The terminal shows something else: the thread is where to look.
+            onOpen?()
+            model.openInboxItem(item)
+        }
     }
 
     @ViewBuilder private var pullRequestButton: some View {

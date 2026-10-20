@@ -83,6 +83,16 @@ public enum ClaudeDialogAnswer: Sendable, Equatable, Codable {
         return .success(keys)
     }
 
+    /// Whether Scope can answer `request` at all: a permission it can tell from another on screen, a question whose
+    /// every part has options. A plan or a form is answered at the terminal.
+    public static func isAnswerable(_ request: ClaudePendingRequest) -> Bool {
+        switch request.kind {
+        case .permission: fragments(of: request) != nil
+        case .question: !request.questions.isEmpty && request.questions.allSatisfy { !$0.options.isEmpty }
+        case .plan, .elicitation: false
+        }
+    }
+
     // MARK: The screen
 
     /// `nil` when the bottom of `screen` (the terminal's lines, oldest first, as text) shows the dialog `request`

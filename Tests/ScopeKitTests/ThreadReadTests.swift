@@ -144,4 +144,45 @@ import Testing
         let fresh = ThreadReadResult(thread: "3f9a2c17be04", title: "acme", state: "done", reply: reply, terminalEnd: 3)
         #expect(fresh.staleReply == false && !CLIRenderer.text(.read(fresh)).contains(CLIRenderer.staleNotice))
     }
+
+    static func pending(_ payloads: [String]) throws -> ClaudePendingRequest {
+        var pending = ClaudePendingRequests()
+        for payload in payloads {
+            pending.apply(ClaudeHookFacts(body: try #require(JSONValue(json: payload)), at: Date(timeIntervalSince1970: 1_000)))
+        }
+        return try #require(pending.current)
+    }
+
+    @Test func aWaitingThreadSaysWhatItIsAskedBetweenTheUntrustedMarkers() throws {
+        let page = ThreadTranscript.page(["❯ 1. Yes"], firstLineNumber: 0, count: nil, cursor: nil)
+        var result = ThreadReadResult(thread: "3f9a2c17be04", title: "acme", state: "waiting", page: page)
+        result.pendingRequest = try Self.pending(Array(ClaudePendingFixtures.mcp[4...5]))
+        let lines = CLIRenderer.text(.read(result)).components(separatedBy: "\n")
+        #expect(lines[1] == "waiting on a permission for mcp__probe__probe_echo:")
+        #expect(lines[2] == ThreadTranscript.untrustedNotice)
+        #expect(lines.contains("MCP tool probe_echo on server probe"))
+        #expect(lines.contains("can remember: allow mcp__probe__probe_echo (local settings)"))
+
+        var question = ThreadWaitResult.Entry(thread: "3f9a2c17be04", title: "acme", state: "waiting", settled: true,
+                                              pendingRequest: try Self.pending([ClaudePendingFixtures.twoQuestions]))
+        question.reply = nil
+        let wait = CLIRenderer.text(.wait(ThreadWaitResult(threads: [question], complete: true, waited: 1)))
+        #expect(wait.contains("waiting on an answer to 2 questions:"))
+        #expect(wait.contains("[Size] Which size?"))
+        #expect(wait.contains("  2. Large — Huge"))
+    }
+
+    @Test func thePendingRequestCrossesTheWire() throws {
+        let page = ThreadTranscript.page(["x"], firstLineNumber: 0, count: nil, cursor: nil)
+        var result = ThreadReadResult(thread: "3f9a2c17be04", title: "t", state: "waiting", page: page)
+        result.pendingRequest = try Self.pending(Array(ClaudePendingFixtures.bash[2...3]))
+        let response = ControlResponse.result(id: "1", .read(result))
+        let decoded = try ControlResponse.decode(response.encoded(), method: .threadRead)
+        guard case .read(let back) = decoded.payload else { Issue.record("not a read"); return }
+        #expect(back.pendingRequest?.command == "echo probe hello")
+        #expect(back.pendingRequest?.shown == true)
+        // An older app sends no such field.
+        let old = try JSONEncoder().encode(ThreadReadResult(thread: "3f9a2c17be04", title: "t", state: "idle", page: page))
+        #expect(try JSONDecoder().decode(ThreadReadResult.self, from: old).pendingRequest == nil)
+    }
 }

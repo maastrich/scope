@@ -113,6 +113,9 @@ import Testing
     @Test("a plan and an MCP form are answered at the terminal")
     func notAnswerable() throws {
         let plan = try Self.request(ClaudePendingFixtures.plan)
+        #expect(!ClaudeDialogAnswer.isAnswerable(plan))
+        #expect(ClaudeDialogAnswer.isAnswerable(try Self.bash()))
+        #expect(ClaudeDialogAnswer.isAnswerable(try Self.two()))
         #expect(ClaudeDialogAnswer.allow.keys(for: plan) == .failure(.notAnswerable(.plan)))
         let form = try Self.request(Array(ClaudePendingFixtures.elicitation[4...5]))
         #expect(ClaudeDialogAnswer.deny.keys(for: form) == .failure(.notAnswerable(.elicitation)))

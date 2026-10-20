@@ -417,7 +417,13 @@ final class ThreadSession: Identifiable {
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
         let subagentsBefore = event.kind == .agentEnded ? runningSubagents() : 0
-        let next = ThreadStateMachine.next(adapterState ?? .initial, on: event, after: activity, promptPending: promptPending)
+        var next = ThreadStateMachine.next(adapterState ?? .initial, on: event, after: activity, promptPending: promptPending)
+        // Two permissions asked together are answered one after the other: the first one's tool report does not end
+        // the wait on the second, still up (`ClaudePendingRequests`).
+        if next == .running, event.kind == .turnStarted, !(event.payload[HookEvent.toolKey] ?? "").isEmpty,
+           let reason = claude.pending.waitReason {
+            next = .waiting(reason: reason)
+        }
         if event.kind.changesState, !late { expectingTurnSince = nil }
         if event.kind == .turnStarted, !late { lastTurnStartedAt = event.receivedAt }
         if event.kind == .sessionStarted { lastSessionStartedAt = event.receivedAt }
@@ -469,6 +475,12 @@ final class ThreadSession: Identifiable {
         }
         // The last background sub-agent reported in the transcript (its notification) rather than by a hook: the
         // driver is about to open a turn on its result, expected as after `agent.ended` in `apply(_:)`.
+        // "No" in a permission dialog fires no hook: the turn just ends, which only the transcript says. The thread
+        // then waits on nothing.
+        let turnEnded = records.contains { if case .turnDuration = $0 { true } else { false } }
+        if turnEnded, phase.isAlive, adapterState == .waiting(reason: .permission), claude.pending.current == nil {
+            setAdapterState(.idle)
+        }
         guard runningBefore > 0, runningSubagents() == 0 else { return }
         subagentsEndedAt = .now
         if !activity.inTurn, expectingTurnSince == nil, adapterState != .running { expectingTurnSince = .now }
@@ -492,16 +504,24 @@ final class ThreadSession: Identifiable {
         }
     }
 
-    /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call.
+    /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call. What it asks words the
+    /// activity line.
     private func updateClaude(_ change: (inout ClaudeSession) -> Void) {
         var next = claude
         change(&next)
         guard next != claude else { return }
         let previous = claude
         claude = next
-        if next.compactions.isRunning != previous.compactions.isRunning { refreshActivityHeadline() }
+        if next.compactions.isRunning != previous.compactions.isRunning || next.pending.current != previous.pending.current {
+            refreshActivityHeadline()
+        }
         let reported = next.pullRequests.changes(since: previous.pullRequests)
         if !reported.isEmpty { onClaudePullRequests?(self, reported) }
+    }
+
+    /// Scope typed an answer to `id`: it is no longer asked, whatever the hooks say next.
+    func answered(_ id: String) {
+        updateClaude { $0.pending.remove(id: id) }
     }
 
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.
@@ -530,7 +550,8 @@ final class ThreadSession: Identifiable {
     }
 
     private func refreshActivityHeadline() {
-        var next = ThreadActivityHeadline.make(activity, state: displayState, compacting: claude.compactions.isRunning)
+        var next = ThreadActivityHeadline.make(activity, state: displayState, compacting: claude.compactions.isRunning,
+                                               pending: claude.pending.current)
         // Between the relaunch and the message that asks it to go on, "stopped mid-turn" is not what is happening.
         if resumingAfterRestart, phase.isAlive, displayState != .running {
             next = ThreadActivityHeadline(text: InterruptedTurn.headline)
@@ -576,14 +597,24 @@ final class ThreadSession: Identifiable {
     /// Bytes the user typed into the terminal, on their way to the child: an interrupt, an approved permission or
     /// a prompt submitted to a driver that never reports a turn start moves the state (`TerminalInputSignal`).
     func handleUserInput(_ bytes: ArraySlice<UInt8>) {
-        guard phase.isAlive, deliversEvents, let signal = inputTracker.feed(bytes) else { return }
+        guard phase.isAlive, deliversEvents else { return }
+        // A key in the dialog Claude Code shows decides it, and no hook says so before the tool has run.
+        if claude.pending.current != nil {
+            var keystroke = ClaudePendingRequests.Keystroke.none
+            updateClaude { keystroke = $0.pending.userTyped(bytes) }
+            if keystroke == .approved, adapterState == .waiting(reason: .permission), claude.pending.waitReason == nil {
+                setAdapterState(.running)
+            }
+        }
+        guard let signal = inputTracker.feed(bytes) else { return }
         if signal != .submit(hadText: false) { lastUserInputAt = .now }
         if signal == .interrupt, adapterState == .running {
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
         }
-        guard let next = ThreadStateMachine.next(adapterState ?? .initial, onUserInput: signal,
+        guard var next = ThreadStateMachine.next(adapterState ?? .initial, onUserInput: signal,
                                                  adapterReportsTurnStart: AdapterInstaller.reportsTurnStart(profile))
         else { return }
+        if next == .running, let reason = claude.pending.waitReason { next = .waiting(reason: reason) }
         setAdapterState(next)
     }
 
@@ -610,6 +641,7 @@ final class ThreadSession: Identifiable {
         let status = ExitStatus.decode(rawWaitStatus: rawWaitStatus)
         phase = .exited(status)
         adapterState = nil
+        updateClaude { $0.pending = ClaudePendingRequests() }
         assistNote = nil
         resumingAfterRestart = false
         setActivity(activity.closingOpenTurn(at: .now))

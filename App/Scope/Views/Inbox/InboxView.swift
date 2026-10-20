@@ -130,7 +130,7 @@ struct InboxView: View {
         case "j": return move(1, order)
         case "k": return move(-1, order)
         case "r":
-            guard item.kind.isThreadItem else { return .ignored }
+            guard item.kind.isThreadItem, !model.inboxItemShowsADialog(item) else { return .ignored }
             model.inbox.replyingTo = item.id
         case "e":
             model.markInboxItemRead(item)
@@ -207,6 +207,7 @@ struct InboxScopeHeader: View {
 
 /// The keys of the selected item, at the foot of the sheet: only the ones that do something to it.
 struct InboxKeyHints: View {
+    @Environment(AppModel.self) private var model
     let item: Inbox.Item?
 
     var body: some View {
@@ -214,7 +215,7 @@ struct InboxKeyHints: View {
             hint("j k", "move")
             if let item {
                 hint("↩", item.kind == .archivedOnMerge ? "restore" : "open")
-                if item.kind.isThreadItem { hint("r", "reply") }
+                if item.kind.isThreadItem, !model.inboxItemShowsADialog(item) { hint("r", "reply") }
                 hint("e", item.kind.isThreadItem ? "mark read" : "done")
                 if item.kind == .readyToMerge || item.kind == .checksFailing { hint("a", "archive task") }
                 if item.pullRequestURL != nil { hint("o", "open PR") }

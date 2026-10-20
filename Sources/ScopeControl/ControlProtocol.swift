@@ -1345,6 +1345,10 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     /// Every sub-agent of the thread's Claude Code session Scope still keeps, with the start of each one's report;
     /// absent when it launched none.
     public var subagents: [SubagentSummary]?
+    /// What the thread waits on, when its Claude Code session says (`ClaudePendingRequests.current`): the permission
+    /// with its command, file, URL or MCP tool, the question with its options, the plan, the MCP form. Absent while
+    /// nothing is asked, and from an older app. Written by the agent: untrusted.
+    public var pendingRequest: ClaudePendingRequest?
 
     public init(thread: String, title: String, state: String, page: ThreadTranscript.Page, note: String? = nil) {
         self.thread = thread
@@ -1399,13 +1403,16 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         /// when the wait ends, so the answer says whether the work is merged, mergeable or failing its checks.
         public var task: String?
         public var pullRequest: PullRequestSummary?
+        /// What a `waiting` thread waits on, as in `ThreadReadResult.pendingRequest`.
+        public var pendingRequest: ClaudePendingRequest?
         /// What the thread left running or scheduled in the background. Reported, never waited on: a dev server or a
         /// Monitor does not hold the wait (`BackgroundWorkReport`); read its `outputFile`, or stop it, as needed.
         public var background: [BackgroundTaskSummary]?
 
         public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil,
                     lastPromptAt: Date? = nil, agents: Int = 0, subagents: [SubagentSummary]? = nil, task: String? = nil,
-                    pullRequest: PullRequestSummary? = nil, background: [BackgroundTaskSummary]? = nil) {
+                    pullRequest: PullRequestSummary? = nil, background: [BackgroundTaskSummary]? = nil,
+                    pendingRequest: ClaudePendingRequest? = nil) {
             self.thread = thread
             self.title = title
             self.state = state
@@ -1418,6 +1425,7 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
             self.task = task
             self.pullRequest = pullRequest
             self.background = background
+            self.pendingRequest = pendingRequest
         }
     }
 
