@@ -204,7 +204,7 @@ private struct TaskPortsRow: View {
                         .foregroundStyle(Ink.tertiary)
                 }
             }
-            if !task.listeningPorts.isEmpty {
+            if !task.listeningPorts.isEmpty || !task.otherPorts.isEmpty {
                 TaskPortChips(task: task, compact: true)
                     .padding(.leading, 24)
                 ForEach(task.listeningProcesses) { process in

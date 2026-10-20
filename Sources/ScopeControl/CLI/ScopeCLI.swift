@@ -99,6 +99,13 @@ public enum ScopeCLI {
       scope task branch remove [<id|slug>] <branch>
                                           take a secondary worktree out of the task: uncommitted changes saved
                                           first, folder removed, branch kept (--repo when several hold it)
+      scope browser open [url]            open a page in the task's browser (agent store, watched in its Browser
+                                          pane) and wait for the load: a URL, localhost:5173, :41001 or a /path;
+                                          --port <n|index> for a port of the block (default: the first server)
+      scope browser read                  the page as text, interactive elements with refs, framed as untrusted
+      scope browser screenshot            a JPEG of the viewport, written under Scope's home; prints its path
+      scope browser console [--all]       what the page logged since the last look (--all: every line kept)
+                                          (browser: --task <id|slug> for another task than the caller's own)
       scope schedule list                 the scheduled prompts of every scope (--scope for one): rule, target,
                                           next fire, last run
       scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
@@ -288,6 +295,36 @@ public enum ScopeCLI {
                 parameters.period = period
             }
             return .call(.usage(parameters), shared)
+        case "browser":
+            guard let word = rest.first, let action = BrowserAction(rawValue: word) else {
+                throw UsageError(message: "browser takes one of: " + BrowserAction.allCases.map(\.rawValue).joined(separator: ", "),
+                                 usage: usage)
+            }
+            rest = rest.dropFirst()
+            var words: [String] = []
+            var parameters = BrowserParams(action: action)
+            let shared = try options(&rest, command: "browser \(word)", positional: { words.append($0) }, specific: { flag, value in
+                switch flag {
+                case "--task": parameters.task = try value()
+                case "--scope": parameters.scope = try value()
+                case "--port" where action == .open:
+                    let text = try value()
+                    guard let port = Int(text), port >= 0 else {
+                        throw UsageError(message: "browser open: --port takes a number, not “\(text)”", usage: usage)
+                    }
+                    parameters.port = port
+                case "--all" where action == .console: parameters.all = true
+                default: return false
+                }
+                return true
+            })
+            if action == .open {
+                guard words.count <= 1 else { throw UsageError(message: "browser open takes at most one URL", usage: usage) }
+                parameters.url = words.first
+            } else if !words.isEmpty {
+                throw UsageError(message: "browser \(word) takes no argument", usage: usage)
+            }
+            return .call(.browser(parameters), shared)
         case "list":
             var kind = ListParams.Kind.all
             if let word = rest.first, !word.hasPrefix("-") {

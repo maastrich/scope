@@ -66,6 +66,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskBranchAdd(let params): try encoder.encode(wire(params))
         case .taskBranchList(let params): try encoder.encode(wire(params))
         case .taskBranchRemove(let params): try encoder.encode(wire(params))
+        case .browser(let params): try encoder.encode(wire(params))
         }
     }
 
@@ -127,6 +128,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskBranchAdd: .taskBranchAdd(try required(TaskBranchAddParams.self))
             case .taskBranchList: .taskBranchList(try decoder.decode(Params<TaskBranchListParams>.self, from: data).params ?? TaskBranchListParams())
             case .taskBranchRemove: .taskBranchRemove(try required(TaskBranchRemoveParams.self))
+            case .browser: .browser(try required(BrowserParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
         } catch let error as ControlError {
@@ -220,6 +222,7 @@ public struct ControlResponse: Sendable, Equatable {
         case .release(let result): try encoder.encode(wire(result))
         case .schedules(let result): try encoder.encode(wire(result))
         case .taskBranches(let result): try encoder.encode(wire(result))
+        case .browser(let result): try encoder.encode(wire(result))
         }
     }
 
@@ -244,6 +247,7 @@ public struct ControlResponse: Sendable, Equatable {
                  .taskBranchAdd, .taskBranchRemove:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .taskBranchList: .taskBranches(try decoder.decode(Wrapped<TaskBranchListResult>.self, from: data).result)
+            case .browser: .browser(try decoder.decode(Wrapped<BrowserResult>.self, from: data).result)
             case .scheduleList: .schedules(try decoder.decode(Wrapped<ScheduleListResult>.self, from: data).result)
             case .threadRead: .read(try decoder.decode(Wrapped<ThreadReadResult>.self, from: data).result)
             case .threadWait: .wait(try decoder.decode(Wrapped<ThreadWaitResult>.self, from: data).result)

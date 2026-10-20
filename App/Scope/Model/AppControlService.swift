@@ -221,7 +221,30 @@ final class AppControlService: ControlService {
             return listBranches(params, from: origin, caller: caller)
         case .taskBranchRemove(let params):
             return await removeBranch(params, from: origin, caller: caller)
+        case .browser(let params):
+            return await browser(params, from: origin, caller: caller)
         }
+    }
+
+    // MARK: Browser
+
+    /// `browser`: one action on the task's agent tab (`AppModel+BrowserAgent`). An agent drives its own task's only.
+    private func browser(_ params: BrowserParams, from origin: ControlOrigin,
+                         caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "drive the browser of") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        if let refusal = AutomationPolicy.mayDriveBrowser(of: task.record.slug, taskThreads: model.threads(in: task.id).map(\.id),
+                                                          from: origin) {
+            return .failure(refusal)
+        }
+        guard !task.isArchived else {
+            return .failure(.badRequest("\(task.record.slug) is archived", detail: "Its browser went with it."))
+        }
+        let driver: String = if case .thread(let id, _) = origin { model.session(id)?.title ?? id.rawValue } else { "you" }
+        return await model.performBrowser(params, in: task, by: driver).map(ControlResultPayload.browser)
     }
 
     // MARK: Several branches

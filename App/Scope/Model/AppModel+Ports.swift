@@ -4,7 +4,8 @@ import ScopeTasks
 
 /// The servers a task is running: every twenty seconds, for each live task with a thread alive, the processes under
 /// its root (the sweep's own lookup) are asked which TCP ports they listen on, and the ones inside the task's block
-/// become `localhost:41003 ↗` chips in its section and hover card. A task whose threads are all stopped keeps the
+/// become `localhost:41003 ↗` chips in its section and hover card; the ones outside the block and what
+/// `.claude/launch.json` declares are kept too, for the task's browser. A task whose threads are all stopped keeps the
 /// last reading until its next thread, so the chips do not blink on a relaunch.
 extension AppModel {
     static let portScanInterval: Duration = .seconds(20)
@@ -25,16 +26,26 @@ extension AppModel {
             !task.isArchived && task.record.portBlock != nil && threads(in: task.id).contains(where: \.isAlive)
         }
         guard !candidates.isEmpty else { return }
-        let inputs = candidates.map { (id: $0.id, root: $0.record.rootURL, block: $0.record.portBlock!) }
+        let inputs = candidates.map { task in
+            (id: task.id, root: task.record.rootURL, block: task.record.portBlock!,
+             launchFiles: task.activeSandboxes.map { URL(fileURLWithPath: $0.sandboxPath).appending(path: ".claude/launch.json") })
+        }
         let readings = await Task.detached(priority: .utility) {
             inputs.map { input in
                 let pids = ProcessSweep.processes(under: [input.root]).map(\.pid)
-                return (id: input.id, ports: input.block.ports(in: ListeningPorts.listeners(of: pids)))
+                let listeners = ListeningPorts.listeners(of: pids)
+                let launch = input.launchFiles.flatMap { url in
+                    (try? Data(contentsOf: url)).map(LaunchConfig.servers) ?? []
+                }
+                return (id: input.id, ports: input.block.ports(in: listeners), others: input.block.otherServerPorts(in: listeners),
+                        launch: launch)
             }
         }.value
         for reading in readings {
             guard let task = task(reading.id) else { continue }
             if task.listeningPorts != reading.ports { task.listeningPorts = reading.ports }
+            if task.otherPorts != reading.others { task.otherPorts = reading.others }
+            if task.launchServers != reading.launch { task.launchServers = reading.launch }
             // The processes go with the ports: same pass, same twenty seconds, only for a card that shows them.
             if processWatchers.contains(task.id) { refreshListeningProcesses(of: task) }
         }
