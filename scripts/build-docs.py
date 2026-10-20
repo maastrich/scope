@@ -511,6 +511,16 @@ processes serve (5173 without <code>--port $SCOPE_PORT</code>), else what <code>
 interfere, framed as <code>&lt;untrusted-page&gt;</code> with hidden text marked; <i>screenshot</i> writes a JPEG
 (1280 px wide at most) under <code>SCOPE_HOME/browser/shots/</code> and the agent gets the image itself;
 <i>console</i> gives what was logged since its last look.</p>
+<p>They act too: <code>scope_browser_click</code> on a ref, <code>scope_browser_type</code> into a field (and
+<code>submit</code> its form), <code>scope_browser_wait</code> for a selector, a text or a quiet page,
+<code>scope_browser_network</code> for the requests (with a status for fetch and XHR only — WebKit gives none for the
+rest). Clicks go through the page's DOM, so what needs a real gesture of yours — a popup, a file picker, the
+clipboard — does not happen. <b>Settings ▸ Automation ▸ Browser</b> says whether acting needs your approval (reading
+never does), where agents may browse — the task's ports, localhost, or anywhere, the default — and which sites are
+blocked; WebKit enforces it on every page and every request of the agent's tab. When an agent's page goes outside
+localhost, a card says so, with <i>Block … for This Task</i>; nothing waits on you. <b>Stop</b> in the agent's band
+(<kbd>Esc</kbd> while it works) ends its running call and refuses the next ones until you let it continue; the
+footer's <i>Actions</i> lists everything it did. Downloads land under <code>SCOPE_HOME/browser/downloads/</code>.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
@@ -1237,6 +1247,9 @@ scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
 scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
 scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
+scope browser click &lt;ref&gt;           <span class="c"># click what read called e12</span>
+scope browser type &lt;ref&gt; &lt;text&gt;     <span class="c"># type into a field (--clear, --submit)</span>
+scope browser wait|network          <span class="c"># until a --selector or --text shows, or the page is quiet; its requests</span>
 scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
 scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
@@ -1400,7 +1413,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_branch_add</code>,
 <code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,
 <code>scope_task_restore_checkpoint</code>, <code>scope_browser_open</code>, <code>scope_browser_read</code>,
-<code>scope_browser_screenshot</code>, <code>scope_browser_console</code>, <code>scope_gc</code>, <code>scope_release</code>,
+<code>scope_browser_screenshot</code>, <code>scope_browser_console</code>, <code>scope_browser_click</code>,
+<code>scope_browser_type</code>, <code>scope_browser_wait</code>, <code>scope_browser_network</code>, <code>scope_gc</code>, <code>scope_release</code>,
 <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single

@@ -32,6 +32,34 @@ final class BrowserSession: Identifiable {
     }
 
     private(set) var agentActivity: AgentActivity?
+    /// Agent calls on this tab still running: the band offers Stop (and Esc) while there are some.
+    private(set) var agentCallsInFlight = 0
+    /// The user stopped the agents here: running calls end and new ones are refused until they resume.
+    private(set) var isStopped = false
+    /// Every agent action, newest last, for the journal of the pane.
+    private(set) var actionLog: [ActionEntry] = []
+    /// Hosts outside the loopback the agent's pages went to, in order; the pane shows the newest unacknowledged.
+    private(set) var externalHosts: [String] = []
+    var acknowledgedHosts: Set<String> = []
+    /// Files the pages downloaded, under `SCOPE_HOME/browser/downloads/<task>/`.
+    private(set) var downloads: [URL] = []
+    /// Where a download goes; set by the model, which knows the home.
+    @ObservationIgnored var downloadsFolder: URL?
+    /// Requests kept since the page opened (`network`), capped like the console.
+    private(set) var network: [BrowserNetworkEntry] = []
+    @ObservationIgnored var networkReadByAgent = 0
+    @ObservationIgnored private var networkDropped = 0
+    @ObservationIgnored private var seenResources: Set<String> = []
+    @ObservationIgnored fileprivate var pendingDownloads: [ObjectIdentifier: URL] = [:]
+
+    struct ActionEntry: Identifiable, Equatable {
+        let id = UUID()
+        var at: Date
+        var thread: String
+        var action: String
+        var detail: String
+        var outcome: String
+    }
     /// Everything the page logged since it opened, capped (`consoleCap`).
     private(set) var console: [BrowserConsoleLine] = []
     /// How many of `console` an agent has read: `scope_browser_console` answers with what comes after.
@@ -81,6 +109,10 @@ final class BrowserSession: Identifiable {
         configuration.userContentController.addUserScript(WKUserScript(source: BrowserScripts.consoleRelay, injectionTime: .atDocumentStart,
                                                                        forMainFrameOnly: true, in: .page))
         configuration.userContentController.add(ConsoleRelay(session: self), contentWorld: .page, name: BrowserScripts.consoleHandler)
+        configuration.userContentController.addUserScript(WKUserScript(source: BrowserScripts.networkRelay, injectionTime: .atDocumentStart,
+                                                                       forMainFrameOnly: true, in: .page))
+        configuration.userContentController.add(NetworkRelay(session: self), contentWorld: .page, name: BrowserScripts.networkHandler)
+        if let rules = pendingRules { configuration.userContentController.add(rules) }
         // An agent's tab may never be on screen: it still lays out at a desktop size, so a screenshot shows the page
         // as a person would see it.
         let view = BrowserWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800), configuration: configuration)
@@ -196,6 +228,112 @@ final class BrowserSession: Identifiable {
             throw PageError.unreadable("the snapshot could not be encoded")
         }
         return (data, width, height)
+    }
+
+    // MARK: Agent calls
+
+    /// Runs one agent call, counted for the band's Stop, logged in the journal.
+    func agentCall<T>(thread: String, action: String, detail: String, _ body: () async -> (T, String)) async -> T {
+        agentCallsInFlight += 1
+        noteAgent(thread: thread, action: action)
+        let entry = ActionEntry(at: .now, thread: thread, action: action, detail: detail, outcome: "…")
+        actionLog.append(entry)
+        if actionLog.count > 200 { actionLog.removeFirst(actionLog.count - 200) }
+        let (value, outcome) = await body()
+        agentCallsInFlight -= 1
+        if let index = actionLog.firstIndex(where: { $0.id == entry.id }) { actionLog[index].outcome = outcome }
+        return value
+    }
+
+    /// Stop: the agents' running calls end, new ones are refused, the page stops loading.
+    func stopAgents() {
+        isStopped = true
+        _webView?.stopLoading()
+    }
+
+    func resumeAgents() {
+        isStopped = false
+    }
+
+    /// The content rule list in force on the tab (`BrowserSitePolicy.contentRules`), replacing the previous one.
+    @ObservationIgnored private var pendingRules: WKContentRuleList?
+    func applyRules(_ list: WKContentRuleList?) {
+        pendingRules = list
+        guard let controller = _webView?.configuration.userContentController else { return }
+        controller.removeAllContentRuleLists()
+        if let list { controller.add(list) }
+    }
+
+    /// Runs `body` in the reader's world with `arguments`; the decoded dictionary it returned.
+    func callInWorld(_ body: String, _ arguments: [String: Any] = [:]) async throws -> [String: Any] {
+        let value = try await webView.callAsyncJavaScript(body, arguments: arguments, in: nil, contentWorld: BrowserScripts.world)
+        return value as? [String: Any] ?? [:]
+    }
+
+    /// Waits for a selector or a text — or, with neither, for the page to stop loading and request nothing for half
+    /// a second. `false` on timeout or when the user stops the agents.
+    func waitFor(selector: String?, text: String?, timeout: Duration) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        var lastCount = -1
+        var quietSince: ContinuousClock.Instant?
+        while clock.now < deadline, !isStopped {
+            let probe = (try? await callInWorld(BrowserScripts.probe, ["selector": selector ?? "", "text": text ?? ""])) ?? [:]
+            if selector?.isEmpty == false || text?.isEmpty == false {
+                if probe["found"] as? Bool == true { return true }
+            } else {
+                let count = probe["resources"] as? Int ?? 0
+                let loading = _webView?.isLoading ?? false
+                if !loading, count == lastCount {
+                    if let since = quietSince, clock.now - since >= .milliseconds(500) { return true }
+                    if quietSince == nil { quietSince = clock.now }
+                } else {
+                    quietSince = nil
+                }
+                lastCount = count
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        return false
+    }
+
+    /// The resource timeline read into `network`, each entry once.
+    func collectResources() async {
+        guard hasView, let value = try? await webView.callAsyncJavaScript(BrowserScripts.resources, arguments: [:], in: nil,
+                                                                           contentWorld: BrowserScripts.world),
+              let entries = value as? [[String: Any]] else { return }
+        for entry in entries {
+            guard let url = entry["url"] as? String else { continue }
+            let key = "\(url)|\(entry["start"] as? Double ?? 0)"
+            guard seenResources.insert(key).inserted else { continue }
+            record(BrowserNetworkEntry(url: url, type: entry["type"] as? String ?? "other", milliseconds: entry["ms"] as? Int))
+        }
+    }
+
+    func networkForAgent(all: Bool) -> [BrowserNetworkEntry] {
+        let start = all ? 0 : max(0, networkReadByAgent - networkDropped)
+        networkReadByAgent = networkDropped + network.count
+        return Array(network[min(start, network.count)...])
+    }
+
+    fileprivate func record(_ entry: BrowserNetworkEntry) {
+        network.append(entry)
+        if network.count > Self.consoleCap {
+            network.removeFirst(network.count - Self.consoleCap)
+            networkDropped += 1
+        }
+        if kind == .agent, let url = URL(string: entry.url) { noteHost(url) }
+    }
+
+    /// A host outside the loopback an agent's page went to: shown, never asked about.
+    fileprivate func noteHost(_ url: URL) {
+        guard kind == .agent, BrowserRoute.isWeb(url), !BrowserRoute.isLocal(url), let host = url.host?.lowercased(),
+              !externalHosts.contains(host) else { return }
+        externalHosts.append(host)
+    }
+
+    fileprivate func downloaded(_ file: URL) {
+        downloads.append(file)
     }
 
     /// The lines an agent has not read yet, or every line kept; marks them read.
@@ -318,8 +456,25 @@ private final class ConsoleRelay: NSObject, WKScriptMessageHandler {
     }
 }
 
+/// Receives the network relay's posts (fetch and XHR, with their status).
+private final class NetworkRelay: NSObject, WKScriptMessageHandler {
+    weak var session: BrowserSession?
+
+    init(session: BrowserSession) {
+        self.session = session
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any], let url = body["url"] as? String else { return }
+        let entry = BrowserNetworkEntry(url: String(url.prefix(2000)), type: body["type"] as? String ?? "fetch",
+                                        method: body["method"] as? String, status: body["status"] as? Int,
+                                        milliseconds: body["ms"] as? Int, failed: body["failed"] as? Bool ?? false)
+        MainActor.assumeIsolated { session?.record(entry) }
+    }
+}
+
 /// WebKit's delegates for one session, kept apart so the session stays a plain observable model.
-private final class BrowserSessionDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {
+private final class BrowserSessionDelegate: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     weak var session: BrowserSession?
 
     init(session: BrowserSession) {
@@ -357,6 +512,51 @@ private final class BrowserSessionDelegate: NSObject, WKNavigationDelegate, WKUI
             decisionHandler(.cancel)
             return
         }
-        decisionHandler(.allow)
+        if navigationAction.targetFrame?.isMainFrame != false, let url = navigationAction.request.url {
+            MainActor.assumeIsolated { session?.noteHost(url) }
+        }
+        decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
+    }
+
+    /// What WebKit cannot show is a download, as in Safari: it lands under Scope's home, never in the user's folders.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void) {
+        let attachment = (navigationResponse.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") ?? false
+        decisionHandler(navigationResponse.canShowMIMEType && !attachment ? .allow : .download)
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
+                  completionHandler: @escaping @MainActor @Sendable (URL?) -> Void) {
+        MainActor.assumeIsolated {
+            guard let folder = session?.downloadsFolder else { return completionHandler(nil) }
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let name = suggestedFilename.replacingOccurrences(of: "/", with: "_")
+            var target = folder.appending(path: name)
+            var counter = 2
+            while FileManager.default.fileExists(atPath: target.path) {
+                let base = (name as NSString).deletingPathExtension
+                let ext = (name as NSString).pathExtension
+                target = folder.appending(path: ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
+                counter += 1
+            }
+            completionHandler(target)
+            session?.pendingDownloads[ObjectIdentifier(download)] = target
+        }
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        MainActor.assumeIsolated {
+            guard let session, let file = session.pendingDownloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
+            session.downloaded(file)
+        }
     }
 }

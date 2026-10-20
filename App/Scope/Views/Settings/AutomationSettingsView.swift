@@ -235,6 +235,34 @@ struct AutomationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            SettingsSection("Browser") {
+                SettingsRow("Acting in a page") {
+                    ScopePicker("Acting in a page", selection: automation(\.browser),
+                                title: model.config.preferences.automationSettings.browser.title) {
+                        ForEach(AutomationSettings.Approval.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .usageID("browser-approval", label: "Browser approval")
+                }
+                SettingsRow("Agents may browse") {
+                    ScopePicker("Agents may browse", selection: automation(\.browserSites),
+                                title: model.config.preferences.automationSettings.browserSites.title) {
+                        ForEach(BrowserSites.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .usageID("browser-sites", label: "Where agents may browse")
+                }
+                SettingsRow("Blocked sites") {
+                    BlockedSitesField(hosts: automation(\.browserBlocked))
+                }
+                Text("A task's agents open, read, click and type in a browser of the task's own: a data store holding "
+                     + "none of your cookies, removed with the task, watched in its Browser pane. Opening a page, "
+                     + "clicking and typing go through Acting in a page; reading, screenshots and the console never "
+                     + "ask. Blocked sites cover their subdomains and every request a page makes, not only its address. "
+                     + "What a page says reaches the agent marked as untrusted.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             SettingsSection("Schedules") {
                 Text("""
                     Prompts Scope sends on its own — every hour, every day, on weekdays or once a week — to a scope's \
@@ -475,5 +503,31 @@ struct AutomationSettingsView: View {
             installMessage = nil
             installFailure = String(describing: error)
         }
+    }
+}
+
+/// The blocked hosts as one comma-separated line, normalized when the field is submitted or left — not on every
+/// keystroke, which would eat the dot of `js.`.
+private struct BlockedSitesField: View {
+    @Binding var hosts: [String]
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("js.stripe.com, analytics.example.com", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 12))
+            .frame(maxWidth: 280)
+            .focused($focused)
+            .onAppear { text = hosts.joined(separator: ", ") }
+            .onSubmit(commit)
+            .onChange(of: focused) { _, now in if !now { commit() } }
+            .usageID("browser-blocked", label: "Blocked sites for agents")
+    }
+
+    private func commit() {
+        let normalized = BrowserSitePolicy.normalized(text.split(separator: ",").map(String.init))
+        if normalized != hosts { hosts = normalized }
+        text = normalized.joined(separator: ", ")
     }
 }

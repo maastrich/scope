@@ -647,6 +647,77 @@ public enum MCPBridge {
             readOnly: true
         ),
         MCPTool(
+            name: "scope_browser_click",
+            title: "Click in the task's browser",
+            description: """
+            Clicks an element of the page in the task's browser, by the ref scope_browser_read gave it (`e12`), then \
+            waits for what it set off to load and answers where the tab stands. The click goes through the DOM: \
+            the page sees isTrusted=false, so what needs a real user gesture (a popup, a file picker, the clipboard, \
+            full screen) will not happen. Read the page again before using refs after a navigation.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "ref":{"type":"string","description":"The element's ref from scope_browser_read, e.g. e12."},\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."}\
+            },"required":["ref"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_browser_type",
+            title: "Type in the task's browser",
+            description: """
+            Types text into a field of the page in the task's browser, by its ref from scope_browser_read: the \
+            field is focused and the text inserted as typing would (input events fire, frameworks see it). `clear` \
+            empties it first; `submit` then submits its form as Enter would, and waits for the result to load.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "ref":{"type":"string","description":"The field's ref from scope_browser_read, e.g. e3."},\
+            "text":{"type":"string","description":"What to type."},\
+            "clear":{"type":"boolean","description":"Empty the field first."},\
+            "submit":{"type":"boolean","description":"Submit the field's form afterwards."},\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."}\
+            },"required":["ref","text"],"additionalProperties":false}
+            """,
+            readOnly: false
+        ),
+        MCPTool(
+            name: "scope_browser_wait",
+            title: "Wait in the task's browser",
+            description: """
+            Waits until the page in the task's browser shows a CSS `selector` or a `text`, or — with neither — until \
+            it has stopped loading and made no request for half a second. Answers ok or timeout (`timeout` seconds, \
+            10 by default, 30 at most).
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "selector":{"type":"string","description":"A CSS selector that must match a visible element."},\
+            "text":{"type":"string","description":"A text that must appear on the page."},\
+            "timeout":{"type":"integer","minimum":1,"maximum":30,"description":"Seconds before giving up (default 10)."},\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
+            name: "scope_browser_network",
+            title: "Network of the task's browser",
+            description: """
+            The requests the page made since your last look (`all` for every one kept): method, status, type, \
+            duration, URL. WebKit gives no HTTP status to anything but fetch and XMLHttpRequest — those are read by \
+            a wrapper inside the page, which a page could forge; the page itself, its scripts, styles and images \
+            have a URL and a duration only. For full statuses and bodies, a chrome-devtools MCP is the tool.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "all":{"type":"boolean","description":"Every request kept since the page opened, not only the new ones."},\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
             name: "scope_ping",
             title: "Check Scope",
             description: "Whether Scope is listening, its version, and what agents are currently allowed to do: whether they may drive Scope at all, how many tasks and threads they may keep open, the depth limit if the user set one, whether opening threads and creating tasks happens without asking, after asking or never, and which threads they may reach. Check it when a call was refused, rather than retrying. Its `limits` are the Claude subscription's windows (5-hour session, week, per model when the plan has them) as Claude Code last reported them: percentage used, when each resets, and the tightest; absent when unknown. Every thread shares them — past 80 % of a window, slow down or wait for its reset rather than open more threads.",
@@ -918,9 +989,16 @@ public enum MCPBridge {
         var url: String?
         var port: Int?
         var all: Bool?
+        var ref: String?
+        var text: String?
+        var clear: Bool?
+        var submit: Bool?
+        var selector: String?
+        var timeout: Int?
 
         func params(_ action: BrowserAction) -> BrowserParams {
-            BrowserParams(action: action, task: task, scope: scope, url: url, port: port, all: all)
+            BrowserParams(action: action, task: task, scope: scope, url: url, port: port, all: all, ref: ref, text: text,
+                          clear: clear, submit: submit, selector: selector, timeout: timeout)
         }
     }
 

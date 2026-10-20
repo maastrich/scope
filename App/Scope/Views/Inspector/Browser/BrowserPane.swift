@@ -11,6 +11,7 @@ struct BrowserPane: View {
     var leading: AnyView?
     var trailing: AnyView?
     @State private var showsConsole = false
+    @State private var showsActions = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,6 +37,18 @@ struct BrowserPane: View {
                     if session.kind == .agent {
                         Rectangle().strokeBorder(Origin.agent.opacity(0.7), lineWidth: 2).allowsHitTesting(false)
                     }
+                }
+                .overlay(alignment: .bottom) {
+                    if session.kind == .agent, let host = session.externalHosts.last(where: { !session.acknowledgedHosts.contains($0) }) {
+                        BrowserHostNotice(session: session, host: host)
+                            .padding(16)
+                            .transition(.opacity)
+                    }
+                }
+                if showsActions, session.kind == .agent {
+                    Divider()
+                    BrowserActionLog(session: session)
+                        .frame(height: 140)
                 }
                 if showsConsole {
                     Divider()
@@ -154,8 +167,35 @@ struct BrowserPane: View {
                 .buttonStyle(.plain)
                 .help("What the page logged: console.* and uncaught errors")
                 .usageID("browser.console", label: "Browser console")
+                if agent {
+                    Button {
+                        showsActions.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Actions")
+                            if !session.actionLog.isEmpty { Text("\(session.actionLog.count)") }
+                        }
+                        .font(.system(size: 10.5, weight: showsActions ? .semibold : .regular))
+                        .foregroundStyle(showsActions ? Ink.primary : Ink.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Every action the agents took in this tab, and how it ended")
+                    .usageID("browser.actions", label: "Agent browser actions")
+                }
+                if let file = session.downloads.last {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([file])
+                    } label: {
+                        Label(file.lastPathComponent, systemImage: "arrow.down.circle")
+                            .font(.system(size: 10.5))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Ink.secondary)
+                    .help("Downloaded under Scope's home (\(file.deletingLastPathComponent().path)); click to reveal")
+                }
             }
-            Text(agent ? "Agent store · none of your cookies" : "Store of \(scopeName) · apart from Safari and agents")
+            Text(agent ? "Agent store" : "Store of \(scopeName) · apart from Safari and agents")
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .help(agent
@@ -296,6 +336,21 @@ private struct BrowserAgentBand: View {
                     .font(.system(size: 11.5, weight: .semibold))
                 Spacer(minLength: 4)
             }
+            if session.isStopped {
+                Text("Stopped")
+                    .font(.scopeCaption.weight(.semibold))
+                Button("Let It Continue") { session.resumeAgents() }
+                    .buttonStyle(.scopeSecondary)
+                    .help("Agents may drive this browser again")
+                    .usageID("browser.resume", label: "Resume the agent browser")
+            } else {
+                Button("Stop") { session.stopAgents() }
+                    .buttonStyle(.scopeSecondary)
+                    .keyboardShortcut(session.agentCallsInFlight > 0 ? KeyboardShortcut(.escape, modifiers: []) : nil)
+                    .help(session.agentCallsInFlight > 0 ? "Stop the agent here (Esc): its running call ends, the next ones are refused"
+                          : "Stop agents from driving this browser until you let them continue")
+                    .usageID("browser.stop", label: "Stop the agent browser")
+            }
         }
         .foregroundStyle(Origin.agent)
         .padding(.horizontal, 10)
@@ -303,6 +358,96 @@ private struct BrowserAgentBand: View {
         .background(Origin.agent.opacity(0.1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("An agent drives this tab")
+    }
+}
+
+/// The agent went outside localhost: said, not asked. The page stays where it is; blocking takes effect at once,
+/// for every page and subresource of this task's agent tab.
+private struct BrowserHostNotice: View {
+    @Environment(AppModel.self) private var model
+    let session: BrowserSession
+    let host: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                Text("The agent opened \(host)")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Spacer(minLength: 8)
+                Button {
+                    session.acknowledgedHosts.insert(host)
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.iconTight)
+                .help("Dismiss")
+                .accessibilityLabel("Dismiss")
+            }
+            .foregroundStyle(Ink.primary)
+            Text("Outside localhost, in the agent's own data store: none of your cookies, none of your tabs. Nothing waits on you; block the site if it should not go there.")
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Block \(host) for This Task") { model.blockForTask(host, session: session) }
+                    .buttonStyle(.scopeSecondary)
+                    .usageID("browser.block-host", label: "Block a host for a task's agents")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 460)
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+}
+
+/// The agents' actions in this tab, newest last: when, which thread, what, and how it ended.
+private struct BrowserActionLog: View {
+    let session: BrowserSession
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    if session.actionLog.isEmpty {
+                        Text("No action yet")
+                            .font(.scopeCaption)
+                            .foregroundStyle(Ink.tertiary)
+                            .padding(.top, 6)
+                    }
+                    ForEach(session.actionLog) { entry in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(entry.at, format: .dateTime.hour().minute().second())
+                                .foregroundStyle(Ink.tertiary)
+                            Text(entry.action)
+                                .foregroundStyle(Origin.agent)
+                                .frame(width: 70, alignment: .leading)
+                            Text(entry.detail)
+                                .foregroundStyle(Ink.primary)
+                                .lineLimit(1)
+                            Text(entry.outcome)
+                                .foregroundStyle(entry.outcome.hasPrefix("refused") ? PullRequestStyle.failing : Ink.secondary)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(entry.thread)
+                                .foregroundStyle(Ink.tertiary)
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: 11, design: .monospaced))
+                        .id(entry.id)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+            }
+            .onChange(of: session.actionLog.count) {
+                if let last = session.actionLog.last { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+        }
+        .background(Surface.ground)
     }
 }
 
