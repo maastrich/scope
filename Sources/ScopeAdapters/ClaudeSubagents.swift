@@ -165,8 +165,10 @@ public struct ClaudeSubagents: Sendable, Equatable {
                 agents[index].result = Self.excerpt(message)
             }
             // A background sub-agent stops at every answer, the interim ones too (`isInterim`): its notification
-            // says when it is done. A foreground one is done when it stops.
-            if agents[index].background != true, agents[index].state.isRunning || agents[index].state == .interrupted {
+            // says when it is done. A foreground one is done when it stops, and so is one launched by another
+            // sub-agent, whose notification goes to its parent's transcript, which is not read.
+            let endsHere = agents[index].background != true || agents[index].parentID != nil
+            if endsHere, agents[index].state.isRunning || agents[index].state == .interrupted {
                 agents[index].state = .completed
                 agents[index].endedAt = agents[index].endedAt ?? facts.at
             }

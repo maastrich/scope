@@ -457,10 +457,16 @@ final class ThreadSession: Identifiable {
     func applyTranscript(_ records: [ClaudeTranscriptRecord]) {
         guard !records.isEmpty else { return }
         let started = if case .alive(_, let since) = phase { since } else { Date?.none }
+        let runningBefore = runningSubagents()
         updateClaude { session in
             // Before the records: what a relaunch reads back from an earlier process is not running any more.
             if let started { session.subagents.processStarted(at: started) }
             session.apply(records)
+        }
+        // The last background sub-agent reported in the transcript (its notification) rather than by a hook: the
+        // driver is about to open a turn on its result, expected as after `agent.ended` in `apply(_:)`.
+        if runningBefore > 0, runningSubagents() == 0, !activity.inTurn, expectingTurnSince == nil, adapterState != .running {
+            expectingTurnSince = .now
         }
     }
 

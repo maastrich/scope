@@ -289,6 +289,10 @@ import Testing
             .replacingOccurrences(of: "toolu_agent1", with: "toolu_agent5")
         subagents.apply(Self.facts(nested))
         #expect(subagents.agent("a0000000000000005")?.parentID == "a0000000000000001")
+        #expect(subagents.agent("a0000000000000005")?.state == .running)
+        // Its notification goes to its parent's transcript: its stop is its end.
+        subagents.apply(Self.facts(F.subagentStop.replacingOccurrences(of: "a0000000000000001", with: "a0000000000000005")))
+        #expect(subagents.agent("a0000000000000005")?.state == .completed)
     }
 
     @Test func theListIsBoundedFinishedFirst() {
