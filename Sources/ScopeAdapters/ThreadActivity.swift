@@ -264,7 +264,13 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             next.agents = [:]
         case .limitsReported:
             if let json = event.payload[HookEvent.contextKey],
-               let report = ContextWindowReport.parse(json, reportedAt: at) {
+               var report = ContextWindowReport.parse(json, reportedAt: at) {
+                // A session just resumed reports its model before any message, without a percentage: the
+                // conversation is the same one, so the last figure stands until the next answer moves it.
+                if report.usedPercentage == nil, let previous = contextWindow {
+                    report.usedPercentage = previous.usedPercentage
+                    report.windowSize = report.windowSize ?? previous.windowSize
+                }
                 next.contextWindow = report
             }
         }

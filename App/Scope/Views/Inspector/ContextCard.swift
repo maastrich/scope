@@ -184,7 +184,7 @@ private struct ContextFileRow: View {
 
     private var origin: String {
         var text = switch file.origin {
-        case .writtenByScope: "task context, written by Scope"
+        case .writtenByScope: "written by Scope"
         case .repository: "repository's own"
         }
         if let sandbox = file.sandbox { text += " · \(sandbox)" }
@@ -236,10 +236,12 @@ private struct ModelRow: View {
         .usageID("inspector.context.model", label: "Model and context")
     }
 
-    /// ` · Claude Code 2.1.47`, ` · Claude Code`: the driver, with its version once it said.
+    /// ` · Claude Code 2.1.47`, ` · Claude Code`: the driver, with its version once it said. A profile's variant
+    /// in parentheses (`Claude Code (bypass)`) is left out: the line is about the tool, and the room is short.
     private func driverSuffix(_ report: ContextWindowReport?) -> String {
         guard ContextCard.modelName(thread) != nil else { return "" }
-        return " · " + (report?.driverVersion.map { "\(thread.profile.name) \($0)" } ?? thread.profile.name)
+        let driver = thread.profile.name.split(separator: "(").first?.trimmingCharacters(in: .whitespaces) ?? thread.profile.name
+        return " · " + (report?.driverVersion.map { "\(driver) \($0)" } ?? driver)
     }
 
     private func gaugeHelp(_ report: ContextWindowReport?) -> String {

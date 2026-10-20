@@ -68,6 +68,14 @@ struct ContextWindowTests {
         let limitsOnly = AdapterEvent(threadID: ThreadID(rawValue: "3f9a2c17be04")!, kind: .limitsReported,
                                       payload: [HookEvent.limitsKey: "{}"], receivedAt: Self.now)
         #expect(activity.apply(limitsOnly).contextWindow?.usedPercentage == 38.4)
+        // A resumed session's first status line names the model without a percentage: the figure stands.
+        let resumed = AdapterEvent(threadID: ThreadID(rawValue: "3f9a2c17be04")!, kind: .limitsReported,
+                                   payload: [HookEvent.contextKey: #"{"model_name":"Fable 5.1","version":"2.1.50"}"#],
+                                   receivedAt: Self.now.addingTimeInterval(60))
+        let after = activity.apply(resumed)
+        #expect(after.contextWindow?.usedPercentage == 38.4)
+        #expect(after.contextWindow?.windowSize == 200_000)
+        #expect(after.contextWindow?.driverVersion == "2.1.50")
         // Saved and read back under a fresh activity: the report comes along.
         let data = try JSONEncoder().encode(activity)
         let saved = try JSONDecoder().decode(ThreadActivity.self, from: data)
