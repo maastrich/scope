@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 23
+    public static let version = 24
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -200,7 +200,7 @@ public struct SkillInstaller: Sendable {
         |---|---|
         | `scope list [tasks\\|threads\\|scopes] [--scope S]` | `scope_list` `{kind, scope}` |
         | `scope task new "<prompt>" [--repo R]… [--branch B] [--pr P] [--issue I] [--title T] [--topic P] [--deliverable F] [--model M] [--attempts N] [--models A,B] [--drivers X,Y] [--mission] [--no-thread] [--no-setup] [--dry-run]` | `scope_task_new` `{prompt, repos: [R], branch, start_pr, issue, title, topic, deliverable, model, attempts, models: [A, B], drivers: [X, Y], mission: true, open_thread: false, run_setup: false, dry_run}` |
-        | `scope thread new [--task T] [--repo R] [--driver D] [--model M] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, repo, driver, model, title, prompt}` |
+        | `scope thread new [--task T] [--branch B] [--repo R] [--driver D] [--model M] [--title T] -p "<prompt>"` | `scope_thread_new` `{task, branch, repo, driver, model, title, prompt}` |
         | `scope thread wait <id>… [--any] [--timeout S]` | `scope_thread_wait` `{threads: [id], until: "any", timeout}` |
         | `scope thread read <id> --reply` | `scope_thread_read` `{thread, view: "reply"}` |
         | `scope thread read <id> [-n N] [--cursor C]` | `scope_thread_read` `{thread, lines, cursor}` |
@@ -211,6 +211,8 @@ public struct SkillInstaller: Sendable {
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |
         | `scope task restore <slug> [--scope S]` | `scope_task_restore` `{task, scope}` |
         | `scope task rebase [<slug>] [--scope S]` | `scope_task_rebase` `{task, scope}` |
+        | `scope task branch add [<slug>] <branch> [--repo R] [--from <ref>\\|--pr <ref>]` | `scope_task_branch_add` `{task, branch, repo, from, pr}` |
+        | `scope task branch list [<slug>]` / `scope task branch remove [<slug>] <branch> [--repo R]` | `scope_task_branch_list` `{task}` / `scope_task_branch_remove` `{task, branch, repo}` |
         | `scope task checkpoints [<slug>] [--scope S]` | `scope_task_checkpoints` `{task, scope}` |
         | `scope task restore-checkpoint [<slug>] <n> [--scope S]` | `scope_task_restore_checkpoint` `{task, number, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
@@ -404,6 +406,18 @@ public struct SkillInstaller: Sendable {
         tasks alike. So end a study with a complete answer, or write it to `REPORT.md` in the task root. `scope task close <slug> --delete-branch` goes further, after a merge. Neither refuses:
         uncommitted changes and an unmerged branch's last commit are kept under `refs/scope/salvage/`, and the
         answer names the ref. `scope gc --dry-run` shows what Scope's own cleanup would remove.
+
+        A task may work on several branches at once, on the same repository too. A second pull request on a
+        repository — the next of a stack, a docs change beside the prototype — gets a worktree of its own inside the
+        task: `scope task branch add [<slug>] <branch> [--repo R] [--from <ref>|--pr <ref>]`
+        (`scope_task_branch_add`) creates the branch (from the repository's base, from an existing branch, or on a
+        pull request's head) and checks it out beside the task's sandbox (`api@fix-login` next to `api`). Scope treats
+        it like the task's own worktree: it finds its pull requests, checkpoints it, measures it against main,
+        archives and restores it with the task, and the task's auto-archive waits for every pull request. Open a
+        thread in it with `scope thread new --task <slug> --branch <branch>`; `scope task branch list` shows the
+        worktrees, `scope task branch remove <branch>` takes one out (uncommitted changes saved first, branch kept).
+        Never `git worktree add` by hand: Scope would neither track that folder, nor bind its pull request, nor
+        clean it up. Same approval as creating a task; no budget, a worktree opens no agent.
 
         To pick archived work back up, `scope task restore <slug>` rebuilds its worktrees on the branch it kept and
         puts back the uncommitted changes saved at archive; then open a thread in it (`scope thread new --task`).

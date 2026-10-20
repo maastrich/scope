@@ -22,6 +22,23 @@ extension PaletteModel {
         }
         items.append(PaletteItem(id: "task-copy-branch", section: .actions, icon: "doc.on.doc", label: "Copy Branch Name",
                                  hint: task.branch) { Pasteboard.copy(task.branch) })
+        if !task.isArchived {
+            items.append(PaletteItem(id: "task-add-branch", section: .actions, icon: "arrow.triangle.branch", label: "Add Branch…",
+                                     hint: "a second worktree of a repository of \(task.name), on its own branch") {
+                model.addBranchFromUI(task)
+            })
+            for sandbox in task.activeSandboxes.filter(\.isSecondary) {
+                let label = sandbox.sandboxLabel(scopeName: task.record.scopeName)
+                items.append(PaletteItem(id: "task-branch-thread-\(sandbox.sandboxKey)", section: .actions, icon: "terminal",
+                                         label: "New Thread on \(sandbox.branch)", hint: label) {
+                    Task { _ = await model.newThread(in: task.scopeID, taskID: task.id, branch: sandbox.branch) }
+                })
+                items.append(PaletteItem(id: "task-branch-remove-\(sandbox.sandboxKey)", section: .actions, icon: "xmark.circle",
+                                         label: "Remove Branch \(sandbox.branch)", hint: "\(label) · uncommitted changes saved, branch kept") {
+                    model.removeBranchFromUI(sandbox, of: task)
+                })
+            }
+        }
         items.append(PaletteItem(id: "task-set-topic", section: .actions, icon: "tag", label: "Set Topic…",
                                  hint: task.record.topic.map { "now “\($0)”" } ?? task.name) {
             guard let name = model.promptTopicName(title: "Set Topic", current: task.record.topic, action: "File") else { return }

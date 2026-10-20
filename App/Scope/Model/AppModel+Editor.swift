@@ -53,7 +53,7 @@ extension AppModel {
     func editorTarget(of task: TaskState) -> EditorTarget {
         let workspace = task.record.workspaceURL.path
         return EditorTarget(taskRoot: task.record.threadCwd.path,
-                            sandboxes: task.activeRepos.map(\.sandboxPath),
+                            sandboxes: task.activeSandboxes.map(\.sandboxPath),
                             workspace: FileManager.default.fileExists(atPath: workspace) ? workspace : nil)
     }
 

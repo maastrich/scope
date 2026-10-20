@@ -24,6 +24,7 @@ public enum CLIRenderer {
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
         case .schedules(let result): try encoder.encode(result)
+        case .taskBranches(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -146,7 +147,21 @@ public enum CLIRenderer {
             return release(result)
         case .schedules(let result):
             return schedules(result)
+        case .taskBranches(let result):
+            return branches(result)
         }
+    }
+
+    /// `scope task branch list`: one line per worktree, the task's own marked, with its pull requests.
+    static func branches(_ result: TaskBranchListResult) -> String {
+        let rows = result.worktrees.map { entry -> [String] in
+            let prs = (entry.pullRequests ?? []).map { $0.line(named: false) }.joined(separator: " · ")
+            return [RepoName.display(entry.repo), entry.branch, entry.primary ? "task branch" : (entry.base.map { "from \($0)" } ?? ""),
+                    prs, entry.worktree]
+        }
+        return table(["REPO", "BRANCH", "", "PR", "WORKTREE"], rows)
+            + "\n\nscope task branch add \(result.slug) <branch> [--repo R] [--from <ref>|--pr <ref>] adds one; "
+            + "scope thread new --task \(result.slug) --branch <branch> opens a thread in it."
     }
 
     /// One row per schedule: where it fires next, and what its last run said.

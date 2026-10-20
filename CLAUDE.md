@@ -55,6 +55,12 @@ xcodebuild -project Scope.xcodeproj -scheme Scope -configuration Debug \
   (`CLAUDE.local.md`), never to one it reads *instead* (`AGENTS.override.md` would shadow the repo's rules).
 - **Microsession argv** (`headlessLight`): keep `{prompt}` *before* variadic flags like `--tools` or
   `--allowedTools`, which would otherwise swallow it.
+- **A task's secondary worktrees are not in `repos`.** `TaskRecord.repos` lists repositories; each entry's
+  `worktrees` holds the branches added beside its primary sandbox (`api@fix-login`, or `<slug>@fix-login` beside a
+  repo scope task's root). Anything that works sandbox by sandbox — salvage, checkpoints, lag, Delta, PR discovery,
+  watchers — iterates `record.activeSandboxes` (every worktree as a `TaskRepo` view, `isSecondary` set) and keys
+  its results by `TaskRepo.sandboxKey`, never by `repoRelativePath` alone. `activeRepos` is for what is really
+  per repository: the base checkout, setup commands, *Try in my checkout*.
 - **A socket callback needs `qos: .userInitiated`.** At the default QoS macOS throttles a background app's
   dispatch queues hard: the same ping answered in 2 ms went to 5–8 s once the app had been idle a minute.
   `UnixSocketServer` and both socket clients set it explicitly.

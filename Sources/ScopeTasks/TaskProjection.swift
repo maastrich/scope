@@ -85,6 +85,10 @@ public enum TaskProjection {
                 if let setup = summary.setup { lines.append("  - Setup: `\(setup)`") }
                 if let test = summary.test { lines.append("  - Test: `\(test)`") }
             }
+            for worktree in repo.worktrees where worktree.state == .active {
+                lines.append("  - Also on branch `\(worktree.branch)`: `\(worktree.sandboxPath)`"
+                             + (worktree.base.map { " (from \($0))" } ?? ""))
+            }
         }
         lines.append("")
         let others = otherRepos.filter { path in !active.contains { $0.repoRelativePath == path } }.sorted()
@@ -106,7 +110,11 @@ public enum TaskProjection {
         lines.append("")
         lines.append("- Work only inside the sandboxes listed above.")
         lines.append("- Never modify the base checkouts under `\(task.scopeRoot)`.")
-        lines.append("- Stay on branch `\(task.branch)`; do not switch branches or create new ones.")
+        lines.append("- Stay on branch `\(task.branch)` in the sandbox above; do not switch branches there.")
+        lines.append("- A second pull request on the same repository needs a worktree of its own: `scope task branch add <branch> [--repo R] [--from <ref>|--pr <ref>]` "
+                     + "creates the branch and its worktree inside this task (`scope task branch list` shows them, `scope task branch remove <branch>` removes one, "
+                     + "`scope thread new --task \(task.slug) --branch <branch>` opens a thread in it). Never `git worktree add` by hand: Scope would not track, "
+                     + "find the pull request of, nor clean up such a worktree.")
         lines.append("- Commit as you go; the user reviews and pushes from Scope.")
         lines.append("")
         return lines.joined(separator: "\n")
@@ -135,13 +143,20 @@ public enum TaskProjection {
         return lines
     }
 
-    /// `<slug>.code-workspace` content: one folder per active sandbox, named after the repo.
+    /// `<slug>.code-workspace` content: one folder per active sandbox, named after the repo; a secondary worktree
+    /// after its repository and branch, at its folder relative to the task root.
     public static func workspaceJSON(task: TaskRecord) throws -> Data {
         struct Folder: Encodable { let name: String; let path: String }
         struct Workspace: Encodable { let folders: [Folder]; let settings: [String: String] }
-        let folders = task.activeRepos.map { repo in
-            Folder(name: repo.isScopeRoot ? task.slug : repo.repoRelativePath,
-                   path: repo.isScopeRoot ? "." : repo.repoRelativePath)
+        let folders = task.activeSandboxes.map { repo in
+            if repo.isSecondary {
+                let relative = repo.sandboxURL.standardizedFileURL.path.hasPrefix(task.rootURL.standardizedFileURL.path + "/")
+                    ? String(repo.sandboxURL.standardizedFileURL.path.dropFirst(task.rootURL.standardizedFileURL.path.count + 1))
+                    : repo.sandboxPath
+                return Folder(name: "\(repo.isScopeRoot ? task.slug : repo.repoRelativePath) @ \(repo.branch)", path: relative)
+            }
+            return Folder(name: repo.isScopeRoot ? task.slug : repo.repoRelativePath,
+                          path: repo.isScopeRoot ? "." : repo.repoRelativePath)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

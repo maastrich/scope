@@ -40,7 +40,7 @@ struct RepoDeltaSummary: Equatable, Sendable {
 final class TaskState: Identifiable {
     let id: TaskID
     private(set) var record: TaskRecord
-    /// Keyed by `TaskRepo.repoRelativePath`.
+    /// Keyed by `TaskRepo.sandboxKey`: one per worktree, a secondary one under `<repo>@<branch>`.
     private(set) var summaries: [String: RepoDeltaSummary] = [:]
     private(set) var isRefreshing = false
     /// Bumped after every completed refresh; the Delta inspector reloads when it changes.
@@ -84,6 +84,8 @@ final class TaskState: Identifiable {
     /// and the Retry action finish it). Either way it is no longer a live task.
     var isArchived: Bool { record.isArchived || record.cleanup != nil || isDismantling }
     var activeRepos: [TaskRepo] { record.activeRepos }
+    /// Every worktree on disk, the primary ones and the branches added beside them (`TaskRecord.activeSandboxes`).
+    var activeSandboxes: [TaskRepo] { record.activeSandboxes }
     var scopeRootURL: URL { URL(fileURLWithPath: record.scopeRoot, isDirectory: true) }
 
     /// `api · web`, or the scope name for a repo scope.
@@ -98,7 +100,7 @@ final class TaskState: Identifiable {
         repo.isScopeRoot ? scopeRootURL : scopeRootURL.appending(path: repo.repoRelativePath, directoryHint: .isDirectory)
     }
 
-    func summary(for repo: TaskRepo) -> RepoDeltaSummary? { summaries[repo.repoRelativePath] }
+    func summary(for repo: TaskRepo) -> RepoDeltaSummary? { summaries[repo.sandboxKey] }
 
     /// The checkpoint a turn of `threadID` left, if one did. Matched on the turn's end, to the millisecond: the
     /// activity in memory carries microseconds, the checkpoint and the reloaded activity do not.
@@ -114,7 +116,7 @@ final class TaskState: Identifiable {
     var dirtyRepoCount: Int { summaries.values.filter(\.isDirty).count }
 
     func update(record: TaskRecord) {
-        let sandboxesChanged = record.activeRepos.map(\.sandboxPath) != self.record.activeRepos.map(\.sandboxPath)
+        let sandboxesChanged = record.activeSandboxes.map(\.sandboxPath) != self.record.activeSandboxes.map(\.sandboxPath)
         self.record = record
         // A repository added to the task brings a worktree directory the running watcher does not cover.
         if sandboxesChanged, watcher != nil {
@@ -133,9 +135,12 @@ final class TaskState: Identifiable {
         }
         self.throttle = throttle
         // The sandboxes' git state (index, HEAD, branch refs) lives in the base checkouts, outside the root.
-        let gitWatch = TaskGitWatch.resolve(sandboxes: record.activeRepos.map(\.sandboxURL),
-                                            branches: record.activeRepos.map(\.branch))
-        let watcher = FSEventsWatcher(paths: [record.rootURL] + gitWatch.watchedDirectories, latency: 0.5)
+        let sandboxes = record.activeSandboxes
+        let gitWatch = TaskGitWatch.resolve(sandboxes: sandboxes.map(\.sandboxURL), branches: sandboxes.map(\.branch))
+        // A repo scope task's secondary worktrees sit beside its root, outside it: watched on their own.
+        let root = record.rootURL.standardizedFileURL.path
+        let outside = sandboxes.map(\.sandboxURL).filter { !$0.standardizedFileURL.path.hasPrefix(root + "/") && $0.standardizedFileURL.path != root }
+        let watcher = FSEventsWatcher(paths: [record.rootURL] + outside + gitWatch.watchedDirectories, latency: 0.5)
         self.watcher = watcher
         watcher.start()
         pump = Task.detached(priority: .utility) {
@@ -180,8 +185,8 @@ final class TaskState: Identifiable {
         }
         Task { [weak self] in
             var next: [String: RepoDeltaSummary] = [:]
-            for repo in record.activeRepos {
-                next[repo.repoRelativePath] = await Self.summarize(repo: repo, task: record, git: git)
+            for repo in record.activeSandboxes {
+                next[repo.sandboxKey] = await Self.summarize(repo: repo, task: record, git: git)
             }
             spinner.cancel()
             guard let self else { return }

@@ -19,6 +19,8 @@ public struct TaskCheckpoint: Codable, Sendable, Equatable, Identifiable {
 
     /// One sandbox's part of the checkpoint.
     public struct Repo: Codable, Sendable, Equatable {
+        /// The sandbox, as `TaskRepo.sandboxKey` names it: the repository path, or `<repo>@<branch>` for a
+        /// secondary worktree. Logs written before a repository could hold several name primary worktrees only.
         public var repoRelativePath: String
         /// The snapshot commit, under the checkpoint's ref in this repository.
         public var commit: String
@@ -158,11 +160,18 @@ public actor TaskCheckpoints {
         "\(namespace)/\(task.rawValue)/\(number)"
     }
 
+    /// The ref of a sandbox's snapshot: `…/<n>` for a repository's primary worktree, `…/<n>-<branch slug>` for a
+    /// secondary one — the refs of two worktrees of one repository live in the same repository, so the number
+    /// alone would name two commits. Not `…/<n>/<branch>`: git refuses a ref under a name that is itself a ref.
+    public static func ref(task: TaskID, number: Int, sandbox: TaskRepo) -> String {
+        sandbox.isSecondary ? "\(ref(task: task, number: number))-\(TaskBranch.slug(for: sandbox.branch))" : ref(task: task, number: number)
+    }
+
     /// The task id a checkpoint ref names, `nil` for anything else.
     public static func taskID(ofRef ref: String) -> String? {
         guard ref.hasPrefix(namespace + "/") else { return nil }
         let rest = ref.dropFirst(namespace.count + 1).split(separator: "/")
-        guard rest.count == 2, Int(rest[1]) != nil else { return nil }
+        guard rest.count == 2, let number = rest[1].split(separator: "-", maxSplits: 1).first, Int(number) != nil else { return nil }
         return String(rest[0])
     }
 
@@ -204,9 +213,9 @@ public actor TaskCheckpoints {
             let client = await registry.client(for: repo.sandboxURL)
             do {
                 let tree = try await WorkingTreeSnapshot.writeTree(of: repo.sandboxURL, using: client)
-                let last = previous?.repos.first { $0.repoRelativePath == repo.repoRelativePath }
+                let last = previous?.repos.first { $0.repoRelativePath == repo.sandboxKey }
                 if let last, last.tree == tree.hash {
-                    repos.append(TaskCheckpoint.Repo(repoRelativePath: repo.repoRelativePath, commit: last.commit, tree: tree.hash,
+                    repos.append(TaskCheckpoint.Repo(repoRelativePath: repo.sandboxKey, commit: last.commit, tree: tree.hash,
                                                      skipped: tree.skipped))
                     continue
                 }
@@ -216,20 +225,21 @@ public actor TaskCheckpoints {
                 guard let baseline else { continue }
                 let counts = try await WorkingTreeSnapshot.counts(from: baseline, to: tree.hash, in: repo.sandboxURL, using: client)
                 let message = Self.message(task: task, number: number, turn: turn, reason: reason, restoring: restoring)
-                let commit = try await WorkingTreeSnapshot.commit(tree: tree.hash, message: message, ref: Self.ref(task: task.id, number: number),
+                let commit = try await WorkingTreeSnapshot.commit(tree: tree.hash, message: message,
+                                                                  ref: Self.ref(task: task.id, number: number, sandbox: repo),
                                                                   in: repo.sandboxURL, using: client)
-                repos.append(TaskCheckpoint.Repo(repoRelativePath: repo.repoRelativePath, commit: commit, tree: tree.hash,
+                repos.append(TaskCheckpoint.Repo(repoRelativePath: repo.sandboxKey, commit: commit, tree: tree.hash,
                                                  additions: counts.additions, deletions: counts.deletions, skipped: tree.skipped))
             } catch let error as GitError {
-                throw TaskError.git(repo: repo.repoRelativePath, error)
+                throw TaskError.git(repo: repo.sandboxKey, error)
             }
         }
         guard changed, !repos.isEmpty else { return nil }
         // The sandboxes that did not move point at the previous commit: the new ref must still exist in each.
         for entry in repos {
-            guard let repo = task.repo(at: entry.repoRelativePath) else { continue }
+            guard let repo = task.sandbox(key: entry.repoRelativePath) else { continue }
             let client = await registry.client(for: repo.sandboxURL)
-            try? await client.run(["-C", repo.sandboxURL.filesystemPath, "update-ref", Self.ref(task: task.id, number: number), entry.commit])
+            try? await client.run(["-C", repo.sandboxURL.filesystemPath, "update-ref", Self.ref(task: task.id, number: number, sandbox: repo), entry.commit])
         }
         let checkpoint = TaskCheckpoint(
             number: number, at: TaskRecord.roundedToMilliseconds(date), reason: reason,
@@ -260,7 +270,7 @@ public actor TaskCheckpoints {
         guard let target = log.checkpoint(number) else { throw TaskError.checkpointNotFound(number) }
         let undo = try await snapshot(task, turn: nil, reason: .beforeRestore, restoring: number) ?? log.checkpoints.last
         for entry in target.repos {
-            guard let repo = Self.sandboxes(of: task).first(where: { $0.repoRelativePath == entry.repoRelativePath }) else { continue }
+            guard let repo = Self.sandboxes(of: task).first(where: { $0.sandboxKey == entry.repoRelativePath }) else { continue }
             let sandbox = repo.sandboxURL
             let client = await registry.client(for: sandbox)
             do {
@@ -285,7 +295,9 @@ public actor TaskCheckpoints {
         return Restoration(restored: target, undo: undo)
     }
 
-    /// `<branch>-cp<n>` at the checkpoint's commit, in every repository of the task. Nothing is checked out.
+    /// `<branch>-cp<n>` at the checkpoint's commit, in every repository of the task — each worktree after its own
+    /// branch, so a secondary one gets `<its branch>-cp<n>`. Nothing is checked out. The task branch's name is
+    /// returned.
     @discardableResult
     public func branch(_ task: TaskRecord, from number: Int) async throws -> String {
         let log = await store.load(task.id)
@@ -293,8 +305,9 @@ public actor TaskCheckpoints {
         let name = "\(task.branch)-cp\(number)"
         for entry in target.repos {
             let client = await client(for: entry.repoRelativePath, task: task)
+            let branch = task.sandbox(key: entry.repoRelativePath).map { "\($0.branch)-cp\(number)" } ?? name
             do {
-                try await client.run(["branch", name, entry.commit])
+                try await client.run(["branch", branch, entry.commit])
             } catch let error as GitError {
                 throw TaskError.git(repo: entry.repoRelativePath, error)
             }
@@ -314,7 +327,7 @@ public actor TaskCheckpoints {
         guard let target = log.checkpoint(number) else { throw TaskError.checkpointNotFound(number) }
         var result: [RepoDiff] = []
         for entry in target.repos {
-            guard let repo = Self.sandboxes(of: task).first(where: { $0.repoRelativePath == entry.repoRelativePath }) else { continue }
+            guard let repo = Self.sandboxes(of: task).first(where: { $0.sandboxKey == entry.repoRelativePath }) else { continue }
             let client = await registry.client(for: repo.sandboxURL)
             do {
                 let now = try await WorkingTreeSnapshot.writeTree(of: repo.sandboxURL, using: client)
@@ -363,9 +376,9 @@ public actor TaskCheckpoints {
 
     // MARK: - Internals
 
-    /// The sandboxes a checkpoint covers: active, on disk, and never the base checkout itself.
+    /// The sandboxes a checkpoint covers: every active worktree on disk, and never the base checkout itself.
     static func sandboxes(of task: TaskRecord) -> [TaskRepo] {
-        task.activeRepos.filter { repo in
+        task.activeSandboxes.filter { repo in
             let base = TaskManager.baseURL(scopeRoot: task.scopeRoot, repoRelativePath: repo.repoRelativePath)
             return repo.sandboxURL.standardizedFileURL.path != base.standardizedFileURL.path
                 && FileManager.default.fileExists(atPath: repo.sandboxURL.appending(path: ".git").path)
@@ -389,19 +402,32 @@ public actor TaskCheckpoints {
     }
 
     /// The sandbox's client while it is there, the base's once it is gone: the refs live in the repository either way.
-    private func client(for repoRelativePath: String, task: TaskRecord) async -> GitClient {
-        if let repo = task.repo(at: repoRelativePath), FileManager.default.fileExists(atPath: repo.sandboxURL.appending(path: ".git").path) {
+    /// `key` is a `TaskRepo.sandboxKey`.
+    private func client(for key: String, task: TaskRecord) async -> GitClient {
+        if let repo = task.sandbox(key: key), FileManager.default.fileExists(atPath: repo.sandboxURL.appending(path: ".git").path) {
             return await registry.client(for: repo.sandboxURL)
         }
-        return await registry.client(for: TaskManager.baseURL(scopeRoot: task.scopeRoot, repoRelativePath: repoRelativePath))
+        return await registry.client(for: TaskManager.baseURL(scopeRoot: task.scopeRoot, repoRelativePath: Self.repoPath(ofKey: key)))
+    }
+
+    /// The repository half of a sandbox key: `api@fix-login` → `api`.
+    static func repoPath(ofKey key: String) -> String {
+        key.split(separator: "@", maxSplits: 1).first.map(String.init) ?? key
+    }
+
+    /// The ref of a log entry: the task's sandbox when the record still names it, else read off the key.
+    private static func ref(task: TaskRecord, number: Int, key: String) -> String {
+        if let sandbox = task.sandbox(key: key) { return ref(task: task.id, number: number, sandbox: sandbox) }
+        guard let at = key.firstIndex(of: "@") else { return ref(task: task.id, number: number) }
+        return "\(ref(task: task.id, number: number))-\(TaskBranch.slug(for: String(key[key.index(after: at)...])))"
     }
 
     @discardableResult
     private func deleteRefs(of checkpoints: [TaskCheckpoint], task: TaskRecord) async -> [String] {
         var deleted: [String] = []
         for checkpoint in checkpoints {
-            let ref = Self.ref(task: task.id, number: checkpoint.number)
             for entry in checkpoint.repos {
+                let ref = Self.ref(task: task, number: checkpoint.number, key: entry.repoRelativePath)
                 let client = await client(for: entry.repoRelativePath, task: task)
                 if (try? await client.run(["update-ref", "-d", ref])) != nil { deleted.append("\(entry.repoRelativePath): \(ref)") }
             }

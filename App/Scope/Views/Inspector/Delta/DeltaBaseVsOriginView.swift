@@ -11,7 +11,7 @@ struct DeltaBaseVsOriginView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(model.delta.repos) { repo in
                     HStack(spacing: 6) {
-                        Text(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name)
+                        Text(repo.repo.sandboxLabel(scopeName: task.record.scopeName))
                             .font(.system(size: 12, weight: .semibold))
                         Spacer()
                         if let delta = repo.delta {

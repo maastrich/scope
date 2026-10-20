@@ -221,6 +221,108 @@ final class AppControlService: ControlService {
             return await addMilestone(params, from: origin, caller: caller)
         case .milestoneDone(let params):
             return await markMilestoneDone(params, from: origin, caller: caller)
+        case .taskBranchAdd(let params):
+            return await addBranch(params, from: origin, caller: caller)
+        case .taskBranchList(let params):
+            return listBranches(params, from: origin, caller: caller)
+        case .taskBranchRemove(let params):
+            return await removeBranch(params, from: origin, caller: caller)
+        }
+    }
+
+    // MARK: Several branches
+
+    /// `task.branch.add`: `AppModel.addBranch` on the task named, or the caller's own. `from` names an existing
+    /// branch, `pr` a pull request whose head is checked out (resolved through `gh`, as a task's start point is).
+    private func addBranch(_ params: TaskBranchAddParams, from origin: ControlOrigin,
+                           caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "add a branch to") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        guard !task.isArchived else {
+            return .failure(.badRequest("\(slug) is archived", detail: "Restore it first: `scope task restore \(slug)`."))
+        }
+        let branch = params.branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !branch.isEmpty else { return .failure(.badRequest("say which branch to add")) }
+        if let from = params.from, let pr = params.pr, !from.isEmpty, !pr.isEmpty {
+            return .failure(.badRequest("task.branch.add takes from or pr, not both"))
+        }
+        var startPoint: TaskStartPoint = .defaultBranch
+        if let from = params.from?.trimmingCharacters(in: .whitespacesAndNewlines), !from.isEmpty {
+            startPoint = .startRef(from)
+        } else if let raw = params.pr?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            guard let reference = PullRequestReference.parse(raw) else {
+                return .failure(.badRequest("“\(raw)” is not a pull request reference", detail: "Use 123, #123, owner/repo#123 or the URL."))
+            }
+            let repos = params.repo.map { [$0] } ?? task.activeRepos.map(\.repoRelativePath)
+            let resolved = await model.resolveTaskRequest(prompt: "", in: task.scopeID, startPR: reference, repos: repos)
+            guard let pr = resolved.pullRequest else {
+                return .failure(.notFound(resolved.unresolved ?? "\(reference.label) could not be resolved"))
+            }
+            startPoint = .pullRequest(pr)
+        }
+        do {
+            let record = try await model.addBranch(branch, to: task.id, repo: params.repo, startPoint: startPoint)
+            let name = startPoint.requiredBranch ?? branch
+            guard let added = record.activeSandboxes.last(where: { $0.isSecondary && $0.branch == name }) else {
+                return .failure(.failed("the worktree on \(name) was not recorded"))
+            }
+            let line = "added \(name) to \(slug): worktree \(added.sandboxPath)"
+                + "\nscope thread new --task \(slug) --branch \(name) opens a thread in it"
+            return .success(.action(ActionResult(message: line, task: task.record.id.rawValue), .taskBranchAdd))
+        } catch {
+            return .failure(.failed("could not add \(branch) to \(slug)", detail: String(describing: error)))
+        }
+    }
+
+    /// `task.branch.list`: every worktree of the task, with the pull requests Scope last saw on each branch.
+    private func listBranches(_ params: TaskBranchListParams, from origin: ControlOrigin,
+                              caller: ControlCaller) -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "list the branches of") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let summaries = pullRequestSummaries(for: task)
+        let entries = task.record.sandboxes.map { sandbox in
+            let prs = task.record.pullRequests.filter { $0.headRefName == sandbox.branch && ($0.repo ?? sandbox.repoRelativePath) == sandbox.repoRelativePath }
+                .compactMap { link in summaries.first { $0.url == link.url } }
+            return TaskBranchListResult.Entry(
+                repo: sandbox.repoRelativePath, branch: sandbox.branch, worktree: sandbox.sandboxPath, primary: !sandbox.isSecondary,
+                base: task.record.repo(at: sandbox.repoRelativePath)?.worktree(onBranch: sandbox.branch)?.base,
+                pullRequests: prs.isEmpty ? nil : prs
+            )
+        }
+        return .success(.taskBranches(TaskBranchListResult(task: task.record.id.rawValue, slug: task.record.slug, worktrees: entries)))
+    }
+
+    /// `task.branch.remove`: `AppModel.removeBranch`, the notice's lines in the answer.
+    private func removeBranch(_ params: TaskBranchRemoveParams, from origin: ControlOrigin,
+                              caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "remove a branch from") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        guard !task.isArchived else {
+            return .failure(.badRequest("\(slug) is archived", detail: "Its worktrees are already gone; `scope task restore \(slug)` brings them back."))
+        }
+        do {
+            let notices = try await model.removeBranch(params.branch, from: task.id, repo: params.repo)
+            var lines = ["removed the worktree on \(params.branch) from \(slug); the branch is kept"]
+            for notice in notices {
+                if case .changesSaved(let repo, let ref, let skipped) = notice {
+                    lines.append("\(repo): uncommitted changes saved under \(ref)"
+                                 + (skipped.isEmpty ? "" : " (too big to keep: \(skipped.joined(separator: ", ")))"))
+                }
+            }
+            return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskBranchRemove))
+        } catch {
+            return .failure(.failed("could not remove \(params.branch) from \(slug)", detail: String(describing: error)))
         }
     }
 
@@ -930,7 +1032,8 @@ final class AppControlService: ControlService {
             topic: task.record.topic, parentTask: task.record.parentTask?.rawValue, archivedAt: task.record.archivedAt,
             behind: model.lag(of: task)?.behind, conflicts: model.lag(of: task)?.conflicts,
             holdBranch: task.record.holdBranch ? true : nil,
-            pullRequest: pullRequestSummary(for: task), pullRequests: pullRequestSummaries(for: task)
+            pullRequest: pullRequestSummary(for: task), pullRequests: pullRequestSummaries(for: task),
+            branches: task.record.branches
         )
     }
 
@@ -967,8 +1070,19 @@ final class AppControlService: ControlService {
 
         var cwdKind = ThreadCwdKind.scopeRoot
         var taskID: TaskID?
+        var branch: String?
         if let task {
             taskID = task.record.id
+            if let wanted = params.branch?.trimmingCharacters(in: .whitespacesAndNewlines), !wanted.isEmpty {
+                guard task.record.sandboxes(onBranch: wanted).first != nil else {
+                    return .failure(.notFound("\(task.record.slug) has no worktree on \(wanted)",
+                                              detail: "Its branches: " + task.record.branches.joined(separator: ", ")
+                                                  + ". `scope task branch add \(task.record.slug) \(wanted)` adds one."))
+                }
+                branch = wanted
+            }
+        } else if params.branch != nil {
+            return .failure(.badRequest("branch needs a task", detail: "The branch is one of that task's worktrees (`scope task branch list`)."))
         } else if let repo = params.repo {
             switch ScopeResolver.resolveRepo(repo, in: scope) {
             case .failure(let error): return .failure(error)
@@ -981,7 +1095,7 @@ final class AppControlService: ControlService {
         if let given = prompt { prompt = await model.expandMentions(given) }
         guard let session = await model.newThread(in: scopeID, driverID: params.driver, cwdKind: cwdKind,
                                                   taskID: taskID, title: params.title, initialPrompt: prompt,
-                                                  origin: threadOrigin, model: requestedModel) else {
+                                                  origin: threadOrigin, model: requestedModel, branch: branch) else {
             return .failure(.failed("Scope could not open the thread",
                                     detail: "The app reported it as a problem; its window says why."))
         }

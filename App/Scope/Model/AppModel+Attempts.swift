@@ -113,7 +113,7 @@ extension AppModel {
                 model: first?.record.model ?? task.record.attempt?.model,
                 driver: profile(id: first?.record.driverID ?? task.record.attempt?.driver)?.name,
                 status: status, tokens: (tokens ?? 0) > 0 ? tokens : nil, agentSeconds: seconds,
-                filesChanged: task.record.activeRepos.reduce(0) { $0 + (task.summary(for: $1)?.files ?? 0) },
+                filesChanged: task.record.activeSandboxes.reduce(0) { $0 + (task.summary(for: $1)?.files ?? 0) },
                 additions: task.totalAdditions, deletions: task.totalDeletions,
                 tests: TaskAttempts.testsRun(in: reply), excerpt: excerpt, isArchived: task.isArchived
             )
@@ -123,7 +123,7 @@ extension AppModel {
     /// The deliverable file of an open attempt (`REPORT.md`, or the record's `deliverable`), read off the sandbox.
     private func attemptReport(of task: TaskState) -> String? {
         guard !task.isArchived else { return nil }
-        let roots = [task.record.rootURL] + task.record.activeRepos.map(\.sandboxURL)
+        let roots = [task.record.rootURL] + task.record.activeSandboxes.map(\.sandboxURL)
         let names = [task.record.deliverable, "REPORT.md"].compactMap { $0 }
         for root in roots {
             for name in names where AttemptFileCopy.isSafe(name) {

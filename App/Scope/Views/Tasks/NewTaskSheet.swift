@@ -383,6 +383,7 @@ struct NewTaskSheet: View {
         switch option {
         case .defaultBranch: "A new branch"
         case .existingBranch(let name): name
+        case .startRef(let ref): "A new branch from \(ref)"
         case .pullRequest(let pr): "#\(pr.number) \(pr.title)"
         }
     }
@@ -397,6 +398,8 @@ struct NewTaskSheet: View {
             return "Checks \(pr.isCrossRepository ? "the fork's head" : pr.headRefName) out — no branch is created."
         case .existingBranch(let name):
             return "Continues \(name) — no branch is created."
+        case .startRef(let ref):
+            return "A new branch, started at \(ref)."
         case .defaultBranch:
             switch source {
             case .driver(let name): return "Suggested by \(name)."

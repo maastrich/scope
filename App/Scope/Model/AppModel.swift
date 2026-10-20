@@ -1131,9 +1131,11 @@ final class AppModel {
     /// `prompt` argv; ignored by profiles without one), never on a relaunch or resume. `model` is what the caller
     /// asked for, settled against the scope's and the driver's defaults (`resolvedModel`) and kept on the record.
     @discardableResult
+    /// `branch`, with a task: the thread starts in the task's worktree on that branch (`TaskRecord.sandboxes(onBranch:)`)
+    /// instead of the task's usual directory.
     func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
                    title customTitle: String? = nil, initialPrompt: String? = nil,
-                   origin: ThreadOrigin = .user, model: String? = nil) async -> ThreadSession? {
+                   origin: ThreadOrigin = .user, model: String? = nil, branch: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -1160,11 +1162,19 @@ final class AppModel {
         var title = scope.name
         var resolvedCwd = cwd
         if let task {
-            guard ScopeState.rootExists(task.record.threadCwd) else {
-                problems.error("Sandbox of \(task.name) is missing", detail: task.record.threadCwd.path, scope: scopeID)
+            var directory = env.tasks.threadCwd(for: task.record)
+            if let branch {
+                guard let worktree = task.record.sandboxes(onBranch: branch).first else {
+                    problems.error("\(task.name) has no worktree on \(branch)", detail: "Add one first: scope task branch add \(task.record.slug) \(branch).", scope: scopeID)
+                    return nil
+                }
+                directory = worktree.sandboxURL
+            }
+            guard ScopeState.rootExists(directory) else {
+                problems.error("Sandbox of \(task.name) is missing", detail: directory.path, scope: scopeID)
                 return nil
             }
-            resolvedCwd = env.tasks.threadCwd(for: task.record).path
+            resolvedCwd = directory.path
             kind = .task(slug: task.record.slug)
             title = task.name
         }

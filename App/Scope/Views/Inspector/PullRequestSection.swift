@@ -294,14 +294,15 @@ struct PullRequestList: View {
         let several = Set(task.record.pullRequests.compactMap(\.repo)).count > 1 || task.record.repos.count > 1
         VStack(alignment: .leading, spacing: 1) {
             ForEach(task.record.pullRequests) { link in
-                row(link, named: several, isSelected: link.url == selected.url)
+                row(link, named: several, branched: task.record.branches.count > 1, isSelected: link.url == selected.url)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(task.record.pullRequests.count) pull requests")
     }
 
-    private func row(_ link: LinkedPullRequest, named: Bool, isSelected: Bool) -> some View {
+    /// `branched`: the task works on several branches, so each row says which one its pull request is on.
+    private func row(_ link: LinkedPullRequest, named: Bool, branched: Bool, isSelected: Bool) -> some View {
         let live = model.livePullRequest(for: task, link: link)
         let state = live?.state ?? link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open
         let checks = live?.checks ?? .none
@@ -315,6 +316,14 @@ struct PullRequestList: View {
                         .foregroundStyle(Ink.tertiary)
                         .lineLimit(1)
                         .fixedSize()
+                }
+                if branched, let head = live?.headRefName ?? link.headRefName {
+                    Text(head)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(Ink.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(-1)
                 }
                 Text(link.label)
                     .font(.system(size: 11.5, design: .monospaced))

@@ -140,7 +140,18 @@ struct TaskSection: View {
         CollapsibleSection(section: .task, bodyHeight: bodyHeight, onNatural: onNatural) {
             if let task { TaskVersionSummary(task: task) }
         } actions: {
-            EmptyView()
+            if let task, !task.isArchived {
+                Button {
+                    model.addBranchFromUI(task)
+                } label: {
+                    Image(systemName: "arrow.triangle.branch")
+                }
+                .buttonStyle(.iconTight)
+                .foregroundStyle(Ink.secondary)
+                .help("Add Branch… — a second worktree of a repository of the task, on a branch of its own")
+                .accessibilityLabel("Add a branch to \(task.name)")
+                .usageID("inspector.task.add-branch", label: "Add a branch to the task")
+            }
         } content: {
             if let task {
                 VStack(alignment: .leading, spacing: 0) {
@@ -153,7 +164,7 @@ struct TaskSection: View {
                         MissionChecklist(task: task, mission: mission)
                     }
                     TaskVersionStrip(task: task)
-                    ForEach(task.activeRepos) { repo in
+                    ForEach(task.activeSandboxes, id: \.sandboxKey) { repo in
                         TaskRepoRow(task: task, repo: repo)
                     }
                     TaskServersRow(task: task)
@@ -321,7 +332,8 @@ private struct TaskCheckpointRow: View {
     private var tooltip: String {
         var text = "Checkpoint \(checkpoint.number) · " + checkpoint.at.formatted(date: .abbreviated, time: .shortened)
         text += "\n" + checkpoint.repos.map { repo in
-            let name = repo.repoRelativePath == "." ? task.record.scopeName : repo.repoRelativePath
+            let name = task.record.sandbox(key: repo.repoRelativePath)?.sandboxLabel(scopeName: task.record.scopeName)
+                ?? (repo.repoRelativePath == "." ? task.record.scopeName : repo.repoRelativePath)
             return "\(name) @ \(repo.commit.prefix(7))" + (repo.skipped.isEmpty ? "" : " (left out: \(repo.skipped.joined(separator: ", ")))")
         }.joined(separator: "\n")
         return text
@@ -437,7 +449,9 @@ struct TaskVersionStrip: View {
     }
 }
 
-/// One repo of the task: name, sandbox state, `+N −M`, a state dot, and (on hover) Open in Editor / See Delta.
+/// One worktree of the task: the repository, its branch when it is not the task's own, the sandbox state, `+N −M`,
+/// a state dot, and (on hover) Open in Editor / See Delta — plus New Thread and Remove on a branch added beside
+/// the primary sandbox.
 private struct TaskRepoRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
@@ -450,9 +464,44 @@ private struct TaskRepoRow: View {
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if repo.isSecondary {
+                Text(repo.branch)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                    .help("A worktree of \(repoName) on \(repo.branch), beside the task's sandbox")
+            }
             Spacer(minLength: 0)
             // Always in the hierarchy (keyboard focus and VoiceOver reach them); revealed on hover.
             HStack(spacing: 8) {
+                if repo.isSecondary {
+                    Button {
+                        Task { _ = await model.newThread(in: task.scopeID, taskID: task.id, branch: repo.branch) }
+                    } label: {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.iconTight)
+                    .foregroundStyle(Ink.secondary)
+                    .help("New Thread on \(repo.branch)")
+                    .accessibilityLabel("New thread on \(repo.branch)")
+                    .usageID("inspector.task.branch-thread", label: "New thread on a task branch")
+                    Button {
+                        model.removeBranchFromUI(repo, of: task)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.iconTight)
+                    .foregroundStyle(Ink.secondary)
+                    .help("Remove Branch — the worktree goes, uncommitted changes saved first; the branch stays")
+                    .accessibilityLabel("Remove the worktree on \(repo.branch)")
+                    .usageID("inspector.task.branch-remove", label: "Remove a branch from the task")
+                }
                 Button {
                     model.openInEditorOrCopy(path: repo.sandboxPath)
                 } label: {
@@ -465,7 +514,7 @@ private struct TaskRepoRow: View {
                 .accessibilityLabel("Open \(repoName) in Editor")
                 Button {
                     model.showInspector(.delta)
-                    model.showDiff(model.delta.orderedFiles.first { $0.repo == repo.repoRelativePath })
+                    model.showDiff(model.delta.orderedFiles.first { $0.repo == repo.sandboxKey })
                 } label: {
                     Image(systemName: "plus.forwardslash.minus")
                         .font(.system(size: 12))

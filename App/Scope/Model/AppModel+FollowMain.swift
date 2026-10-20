@@ -25,7 +25,8 @@ extension AppModel {
         guard !task.isArchived else { return nil }
         let git = env.git
         var repos: [String: BranchLag] = [:]
-        for repo in task.activeRepos {
+        // Every worktree, each measured on its own branch, keyed by `TaskRepo.sandboxKey`.
+        for repo in task.activeSandboxes {
             let base = task.baseURL(for: repo)
             let sandbox = repo.sandboxURL
             guard FileManager.default.fileExists(atPath: sandbox.path) else { continue }
@@ -33,7 +34,7 @@ extension AppModel {
                 let client = await git.client(for: base)
                 return try? await client.branchLag(at: sandbox)
             }.value
-            if let lag { repos[repo.repoRelativePath] = lag }
+            if let lag { repos[repo.sandboxKey] = lag }
         }
         guard !task.isArchived else { return nil }
         let lag = repos.isEmpty ? nil : TaskLag(repos: repos)
@@ -145,8 +146,8 @@ extension AppModel {
         var pushed = false
         var conflicted = lag
         var stopped = false
-        for repo in task.activeRepos {
-            guard let repoLag = lag.repos[repo.repoRelativePath], repoLag.isBehind else { continue }
+        for repo in task.activeSandboxes {
+            guard let repoLag = lag.repos[repo.sandboxKey], repoLag.isBehind else { continue }
             let base = task.baseURL(for: repo)
             let sandbox = repo.sandboxURL
             let branch = repo.branch
@@ -167,15 +168,15 @@ extension AppModel {
             }.value
             switch result {
             case .success((.rebased, let didPush)):
-                done.append(repo.name)
+                done.append(repo.isSecondary ? repo.sandboxLabel(scopeName: task.record.scopeName) : repo.name)
                 pushed = pushed || didPush
             case .success((.upToDate, _)):
                 continue
             case .success((.dirty, _)):
-                problems.warn("\(task.name) was not rebased", detail: "\(repo.name) has uncommitted changes.", scope: task.scopeID)
+                problems.warn("\(task.name) was not rebased", detail: "\(repo.sandboxLabel(scopeName: task.record.scopeName)) has uncommitted changes.", scope: task.scopeID)
                 stopped = true
             case .success((.conflicted(let paths), _)):
-                conflicted.repos[repo.repoRelativePath]?.conflicts = paths
+                conflicted.repos[repo.sandboxKey]?.conflicts = paths
                 stopped = true
             case .failure(let error):
                 problems.warn("Could not rebase \(task.name) on \(upstream)", detail: String(describing: error), scope: task.scopeID)
@@ -191,7 +192,7 @@ extension AppModel {
         await noteFollowedMain(task, head: lag.upstreamHead)
         await measureLag(of: task)
         guard !done.isEmpty else { return "nothing to rebase in \(task.record.slug)" }
-        let what = done.count == 1 && task.record.isMonoRepo ? task.branch : done.joined(separator: ", ")
+        let what = done.count == 1 && task.record.isMonoRepo && !task.record.hasSecondaryWorktrees ? task.branch : done.joined(separator: ", ")
         let line = "rebased \(what) on \(lag.upstream) (\(lag.behind) commit\(lag.behind == 1 ? "" : "s"))" + (pushed ? " and pushed with lease" : "")
         problems.report(Problem(severity: .info, title: "Rebased \(task.name) on \(lag.upstream)", detail: line, scopeID: task.scopeID))
         return line

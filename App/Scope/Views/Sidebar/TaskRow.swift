@@ -223,6 +223,12 @@ struct TaskContextMenu: View {
                 Task { _ = await model.newThread(in: task.scopeID, driverID: driver, taskID: task.id, model: chosen) }
             }
         }
+        // One item per branch added beside the task's own: the thread starts in that worktree.
+        ForEach(task.activeSandboxes.filter(\.isSecondary), id: \.sandboxKey) { sandbox in
+            Button("New Thread on \(sandbox.branch)") {
+                Task { _ = await model.newThread(in: task.scopeID, taskID: task.id, branch: sandbox.branch) }
+            }
+        }
         Divider()
         TopicMenu(tasks: [task])
         DelegationMenuItems(task: task)
@@ -235,6 +241,19 @@ struct TaskContextMenu: View {
             }
         }
         .disabled(candidates.isEmpty)
+        Button("Add Branch…") {
+            model.addBranchFromUI(task)
+        }
+        .disabled(task.isArchived)
+        let secondary = task.activeSandboxes.filter(\.isSecondary)
+        Menu("Remove Branch") {
+            ForEach(secondary, id: \.sandboxKey) { sandbox in
+                Button(sandbox.sandboxLabel(scopeName: task.record.scopeName)) {
+                    model.removeBranchFromUI(sandbox, of: task)
+                }
+            }
+        }
+        .disabled(secondary.isEmpty)
         Button("Open Task in Editor") {
             model.openTaskInEditor(task)
         }

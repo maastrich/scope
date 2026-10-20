@@ -589,6 +589,33 @@ results.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
 
+<h2 id="branches">Several branches in one task</h2>
+<p>A task is one branch, but its work may not be: the next pull request of a stack, a docs change beside the
+prototype, a second fix on the same repository. Rather than switching branches in the sandbox, or improvising a
+<code>git worktree add</code> Scope would neither track nor clean up, a task can hold a second worktree of a
+repository, on a branch of its own, beside the first:</p>
+<pre><code>~/.scope/sandboxes/&lt;scope-slug&gt;/&lt;task-slug&gt;/
+├── api/                      <span class="c"># the task branch, feat/catalogue-cache</span>
+└── api@invalidation/         <span class="c"># a second worktree of api, on fix/invalidation</span></code></pre>
+<p>The folder is <code>&lt;repo&gt;@&lt;short branch&gt;</code> — <code>@</code> never appears in a slug or a
+repository name, so it reads as <i>repo at branch</i> and collides with nothing. On a single-repository scope,
+whose task root is the worktree itself, the second one sits beside the root under the scope's folder
+(<code>&lt;task-slug&gt;@invalidation</code>).</p>
+<p><b>Add Branch…</b> in a task's context menu, the command palette or the Task section asks for the branch (and
+the repository, on a task of several). From a thread, <code>scope task branch add &lt;branch&gt; [--repo R]
+[--from &lt;ref&gt;|--pr &lt;ref&gt;]</code> (<code>scope_task_branch_add</code>) does the same, starting the
+branch from the repository's base, from an existing branch or on a pull request's head, under the same approval
+as creating a task. <code>scope thread new --task &lt;slug&gt; --branch &lt;branch&gt;</code> opens a thread in
+that worktree; the Task section's row has <b>New Thread</b> too.</p>
+<p>Scope treats the added worktree like the task's own: it gets the <code>.env</code> files and the setup command,
+the task's context file, a row in the Task section with its branch, its own group in the Delta, its own checkpoint
+in every snapshot, its own measure against main, and its pull requests are found explicitly — every branch of the
+task is asked about, not only the ones the primary sandbox's reflog remembers — so the task's auto-archive waits
+for all of them. Archive removes every worktree and saves each one's uncommitted changes; Restore rebuilds them
+all; Close with the branches deletes every branch of the task. <b>Remove Branch</b> (or <code>scope task branch
+remove</code>) takes one worktree out of a live task the way an archive would: changes saved, folder gone, branch
+kept. The task's own branch is not removable that way; archive or close the task.</p>
+
 <h2 id="setup">Setup and teardown</h2>
 <p>A fresh worktree has the committed tree and nothing else: no <code>node_modules</code>, no <code>.env</code>.
 Right after <b>Create</b>, in the background, Scope prepares each sandbox — and the task's first thread waits for
@@ -714,8 +741,8 @@ context file lists the milestones as they stand.</p>
 <h2 id="lifecycle">Archiving and closing</h2>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
-  <tr><td><b>Archive</b></td><td>removes every worktree, keeps the branches and the record</td></tr>
-  <tr><td><b>Close</b></td><td>the same, then the record goes; optionally the branches too</td></tr>
+  <tr><td><b>Archive</b></td><td>removes every worktree (the <a href="#branches">added branches</a> included), keeps the branches and the record</td></tr>
+  <tr><td><b>Close</b></td><td>the same, then the record goes; optionally every branch of the task too</td></tr>
 </table>
 <p>One click, no question. In order: the task's threads are hung up, its teardown runs, every process still
 running under its folder (or started with its <code>SCOPE_TASK_ROOT</code>) gets SIGTERM, then SIGKILL three
@@ -1103,7 +1130,7 @@ app.</p>
 
 <h2 id="commands">Commands</h2>
 <pre><code>scope list [scopes|threads|tasks]   <span class="c"># what Scope is holding right now</span>
-scope thread new [options]          <span class="c"># open a thread, print its id</span>
+scope thread new [options]          <span class="c"># open a thread, print its id (--task, --branch, --repo, --driver, --model, -p)</span>
 scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it and press ↩ (--no-enter, --command, --wait)</span>
 scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor), or --reply</span>
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
@@ -1115,6 +1142,8 @@ scope task archive &lt;id|slug&gt;        <span class="c"># put it away: process
 scope task close &lt;id|slug&gt;          <span class="c"># archive it and forget it (--delete-branch)</span>
 scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived task back, with the changes saved at archive</span>
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
+scope task branch add [&lt;id|slug&gt;] &lt;branch&gt; <span class="c"># a second worktree of a repository, on that branch (--repo, --from, --pr)</span>
+scope task branch list|remove [&lt;id|slug&gt;] … <span class="c"># every worktree of the task; take one out, its changes saved, branch kept</span>
 scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: one snapshot of the sandboxes per turn that changed a file</span>
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
@@ -1264,7 +1293,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
-<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_checkpoints</code>,
+<code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_branch_add</code>,
+<code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,
 <code>scope_task_restore_checkpoint</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single

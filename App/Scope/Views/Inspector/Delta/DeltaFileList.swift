@@ -116,7 +116,7 @@ struct DeltaFileList: View {
                             }
                         } else if let error = repo.error {
                             HStack(spacing: 6) {
-                                Text(repo.repo.name).font(.system(size: 12, weight: .semibold))
+                                Text(repo.repo.sandboxLabel(scopeName: task.record.scopeName)).font(.system(size: 12, weight: .semibold))
                                 Text(error).font(.scopeCaption).foregroundStyle(Color(nsColor: .systemRed)).lineLimit(1)
                                 Spacer()
                             }
@@ -141,7 +141,7 @@ struct DeltaFileList: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Ink.tertiary)
                     .frame(width: 11)
-                Text(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name)
+                Text(repo.repo.sandboxLabel(scopeName: task.record.scopeName))
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 4)
@@ -168,7 +168,7 @@ struct DeltaFileList: View {
         }
         .buttonStyle(.plain)
         .background(Fill.quiet)
-        .accessibilityLabel("\(repo.repo.isScopeRoot ? task.record.scopeName : repo.repo.name), \(shown) files, \(collapsedRepos.contains(repo.id) ? "collapsed" : "expanded")")
+        .accessibilityLabel("\(repo.repo.sandboxLabel(scopeName: task.record.scopeName)), \(shown) files, \(collapsedRepos.contains(repo.id) ? "collapsed" : "expanded")")
     }
 
     private func fileRow(repo: TaskRepo, ref: DeltaFileRef, file: DiffFile) -> some View {
