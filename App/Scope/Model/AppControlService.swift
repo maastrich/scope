@@ -154,24 +154,11 @@ final class AppControlService: ControlService {
         case .threadRead(let params):
             // The gate is `thread.send`'s: the same reach, and any thread from the user's own terminal.
             return act(on: params.thread, from: origin) { session in
-                let transcript = TerminalBridge.transcript(of: session)
-                let page = ThreadTranscript.page(transcript.lines, firstLineNumber: transcript.firstLineNumber,
-                                                 count: params.lines, cursor: params.cursor)
-                let state = session.displayState.name
-                guard params.view == .reply else {
-                    return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title,
-                                                           state: state, page: page)))
+                read(session, params).map { payload in
+                    guard case .read(var result) = payload else { return payload }
+                    result.background = session.backgroundReport()
+                    return .read(result)
                 }
-                guard let reply = session.lastReply else {
-                    let why = session.deliversEvents
-                        ? "no turn has ended since Scope started this thread"
-                        : "\(session.profile.name) does not report its answers"
-                    return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
-                                                           page: page, note: "no reply to show (\(why)); its terminal instead:")))
-                }
-                return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
-                                                       reply: reply, terminalEnd: page.toLine,
-                                                       lastPromptAt: session.lastPromptAt)))
             }
         case .threadWait(let params):
             return await wait(params, from: origin)
@@ -480,6 +467,28 @@ final class AppControlService: ControlService {
         }
     }
 
+    /// `thread.read`: a page of the terminal, or the last reply.
+    private func read(_ session: ThreadSession, _ params: ThreadReadParams) -> Result<ControlResultPayload, ControlError> {
+        let transcript = TerminalBridge.transcript(of: session)
+        let page = ThreadTranscript.page(transcript.lines, firstLineNumber: transcript.firstLineNumber,
+                                         count: params.lines, cursor: params.cursor)
+        let state = session.displayState.name
+        guard params.view == .reply else {
+            return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title,
+                                                   state: state, page: page)))
+        }
+        guard let reply = session.lastReply else {
+            let why = session.deliversEvents
+                ? "no turn has ended since Scope started this thread"
+                : "\(session.profile.name) does not report its answers"
+            return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
+                                                   page: page, note: "no reply to show (\(why)); its terminal instead:")))
+        }
+        return .success(.read(ThreadReadResult(thread: session.id.rawValue, title: session.title, state: state,
+                                               reply: reply, terminalEnd: page.toLine,
+                                               lastPromptAt: session.lastPromptAt)))
+    }
+
     /// Polls rather than observes: twice a second on a handful of threads costs nothing, and a wait cannot miss a
     /// state that came and went between two observations — the expectation is cleared only by the driver's report.
     private func wait(_ params: ThreadWaitParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
@@ -520,7 +529,7 @@ final class AppControlService: ControlService {
             return ThreadWaitResult.Entry(thread: session.id.rawValue, title: session.title, state: session.displayState.name,
                                           settled: settled, reply: session.lastReply, lastPromptAt: session.lastPromptAt,
                                           agents: session.waitSnapshot.agents, task: task?.record.id.rawValue,
-                                          pullRequest: task.flatMap(pullRequestSummary))
+                                          pullRequest: task.flatMap(pullRequestSummary), background: session.backgroundReport())
         }
         return .success(.wait(ThreadWaitResult(threads: entries, complete: ThreadWait.isOver(settled, until: params.until),
                                                waited: Int(Date.now.timeIntervalSince(started).rounded()))))
@@ -1022,7 +1031,8 @@ final class AppControlService: ControlService {
                 ? InterruptedTurn.activityLine
                 : ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
             tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue]),
-            session: ClaudeSessionSummary.make(session.claude)
+            session: ClaudeSessionSummary.make(session.claude),
+            background: session.backgroundReport()
         )
     }
 

@@ -8,9 +8,9 @@ import Foundation
 ///
 /// Each card answers one question: where the task runs (Environment), what the agent means to do (Plan), what
 /// changed (Changes), what it shipped (Pull requests), what it produced (Artifacts), what the agent was given
-/// (Context); then the base checkout (Repository, Files, Search, History).
+/// (Context), what it runs in the background (Background); then the base checkout (Repository, Files, Search, History).
 public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable {
-    case environment, plan, delta, pullRequest, artifacts, context, base, files, search, history
+    case environment, plan, delta, pullRequest, artifacts, context, background, base, files, search, history
 
     public var title: String {
         switch self {
@@ -20,6 +20,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
         case .pullRequest: "Pull requests"
         case .artifacts: "Artifacts"
         case .context: "Context"
+        case .background: "Background"
         case .base: "Repository"
         case .files: "Files"
         case .search: "Search"
@@ -30,7 +31,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     /// Whether the section has nothing to show without a task; it stays on screen, dimmed, so the column keeps its shape.
     public var needsTask: Bool {
         switch self {
-        case .environment, .plan, .delta, .pullRequest, .artifacts, .context: true
+        case .environment, .plan, .delta, .pullRequest, .artifacts, .context, .background: true
         case .base, .files, .search, .history: false
         }
     }
@@ -40,7 +41,7 @@ public enum InspectorSection: String, Codable, Sendable, CaseIterable, Hashable 
     public var fills: Bool {
         switch self {
         case .delta, .files, .search, .history: true
-        case .environment, .plan, .pullRequest, .artifacts, .context, .base: false
+        case .environment, .plan, .pullRequest, .artifacts, .context, .background, .base: false
         }
     }
 }

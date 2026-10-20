@@ -5,7 +5,7 @@ import ScopeTasks
 
 /// Right-hand inspector, about the selection alone: a 30 pt band naming the subject, level with the window toolbar,
 /// with the pane strip at its right, then a column of cards — Environment, Changes, Pull requests, Artifacts,
-/// Context, Repository, Files, Search, History.
+/// Context, Background, Repository, Files, Search, History.
 ///
 /// Cards, not tabs: every one is there (unless taken out through the Cards menu), so the column says at a glance
 /// what exists, and a closed one costs a line while its header keeps the essential (`+108 −12`, the branch and its
@@ -109,6 +109,8 @@ struct InspectorView: View {
             ArtifactsCard(bodyHeight: height, onNatural: natural(for: .artifacts))
         case .context:
             ContextCard(bodyHeight: height, onNatural: natural(for: .context))
+        case .background:
+            BackgroundCard(bodyHeight: height, onNatural: natural(for: .background))
         case .base:
             BaseSection(bodyHeight: height, onNatural: natural(for: .base))
         case .files:
