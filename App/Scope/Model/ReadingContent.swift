@@ -14,6 +14,8 @@ struct ReadingContent: Equatable {
         case brief(TaskID)
         /// A checkpoint of a task against its sandboxes now (`AppModel+Checkpoints`).
         case checkpoint(TaskID, Int)
+        /// A context file the task's agent reads (`TaskContextFiles`), by path.
+        case contextFile(TaskID, String)
     }
 
     var kind: Kind
@@ -39,6 +41,7 @@ struct ReadingContent: Equatable {
         case .deliverable: "doc.richtext"
         case .brief: "text.quote"
         case .checkpoint: "clock.arrow.circlepath"
+        case .contextFile: "doc.text"
         }
     }
 }

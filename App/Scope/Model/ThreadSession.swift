@@ -57,6 +57,9 @@ final class ThreadSession: Identifiable {
     private(set) var assistNote: AssistNote?
     /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
+    /// How full the driver's context window is, with its model and version (`ThreadActivity.contextWindow`), observed
+    /// for the Context card: set only when the report moved, so a status line that repeats itself redraws nothing.
+    private(set) var contextWindow: ContextWindowReport?
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
     /// transcript) — not on each tool call, which only moves `lastTool`.
     @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
@@ -411,16 +414,33 @@ final class ThreadSession: Identifiable {
         return !late
     }
 
+    /// A `limits.reported` event: the status line said how full the context window is. Only the activity moves —
+    /// the state machine has nothing to say about it, and the record is not touched.
+    func receiveStatus(_ event: AdapterEvent) {
+        guard event.kind == .limitsReported, event.payload[HookEvent.contextKey] != nil else { return }
+        setActivity(activity.apply(event))
+    }
+
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.
     func setActivity(_ next: ThreadActivity) {
         let previous = activity
         activity = next
         refreshActivityHeadline()
         if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
+        if next.contextWindow != contextWindow { contextWindow = next.contextWindow }
+        // The context report is saved when its figure moves by a point, or the model or version changes: a status line
+        // after `Stop` would otherwise live in memory only, and the gauge vanish at the next launch. Not on every
+        // status line, which comes with each message.
+        let contextMoved = Self.savedContext(next.contextWindow) != Self.savedContext(previous.contextWindow)
         if next.turns != previous.turns || next.lastReply != previous.lastReply
-            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved {
             onActivityChanged?(self)
         }
+    }
+
+    /// What of a context report is worth a write: the rounded percentage, the model and the driver's version.
+    private static func savedContext(_ report: ContextWindowReport?) -> [String?] {
+        [report?.usedPercentage.map { String(Int($0.rounded())) }, report?.modelID, report?.modelName, report?.driverVersion]
     }
 
     private func refreshActivityHeadline() {
