@@ -125,11 +125,20 @@ import ScopeGit
         let manager = makeManager(scope)
         let task = try await manager.create(name: "Stack", branch: "feat/stack", in: scope.declaration, repos: ["api"])
 
-        let record = try await manager.addBranch(task.id, branch: "ignored", startPoint: .existingBranch("feat/base"))
+        // `--from`: a new branch, started where the existing one stands, under the name the caller chose.
+        let record = try await manager.addBranch(task.id, branch: "feat/stack-2", startPoint: .startRef("feat/base"))
         let worktree = try #require(record.repos[0].worktrees.first)
-        #expect(worktree.branch == "feat/base" && worktree.branchCreated == false && worktree.base == "feat/base")
+        #expect(worktree.branch == "feat/stack-2" && worktree.branchCreated == true && worktree.base == "feat/base")
         let sandbox = await scope.client(for: worktree.sandboxURL)
         #expect(try await sandbox.output(["rev-parse", "HEAD"]) == head)
+        #expect(try await sandbox.output(["rev-parse", "--abbrev-ref", "HEAD"]) == "feat/stack-2")
+        // An existing branch can still be checked out as it is (a pull request's head goes the same way).
+        let continued = try await manager.addBranch(task.id, branch: "ignored", startPoint: .existingBranch("feat/base"))
+        let existing = try #require(continued.repos[0].worktrees.last)
+        #expect(existing.branch == "feat/base" && existing.branchCreated == false)
+        // A start that resolves to nothing is refused, and leaves no folder behind.
+        await #expect(throws: TaskError.self) { try await manager.addBranch(task.id, branch: "feat/nowhere", startPoint: .startRef("feat/missing")) }
+        #expect(!scope.exists(task.rootURL.appending(path: "api@nowhere")))
     }
 
     @Test func removingABranchSavesItsChangesAndKeepsTheBranch() async throws {

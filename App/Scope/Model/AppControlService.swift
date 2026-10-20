@@ -252,7 +252,7 @@ final class AppControlService: ControlService {
         }
         var startPoint: TaskStartPoint = .defaultBranch
         if let from = params.from?.trimmingCharacters(in: .whitespacesAndNewlines), !from.isEmpty {
-            startPoint = .existingBranch(from)
+            startPoint = .startRef(from)
         } else if let raw = params.pr?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             guard let reference = PullRequestReference.parse(raw) else {
                 return .failure(.badRequest("“\(raw)” is not a pull request reference", detail: "Use 123, #123, owner/repo#123 or the URL."))

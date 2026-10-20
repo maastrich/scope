@@ -14,11 +14,18 @@ public enum TaskStartPoint: Sendable, Equatable, Hashable {
     /// The head of a pull request: `origin/<headRefName>`, or `pull/<n>/head` fetched into
     /// `refs/remotes/origin/pr/<n>` for a fork.
     case pullRequest(PullRequest)
+    /// A *new* branch, started at `ref` instead of the repository's base: a local branch, `origin/<name>`, a tag or
+    /// a sha (`task branch add --from`). Unlike `existingBranch`, the branch keeps the name the caller chose.
+    case startRef(String)
 
     /// `true` for a start point that continues an existing branch rather than opening one.
     public var continuesExistingWork: Bool {
-        if case .defaultBranch = self { return false }
-        return true
+        switch self {
+        case .defaultBranch: false
+        case .existingBranch, .pullRequest: true
+        // A new branch, but its start must resolve: origin's refs are wanted.
+        case .startRef: true
+        }
     }
 
     /// The branch a task on this start point must use, if the start point dictates one.
@@ -27,7 +34,7 @@ public enum TaskStartPoint: Sendable, Equatable, Hashable {
     /// `origin`, so it is checked out as `pr/<n>`.
     public var requiredBranch: String? {
         switch self {
-        case .defaultBranch: nil
+        case .defaultBranch, .startRef: nil
         case .existingBranch(let name): name
         case .pullRequest(let pr): pr.isCrossRepository ? "pr/\(pr.number)" : pr.headRefName
         }

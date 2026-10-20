@@ -961,6 +961,17 @@ public actor TaskManager {
             } else {
                 throw TaskError.branchNotFound(repo: path, branch: name)
             }
+        case .startRef(let ref):
+            // A local branch first (the work being built on), then origin's copy, then anything git resolves.
+            if await client.branchExists(ref) {
+                startPoint = ref
+            } else if await client.refExists("origin/\(ref)") {
+                startPoint = "origin/\(ref)"
+            } else if await client.refExists(ref) {
+                startPoint = ref
+            } else {
+                throw TaskError.branchNotFound(repo: path, branch: ref)
+            }
         case .defaultBranch:
             guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
             startPoint = await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
@@ -1027,6 +1038,7 @@ public actor TaskManager {
         let base: String? = switch startPoint {
         case .defaultBranch: nil
         case .existingBranch(let name): name
+        case .startRef(let ref): ref
         case .pullRequest(let pr): "#\(pr.number)"
         }
         record.repos[index].worktrees.append(TaskWorktree(branch: branch, sandboxPath: sandbox.sandboxPath, base: base,
