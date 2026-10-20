@@ -1552,9 +1552,11 @@ final class AppModel {
     // MARK: Adapter events
 
     func handle(_ event: AdapterEvent) {
-        // About the account, not the thread: the meter takes it and no session state moves.
+        // The status line's figures: the limits are about the account (the meter takes them), the context window
+        // about the thread (its activity keeps it); no session state moves either way.
         if event.kind == .limitsReported {
             receiveLimits(event)
+            session(event.threadID)?.receiveStatus(event)
             return
         }
         guard let session = session(event.threadID), session.isAlive else { return }
