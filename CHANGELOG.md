@@ -11,6 +11,18 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.29.0](https://github.com/maastrich/scope/releases/tag/v0.29.0) - 2026-10-20
+
+### Added
+
+- **inspector:** a Browser pane of the task in the reading column ([#103](https://github.com/maastrich/scope/pull/103)) by @maastrich
+- **inspector:** an Overview of what is happening, and a Details page for the rest ([#104](https://github.com/maastrich/scope/pull/104)) by @maastrich
+- **browser:** the task's agents open, read, screenshot and read the console of its browser ([#105](https://github.com/maastrich/scope/pull/105)) by @maastrich
+- **browser:** the task's agents click, type, wait and read the network, within the sites you allow ([#106](https://github.com/maastrich/scope/pull/106)) by @maastrich
+- **browser:** compare a route on the base branch and the task, side by side, with what differs ([#107](https://github.com/maastrich/scope/pull/107)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.28.0...v0.29.0
+
 ## [0.28.0](https://github.com/maastrich/scope/releases/tag/v0.28.0) - 2026-10-20
 
 ### Added
