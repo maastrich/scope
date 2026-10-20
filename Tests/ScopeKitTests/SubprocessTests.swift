@@ -141,62 +141,69 @@ private struct Boom: Error {}
 }
 
 @Suite struct DebouncerSmoke {
+    // Both actors sleep on a `TestClock`: the burst below is "within the delay" by construction, not because the
+    // runner happened to schedule five fires inside 80 real milliseconds.
+
     @Test func burstRunsOnceAfterTheDelay() async throws {
         let gauge = Gauge()
-        let debouncer = Debouncer(delay: .milliseconds(80)) { gauge.enter(); gauge.leave() }
+        let clock = TestClock()
+        let debouncer = Debouncer(delay: .milliseconds(80), clock: clock) { gauge.enter(); gauge.leave() }
         for _ in 0..<5 {
             await debouncer.fire()
-            try await Task.sleep(for: .milliseconds(6))
+            clock.advance(by: .milliseconds(10))                  // five fires spread over 40 ms, each re-arming
         }
+        #expect(await eventually { clock.sleeping == 1 })
         #expect(gauge.runs == 0)
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(gauge.runs == 1)
+        clock.advance(by: .milliseconds(70))                      // 70 ms after the last fire: not yet
+        #expect(gauge.runs == 0)
+        clock.advance(by: .milliseconds(10))                      // 80 ms: once
+        #expect(await eventually { gauge.runs == 1 })
+        #expect(clock.sleeping == 0)
     }
 
     @Test func cancelDropsAndFlushRunsNow() async throws {
         let gauge = Gauge()
-        let debouncer = Debouncer(delay: .milliseconds(80)) { gauge.enter(); gauge.leave() }
+        let clock = TestClock()
+        let debouncer = Debouncer(delay: .milliseconds(80), clock: clock) { gauge.enter(); gauge.leave() }
 
         await debouncer.fire()
         await debouncer.cancel()
-        try await Task.sleep(for: .milliseconds(200))
+        clock.advance(by: .seconds(1))
+        #expect(await eventually { clock.sleeping == 0 })
         #expect(gauge.runs == 0)
 
         await debouncer.fire()
         await debouncer.flush()
         #expect(gauge.runs == 1)
         await debouncer.flush()                 // nothing pending
-        try await Task.sleep(for: .milliseconds(200))
+        clock.advance(by: .seconds(1))
+        #expect(await eventually { clock.sleeping == 0 })
         #expect(gauge.runs == 1)                // the cancelled timer did not fire a second run
     }
 
     @Test func throttleRunsLeadingAndOneTrailing() async throws {
         let gauge = Gauge()
-        let throttle = Throttle(minimumInterval: .milliseconds(150)) { gauge.enter(); gauge.leave() }
+        let clock = TestClock()
+        let throttle = Throttle(minimumInterval: .milliseconds(150), clock: clock) { gauge.enter(); gauge.leave() }
         for _ in 0..<5 {
             await throttle.fire()
         }
-        try await waitUntil { gauge.runs >= 1 }
+        #expect(await eventually { gauge.runs >= 1 })
         #expect(gauge.runs == 1)                // leading edge, the other four coalesce
-        try await waitUntil { gauge.runs >= 2 }
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(gauge.runs == 2)                // exactly one trailing run, then quiet (cooldown over)
+        #expect(await eventually { clock.sleeping == 1 })
+        clock.advance(by: .milliseconds(150))   // cooldown over: the one trailing run
+        #expect(await eventually { gauge.runs >= 2 })
+        #expect(await eventually { clock.sleeping == 1 })   // its own cooldown
+        clock.advance(by: .milliseconds(150))
+        #expect(await eventually { clock.sleeping == 0 })
+        #expect(gauge.runs == 2)                // exactly one trailing run, then quiet
         await throttle.fire()
-        try await waitUntil { gauge.runs >= 3 }
+        #expect(await eventually { gauge.runs >= 3 })
         #expect(gauge.runs == 3)                // leading edge again
         await throttle.cancel()
-        try await Task.sleep(for: .milliseconds(300))
+        clock.advance(by: .seconds(1))
+        #expect(await eventually { clock.sleeping == 0 })
         #expect(gauge.runs == 3)
-    }
-
-    /// Polls `condition` every 10 ms until it holds or `timeout` elapses; shared CI runners stretch timers.
-    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () -> Bool) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now + timeout
-        while !condition() {
-            if clock.now > deadline { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }
 
