@@ -363,10 +363,10 @@ struct DeltaCounts: View {
     var body: some View {
         HStack(spacing: 5) {
             if additions > 0 {
-                Text("+\(additions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.added)
+                Text(verbatim: "+\(String(additions))").foregroundStyle(isOnAccent ? Ink.onAccent : Self.added)
             }
             if deletions > 0 {
-                Text("−\(deletions)").foregroundStyle(isOnAccent ? Ink.onAccent : Self.removed)
+                Text(verbatim: "−\(String(deletions))").foregroundStyle(isOnAccent ? Ink.onAccent : Self.removed)
             }
         }
         .font(.system(size: size, design: .monospaced))

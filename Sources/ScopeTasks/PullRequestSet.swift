@@ -85,4 +85,101 @@ public enum PullRequestSet {
         if closed > 0 { parts.append("\(closed) closed") }
         return parts.joined(separator: " · ")
     }
+
+    // MARK: One pull request, read at a glance
+
+    /// The checks of one pull request counted: `✗ 1 / 4` says more than *checks failing*. Skipped and neutral
+    /// checks count for nothing, as `PullRequest.Checks` already has it.
+    public struct CheckTally: Sendable, Equatable {
+        public var passed = 0
+        public var failed = 0
+        public var pending = 0
+        public var skipped = 0
+
+        public init(passed: Int = 0, failed: Int = 0, pending: Int = 0, skipped: Int = 0) {
+            self.passed = passed
+            self.failed = failed
+            self.pending = pending
+            self.skipped = skipped
+        }
+
+        /// The checks that count.
+        public var total: Int { passed + failed + pending }
+
+        /// `✗ 1 / 4` while any failed, `● 2 / 4` while any still runs, `✓ 4 / 4` when all passed; `nil` with no check
+        /// that counts. The glyphs are `PullRequest.Checks`'s, so a row and a chip read the same.
+        public var caption: String? {
+            guard total > 0 else { return nil }
+            if failed > 0 { return "✗ \(failed) / \(total)" }
+            if pending > 0 { return "● \(passed) / \(total)" }
+            return "✓ \(passed) / \(total)"
+        }
+
+        /// The fold the caption reads: what colours it.
+        public var checks: PullRequest.Checks {
+            guard total > 0 else { return .none }
+            if failed > 0 { return .failing }
+            return pending > 0 ? .pending : .passing
+        }
+    }
+
+    public static func tally(_ runs: [PullRequestCheck]) -> CheckTally {
+        var tally = CheckTally()
+        for run in runs {
+            switch run.state {
+            case .passing: tally.passed += 1
+            case .failing: tally.failed += 1
+            case .pending: tally.pending += 1
+            case .skipped: tally.skipped += 1
+            }
+        }
+        return tally
+    }
+
+    /// What one pull request asks of you now, in one word for the foot of the card: the first that applies, from
+    /// the most blocking down. A merged or closed one asks nothing.
+    public enum Verdict: Sendable, Equatable {
+        case merged, closed, conflicting
+        case checksFailing(Int)
+        case changesRequested, draft, checksRunning, reviewNeeded, ready, open
+
+        public var label: String {
+            switch self {
+            case .merged: "Merged"
+            case .closed: "Closed"
+            case .conflicting: "Conflicts with the base"
+            case .checksFailing(let count): count == 1 ? "1 check failing" : "\(count) checks failing"
+            case .changesRequested: "Changes requested"
+            case .draft: "Draft"
+            case .checksRunning: "Checks running"
+            case .reviewNeeded: "Ready to merge · review needed"
+            case .ready: "Ready to merge"
+            case .open: "Open"
+            }
+        }
+
+        /// Whether the agent can do something about it from the thread: fix conflicts, fix the checks, merge.
+        public var asksTheAgent: Bool {
+            switch self {
+            case .conflicting, .checksFailing, .ready, .reviewNeeded: true
+            case .merged, .closed, .changesRequested, .draft, .checksRunning, .open: false
+            }
+        }
+    }
+
+    public static func verdict(state: PullRequest.State, isDraft: Bool, mergeable: PullRequest.Mergeable,
+                               tally: CheckTally, review: PullRequest.ReviewDecision) -> Verdict {
+        switch state {
+        case .merged: return .merged
+        case .closed: return .closed
+        case .open: break
+        }
+        if mergeable == .conflicting { return .conflicting }
+        if tally.failed > 0 { return .checksFailing(tally.failed) }
+        if review == .changesRequested { return .changesRequested }
+        if isDraft { return .draft }
+        if tally.pending > 0 { return .checksRunning }
+        guard tally.total > 0 || mergeable == .mergeable else { return .open }
+        return review == .reviewRequired ? .reviewNeeded : .ready
+    }
 }

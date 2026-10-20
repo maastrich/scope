@@ -130,6 +130,14 @@ extension AppModel {
         reportUndelivered(deliver(text, to: thread, label: "the conflicts of #\(pr.number)"), task: task)
     }
 
+    /// Hands a green pull request to the thread: merge it when done (`PullRequestPrompts.readyToMerge`).
+    func askToMerge(of task: TaskState, pullRequest link: LinkedPullRequest, to thread: ThreadID) {
+        guard let pr = livePullRequest(for: task, link: link) else { return }
+        let text = PullRequestPrompts.readyToMerge(pullRequest: pr.number, base: pr.baseRefName,
+                                                   reviewNeeded: pr.reviewDecision == .reviewRequired)
+        reportUndelivered(deliver(text, to: thread, label: "the merge of #\(pr.number)"), task: task)
+    }
+
     /// `gh pr merge` with the method the repository allows, after asking; then, once every pull request of the task
     /// is merged, offers to close the task, which deletes the branch the task itself created.
     func mergePullRequest(of task: TaskState, pullRequest link: LinkedPullRequest) async {

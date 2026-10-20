@@ -8,7 +8,8 @@ import Testing
       {"number": 12, "title": "Fix refresh token", "author": {"login": "alice"}, "headRefName": "feature/x",
        "baseRefName": "main", "isDraft": true, "reviewDecision": "", "statusCheckRollup": [],
        "updatedAt": "2026-09-01T10:00:00Z", "url": "https://github.com/acme/api/pull/12",
-       "isCrossRepository": false, "headRepositoryOwner": {"login": "acme"}, "mergeable": "MERGEABLE"},
+       "isCrossRepository": false, "headRepositoryOwner": {"login": "acme"}, "mergeable": "MERGEABLE",
+       "additions": 61, "deletions": 23},
       {"number": 13, "title": "Approved one", "author": {"login": "bob"}, "headRefName": "feat/approved",
        "baseRefName": "main", "isDraft": false, "reviewDecision": "APPROVED",
        "statusCheckRollup": [
@@ -45,6 +46,7 @@ import Testing
         #expect(draft.mergeable == .mergeable && draft.headOwner == "acme" && !draft.isCrossRepository)
         #expect(draft.url.absoluteString == "https://github.com/acme/api/pull/12")
         #expect(draft.updatedAt == ISO8601DateFormatter().date(from: "2026-09-01T10:00:00Z"))
+        #expect(draft.additions == 61 && draft.deletions == 23)
 
         let approved = prs[1]
         #expect(approved.reviewDecision == .approved && approved.checks == .passing && approved.mergeable == .conflicting)
@@ -62,6 +64,7 @@ import Testing
         let json = #"{"number": 7, "title": "Minimal", "headRefName": "h", "baseRefName": "main", "url": "https://github.com/acme/api/pull/7"}"#
         let pr = try PullRequest.parseOne(json: Data(json.utf8))
         #expect(pr.number == 7 && pr.author == "" && !pr.isDraft && pr.checks == .none && pr.headOwner == nil)
+        #expect(pr.additions == nil && pr.deletions == nil)
     }
 
     @Test func rejectsMalformedJSON() {

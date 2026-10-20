@@ -43,6 +43,9 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     public let createdAt: Date?
     public let mergedAt: Date?
     public let closedAt: Date?
+    /// Lines added and removed over the whole pull request, as GitHub counts them; absent from an older reading.
+    public let additions: Int?
+    public let deletions: Int?
 
     public var id: Int { number }
 
@@ -51,8 +54,11 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         isDraft: Bool = false, reviewDecision: ReviewDecision = .none, checks: Checks = .none,
         updatedAt: Date = .now, url: URL, isCrossRepository: Bool = false, headOwner: String? = nil,
         mergeable: Mergeable = .unknown, checkRuns: [PullRequestCheck] = [], state: State = .open,
-        createdAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil
+        createdAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil,
+        additions: Int? = nil, deletions: Int? = nil
     ) {
+        self.additions = additions
+        self.deletions = deletions
         self.checkRuns = checkRuns
         self.createdAt = createdAt
         self.mergedAt = mergedAt
@@ -77,7 +83,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     public static let jsonFields = [
         "number", "title", "author", "headRefName", "baseRefName", "isDraft", "reviewDecision",
         "statusCheckRollup", "updatedAt", "url", "isCrossRepository", "headRepositoryOwner", "mergeable", "state",
-        "createdAt", "mergedAt", "closedAt",
+        "createdAt", "mergedAt", "closedAt", "additions", "deletions",
     ].joined(separator: ",")
 
     // MARK: Parsing
@@ -153,6 +159,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         var createdAt: Date?
         var mergedAt: Date?
         var closedAt: Date?
+        var additions: Int?
+        var deletions: Int?
     }
 
     init(dto: DTO) {
@@ -182,7 +190,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
                 )
             },
             state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open,
-            createdAt: Self.real(dto.createdAt), mergedAt: Self.real(dto.mergedAt), closedAt: Self.real(dto.closedAt)
+            createdAt: Self.real(dto.createdAt), mergedAt: Self.real(dto.mergedAt), closedAt: Self.real(dto.closedAt),
+            additions: dto.additions, deletions: dto.deletions
         )
     }
 
