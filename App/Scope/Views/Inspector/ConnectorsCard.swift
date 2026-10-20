@@ -85,26 +85,50 @@ struct ConnectorsCard: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(groups, id: \.thread) { group in
-                    if let title = group.title { CardGroupLabel(title, count: group.servers.count) }
-                    ForEach(group.servers) { server in
-                        ConnectorRow(server: server, thread: group.thread ?? thread(waitingOn: server, in: sessions))
-                    }
+                    ConnectorGroup(group: group) { server in group.thread ?? thread(waitingOn: server, in: sessions) }
                 }
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "lock")
                         .font(.system(size: 10))
                         .accessibilityHidden(true)
                     Text("Read from Claude Code's transcript and configuration · never edited by Scope")
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.tertiary)
-                .frame(height: 22)
-                .help("Read from Claude Code's transcript and configuration · never edited by Scope")
+                .padding(.top, 6)
+                .padding(.bottom, 2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
+        }
+    }
+}
+
+/// One list of servers, its thread's title above it when the card holds several, folded after `shortCount` rows
+/// with *Show all N*: a Claude Code session with its claude.ai connectors and plugins easily lists twenty servers,
+/// and trouble sorts first, so what is folded is what works.
+private struct ConnectorGroup: View {
+    let group: ConnectorsSummary.Group<ThreadID>
+    let thread: (ClaudeMCPServers.Server) -> ThreadID?
+    @State private var showAll = false
+
+    static let shortCount = 10
+
+    var body: some View {
+        let servers = group.servers
+        if let title = group.title { CardGroupLabel(title, count: servers.count) }
+        ForEach(showAll ? servers : Array(servers.prefix(Self.shortCount))) { server in
+            ConnectorRow(server: server, thread: thread(server))
+        }
+        if servers.count > Self.shortCount {
+            Button(showAll ? "Show fewer" : "Show all \(servers.count)") { showAll.toggle() }
+                .buttonStyle(.plain)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.secondary)
+                .padding(.top, 2)
+                .padding(.leading, 24)
+                .usageID("connectors.show-all", label: "Show every MCP server")
         }
     }
 }
@@ -140,7 +164,9 @@ private struct ConnectorRow: View {
                     .font(.scopeValue)
                     .foregroundStyle(ThreadStateStyle.failed)
                     .lineLimit(1)
-            } else if let usage {
+                    .fixedSize()
+            } else if light != .needsAuth, let usage {
+                // A server waiting for a login lists only its `authenticate` tools: no count worth reading.
                 Text(usage)
                     .font(.scopeCaption.monospacedDigit())
                     .foregroundStyle(Ink.tertiary)
@@ -153,6 +179,7 @@ private struct ConnectorRow: View {
                     if let thread { model.selection = .thread(thread) }
                 } label: {
                     Chip(text: "re-authenticate", tint: PullRequestStyle.pending)
+                        .fixedSize()
                 }
                 .buttonStyle(.plain)
                 .help("Run /mcp in the thread to sign \(server.name) in again; Scope sends nothing")
