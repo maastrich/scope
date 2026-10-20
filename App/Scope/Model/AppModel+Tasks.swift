@@ -531,8 +531,22 @@ extension AppModel {
         setupRuns[id] = (token, run)
     }
 
+    /// The setup commands the Environment card shows beside *Setup*, resolved once per task and again after a setup.
+    func loadSetupCommands(of task: TaskState) async {
+        let commands = await sandboxCommands(for: task.record)
+        guard self.task(task.id) != nil else { return }
+        task.setupCommands = Self.uniqueSetupCommands(commands, record: task.record)
+    }
+
+    /// Each repository's setup command once, in the order of the repositories.
+    static func uniqueSetupCommands(_ commands: [String: SandboxCommands], record: TaskRecord) -> [String] {
+        var seen = Set<String>()
+        return record.repos.compactMap { commands[$0.repoRelativePath]?.setup }.filter { seen.insert($0).inserted }
+    }
+
     private func performSetup(_ task: TaskState, runCommands: Bool, only: [String]?) async {
         let commands = await sandboxCommands(for: task.record)
+        task.setupCommands = Self.uniqueSetupCommands(commands, record: task.record)
         let runner = await commandRunner()
         do {
             let record = try await env.tasks.runSetup(task.id, commands: commands, runCommands: runCommands,

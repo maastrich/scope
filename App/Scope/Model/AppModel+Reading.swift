@@ -157,6 +157,35 @@ extension AppModel {
         TaskContextFiles.skills(task: task.record, children: TaskContextFiles.diskChildren, isSkill: TaskContextFiles.diskIsSkill)
     }
 
+    /// The setup log of `task`, from the Setup line of the Environment card: what its commands printed, as one
+    /// code block, growing while the setup runs (`refreshSetupLogReading`).
+    func readSetupLog(of task: TaskState) {
+        Usage.click("task.read-setup-log", label: "Read a task's setup log")
+        showReading(setupLogContent(of: task))
+    }
+
+    /// The task's record changed: a setup log being read follows it.
+    func refreshSetupLogReading(of task: TaskState) {
+        guard let shown = inspector.reading, shown.kind == .setupLog(task.id) else { return }
+        let next = setupLogContent(of: task)
+        if next != shown { inspector.reading = next }
+    }
+
+    private func setupLogContent(of task: TaskState) -> ReadingContent {
+        let setup = task.record.setup
+        let log = setup?.log.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let markdown: String
+        switch setup?.state {
+        case .none, .notRun: markdown = "_The setup has not run yet._"
+        case .skipped where log.isEmpty: markdown = "_Nothing to run: the task's repositories declare no setup command._"
+        case .running where log.isEmpty: markdown = "_The setup is running; its output lands here._"
+        default: markdown = "```\n" + log.replacingOccurrences(of: "```", with: "`\u{200B}``") + "\n```"
+        }
+        return ReadingContent(kind: .setupLog(task.id), title: "\(task.name) · setup log",
+                              at: setup?.finishedAt ?? setup?.startedAt, isLive: setup?.state == .running,
+                              markdown: markdown, directory: task.record.threadCwd.path, taskID: task.id, scopeID: task.scopeID)
+    }
+
     /// The reading column stands on its own: it opens beside the terminal whether the inspector is shown or not
     /// (`RootView`), so reading an answer never brings the inspector along.
     func showReading(_ content: ReadingContent) {

@@ -33,8 +33,54 @@ extension AppModel {
             }
         }.value
         for reading in readings {
-            guard let task = task(reading.id), task.listeningPorts != reading.ports else { continue }
-            task.listeningPorts = reading.ports
+            guard let task = task(reading.id) else { continue }
+            if task.listeningPorts != reading.ports { task.listeningPorts = reading.ports }
+            // The processes go with the ports: same pass, same twenty seconds, only for a card that shows them.
+            if processWatchers.contains(task.id) { refreshListeningProcesses(of: task) }
+        }
+    }
+
+    /// The Environment card of `task` opened or closed: its listening processes are read while it is open, and
+    /// right away on opening so the lines do not wait for the next pass.
+    func watchListeningProcesses(of task: TaskState, _ watching: Bool) {
+        if watching {
+            processWatchers.insert(task.id)
+            refreshListeningProcesses(of: task)
+        } else {
+            processWatchers.remove(task.id)
+        }
+    }
+
+    /// Who holds the task's listening ports: one `lsof` over them, off the main actor, each process named by its
+    /// `argv` and tied to the thread it was started from (`ListeningProcesses.owner`). Coalesced per task; nothing
+    /// listening means nothing to run.
+    func refreshListeningProcesses(of task: TaskState) {
+        let id = task.id
+        let ports = task.listeningPorts
+        guard !ports.isEmpty else {
+            if !task.listeningProcesses.isEmpty { task.listeningProcesses = [] }
+            return
+        }
+        guard processRuns[id] == nil else { return }
+        let shells = Dictionary(threads(in: id).compactMap { session in session.pid.map { ($0, session.id.rawValue) } },
+                                uniquingKeysWith: { first, _ in first })
+        processRuns[id] = Task { [weak self] in
+            let processes = await Task.detached(priority: .utility) { () -> [ListeningProcesses.Process]? in
+                guard let result = try? await Subprocess.run(executable: "/usr/sbin/lsof",
+                                                              arguments: ListeningProcesses.lsofArguments(ports: ports),
+                                                              timeout: .seconds(10)) else { return nil }
+                // `lsof` exits 1 when nothing matched: an empty list, not a failure.
+                let entries = ListeningProcesses.parse(result.stdoutText)
+                return ListeningProcesses.processes(entries) { pid in
+                    ProcessSweep.arguments(pid).joined(separator: " ")
+                } owner: { pid in
+                    ListeningProcesses.owner(of: pid, threads: shells, environment: ProcessSweep.environment, parent: ProcessSweep.parent)
+                }
+            }.value
+            guard let self else { return }
+            processRuns[id] = nil
+            guard let processes, let task = self.task(id), task.listeningProcesses != processes else { return }
+            task.listeningProcesses = processes
         }
     }
 
