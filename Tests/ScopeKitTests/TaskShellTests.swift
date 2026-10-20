@@ -88,6 +88,8 @@ struct TaskShellTests {
             #expect(TaskShell.tabTitle(reported: title, shell: "/bin/zsh", cwd: cwd) == "zsh", "\(title)")
         }
         #expect(TaskShell.tabTitle(reported: "vim api", shell: "/bin/zsh", cwd: cwd) == "vim api")
+        #expect(TaskShell.tabTitle(reported: "swift test ~/.s/s/a/f/api", shell: "/opt/homebrew/bin/fish", cwd: cwd) == "swift test",
+                "fish appends the directory to the command")
     }
 
     // MARK: Footer

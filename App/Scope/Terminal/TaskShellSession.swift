@@ -130,10 +130,12 @@ final class TaskShellSession: Identifiable {
         guard pid > 0 else { return }
         kill(pid, SIGHUP)
         if getpgid(pid) == pid { kill(-pid, SIGHUP) }
-        Task { [weak self] in
+        // The view, not the session: a closed tab's session may be gone by then, the shell must not be.
+        let id = id
+        Task {
             try? await Task.sleep(for: .seconds(seconds))
-            guard let self, let view = self._terminalView, view.process.running, view.process.shellPid == pid else { return }
-            Log.threads.warning("task shell \(self.id.rawValue, privacy: .public): pid \(pid) ignored SIGHUP, sending SIGKILL")
+            guard view.process.running, view.process.shellPid == pid else { return }
+            Log.threads.warning("task shell \(id.rawValue, privacy: .public): pid \(pid) ignored SIGHUP, sending SIGKILL")
             kill(pid, SIGKILL)
             if getpgid(pid) == pid { kill(-pid, SIGKILL) }
         }

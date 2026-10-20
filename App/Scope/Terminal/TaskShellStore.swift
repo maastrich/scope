@@ -9,6 +9,9 @@ import ScopeTasks
 final class TaskShellStore {
     private(set) var tabs = TaskShellTabs()
     private var sessions: [TaskShellID: TaskShellSession] = [:]
+    /// Hung up, not yet exited. The session owns the terminal view, and the view reaps the child when it exits: a
+    /// session dropped at once would leave a zombie behind, and no SIGKILL for a shell that ignored the hang-up.
+    private var retiring: [TaskShellID: TaskShellSession] = [:]
 
     func session(_ id: TaskShellID) -> TaskShellSession? { sessions[id] }
 
@@ -36,8 +39,7 @@ final class TaskShellStore {
     func remove(_ id: TaskShellID) -> TaskShellSession? {
         guard let session = sessions.removeValue(forKey: id) else { return nil }
         tabs.close(id)
-        session.onExit = nil
-        session.stop()
+        retire(session)
         return session
     }
 
@@ -46,9 +48,15 @@ final class TaskShellStore {
     func removeAll(of task: TaskID) -> [TaskShellSession] {
         tabs.closeAll(of: task.rawValue).compactMap { tab in
             guard let session = sessions.removeValue(forKey: tab.id) else { return nil }
-            session.onExit = nil
-            session.stop()
+            retire(session)
             return session
         }
+    }
+
+    private func retire(_ session: TaskShellSession) {
+        guard session.isAlive else { return }
+        retiring[session.id] = session
+        session.onExit = { [weak self] session in self?.retiring[session.id] = nil }
+        session.stop()
     }
 }

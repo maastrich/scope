@@ -40,12 +40,17 @@ public enum TaskShell {
 
     /// The title of a tab: the command the terminal reported (OSC 0/2, as zsh and fish prompts set it while a
     /// command runs), else the shell's name. A title that only names the directory — what those prompts set
-    /// between two commands — is no command and counts as nothing: the tab says `zsh` again.
+    /// between two commands — is no command and counts as nothing: the tab says `zsh` again. fish writes the
+    /// directory after the command (`swift test ~/s/api`); that tail goes.
     public static func tabTitle(reported: String?, shell: String, cwd: String) -> String {
         let name = shellName(shell)
         guard let reported else { return name }
-        let title = reported.trimmingCharacters(in: .whitespacesAndNewlines)
+        var title = reported.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, !isDirectoryTitle(title, cwd: cwd), title != name else { return name }
+        let words = title.split(separator: " ")
+        if words.count > 1, let last = words.last, last.hasPrefix("/") || last.hasPrefix("~") {
+            title = words.dropLast().joined(separator: " ")
+        }
         return title
     }
 

@@ -88,9 +88,10 @@ extension AppModel {
         dismissShellPaneIfEmpty(task: session.taskID)
     }
 
-    /// The last shell of the task on screen is gone: back to what the pane covered, else nothing.
+    /// The last shell of the task on screen is gone — or the task itself: back to what the pane covered, else nothing.
     private func dismissShellPaneIfEmpty(task taskID: TaskID) {
-        guard inspector.viewer == .shell, currentTask?.id == taskID, taskShells.sessions(of: taskID).isEmpty else { return }
+        guard inspector.viewer == .shell, taskShells.sessions(of: taskID).isEmpty,
+              currentTask == nil || currentTask?.id == taskID else { return }
         if let previous = inspector.previousViewer, isShowable(previous) {
             inspector.goBack()
         } else {
