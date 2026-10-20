@@ -428,10 +428,19 @@ final class ThreadSession: Identifiable {
         refreshActivityHeadline()
         if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
         if next.contextWindow != contextWindow { contextWindow = next.contextWindow }
+        // The context report is saved when its figure moves by a point, or the model or version changes: a status line
+        // after `Stop` would otherwise live in memory only, and the gauge vanish at the next launch. Not on every
+        // status line, which comes with each message.
+        let contextMoved = Self.savedContext(next.contextWindow) != Self.savedContext(previous.contextWindow)
         if next.turns != previous.turns || next.lastReply != previous.lastReply
-            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved {
             onActivityChanged?(self)
         }
+    }
+
+    /// What of a context report is worth a write: the rounded percentage, the model and the driver's version.
+    private static func savedContext(_ report: ContextWindowReport?) -> [String?] {
+        [report?.usedPercentage.map { String(Int($0.rounded())) }, report?.modelID, report?.modelName, report?.driverVersion]
     }
 
     private func refreshActivityHeadline() {
