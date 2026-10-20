@@ -1031,6 +1031,7 @@ final class AppControlService: ControlService {
                 ? InterruptedTurn.activityLine
                 : ThreadActivityLine.text(session.activity, cwd: session.record.cwd, now: .now),
             tokens: TokenUsageText.threadField(model.tokenUsage.snapshot.threads[session.id.rawValue]),
+            session: ClaudeSessionSummary.make(session.claude),
             background: session.backgroundReport()
         )
     }

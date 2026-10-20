@@ -56,6 +56,11 @@ final class ThreadSession: Identifiable {
     /// Where the transcript was last read up to (`AppModel+ClaudeSession`).
     @ObservationIgnored var transcriptTail = ClaudeTranscriptTail()
     @ObservationIgnored var transcriptTailReading = false
+    /// A Claude Code session started, resumed or was cleared in this folder: its MCP configuration is read again
+    /// (`AppModel+ClaudeSession`).
+    @ObservationIgnored var onClaudeSessionStarted: (@MainActor (ThreadSession, String) -> Void)?
+    /// The session opened, merged or linked pull requests it had not reported yet (`ClaudeSessionPullRequests`).
+    @ObservationIgnored var onClaudePullRequests: (@MainActor (ThreadSession, [ClaudeSessionPullRequests.Entry]) -> Void)?
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
@@ -390,7 +395,10 @@ final class ThreadSession: Identifiable {
     func apply(_ event: AdapterEvent) -> Bool {
         guard phase.isAlive else { return false }
         // Before the turn logic: what Claude Code reports between turns is still news here.
-        if let facts = ClaudeHookFacts.from(event) { updateClaude { $0.apply(facts) } }
+        if let facts = ClaudeHookFacts.from(event) {
+            updateClaude { $0.apply(facts) }
+            if facts.event == "SessionStart" { onClaudeSessionStarted?(self, facts.body["cwd"]?.nonEmptyString ?? record.cwd) }
+        }
         // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
@@ -439,6 +447,11 @@ final class ThreadSession: Identifiable {
         updateClaude { $0.apply(records) }
     }
 
+    /// What the configuration declares for the session's MCP servers (`ClaudeMCPConfig`).
+    func declareMCPServers(_ declarations: [ClaudeMCPServers.Declaration]) {
+        updateClaude { $0.mcpServers.declare(declarations) }
+    }
+
     /// Scope is about to signal background task `id` (`AppModel.stopBackgroundTask`).
     func markBackgroundStopRequested(_ id: String) {
         updateClaude { $0.background.markStopRequested(id) }
@@ -448,7 +461,12 @@ final class ThreadSession: Identifiable {
     private func updateClaude(_ change: (inout ClaudeSession) -> Void) {
         var next = claude
         change(&next)
-        if next != claude { claude = next }
+        guard next != claude else { return }
+        let previous = claude
+        claude = next
+        if next.compactions.isRunning != previous.compactions.isRunning { refreshActivityHeadline() }
+        let reported = next.pullRequests.changes(since: previous.pullRequests)
+        if !reported.isEmpty { onClaudePullRequests?(self, reported) }
     }
 
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.
@@ -477,7 +495,7 @@ final class ThreadSession: Identifiable {
     }
 
     private func refreshActivityHeadline() {
-        var next = ThreadActivityHeadline.make(activity, state: displayState)
+        var next = ThreadActivityHeadline.make(activity, state: displayState, compacting: claude.compactions.isRunning)
         // Between the relaunch and the message that asks it to go on, "stopped mid-turn" is not what is happening.
         if resumingAfterRestart, phase.isAlive, displayState != .running {
             next = ThreadActivityHeadline(text: InterruptedTurn.headline)

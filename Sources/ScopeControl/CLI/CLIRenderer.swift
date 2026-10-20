@@ -64,10 +64,11 @@ public enum CLIRenderer {
             if !result.threads.isEmpty {
                 // The column only when some thread has something running in the background.
                 let background = result.threads.contains { ($0.background ?? []).contains(where: \.isRunning) }
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "STATE", "SCOPE", "TASK", "TOKENS", "BY"]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "MODE", "STATE", "SCOPE", "TASK", "TOKENS", "BY"]
                                         + (background ? ["BACKGROUND"] : []) + ["ACTIVITY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.model ?? "", $0.state, $0.scopeSlug, $0.task ?? "", $0.tokens ?? "", openedBy($0)]
-                        + (background ? [backgroundColumn($0.background)] : []) + [$0.activity ?? ""]
+                    [$0.id, $0.title, $0.driver, $0.session?.model ?? $0.model ?? "", $0.session?.modeColumn ?? "", $0.state, $0.scopeSlug,
+                     $0.task ?? "", $0.tokens ?? "", openedBy($0)]
+                        + (background ? [backgroundColumn($0.background)] : []) + [activityColumn($0)]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -507,6 +508,11 @@ public enum CLIRenderer {
         }
         if task.holdBranch == true { parts.append("held") }
         return parts.joined(separator: ", ")
+    }
+
+    /// The activity, then what the session adds when it matters: `… · compacting`, `… · MCP failed: github`.
+    static func activityColumn(_ thread: ThreadSummary) -> String {
+        ([thread.activity].compactMap { $0 } + (thread.session?.notes ?? [])).joined(separator: " · ")
     }
 
     static func openedBy(_ thread: ThreadSummary) -> String {

@@ -88,11 +88,17 @@ repo        api → ~/.scope/sandboxes/acme/fix-flaky-login-test/api (branch cre
 on what — a file (relative to the thread's folder), the first line of a command, a search pattern, a URL — or how
 its turn ended. <code>--json</code> and the MCP tool carry it as <code>activity</code>; a thread whose driver
 reports nothing (a shell) has none. <code>TOKENS</code> is what a Claude Code thread consumed over the last five
-hours (<code>tokens</code> in JSON), read from its transcripts.</p>
+hours (<code>tokens</code> in JSON), read from its transcripts. For a Claude Code thread, <code>MODEL</code> is the
+model its session runs on now (after any <code>/model</code>), <code>MODE</code> its permission mode when it is not the default
+(<code>plan</code>, <code>auto</code>, <code>bypass</code>, <code>accept edits</code>), and the activity ends with
+<code>compacting</code>, the number of compactions and the MCP servers that failed or wait for authentication. JSON carries
+all of it under <code>session</code>: <code>permissionMode</code>, <code>model</code>, <code>effort</code>,
+<code>compacting</code>, <code>compactions</code>, <code>lastCompaction</code> (trigger, tokens before and after, duration)
+and <code>mcpServers</code>.</p>
 <pre><code>$ scope list threads
-THREAD        TITLE  DRIVER       MODEL             STATE    SCOPE  TASK  TOKENS    BY    ACTIVITY
-3f9a2c17be04  acme   claude-code  claude-fable-5-1  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
-8a18d7476063  ci     claude-code                    done     acme         310k · 5h  user  finished · 1h ago</code></pre>
+THREAD        TITLE  DRIVER       MODEL             MODE  STATE    SCOPE  TASK  TOKENS     BY    ACTIVITY
+3f9a2c17be04  acme   claude-code  claude-fable-5-1  plan  running  acme         1.2M · 5h  user  Edit Sources/Login/Session.swift · 2m ago
+8a18d7476063  ci     claude-code  claude-opus-5-5         done     acme         310k · 5h  user  finished · 1h ago · 1 compaction · MCP failed: github</code></pre>
 <p><code>--model</code> on <code>thread new</code> and <code>task new</code> (<code>model</code> in MCP) picks what the driver
 runs on, through the profile's <code>modelArgs</code>; the thread keeps it across relaunches and resumes, and the window
 subtitle shows it. Left out, an agent's thread inherits the agent's own model when it runs the same driver, else the

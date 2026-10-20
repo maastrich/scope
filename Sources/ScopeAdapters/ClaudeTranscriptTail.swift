@@ -102,6 +102,14 @@ public struct ClaudeMCPServerReport: Sendable, Equatable {
     public var pending: [String]
     public var failed: [Failure]
     public var needsAuth: [String]
+    /// The lists the delta carried: one it left out says nothing (`needsAuthMcpServers` is missing from most deltas,
+    /// even while a server waits for authentication), where one it carried empty says nothing is in it any more.
+    public var carriesPending = true
+    public var carriesFailed = true
+    public var carriesNeedsAuth = true
+    /// MCP tools the delta made available and withdrew (`mcp__<server>__<tool>`): a server whose tools arrive is up.
+    public var addedTools: [String] = []
+    public var removedTools: [String] = []
     public var at: Date?
 }
 
@@ -282,11 +290,22 @@ public struct ClaudeTranscriptTail: Sendable, Equatable {
                 guard let name = server["name"]?.nonEmptyString else { return nil }
                 return .init(name: name, error: server["error"]?.nonEmptyString, code: server["errorCode"]?.nonEmptyString)
             }
-            // Most deltas are about deferred tools only; a report with no server in it says nothing about them.
+            let mcpTools = { (key: String) in
+                (attachment[key]?.array ?? []).compactMap(\.nonEmptyString).filter { $0.hasPrefix("mcp__") }
+            }
+            let added = mcpTools("addedNames")
+            let removed = mcpTools("removedNames")
+            // Most deltas are about built-in deferred tools only; one with no server and no MCP tool in it says nothing.
             let saysSomething = attachment["pendingMcpServers"] != nil || attachment["failedMcpServers"] != nil
-                || attachment["needsAuthMcpServers"] != nil
+                || attachment["needsAuthMcpServers"] != nil || !added.isEmpty || !removed.isEmpty
             guard saysSomething else { return [] }
-            return [.mcpServers(ClaudeMCPServerReport(pending: pending, failed: failed, needsAuth: needsAuth, at: at))]
+            var report = ClaudeMCPServerReport(pending: pending, failed: failed, needsAuth: needsAuth, at: at)
+            report.carriesPending = attachment["pendingMcpServers"] != nil
+            report.carriesFailed = attachment["failedMcpServers"] != nil
+            report.carriesNeedsAuth = attachment["needsAuthMcpServers"] != nil
+            report.addedTools = added
+            report.removedTools = removed
+            return [.mcpServers(report)]
         default:
             return []
         }
