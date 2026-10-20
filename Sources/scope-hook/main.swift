@@ -120,10 +120,12 @@ enum HookCLI {
         var raw: String?
         var parsedStdin = HookStdin()
         var truncated = false
+        var hook: String?
         // An argument JSON wins over stdin, which the driver may have left attached to something that never ends.
         if command.inlineJSON != nil || command.readStdin {
             var data = command.inlineJSON.map { Data($0.utf8) } ?? stdin.readDataToEndOfFile()
             parsedStdin = HookStdin.parse(data)
+            hook = ClaudeHookFacts.wirePayload(from: data)
             if data.count > maxRawBytes {
                 data = data.prefix(maxRawBytes)
                 note("stdin truncated to \(maxRawBytes) bytes")
@@ -133,7 +135,7 @@ enum HookCLI {
         }
 
         guard let event = Self.buildEvent(thread: thread, command: command, stdin: parsedStdin, raw: raw,
-                                          rawTruncated: truncated) else {
+                                          rawTruncated: truncated, hook: hook) else {
             note("notification '\(parsedStdin.notificationType ?? "?")' needs nobody; nothing sent")
             return 0
         }
@@ -207,7 +209,7 @@ enum HookCLI {
     /// The wire event for a parsed command line and stdin; `nil` when there is nothing to send.
     /// An explicit `session_id=` (or `error=`) argument wins over the one lifted from stdin.
     static func buildEvent(thread: String, command: HookCommand, stdin: HookStdin, raw: String?,
-                           rawTruncated: Bool = false) -> HookEvent? {
+                           rawTruncated: Bool = false, hook: String? = nil) -> HookEvent? {
         guard let kind = command.event.resolve(stdin: stdin) else { return nil }
         var payload = command.payload
         if payload[HookEvent.sessionIDKey] == nil, let sessionID = stdin.sessionID {
@@ -243,6 +245,8 @@ enum HookCLI {
             if stdin.displayFinal == true { payload[HookEvent.finalKey] = "true" }
             return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: nil)
         }
+        // The whole payload, clamped: what `raw` holds, minus its size, so it parses even when `raw` was cut.
+        if let hook, payload[HookEvent.hookKey] == nil { payload[HookEvent.hookKey] = hook }
         return HookEvent(thread: thread, event: kind, payload: payload, sentAt: .now, raw: raw)
     }
 }

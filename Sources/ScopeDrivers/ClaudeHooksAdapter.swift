@@ -20,6 +20,9 @@ import ScopeCore
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 /// | `MessageDisplay`                      | `turn.said`             | unchanged (the answer, as it is written) |
 /// | `SubagentStart` / `SubagentStop`      | `agent.started` / `agent.ended` | unchanged (a sub-agent running in the background holds `thread.wait`) |
+/// | `PreCompact`, `PostCompact`, `PermissionRequest`, `PermissionDenied`, `PostToolUseFailure`, `PostModelSwitch` | `driver.reported` | unchanged (`ClaudeSession`) |
+///
+/// Every event also carries the hook's stdin, clamped, under `payload["hook"]` (`ClaudeHookFacts`).
 ///
 /// `MessageDisplay` exists since Claude Code 2.1.152; an older one ignores the entry with a note and keeps the
 /// rest of the file, so the reading column simply waits for `Stop` there.
@@ -68,7 +71,13 @@ public enum ClaudeHooksAdapter {
         Entry(event: "MessageDisplay", matcher: nil, arguments: ["turn.said", "--stdin"]),
         Entry(event: "SubagentStart", matcher: nil, arguments: ["agent.started", "--stdin"]),
         Entry(event: "SubagentStop", matcher: nil, arguments: ["agent.ended", "--stdin"]),
-    ]
+    ] + informational.map { Entry(event: $0, matcher: nil, arguments: [HookEvent.Kind.driverReported.rawValue, "--stdin"]) }
+
+    /// Hooks that only inform (`driver.reported`): read through `ClaudeHookFacts`, they never move the thread state.
+    /// `PermissionRequest` is here as information only — what is being asked, at once — and still not as the signal
+    /// that someone must act (see above); `scope-hook` answers nothing, so the dialog opens as it would without it.
+    static let informational = ["PreCompact", "PostCompact", "PermissionRequest", "PermissionDenied", "PostToolUseFailure",
+                                "PostModelSwitch"]
 
     /// `<home>/threads/<thread-id>.claude-settings.json`
     public static func settingsURL(home: URL, threadID: ThreadID) -> URL {
