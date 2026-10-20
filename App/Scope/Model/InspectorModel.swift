@@ -1,5 +1,6 @@
 import Foundation
 import ScopeCore
+import ScopeTasks
 
 /// What the viewer column beside the inspector shows: the diff of the file selected in Delta, or the base file
 /// opened from Files or Search.
@@ -41,6 +42,16 @@ struct FocusRequest: Equatable {
 final class InspectorModel {
     /// The open sections of the current scope; swapped when the scope changes.
     var sections = InspectorSections.defaults
+    /// The page of a task's column on show (`InspectorPlacement`). Not saved: a launch starts on Overview.
+    var page: InspectorPage = .overview
+    /// The Overview cards kept there however quiet they get, because they are open (`InspectorPlacement.retained`),
+    /// and the task they were kept for: a task switch lets them go.
+    var retained: Set<InspectorSection> = []
+    var retainedTask: TaskID?
+    /// A card went down to Details while Details was not on show: the quiet dot on its button, until it is opened.
+    var detailsHasNews = false
+    /// The cards of the last placement drawn, to tell which went down.
+    @ObservationIgnored var lastPlacement: InspectorPlacement.Result?
     /// Relative heights of the open lists, as left by the last drag. Global: a habit of the eye, not of a scope.
     var weights: [InspectorSection: Double] = [:]
     /// The viewer column's share of the width the sidebar and the inspector leave, the terminal taking the rest. A share

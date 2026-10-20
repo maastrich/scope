@@ -2,12 +2,13 @@ import SwiftUI
 import ScopeCore
 import ScopeTasks
 
-/// The strip of panes at the right of the inspector band: Overview, Changes, Shell, Browser, Pull requests, Files, and `⋮` with the
-/// Cards menu. A click opens the card *and* its pane when it has one (the diff for Changes, the base file for
-/// Files); Overview closes the pane and leaves the column of cards alone. It is not a tab bar: every card stays in
-/// the column whatever is lit here, and `⌘D` / `⇧⌘B` keep working.
+/// The strip at the right of the inspector band: the column's two pages, Overview and Details (`InspectorPage`), then
+/// the panes — Changes, Shell, Browser, Pull requests, Files — and `⋮` with the Cards menu. Overview turns to its page and
+/// closes the pane; Details (⇧⌘D) turns to the other page and back. A pane button opens its card, on whichever page
+/// it is, *and* its pane when it has one (the diff for Changes, the base file for Files).
 ///
-/// Badges say what waits: the changed files on Changes, the failing checks on Pull requests. Without a task the
+/// Badges say what waits: the changed files on Changes, the failing checks on Pull requests. Details carries a quiet
+/// dot, no count, when a card went down to it while it was not on show. Without a task there is one page and the
 /// strip is the base checkout's: Overview, Files, Search, `⋮`.
 struct InspectorPaneStrip: View {
     @Environment(AppModel.self) private var model
@@ -16,12 +17,24 @@ struct InspectorPaneStrip: View {
         let task = model.currentTask
         let viewer = model.shownViewer
         HStack(spacing: 1) {
-            PaneButton(systemImage: "list.bullet.rectangle", title: "Overview", selected: viewer == nil) {
+            PaneButton(systemImage: "list.bullet.rectangle", title: "Overview",
+                       selected: viewer == nil && (task == nil || model.inspector.page == .overview)) {
                 Usage.click("inspector.panes.overview", label: "Overview pane")
+                model.showInspectorPage(.overview)
                 model.inspector.closeViewer()
             }
-            .help("Overview — the cards alone, the pane closed")
+            .help(task == nil ? "Overview — the cards alone, the pane closed"
+                              : "Overview — what is happening: the cards with something to say, the pane closed")
             if let task {
+                PaneButton(systemImage: "info.circle", title: "Details", dot: model.inspector.detailsHasNews,
+                           selected: model.inspector.page == .details) {
+                    Usage.click("inspector.panes.details", label: "Details page")
+                    model.toggleInspectorDetails()
+                }
+                .keyHints { CommandKeyHints.shared.keys(for: "command.details").map { [$0] } ?? [] }
+                .help(model.inspector.detailsHasNews
+                      ? "Details (⇧⌘D) — a card went quiet and moved here"
+                      : "Details (⇧⌘D) — environment, context, the base checkout, and the cards with nothing to say yet")
                 PaneButton(systemImage: "plus.forwardslash.minus", title: "Changes", badge: changedFiles(task),
                            badgeColor: Ink.secondary, selected: viewer == .diff) {
                     Usage.click("inspector.panes.changes", label: "Changes pane")
@@ -91,6 +104,8 @@ private struct PaneButton: View {
     let title: String
     var badge: Int? = nil
     var badgeColor: Color = Ink.secondary
+    /// A quiet mark that something changed behind the button, where a count would shout.
+    var dot = false
     let selected: Bool
     let action: () -> Void
     @State private var hovering = false
@@ -113,29 +128,39 @@ private struct PaneButton: View {
                             .background(badgeColor, in: Capsule())
                             .offset(x: 4, y: -4)
                             .accessibilityHidden(true)
+                    } else if dot {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 5, height: 5)
+                            .offset(x: 1, y: 1)
+                            .accessibilityHidden(true)
                     }
                 }
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel(title)
-        .accessibilityValue(badge.map { "\($0)" } ?? "")
+        .accessibilityValue(badge.map { "\($0)" } ?? (dot ? "updated" : ""))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-/// `⋮`: which cards the column shows, one check mark each, and *Reset to defaults*. Kept per scope with the open
-/// cards (`InspectorSections.hidden`). A card that needs a task can be shown or hidden without one; it stays dimmed.
+/// `⋮`: where each card goes, one submenu each — by itself (Overview while it has something to say for an event card,
+/// Details for the others), always on Overview however quiet, or nowhere — and *Reset to defaults*. Kept per scope
+/// with the open cards (`InspectorSections.pinned`, `.hidden`).
 private struct CardsMenu: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         ScopeMenu {
-            Section("Cards") {
-                ForEach(InspectorSection.allCases, id: \.self) { section in
-                    Toggle(section.title, isOn: Binding(
-                        get: { model.isSectionVisible(section) },
-                        set: { model.setSection(section, visible: $0) }))
+            Section("Overview when they have something") {
+                ForEach(InspectorSection.eventCards, id: \.self) { section in
+                    choice(section, automatic: "When it has something")
+                }
+            }
+            Section("Details") {
+                ForEach(InspectorSection.allCases.filter { !$0.isEventCard }, id: \.self) { section in
+                    choice(section, automatic: "In Details")
                 }
             }
             Divider()
@@ -148,8 +173,23 @@ private struct CardsMenu: View {
                 .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .help("Cards — choose which cards the column shows")
+        .help("Cards — where each card goes: by itself, always on Overview, or hidden")
         .accessibilityLabel("Cards")
         .usageID("inspector.panes.cards", label: "Cards menu")
+    }
+}
+
+extension CardsMenu {
+    fileprivate func choice(_ section: InspectorSection, automatic: String) -> some View {
+        Picker(section.title, selection: Binding<AppModel.CardPlacementChoice>(
+            get: {
+                if !model.isSectionVisible(section) { return .hidden }
+                return model.inspector.sections.isPinned(section) ? .pinned : .automatic
+            },
+            set: { model.setCard(section, $0) })) {
+            Text(automatic).tag(AppModel.CardPlacementChoice.automatic)
+            Text("Always in Overview").tag(AppModel.CardPlacementChoice.pinned)
+            Text("Hidden").tag(AppModel.CardPlacementChoice.hidden)
+        }
     }
 }
