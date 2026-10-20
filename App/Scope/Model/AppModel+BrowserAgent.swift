@@ -29,6 +29,11 @@ extension AppModel {
     }
 
     func performBrowser(_ params: BrowserParams, in task: TaskState, by driver: String) async -> Result<BrowserResult, ControlError> {
+        // Compare captures in views of its own: no agent tab to open for it.
+        if params.action == .compare {
+            Usage.register("browser.agent.compare", label: "Agent browser: compare")
+            return await compareBrowser(params, in: task)
+        }
         let session = agentBrowser(of: task)
         guard !session.isStopped else {
             return .failure(.denied("the user stopped the browser of \(task.record.slug)",
@@ -108,7 +113,7 @@ extension AppModel {
         }
         if session.isLoading { _ = await session.waitUntilLoaded(timeout: .seconds(10)) }
         switch params.action {
-        case .open:
+        case .open, .compare:
             return .failure(.failed("unreachable"))
         case .read:
             do {

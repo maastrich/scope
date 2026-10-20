@@ -110,6 +110,8 @@ public enum ScopeCLI {
       scope browser wait [--selector S] [--text T] [--timeout s]
                                           until the selector or the text shows, else until the page is quiet
       scope browser network [--all]       the requests since the last look; status for fetch/XHR only
+      scope browser compare [/path]       the route on the base branch's server and the task's, side by side, with
+                                          what differs (--before <port>, --after <port>; default: picked)
                                           (browser: --task <id|slug> for another task than the caller's own)
       scope schedule list                 the scheduled prompts of every scope (--scope for one): rule, target,
                                           next fire, last run
@@ -323,6 +325,12 @@ public enum ScopeCLI {
                 case "--submit" where action == .type: parameters.submit = true
                 case "--selector" where action == .wait: parameters.selector = try value()
                 case "--text" where action == .wait: parameters.text = try value()
+                case "--before" where action == .compare, "--after" where action == .compare:
+                    let text = try value()
+                    guard let port = Int(text), port >= 0 else {
+                        throw UsageError(message: "browser compare: \(flag) takes a port, not “\(text)”", usage: usage)
+                    }
+                    if flag == "--before" { parameters.before = port } else { parameters.after = port }
                 case "--timeout" where action == .wait:
                     let text = try value()
                     guard let seconds = Int(text), seconds > 0 else {
@@ -336,6 +344,9 @@ public enum ScopeCLI {
             switch action {
             case .open:
                 guard words.count <= 1 else { throw UsageError(message: "browser open takes at most one URL", usage: usage) }
+                parameters.url = words.first
+            case .compare:
+                guard words.count <= 1 else { throw UsageError(message: "browser compare takes at most one path", usage: usage) }
                 parameters.url = words.first
             case .click:
                 guard words.count == 1 else { throw UsageError(message: "browser click takes one ref (e12)", usage: usage) }

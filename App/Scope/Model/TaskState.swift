@@ -65,6 +65,9 @@ final class TaskState: Identifiable {
     var otherPorts: [Int] = []
     /// What `.claude/launch.json` in its sandboxes declares, read on the same pass.
     var launchServers: [LaunchConfig.Server] = []
+    /// Which worktree serves each port (`TaskRepo.sandboxKey`), from the listening process's directory: Compare puts
+    /// a secondary worktree's server on the left.
+    var portWorktrees: [Int: String] = [:]
     /// Hosts the user blocked for this task's agent browser from the pane (*Block … for this task*), on top of the
     /// ones Settings blocks everywhere. Kept while the app runs.
     var browserBlocked: [String] = []
