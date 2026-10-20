@@ -62,8 +62,9 @@ public enum CLIRenderer {
                 }))
             }
             if !result.threads.isEmpty {
-                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "STATE", "SCOPE", "TASK", "TOKENS", "BY", "ACTIVITY"], result.threads.map {
-                    [$0.id, $0.title, $0.driver, $0.model ?? "", $0.state, $0.scopeSlug, $0.task ?? "", $0.tokens ?? "", openedBy($0), $0.activity ?? ""]
+                blocks.append(table(["THREAD", "TITLE", "DRIVER", "MODEL", "MODE", "STATE", "SCOPE", "TASK", "TOKENS", "BY", "ACTIVITY"], result.threads.map {
+                    [$0.id, $0.title, $0.driver, $0.session?.model ?? $0.model ?? "", $0.session?.modeColumn ?? "", $0.state, $0.scopeSlug,
+                     $0.task ?? "", $0.tokens ?? "", openedBy($0), activityColumn($0)]
                 }))
             }
             return blocks.isEmpty ? "nothing yet" : blocks.joined(separator: "\n\n")
@@ -493,6 +494,11 @@ public enum CLIRenderer {
         }
         if task.holdBranch == true { parts.append("held") }
         return parts.joined(separator: ", ")
+    }
+
+    /// The activity, then what the session adds when it matters: `… · compacting`, `… · MCP failed: github`.
+    static func activityColumn(_ thread: ThreadSummary) -> String {
+        ([thread.activity].compactMap { $0 } + (thread.session?.notes ?? [])).joined(separator: " · ")
     }
 
     static func openedBy(_ thread: ThreadSummary) -> String {

@@ -32,10 +32,15 @@ public struct ThreadActivityHeadline: Sendable, Equatable {
 
     /// `nil` when there is nothing better than what a row says without it: an exited thread, one that never
     /// reported anything, one idle after a wait was dismissed.
-    public static func make(_ activity: ThreadActivity, state: ThreadState,
+    /// `compacting`: Claude Code is compacting the conversation (`ClaudeCompactions.isRunning`), mid-turn or at rest —
+    /// what it is doing then, whatever the last tool was.
+    public static func make(_ activity: ThreadActivity, state: ThreadState, compacting: Bool = false,
                             finished: FinishedThreadLine = .elapsed) -> ThreadActivityHeadline? {
-        make(activity, state: state)?.showing(finished)
+        if compacting, state != .exited { return ThreadActivityHeadline(text: compactingText) }
+        return make(activity, state: state)?.showing(finished)
     }
+
+    public static let compactingText = "Compacting…"
 
     private static func make(_ activity: ThreadActivity, state: ThreadState) -> ThreadActivityHeadline? {
         switch state {
