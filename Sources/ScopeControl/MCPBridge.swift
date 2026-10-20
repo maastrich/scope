@@ -146,10 +146,70 @@ public enum MCPBridge {
             "repo":{"type":"string","description":"Repository relative to the scope root."},\
             "title":{"type":"string","description":"Row label for the thread."},\
             "prompt":{"type":"string","description":"First request handed to the driver."},\
-            "model":{"type":"string","description":"Model the driver runs on (claude-opus-5-5, claude-fable-5-1…), through the profile's modelArgs. Omitted: your own model when the thread runs your driver, else the scope's default, else the driver's."}\
+            "model":{"type":"string","description":"Model the driver runs on (claude-opus-5-5, claude-fable-5-1…), through the profile's modelArgs. Omitted: your own model when the thread runs your driver, else the scope's default, else the driver's."},\
+            "branch":{"type":"string","description":"With task: a branch the task holds a worktree on (scope_task_branch_add); the thread starts in that worktree."}\
             },"additionalProperties":false}
             """,
             readOnly: false
+        ),
+        MCPTool(
+            name: "scope_task_branch_add",
+            title: "Add a branch to a task",
+            description: """
+            Adds a second git worktree to one repository of a task, on a branch of its own, beside the task's sandbox \
+            (api@fix-login next to api): the way to open a second pull request on the same repository without leaving \
+            the branch you are on, or to work the next pull request of a stack. The branch starts from the repository's \
+            base, from an existing branch (from), or on a pull request's head (pr). Scope tracks the worktree like the \
+            task's own: it finds its pull requests, checkpoints it, archives and restores it with the task. Never run \
+            `git worktree add` yourself. Open a thread in it with scope_thread_new and its branch. Without a task, the \
+            task you run in; repo may be omitted on a task of one repository. Same approval as creating a task.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "branch":{"type":"string","description":"The branch to create, or the name it must have with from or pr."},\
+            "repo":{"type":"string","description":"Repository relative to the scope root; omitted on a task of one repository."},\
+            "from":{"type":"string","description":"An existing branch to start from (local or origin/<name>), instead of the repository's base."},\
+            "pr":{"type":"string","description":"A pull request whose head to check out: 123, #123, owner/repo#123 or its URL."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"required":["branch"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
+            name: "scope_task_branch_list",
+            title: "List a task's worktrees",
+            description: """
+            Every worktree of a task: repository, branch, folder, whether it is the task's own, and the pull requests \
+            Scope last saw on that branch. Read-only. Without a task, the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
+            name: "scope_task_branch_remove",
+            title: "Remove a branch's worktree from a task",
+            description: """
+            Takes a worktree added with scope_task_branch_add out of the task: its uncommitted changes are saved under \
+            refs/scope/salvage/ first, the folder is removed, the branch stays. The task's own branch cannot be removed \
+            this way: archive or close the task. Without a task, the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "branch":{"type":"string","description":"The branch whose worktree to remove."},\
+            "repo":{"type":"string","description":"Repository relative to the scope root, when the branch is a worktree of several repositories of the task."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"required":["branch"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
         ),
         MCPTool(
             name: "scope_task_new",
@@ -584,6 +644,12 @@ public enum MCPBridge {
                 return .success(.scheduleList(try decoder.decode(ScheduleListParams.self, from: arguments)))
             case "scope_schedule_run":
                 return .success(.scheduleRun(try decoder.decode(ScheduleRunParams.self, from: arguments)))
+            case "scope_task_branch_add":
+                return .success(.taskBranchAdd(try decoder.decode(TaskBranchAddParams.self, from: arguments)))
+            case "scope_task_branch_list":
+                return .success(.taskBranchList(try decoder.decode(TaskBranchListParams.self, from: arguments)))
+            case "scope_task_branch_remove":
+                return .success(.taskBranchRemove(try decoder.decode(TaskBranchRemoveParams.self, from: arguments)))
             default:
                 return .failure(.init(.unsupported, "no tool called “\(name)”",
                                       detail: tools.map(\.name).joined(separator: ", ")))
@@ -615,6 +681,7 @@ public enum MCPBridge {
         case .usage(let result): try encoder.encode(result)
         case .release(let result): try encoder.encode(result)
         case .schedules(let result): try encoder.encode(result)
+        case .taskBranches(let result): try encoder.encode(result)
         }
     }
 
@@ -670,6 +737,10 @@ public enum MCPBridge {
             "scope_task_milestone_done": taskID.merging(["n": .rename("milestone"), "number": .rename("milestone"),
                                                         "title": .rename("milestone"), "child_task": .rename("child")]) { $1 },
             "scope_schedule_run": ["schedule": .rename("name"), "id": .rename("name")],
+            "scope_task_branch_add": taskID.merging(["name": .rename("branch"), "start_pr": .rename("pr"), "pull_request": .rename("pr"),
+                                                     "start": .rename("from"), "base": .rename("from"), "repository": .rename("repo")]) { $1 },
+            "scope_task_branch_list": taskID,
+            "scope_task_branch_remove": taskID.merging(["name": .rename("branch"), "repository": .rename("repo")]) { $1 },
         ]
     }()
 

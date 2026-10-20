@@ -229,11 +229,11 @@ enum PaletteModel {
                                      path: task.record.threadCwd.path) {
                 model.openTaskInEditor(task)
             })
-            if task.activeRepos.count > 1 {
-                for repo in task.activeRepos {
+            if task.activeSandboxes.count > 1 {
+                for repo in task.activeSandboxes {
                     let path = repo.sandboxURL.path
-                    items.append(PaletteItem(id: "editor-sandbox-\(repo.id)", section: .editor, icon: "chevron.left.forwardslash.chevron.right",
-                                             label: repo.name, hint: "sandbox · \(repo.branch)", path: path) { model.openInEditor(path: path) })
+                    items.append(PaletteItem(id: "editor-sandbox-\(repo.sandboxKey)", section: .editor, icon: "chevron.left.forwardslash.chevron.right",
+                                             label: repo.isScopeRoot ? task.record.scopeName : repo.name, hint: "sandbox · \(repo.branch)", path: path) { model.openInEditor(path: path) })
                 }
             }
         }

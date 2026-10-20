@@ -206,10 +206,14 @@ extension AppModel {
         task.record.pullRequests.map { ($0, livePullRequest(for: task, link: $0)) }
     }
 
-    /// The task repository a link belongs to: the one it names, else the first (links written before the
-    /// repository was kept were all in the first).
+    /// The task sandbox a link belongs to: the repository it names — its worktree on the pull request's head branch
+    /// when the task holds one beside the primary — else the first (links written before the repository was kept
+    /// were all in the first).
     func repo(of link: LinkedPullRequest, in task: TaskState) -> TaskRepo? {
-        if let path = link.repo, let repo = task.record.repos.first(where: { $0.repoRelativePath == path }) { return repo }
+        if let path = link.repo, let repo = task.record.repos.first(where: { $0.repoRelativePath == path }) {
+            if let head = link.headRefName, head != repo.branch, let worktree = repo.worktree(onBranch: head) { return repo.sandbox(worktree) }
+            return repo
+        }
         return task.activeRepos.first ?? task.record.repos.first
     }
 

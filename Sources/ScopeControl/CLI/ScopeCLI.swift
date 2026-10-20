@@ -89,6 +89,16 @@ public enum ScopeCLI {
       scope task milestone done [<id|slug>] <n|title>
                                           mark a milestone done: Scope runs its validation and records the
                                           verdict; a failure goes to the milestone's thread (--child <id|slug>)
+      scope task branch add [<id|slug>] <branch>
+                                          a second worktree of a repository of the task, on <branch>, beside its
+                                          sandbox (api@fix-login): for a second pull request on the same repo.
+                                          --repo <path> on a task of several, --from <ref> to start from an
+                                          existing branch, --pr <ref> to check out a pull request's head
+                                          (default: the caller's own task; the same approval as creating one)
+      scope task branch list [<id|slug>]  every worktree of the task: repository, branch, folder, pull requests
+      scope task branch remove [<id|slug>] <branch>
+                                          take a secondary worktree out of the task: uncommitted changes saved
+                                          first, folder removed, branch kept (--repo when several hold it)
       scope schedule list                 the scheduled prompts of every scope (--scope for one): rule, target,
                                           next fire, last run
       scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
@@ -111,6 +121,7 @@ public enum ScopeCLI {
       --scope <slug|name|id|path>   which scope (default: the caller's, else the one holding the cwd)
       --driver <id>                 driver profile (default: the one chosen in Settings, never yours)
       --task <id|slug>              open it inside that task's sandbox (any scope; --scope settles a shared slug)
+      --branch <name>               with --task: open it in the task's worktree on that branch (task branch add)
       --repo <relative/path>        open it in that repository
       --title <text>                row label
       -p, --prompt <text>           first thing the driver is asked
@@ -365,6 +376,7 @@ public enum ScopeCLI {
                 case "--driver": parameters.driver = try value()
                 case "--task": parameters.task = try value()
                 case "--repo": parameters.repo = try value()
+                case "--branch": parameters.branch = try value()
                 case "--title": parameters.title = try value()
                 case "-p", "--prompt": parameters.prompt = try value()
                 case "--model": parameters.model = try value()
@@ -372,6 +384,9 @@ public enum ScopeCLI {
                 }
                 return true
             })
+            guard parameters.branch == nil || parameters.task != nil else {
+                throw UsageError(message: "thread new --branch needs --task: the branch is one of that task's worktrees", usage: usage)
+            }
             return .call(.threadNew(parameters), shared)
         case "config":
             var words: [String] = []
@@ -441,6 +456,49 @@ public enum ScopeCLI {
                     return .call(.milestoneDone(MilestoneDoneParams(task: task, milestone: last, child: child)), shared)
                 default:
                     throw UsageError(message: "task milestone commands: add, done", usage: usage)
+                }
+            }
+            if sub == "branch" {
+                let verb = rest.first
+                rest = rest.dropFirst()
+                var words: [String] = []
+                var repo: String?
+                var from: String?
+                var pr: String?
+                var scope: String?
+                let shared = try options(&rest, command: "task branch", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--repo": repo = try value()
+                    case "--from": from = try value()
+                    case "--pr": pr = try value()
+                    case "--scope": scope = try value()
+                    default: return false
+                    }
+                    return true
+                })
+                switch verb {
+                case "list":
+                    guard words.count <= 1, repo == nil, from == nil, pr == nil else {
+                        throw UsageError(message: "task branch list takes at most a task id or slug", usage: usage)
+                    }
+                    return .call(.taskBranchList(TaskBranchListParams(task: words.first, scope: scope)), shared)
+                case "add":
+                    // The last word is the branch, the one before it the task; without a task, the caller's own.
+                    guard (1...2).contains(words.count), let branch = words.last, branch.contains(where: { !$0.isWhitespace }) else {
+                        throw UsageError(message: "task branch add takes a branch, after the task id or slug", usage: usage)
+                    }
+                    guard from == nil || pr == nil else { throw UsageError(message: "task branch add takes --from or --pr, not both", usage: usage) }
+                    return .call(.taskBranchAdd(TaskBranchAddParams(task: words.count == 2 ? words[0] : nil, branch: branch, repo: repo,
+                                                                    from: from, pr: pr, scope: scope)), shared)
+                case "remove", "rm":
+                    guard (1...2).contains(words.count), let branch = words.last, branch.contains(where: { !$0.isWhitespace }) else {
+                        throw UsageError(message: "task branch remove takes a branch, after the task id or slug", usage: usage)
+                    }
+                    guard from == nil, pr == nil else { throw UsageError(message: "task branch remove takes no --from or --pr", usage: usage) }
+                    return .call(.taskBranchRemove(TaskBranchRemoveParams(task: words.count == 2 ? words[0] : nil, branch: branch,
+                                                                          repo: repo, scope: scope)), shared)
+                default:
+                    throw UsageError(message: "task branch commands: add, list, remove", usage: usage)
                 }
             }
             if sub == "show" {
@@ -570,7 +628,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, checkpoints, restore-checkpoint, topic, milestone", usage: usage)
+                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, branch, checkpoints, restore-checkpoint, topic, milestone", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

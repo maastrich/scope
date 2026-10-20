@@ -35,9 +35,13 @@ extension AppModel {
         var found: [LinkedPullRequest] = []
         var live: [PullRequest] = []
         var failed = false
-        for repo in task.record.activeRepos {
+        // Every worktree: each one's own branch is asked about explicitly — a branch added with `task branch add`
+        // never shows in the primary sandbox's reflog — then the branches its reflog says it visited. A branch two
+        // worktrees of one repository both name is asked about once.
+        var asked = Set<String>()
+        for repo in task.record.activeSandboxes {
             let seen = await visitedBranches(of: repo, in: task)
-            for branch in seen {
+            for branch in seen where asked.insert("\(repo.repoRelativePath)\0\(branch)").inserted {
                 do {
                     for pr in try await gh.prsForBranch(branch, in: repo.sandboxURL) {
                         found.append(LinkedPullRequest(pr, repo: repo.repoRelativePath))

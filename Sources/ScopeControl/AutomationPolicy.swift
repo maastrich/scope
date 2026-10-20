@@ -219,7 +219,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList:
+            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList, .taskBranchList:
                 return .allow
             case .milestoneAdd, .milestoneDone:
                 // Bookkeeping on a mission the agent is part of: nothing opened, nothing removed. The service checks
@@ -244,6 +244,11 @@ public struct AutomationPolicy: Sendable, Equatable {
             case .taskClose, .taskArchive, .taskRebase, .scheduleRun:
                 // Undoing a task removes worktrees and can delete a branch; a rebase rewrites one and may open a
                 // thread; a schedule may create a task: the same approval as creating one.
+                approval = settings.tasks
+            case .taskBranchAdd, .taskBranchRemove:
+                // A branch and a worktree written into the user's repository, or a worktree removed: what creating
+                // and archiving a task do, under the same approval. No budget: a worktree opens no agent, and the
+                // task it joins already holds its share.
                 approval = settings.tasks
             case .taskRestore:
                 // A task opened again, sandboxes and all: the budget and the approval of a new one. No depth to
@@ -385,6 +390,12 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .scheduleRun(let params): "run the schedule “\(params.name)” now"
         case .milestoneAdd(let params): "add the milestone “\(params.title)”" + (params.task.map { " to \($0)" } ?? "")
         case .milestoneDone(let params): "mark the milestone \(params.milestone) done" + (params.task.map { " on \($0)" } ?? "")
+        case .taskBranchAdd(let params):
+            "add a worktree on \(params.branch) to " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+                + (params.repo.map { " (\($0))" } ?? "")
+        case .taskBranchList(let params): "list the worktrees of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+        case .taskBranchRemove(let params):
+            "remove the worktree on \(params.branch) from " + (params.task.map { "the task “\($0)”" } ?? "its own task")
         }
     }
 }

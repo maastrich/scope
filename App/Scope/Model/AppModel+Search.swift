@@ -119,9 +119,9 @@ extension AppModel {
     /// The roots the Files section lists: the current task's sandboxes, else the Base panel's repo.
     var fileRoots: [FileRoot] {
         if let task = currentTask {
-            return task.activeRepos.map { repo in
-                FileRoot(kind: .sandbox(task: task.id, repo: repo.repoRelativePath), url: repo.sandboxURL,
-                         label: "\(repo.isScopeRoot ? task.record.scopeName : repo.name) · \(task.name)")
+            return task.activeSandboxes.map { repo in
+                FileRoot(kind: .sandbox(task: task.id, repo: repo.sandboxKey), url: repo.sandboxURL,
+                         label: "\(repo.sandboxLabel(scopeName: task.record.scopeName)) · \(task.name)")
             }
         }
         guard let scope = currentScope, let repo = baseRepo else { return [] }

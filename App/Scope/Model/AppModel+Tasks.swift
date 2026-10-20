@@ -392,6 +392,103 @@ extension AppModel {
         }
     }
 
+    // MARK: Several branches
+
+    /// `scope task branch add` and *Add Branch…*: a second worktree of one repository of the task, on `branch`
+    /// (`TaskManager.addBranch`). The new sandbox gets the repository's setup — its `.env*` files and its setup
+    /// command — like one added with a repository. Throws for the caller to report.
+    @discardableResult
+    func addBranch(_ branch: String, to taskID: TaskID, repo: String? = nil, startPoint: TaskStartPoint = .defaultBranch) async throws -> TaskRecord {
+        guard let task = task(taskID), let scope = scope(task.scopeID) else { throw TaskError.persistence("no such task") }
+        let summaries = await graphSummaries(for: scope)
+        let record = try await env.tasks.addBranch(taskID, branch: branch, repo: repo, startPoint: startPoint,
+                                                   scopeContext: scope.declaration.context, scopeRepos: scope.repos.map(\.id),
+                                                   repoSummaries: summaries, contextFiles: contextFileNames)
+        task.update(record: record)
+        let name = startPoint.requiredBranch ?? branch
+        if let added = record.activeSandboxes.last(where: { $0.isSecondary && $0.branch == name }) {
+            startSetup(for: task, runCommands: true, only: [added.sandboxKey])
+        }
+        refreshDiskUsage(of: task)
+        scope.refreshFacts()
+        return record
+    }
+
+    /// `scope task branch remove` and *Remove Branch*: the worktree on `branch` leaves the task, its threads hung up
+    /// first and its uncommitted changes saved (`TaskManager.removeBranch`). The notice says where they went.
+    @discardableResult
+    func removeBranch(_ branch: String, from taskID: TaskID, repo: String? = nil) async throws -> [DismantleNotice] {
+        guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
+        let leaving = task.record.sandboxes(onBranch: branch).filter(\.isSecondary).map(\.sandboxURL.standardizedFileURL.path)
+        for session in threads(in: taskID) {
+            let cwd = URL(fileURLWithPath: session.record.cwd).standardizedFileURL.path
+            guard leaving.contains(where: { cwd == $0 || cwd.hasPrefix($0 + "/") }) else { continue }
+            await close(session.id, force: true)
+        }
+        let (record, notices) = try await env.tasks.removeBranch(taskID, branch: branch, repo: repo)
+        task.update(record: record)
+        if currentTask?.id == taskID { await delta.load(task: task) }
+        refreshDiskUsage(of: task)
+        scope(task.scopeID)?.refreshFacts()
+        var saved: [String] = []
+        for notice in notices {
+            if case .changesSaved(let repo, let ref, let skipped) = notice {
+                saved.append("\(repo): uncommitted changes → \(ref)" + (skipped.isEmpty ? "" : " (too big to keep, deleted: \(skipped.joined(separator: ", ")))"))
+            }
+        }
+        if !saved.isEmpty {
+            problems.report(Problem(severity: .info, title: "\(task.name): unfinished work on \(branch) saved",
+                                    detail: saved.joined(separator: "\n"), scopeID: task.scopeID))
+        }
+        return notices
+    }
+
+    /// *Add Branch…* (context menu, palette): an alert asking for the branch, then `addBranch` on the task's only
+    /// repository — or the one picked in the alert when the task holds several. The failure goes to the problem list.
+    func addBranchFromUI(_ task: TaskState) {
+        Usage.click("task.add-branch", label: "Add a branch to the task")
+        let repos = task.activeRepos
+        let alert = NSAlert()
+        alert.messageText = "Add a branch to “\(task.name)”"
+        alert.informativeText = "A second worktree of the repository, on that branch, beside the task's sandbox — for a second "
+            + "pull request on the same repository. The branch starts from the repository's base; `scope task branch add --from` "
+            + "starts it from an existing one."
+        alert.addButton(withTitle: "Add Branch")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(string: "")
+        field.placeholderString = "fix/login-redirect"
+        let picker = NSPopUpButton(frame: .zero, pullsDown: false)
+        for repo in repos { picker.addItem(withTitle: repo.isScopeRoot ? task.record.scopeName : repo.repoRelativePath) }
+        let stack = NSStackView(views: repos.count > 1 ? [picker, field] : [field])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.frame = NSRect(x: 0, y: 0, width: 300, height: repos.count > 1 ? 56 : 24)
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        picker.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = stack
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let branch = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !branch.isEmpty else { return }
+        let repo = repos.count > 1 ? repos[max(0, picker.indexOfSelectedItem)].repoRelativePath : nil
+        Task {
+            do { try await addBranch(branch, to: task.id, repo: repo) } catch {
+                problems.error("Could not add \(branch) to \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            }
+        }
+    }
+
+    /// *Remove Branch* for a secondary sandbox: no question — the uncommitted work is saved and the notice says so.
+    func removeBranchFromUI(_ sandbox: TaskRepo, of task: TaskState) {
+        Usage.click("task.remove-branch", label: "Remove a branch from the task")
+        Task {
+            do { try await removeBranch(sandbox.branch, from: task.id, repo: sandbox.repoRelativePath) } catch {
+                problems.error("Could not remove \(sandbox.branch) from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            }
+        }
+    }
+
     // MARK: Setup and teardown
 
     /// The setup / teardown commands and the copied files of each repository of a task: its graph card, with the

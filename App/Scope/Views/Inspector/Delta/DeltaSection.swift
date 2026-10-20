@@ -78,7 +78,7 @@ struct DeltaSection: View {
                     DeltaCounts(additions: summary.additions, deletions: summary.deletions)
                 }
             } else {
-                let summaries = task.activeRepos.compactMap { task.summary(for: $0) }
+                let summaries = task.activeSandboxes.compactMap { task.summary(for: $0) }
                 DeltaCounts(additions: summaries.reduce(0) { $0 + $1.additions },
                             deletions: summaries.reduce(0) { $0 + $1.deletions })
             }
@@ -138,7 +138,7 @@ struct DeltaSection: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Ink.secondary)
                     ForEach(delta.repos.filter { $0.error != nil }) { repo in
-                        Text("\(repo.repo.name): \(repo.error ?? "")")
+                        Text("\(repo.repo.sandboxLabel(scopeName: task.record.scopeName)): \(repo.error ?? "")")
                             .font(.scopeCaption)
                             .foregroundStyle(Color(nsColor: .systemRed))
                             .multilineTextAlignment(.center)

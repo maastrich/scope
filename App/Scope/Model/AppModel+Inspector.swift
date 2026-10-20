@@ -90,10 +90,10 @@ extension AppModel {
         var roots: [FileLinkResolver.Root] = []
         var names: [String: String] = [:]
         if let taskState {
-            for repo in taskState.activeRepos {
+            for repo in taskState.activeSandboxes {
                 let base = repo.isScopeRoot ? scope.url.path : scope.url.appending(path: repo.repoRelativePath).path
-                roots.append(.init(name: repo.repoRelativePath, sandbox: repo.sandboxPath, base: base))
-                names[repo.repoRelativePath] = repo.isScopeRoot ? scope.name : repo.name
+                roots.append(.init(name: repo.sandboxKey, sandbox: repo.sandboxPath, base: base))
+                names[repo.sandboxKey] = repo.sandboxLabel(scopeName: scope.name)
             }
         }
         // The scope's other repositories, base only: a path into one of them is still worth showing.

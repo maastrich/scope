@@ -10,12 +10,12 @@ struct DeltaFileRef: Hashable, Sendable {
     let path: String
 }
 
-/// One repo of the loaded delta.
+/// One sandbox of the loaded delta: a repository's primary worktree, or a branch added beside it.
 struct RepoDelta: Identifiable, Sendable {
     let repo: TaskRepo
     var delta: Delta?
     var error: String?
-    var id: String { repo.repoRelativePath }
+    var id: String { repo.sandboxKey }
 }
 
 /// State of the Delta inspector (spec §4.4): the loaded delta per repo of the followed task, the
@@ -75,8 +75,9 @@ final class DeltaModel {
 
     var selectedDiffFile: DiffFile? { selectedFile.flatMap(file) }
 
-    func taskRepo(_ relativePath: String) -> TaskRepo? {
-        repos.first { $0.id == relativePath }?.repo
+    /// The sandbox a file ref names, by `TaskRepo.sandboxKey`.
+    func taskRepo(_ key: String) -> TaskRepo? {
+        repos.first { $0.id == key }?.repo
     }
 
     /// The repo the action bar acts on: the selected file's, else the first active one.
@@ -193,7 +194,7 @@ final class DeltaModel {
         let git = env.git
         let loaded: [RepoDelta] = await Task.detached(priority: .userInitiated) {
             var result: [RepoDelta] = []
-            for repo in record.activeRepos {
+            for repo in record.activeSandboxes {
                 let scopeRoot = URL(fileURLWithPath: record.scopeRoot, isDirectory: true)
                 let base = repo.isScopeRoot ? scopeRoot : scopeRoot.appending(path: repo.repoRelativePath, directoryHint: .isDirectory)
                 guard ScopeState.rootExists(repo.sandboxURL) else {
@@ -221,10 +222,10 @@ final class DeltaModel {
 
     private func lookupPRs(task: TaskRecord) async {
         guard let gh else { return }
-        for repo in task.activeRepos {
+        for repo in task.activeSandboxes {
             if let url = try? await gh.prView(in: repo.sandboxURL) {
                 guard taskID == task.id else { return }
-                prURLs[repo.repoRelativePath] = url
+                prURLs[repo.sandboxKey] = url
             }
         }
     }
@@ -258,8 +259,8 @@ final class DeltaModel {
         guard let gh, let repo = focusedRepo else { return }
         let record = task.record
         let title = record.name
-        let body = "Task **\(record.name)** (branch `\(record.branch)`) from scope \(record.scopeName)."
-        let key = repo.repoRelativePath
+        let body = "Task **\(record.name)** (branch `\(repo.branch)`) from scope \(record.scopeName)."
+        let key = repo.sandboxKey
         await act("Create PR failed in \(repo.name)") { git in
             let client = await git.client(for: repo.sandboxURL)
             let upstream = try await client.run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], timeout: .seconds(10), allowFailure: true)
@@ -269,7 +270,7 @@ final class DeltaModel {
         }
         // Bind the PR to the task so the sidebar chip and the PRs panel know about it.
         guard let url = prURLs[key], let number = Int(url.lastPathComponent) else { return }
-        let link = LinkedPullRequest(number: number, url: url, title: title, repo: key, headRefName: record.branch)
+        let link = LinkedPullRequest(number: number, url: url, title: title, repo: repo.repoRelativePath, headRefName: repo.branch)
         if let record = try? await env.tasks.linkPullRequest(link, to: record.id) {
             task.update(record: record)
         }

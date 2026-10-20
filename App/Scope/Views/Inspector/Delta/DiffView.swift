@@ -107,7 +107,7 @@ struct DiffView: View {
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
             FilePathLabel(path: file.path)
-                .help("\(repo.isScopeRoot ? task.record.scopeName : repo.name)/\(file.path)")
+                .help("\(repo.sandboxLabel(scopeName: task.record.scopeName))/\(file.path)")
             if let old = file.oldPath, old != file.path {
                 Text("← \(old)")
                     .font(.system(size: 10.5, design: .monospaced))

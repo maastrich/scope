@@ -91,13 +91,21 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case milestoneAdd = "task.milestone.add"
     /// Marks a milestone done; Scope runs its validation.
     case milestoneDone = "task.milestone.done"
+    /// A second worktree of a task's repository, on a branch of its own: created and added to the task.
+    case taskBranchAdd = "task.branch.add"
+    /// Every worktree of a task: repository, branch, folder, which is the task's own.
+    case taskBranchList = "task.branch.list"
+    /// A secondary worktree removed from the task, its uncommitted changes saved first; the branch stays.
+    case taskBranchRemove = "task.branch.remove"
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList: false
+        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList,
+             .taskBranchList: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone: true
+             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
+             .taskBranchAdd, .taskBranchRemove: true
         }
     }
 
@@ -222,6 +230,9 @@ public enum ControlCall: Sendable, Equatable {
     case scheduleRun(ScheduleRunParams)
     case milestoneAdd(MilestoneAddParams)
     case milestoneDone(MilestoneDoneParams)
+    case taskBranchAdd(TaskBranchAddParams)
+    case taskBranchList(TaskBranchListParams)
+    case taskBranchRemove(TaskBranchRemoveParams)
 
     public var method: ControlMethod {
         switch self {
@@ -253,6 +264,9 @@ public enum ControlCall: Sendable, Equatable {
         case .scheduleRun: .scheduleRun
         case .milestoneAdd: .milestoneAdd
         case .milestoneDone: .milestoneDone
+        case .taskBranchAdd: .taskBranchAdd
+        case .taskBranchList: .taskBranchList
+        case .taskBranchRemove: .taskBranchRemove
         }
     }
 
@@ -264,12 +278,14 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList: .seconds(15)
+        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList,
+             .taskBranchList: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .taskTopic, .milestoneAdd: .seconds(30)
         // Typing takes a moment; with `wait`, the thread's whole turn follows.
         case .threadSend(let params): .seconds(30 + (params.waitParams.map { $0.effectiveTimeout + 15 } ?? 0))
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .scheduleRun: .seconds(300)
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .scheduleRun,
+             .taskBranchAdd, .taskBranchRemove: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
         // Marking done starts the validation; the answer waits for it, up to its own limit.
@@ -512,6 +528,101 @@ public struct TaskRebaseParams: Codable, Sendable, Equatable {
     }
 }
 
+/// `scope task branch add [<id|slug>] <branch> [--repo R] [--from <ref>|--pr <ref>]` — a second worktree of one
+/// repository of the task, on `branch`: created from the repository's base, from `from` (an existing branch), or on
+/// the head of the pull request `pr`. The folder sits beside the primary sandbox (`api@fix-login`); Scope tracks it,
+/// finds its pull request, checkpoints it, and removes it with the task.
+public struct TaskBranchAddParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    /// The branch to create (or, with `from` or `pr`, the name it must have); never `scope/…`.
+    public var branch: String
+    /// Repository relative to the scope root; `nil` = the task's only repository.
+    public var repo: String?
+    /// An existing branch to start from (local, or `origin/<name>`), instead of the repository's base.
+    public var from: String?
+    /// A pull request whose head to check out (`123`, `#123`, `owner/repo#123`, a URL): the worktree is on its branch.
+    public var pr: String?
+    /// Slug, name, id or path of the task's scope, when the slug exists in several.
+    public var scope: String?
+
+    public init(task: String? = nil, branch: String, repo: String? = nil, from: String? = nil, pr: String? = nil, scope: String? = nil) {
+        self.task = task
+        self.branch = branch
+        self.repo = repo
+        self.from = from
+        self.pr = pr
+        self.scope = scope
+    }
+}
+
+/// `scope task branch list [<id|slug>]` — every worktree of the task.
+public struct TaskBranchListParams: Codable, Sendable, Equatable {
+    /// Task id or slug; `nil` = the task the caller's thread runs in.
+    public var task: String?
+    public var scope: String?
+
+    public init(task: String? = nil, scope: String? = nil) {
+        self.task = task
+        self.scope = scope
+    }
+}
+
+/// `scope task branch remove [<id|slug>] <branch> [--repo R]` — a secondary worktree taken out of the task: its
+/// uncommitted changes saved under `refs/scope/salvage/` first, the folder removed, the branch kept. The task's own
+/// branch is not one to remove: archive or close the task.
+public struct TaskBranchRemoveParams: Codable, Sendable, Equatable {
+    public var task: String?
+    public var branch: String
+    /// Repository relative to the scope root, when the branch is a worktree of several repositories of the task.
+    public var repo: String?
+    public var scope: String?
+
+    public init(task: String? = nil, branch: String, repo: String? = nil, scope: String? = nil) {
+        self.task = task
+        self.branch = branch
+        self.repo = repo
+        self.scope = scope
+    }
+}
+
+/// `task.branch.list` — the worktrees of a task, repository by repository, the task's own first.
+public struct TaskBranchListResult: Codable, Sendable, Equatable {
+    public struct Entry: Codable, Sendable, Equatable {
+        /// Repository relative to the scope root (`.` for a repo scope).
+        public var repo: String
+        public var branch: String
+        /// Absolute path of the worktree.
+        public var worktree: String
+        /// `true` for the task's own worktree of the repository, the one its threads start in.
+        public var primary: Bool
+        /// What the branch was started from, when a secondary worktree said (`origin/main`, `feat/base`, `#42`).
+        public var base: String?
+        /// The pull requests of the task on this branch, as Scope last saw them.
+        public var pullRequests: [PullRequestSummary]?
+
+        public init(repo: String, branch: String, worktree: String, primary: Bool, base: String? = nil,
+                    pullRequests: [PullRequestSummary]? = nil) {
+            self.repo = repo
+            self.branch = branch
+            self.worktree = worktree
+            self.primary = primary
+            self.base = base
+            self.pullRequests = pullRequests
+        }
+    }
+
+    public var task: String
+    public var slug: String
+    public var worktrees: [Entry]
+
+    public init(task: String, slug: String, worktrees: [Entry]) {
+        self.task = task
+        self.slug = slug
+        self.worktrees = worktrees
+    }
+}
+
 /// `scope task try <id|slug> [--end|--refresh]` — the task's branch in the user's own checkout (spec §4.5). Plain: the
 /// base of each repository of the task is stashed and detached onto the branch. `--refresh`: moved to the branch's
 /// current head. `--end`: put back on its branch with its stash applied. Refused to agents, always.
@@ -708,9 +819,12 @@ public struct ThreadNewParams: Codable, Sendable, Equatable {
     /// The model the driver runs on, through the profile's `modelArgs`; `nil` = the caller's own model for a thread
     /// of the same driver, else the scope's default, else the driver's (`ModelChoice`).
     public var model: String?
+    /// With `task`: a branch the task holds a worktree on (`task.branch.add`): the thread starts in that worktree
+    /// instead of the task's usual directory.
+    public var branch: String?
 
     public init(scope: String? = nil, driver: String? = nil, task: String? = nil, repo: String? = nil,
-                title: String? = nil, prompt: String? = nil, model: String? = nil) {
+                title: String? = nil, prompt: String? = nil, model: String? = nil, branch: String? = nil) {
         self.scope = scope
         self.driver = driver
         self.task = task
@@ -718,6 +832,7 @@ public struct ThreadNewParams: Codable, Sendable, Equatable {
         self.title = title
         self.prompt = prompt
         self.model = model
+        self.branch = branch
     }
 }
 
@@ -1003,13 +1118,16 @@ public struct TaskSummary: Codable, Sendable, Equatable {
     public var conflicts: Int?
     /// "Don't rebase automatically" is set on the task.
     public var holdBranch: Bool?
+    /// Every branch the task works on when it holds more than its own (`task.branch.add`), the task branch first.
+    public var branches: [String]?
 
     public init(id: String, name: String, slug: String, branch: String, scope: String, scopeSlug: String,
                 root: String, repos: [String], threads: [String], topic: String? = nil, parentTask: String? = nil,
                 archivedAt: Date? = nil, behind: Int? = nil, conflicts: Int? = nil, holdBranch: Bool? = nil,
-                pullRequest: PullRequestSummary? = nil, pullRequests: [PullRequestSummary] = []) {
+                pullRequest: PullRequestSummary? = nil, pullRequests: [PullRequestSummary] = [], branches: [String] = []) {
         self.pullRequest = pullRequest
         self.pullRequests = pullRequests.isEmpty ? nil : pullRequests
+        self.branches = branches.count > 1 ? branches : nil
         self.behind = behind
         self.conflicts = conflicts
         self.holdBranch = holdBranch
@@ -1341,6 +1459,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case usage(UsageResult)
     case release(ReleaseResult)
     case schedules(ScheduleListResult)
+    case taskBranches(TaskBranchListResult)
 
     public var method: ControlMethod {
         switch self {
@@ -1357,6 +1476,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .usage: .usage
         case .release: .release
         case .schedules: .scheduleList
+        case .taskBranches: .taskBranchList
         }
     }
 }

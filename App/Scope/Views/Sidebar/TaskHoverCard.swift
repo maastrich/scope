@@ -33,8 +33,8 @@ struct TaskHoverCard: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            ForEach(task.activeRepos) { repo in
-                row(repo.isScopeRoot ? task.record.scopeName : repo.name) {
+            ForEach(task.activeSandboxes, id: \.sandboxKey) { repo in
+                row(repo.sandboxLabel(scopeName: task.record.scopeName)) {
                     HStack(spacing: 6) {
                         Text(sandboxCaption(repo))
                             .font(.scopeCaption)
