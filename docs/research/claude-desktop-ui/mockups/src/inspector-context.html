@@ -1,0 +1,79 @@
+<!-- title: Inspector · Context & connectors -->
+<!-- size: 380x960 -->
+<style>
+  body { width: 380px; height: 960px; overflow: hidden; }
+  .lane { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 0 8px; height: 18px; font-size: 10.5px; color: var(--ink-2); }
+  .bar { position: relative; height: 10px; background: var(--fill-quiet); border-radius: 2px; }
+  .bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+  .totals { display: flex; gap: 6px; margin: 4px 0 8px; }
+  .totals div { flex: 1; padding: 5px 8px; border-radius: 4px; background: var(--fill-quiet); }
+  .totals .k { font-size: 10px; color: var(--ink-3); } .totals .v { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .menu { position: absolute; right: 12px; top: 120px; width: 190px; background: var(--elevated); border: 1px solid var(--stroke); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; font-size: 12px; }
+  .menu div { height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 4px; }
+  .menu div.h { background: var(--fill-hover); }
+  .menu .sep { height: 1px; background: var(--stroke); margin: 4px 6px; padding: 0; }
+  .menu .ck { width: 12px; display: inline-flex; justify-content: center; color: var(--accent); padding: 0; height: auto; }
+</style>
+<div class="rail" style="border-left:none; position: relative">
+  <div class="band">
+    <div class="subject">{i:branch:ink2}<span class="name">claude-desktop-ui-research</span><span class="scope">· @maastrich</span></div>
+    <div class="pane-strip">
+      <span class="pb on">{i:info}</span><span class="pb">{i:diff}<span class="badge">6</span></span><span class="pb">{i:shell}</span>
+      <span class="pb">{i:pr}<span class="badge fail">1</span></span><span class="pb">{i:folder}</span><span class="pb on" style="background:var(--fill-pressed)">{i:dots}</span>
+    </div>
+  </div>
+  <div class="rail-scroll">
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Environment</span><span class="sum"><span class="mono">explore/scope-claude-desktop-ui</span> · ↑3</span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Changes</span><span class="sum">6 files · <span class="plus">+108</span> <span class="minus">−12</span></span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Pull requests</span><span class="sum"><span class="mono">#79</span> <span class="chip fail">✗ 1 / 4</span></span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Artifacts</span><span class="sum">REPORT.md · 3 files</span></div></div>
+
+    <div class="card">
+      <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Context</span><div class="acts"><span class="ib">{i:copy}</span></div></div>
+      <div class="card-b">
+        <div class="t-micro" style="padding:2px 0">Brief</div>
+        <div class="brief">Recherche UI + maquettes pour l'app Scope. Pas de code de prod, pas de feature implémentée. L'utilisateur aime le panneau de droite de Claude Code Desktop (diff, terminal, environnement, artifacts, contexte, connecteurs, PR) et sa sidebar…</div>
+        <div class="row" style="height:20px"><span class="lbl"><a style="color:var(--accent);font-size:11.5px">Read in full</a> <span class="ink3">· topic <span class="chip">ui-research</span></span></span></div>
+        <div class="t-micro" style="padding:6px 0 2px">Given to the agent</div>
+        <div class="row">{i:doc:ic}<span class="lbl">CLAUDE.local.md <span class="ink3">· task context, written by Scope</span></span><span class="val">1.8 kB</span><span class="ib ink3">{i:eye}</span></div>
+        <div class="row">{i:doc:ic}<span class="lbl">CLAUDE.md <span class="ink3">· repository's own</span></span><span class="val">6.1 kB</span></div>
+        <div class="row">{i:skills:ic}<span class="lbl">Skills loaded this session</span><span class="val">3</span></div>
+        <div class="chips" style="padding-left:22px"><span class="chip">scope</span><span class="chip">artifact-design</span><span class="chip">create-pr</span></div>
+        <div class="t-micro" style="padding:6px 0 2px">Model</div>
+        <div class="row">{i:model:ic}<span class="lbl">Fable 5.1 <span class="ink3">· high · Claude Code 2.1.x</span></span><span class="meter" style="max-width:80px"><i style="width:38%"></i></span><span class="val mono">38 %</span></div>
+        <div class="row" style="height:22px"><span class="lbl ink2" style="font-size:11px;padding-left:22px">184 k in · 22 k out · 61 % cached · 2 sub-agents</span></div>
+        <div class="t-micro" style="padding:8px 0 4px">Timeline · since creation</div>
+        <div class="totals"><div><div class="k">Agent</div><div class="v" style="color:var(--st-running)">2 h 14</div></div><div><div class="k">Waiting for you</div><div class="v" style="color:var(--st-waiting)">11 min</div></div><div><div class="k">Elapsed</div><div class="v">3 h 02</div></div></div>
+        <div class="lane"><span>Fable · main</span><div class="bar"><i style="left:2%;width:30%;background:var(--st-running)"></i><i style="left:33%;width:5%;background:var(--st-waiting)"></i><i style="left:39%;width:42%;background:var(--st-running)"></i><i style="left:82%;width:14%;background:var(--st-running)"></i></div></div>
+        <div class="lane"><span>research</span><div class="bar"><i style="left:12%;width:22%;background:var(--st-running)"></i></div></div>
+        <div class="lane"><span>explore</span><div class="bar"><i style="left:12%;width:16%;background:var(--st-running)"></i></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Connectors</span><span class="sum">3 · <span style="color:var(--ck-pend)">1 needs auth</span></span></div>
+      <div class="card-b" style="gap:0">
+        <div class="conn">{i:plug:ic}<span class="n">scope <span class="ink3">· MCP, this app · stdio</span></span><span class="tools">28 tools · 2 min</span><span class="st" style="background:var(--st-running)"></span></div>
+        <div class="conn">{i:plug:ic}<span class="n">github <span class="ink3">· https</span></span><span class="tools">12 tools</span><span class="st" style="background:var(--st-running)"></span></div>
+        <div class="conn">{i:plug:ic}<span class="n">linear</span><span class="chip pend">re-authenticate</span><span class="st" style="background:var(--ck-pend)"></span></div>
+        <div class="row" style="height:22px"><span class="lbl ink3" style="font-size:11px">{i:lock:ic} read from the driver's <span class="mono">mcp</span> hook events · never edited by Scope</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⋮ menu: which cards show, as in Claude's "right-click a card header" -->
+  <div class="menu">
+    <div class="t-micro" style="height:20px">Cards</div>
+    <div><span class="ck">✓</span>Environment</div>
+    <div><span class="ck">✓</span>Changes</div>
+    <div><span class="ck">✓</span>Pull requests</div>
+    <div><span class="ck">✓</span>Artifacts</div>
+    <div class="h"><span class="ck">✓</span>Context</div>
+    <div><span class="ck">✓</span>Connectors</div>
+    <div><span class="ck"></span>Repository</div>
+    <div><span class="ck"></span>Search</div>
+    <div><span class="ck"></span>History</div>
+    <div class="sep"></div>
+    <div>Reset to defaults</div>
+  </div>
+</div>

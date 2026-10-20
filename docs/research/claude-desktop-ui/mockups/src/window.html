@@ -1,0 +1,167 @@
+<!-- title: Window · sidebar, terminal, diff pane, inspector -->
+<!-- size: 1440x900 -->
+<style>
+  body { width: 1440px; height: 900px; overflow: hidden; }
+  .sidebar { width: 264px; }
+  .pane { width: 400px; }
+  .rail { width: 380px; }
+  .term { font-size: 12px; }
+  .tui { border: 1px solid var(--stroke); border-radius: 6px; padding: 6px 10px; margin: 8px 0; color: var(--ink-2); }
+</style>
+<div class="win">
+  <div class="toolbar">
+    <div class="lights"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>
+    <span class="ib">{i:sidebar}</span>
+    <div style="display:flex;flex-direction:column;line-height:1.15;margin-left:6px"><span class="title">Fable · main</span><span class="sub">@maastrich · ~/.scope/sandboxes/maastrich/claude-desktop-ui-research/scope</span></div>
+    <span class="pill" style="margin-left:auto"><span class="dot running pulse"></span> Editing README.md</span>
+    <span class="chip">{i:bolt} 5 h · 38 %</span>
+    <span class="ib">{i:bubble}</span>
+    <span class="ib">{i:cursor}</span>
+    <span class="ib" style="background:var(--fill-pressed);color:var(--ink)">{i:inspector}</span>
+  </div>
+  <div class="cols">
+    <div class="sidebar">
+      <div class="sb-head">
+        <span class="tile" style="background:#6B4FD8">M<span class="mk sq"></span></span><span class="cur">@maastrich</span>
+        <div class="others"><span class="tile" style="background:#0F7C6C">m<span class="mk ring"></span></span><span class="tile" style="background:#8A7400">w</span><span class="tile" style="background:#1B6F94">a<span class="mk dot"></span></span><span class="more">+2</span></div>
+      </div>
+      <div class="gv"><span class="b">{i:tray} Inbox <span class="cnt urgent">2</span></span><span class="b">{i:pr} PRs <span class="cnt">4</span></span><span class="b">{i:box} Graph</span></div>
+      <div class="filter">{i:search} Filter <span class="k kbd">⌥⌘F</span></div>
+      <div class="sb-list">
+        <div class="grp">Needs you <span class="cnt">2</span></div>
+        <div class="trow detail"><span class="g waiting">{i:question}</span><div class="tx"><div class="n">gh-stack-tree · label sync</div><div class="c"><span class="k">Asks:</span> keep the legacy label?</div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+        <div class="trow detail"><span class="g waiting">{i:hand}</span><div class="tx"><div class="n">vitest-plugin-cache · flaky replay</div><div class="c"><span class="k">Waiting for your permission</span></div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+        <div class="grp">Working <span class="cnt">3</span></div>
+        <div class="trow detail sel"><span class="g running">{i:play}</span><div class="tx"><div class="n">claude-desktop-ui-research</div><div class="c">Editing README.md · <span class="fl">✗ checks</span> on #79</div></div><div class="tr"><span class="dot running pulse"></span></div></div>
+        <div class="thr sel"><span class="g">{i:asterisk}</span><div class="tx"><div class="n">Fable · main</div><div class="c">Editing README.md</div></div><span class="dot running"></span></div>
+        <div class="thr"><span class="g agent">{i:asterisk}</span><div class="tx"><div class="n">research · web</div><div class="c">Finished · 2 min</div></div><span class="dot done"></span></div>
+        <div class="thr last"><span class="g">{i:terminal}</span><div class="tx"><div class="n">shell</div><div class="c">http.server 4310</div></div><span class="dot ring"></span></div>
+        <div class="trow detail"><span class="g running">{i:play}</span><div class="tx"><div class="n">workout-calendar · strava backfill</div><div class="c">Running pnpm test · 2 agents</div></div><div class="tr"><span class="dot running"></span></div></div>
+        <div class="trow detail"><span class="g pend">{i:clock}</span><div class="tx"><div class="n">usage-assist-measures</div><div class="c"><span class="ok">✓ approved</span> · checks running · 3 PRs</div></div><div class="tr"><span class="dot idle"></span></div></div>
+        <div class="grp">Finished, not read <span class="cnt">1</span></div>
+        <div class="trow detail"><span class="g done">{i:flag}</span><div class="tx"><div class="n">hashup · symlinks</div><div class="c">Finished · 14 min · “Symlinks now resolve…”</div></div><div class="tr"><span class="dot done"></span></div></div>
+        <div class="grp">Quiet <span class="cnt">2</span></div>
+        <div class="trow"><span class="g merged">{i:merge}</span><div class="tx"><div class="n">gh-next · turn-based sort</div></div><div class="tr"><span class="chip pass" style="height:16px;font-size:10px">merged</span></div></div>
+        <div class="trow"><span class="g quiet">{i:branch}</span><div class="tx"><div class="n">logger · figures set <span class="ink3" style="font-size:11px">· idle 4 d</span></div></div><div class="tr"><span class="dot ring"></span></div></div>
+        <div class="grp" style="margin-top:10px">Repositories <span class="cnt">31 · 3 changed</span><span class="ib">{i:chev-r}</span></div>
+      </div>
+      <div class="sb-foot">{i:bolt} 5 h · 38 % <span class="sp"><span class="kbd">⌘T</span><span class="kbd">⌘⇧T</span></span></div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-h"><span class="crumb">@maastrich</span> › <span class="crumb">claude-desktop-ui-research</span> › <span class="crumb">Fable · main</span><span style="margin-left:auto">claude · sandbox · <span style="color:var(--st-running)">working</span></span></div>
+      <div class="term"><span class="dim">╭──────────────────────────────────────────────────────────╮
+│</span> <span class="acc">✻</span> Claude Code · Fable 5.1 · high                         <span class="dim">│
+╰──────────────────────────────────────────────────────────╯</span>
+
+<span class="dim">></span> Rends les maquettes en PNG et écris le rapport.
+
+<span class="acc">●</span> Je rends les 9 pages en clair et sombre, puis le rapport.
+
+<span class="ok">●</span> <b>Bash</b>(python3 docs/research/claude-desktop-ui/mockups/build.py)
+  <span class="dim">⎿</span>  rendered png/inspector-overview-light.png
+     rendered png/inspector-overview-dark.png
+     <span class="dim">… +16 lines</span>
+
+<span class="ok">●</span> <b>Read</b>(docs/research/claude-desktop-ui/mockups/png/window-light.png)
+  <span class="dim">⎿</span>  Read image (1440×900)
+
+<span class="ok">●</span> <b>Write</b>(docs/research/claude-desktop-ui/README.md)
+  <span class="dim">⎿</span>  Wrote 212 lines
+
+<span class="acc">●</span> <b>Edit</b>(docs/research/claude-desktop-ui/README.md)
+  <span class="dim">⎿</span>  Updated with 4 additions and 1 removal
+       <span class="ok">+ ## Ce qu'on reprend</span>
+       <span class="ok">+ - Rail en cartes, une ligne par fait</span>
+
+<span class="warn">✶</span> Writing… <span class="dim">(2 min · ↓ 38 % context)</span>
+
+<span class="dim">╭──────────────────────────────────────────────────────────╮
+│</span> <span class="dim">></span> <span class="cursor"></span>                                                   <span class="dim">│
+╰──────────────────────────────────────────────────────────╯
+  bypass permissions · ⌘↩ newline</span></div>
+    </div>
+
+    <div class="pane">
+      <div class="band">
+        <div class="subject">{i:diff:ink2}<span class="name">Changes</span><span class="scope">· since last turn</span></div>
+        <span class="ib ink3" style="margin-left:auto">{i:copy}</span><span class="ib ink3">{i:x}</span>
+      </div>
+      <div class="diff">
+        <div class="dfile">{i:chev-d:ink3}<span class="p"><span class="dir">docs/research/claude-desktop-ui/</span>README.md</span><span class="plus">+71</span></div>
+        <div class="hunk">@@ -0,0 +1,71 @@</div>
+        <div class="ln add"><span class="g"></span><span class="g c">1</span><span class="code"># Claude Code Desktop : ce qu'on reprend</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">2</span><span class="code"></span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">3</span><span class="code">## Ce qui plaît</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">4</span><span class="code">- Le rail : des cartes, une ligne par fait.</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">5</span><span class="code">- Changes : une ligne par PR, stats et checks.</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">6</span><span class="code">- Sidebar : Needs input / Working / Completed.</span></div>
+        <div class="hunk">⋯ 65 more lines</div>
+        <div class="dfile">{i:chev-d:ink3}<span class="p"><span class="dir">App/Scope/Views/Inspector/</span>InspectorView.swift</span><span class="plus">+18</span><span class="minus">−6</span></div>
+        <div class="hunk">@@ -88,12 +88,18 @@</div>
+        <div class="ln ctx"><span class="g">89</span><span class="g c">89</span><span class="code">    private func body(for s: InspectorSection)</span></div>
+        <div class="ln del"><span class="g">90</span><span class="g c"></span><span class="code">        CollapsibleSection(s) {</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">90</span><span class="code">        InspectorCard(s, summary: summary(s)) {</span></div>
+        <div class="ln ctx"><span class="g">91</span><span class="g c">91</span><span class="code">            switch s {</span></div>
+        <div class="ln del"><span class="g">93</span><span class="g c"></span><span class="code">            case .task: TaskSection(task)</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">93</span><span class="code">            case .task: EnvironmentCard(task)</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">94</span><span class="code">            case .artifacts: ArtifactsCard(task)</span></div>
+        <div class="ln cmt"><div class="comment" style="margin-left:60px"><div class="who">You · queued</div>Setup state stays on the card, not in the band.</div></div>
+        <div class="dfile">{i:chev-r:ink3}<span class="p"><span class="dir">App/Scope/Views/Shared/</span>CollapsibleSection.swift</span><span class="plus">+9</span><span class="minus">−4</span></div>
+        <div class="dfile">{i:chev-r:ink3}<span class="p"><span class="dir">App/Scope/Views/Shared/</span>Theme.swift</span><span class="plus">+4</span><span class="minus">−2</span></div>
+      </div>
+      <div class="review-bar" style="margin:0"><span class="btn ghost">{i:bubble} 1 comment</span><span class="btn primary" style="margin-left:auto">Send review</span></div>
+    </div>
+
+    <div class="rail">
+      <div class="band">
+        <div class="subject">{i:branch:ink2}<span class="name">claude-desktop-ui-research</span></div>
+        <div class="pane-strip">
+          <span class="pb on">{i:info}</span><span class="pb on" style="background:var(--sel-tint)">{i:diff}<span class="badge">6</span></span><span class="pb">{i:shell}</span><span class="pb">{i:pr}<span class="badge fail">1</span></span><span class="pb">{i:folder}</span><span class="pb">{i:dots}</span>
+        </div>
+      </div>
+      <div class="rail-scroll">
+        <div class="card">
+          <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Environment</span><div class="acts"><span class="ib">{i:terminal}</span><span class="ib">{i:folder}</span></div></div>
+          <div class="card-b">
+            <div class="version"><span class="br">explore/scope-claude-desktop-ui</span><span class="from">from main @ b078522</span><span class="chip mono" style="margin-left:auto">↑3</span></div>
+            <div class="row">{i:box:ic}<span class="lbl">scope <span class="ink3 mono">~/.scope/sandboxes/…</span></span><span class="val"><span class="plus">+108</span> <span class="minus">−12</span></span><span class="dot done"></span></div>
+            <div class="row">{i:gear:ic}<span class="lbl">Setup <span class="ink3 mono">swift build</span></span><span class="chip pass">{i:check} 42 s</span></div>
+            <div class="row">{i:port:ic}<span class="lbl">Ports</span><span class="port">localhost:4310 ↗</span><span class="port">4311 ↗</span></div>
+            <div class="proc"><span class="dot running"></span><span class="cmd">python3 -m http.server 4310</span><span class="meta">shell · 12 min</span></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Changes</span><span class="sum">6 files · <span class="plus">+108</span> <span class="minus">−12</span> · 1 comment</span></div></div>
+        <div class="card">
+          <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Pull requests <span class="ink3" style="font-weight:500">2</span></span><div class="acts"><span class="ib">{i:ext}</span></div></div>
+          <div class="card-b" style="gap:0">
+            <div class="pr-row sel"><span class="st" style="color:var(--ck-fail)">{i:x}</span><div class="t"><div class="l1">docs(research): Claude Code Desktop UI</div><div class="l2"><span class="mono">scope #79</span><span class="plus mono">+1204</span><span class="minus mono">−3</span><span class="chip fail">✗ 1 / 4</span></div></div></div>
+            <div class="pr-row"><span class="st" style="color:var(--ck-pass)">{i:merge}</span><div class="t"><div class="l1">feat(tasks): show every pull request</div><div class="l2"><span class="mono">scope #78</span><span class="chip pass">merged · 2 d</span></div></div></div>
+            <div class="checks">
+              <div class="ck"><span class="ic" style="color:var(--ck-fail)">{i:x}</span><span class="n">build · macos-15</span><span class="d">3 min</span><span class="ib hover">{i:send}</span></div>
+              <div class="ck"><span class="ic" style="color:var(--ck-pend)">{i:clock}</span><span class="n">test · ScopeKitTests</span><span class="d">running</span></div>
+              <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">lint · docs</span><span class="d">48 s</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Artifacts</span><span class="sum">3 files · 1 page</span></div>
+          <div class="card-b" style="gap:0">
+            <div class="art">{i:doc:ic}<span class="n">REPORT.md <span class="ink3">· deliverable</span></span><span class="m">6 min</span></div>
+            <div class="art">{i:file:ic}<span class="n">mockups/png/window-light.png</span><span class="m">turn 9</span></div>
+            <div class="art">{i:globe:ic}<span class="n">Mockups · summary page</span><span class="m">published</span><span class="ib ink3">{i:ext}</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Context</span><span class="sum">Fable 5.1 · 38 %</span></div>
+          <div class="card-b">
+            <div class="brief" style="-webkit-line-clamp:2">Recherche UI + maquettes pour l'app Scope. S'inspirer du panneau de droite de Claude Code Desktop…</div>
+            <div class="row">{i:doc:ic}<span class="lbl">CLAUDE.local.md</span><span class="val">1.8 kB</span></div>
+            <div class="row">{i:skills:ic}<span class="lbl">Skills</span><span class="chips" style="padding:0"><span class="chip">scope</span><span class="chip">artifact-design</span></span></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Connectors</span><span class="sum">3 · <span style="color:var(--ck-pend)">1 needs auth</span></span></div></div>
+      </div>
+    </div>
+  </div>
+</div>

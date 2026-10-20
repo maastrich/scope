@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Window · sidebar, terminal, diff pane, inspector</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { width: 1440px; height: 900px; overflow: hidden; }
+  .sidebar { width: 264px; }
+  .pane { width: 400px; }
+  .rail { width: 380px; }
+  .term { font-size: 12px; }
+  .tui { border: 1px solid var(--stroke); border-radius: 6px; padding: 6px 10px; margin: 8px 0; color: var(--ink-2); }
+</style>
+<script>
+  // ?theme=dark renders the Midnight palette; the default is Daylight.
+  var q = new URLSearchParams(location.search);
+  document.documentElement.dataset.theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-chev-d" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol><symbol id="i-chev-r" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol><symbol id="i-chev-l" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></symbol><symbol id="i-terminal" viewBox="0 0 16 16"><path d="M3 4l4 4-4 4M8 12h5"/></symbol><symbol id="i-diff" viewBox="0 0 16 16"><path d="M8 2v6M5 5h6M5 12h6"/></symbol><symbol id="i-branch" viewBox="0 0 16 16"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="13" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 4.6v6.8M12 6.6c0 3-8 2-8 4.8"/></symbol><symbol id="i-pr" viewBox="0 0 16 16"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="13" r="1.6"/><circle cx="12" cy="13" r="1.6"/><path d="M4 4.6v6.8M12 11.4V7a2 2 0 0 0-2-2H8"/><path d="M9.5 3.5L8 5l1.5 1.5"/></symbol><symbol id="i-merge" viewBox="0 0 16 16"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="13" r="1.6"/><circle cx="12" cy="9" r="1.6"/><path d="M4 4.6v6.8M4 5c0 3 6.4 4 6.4 4"/></symbol><symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z"/></symbol><symbol id="i-file" viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></symbol><symbol id="i-doc" viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3M6 8h4M6 10.5h4"/></symbol><symbol id="i-dots" viewBox="0 0 16 16"><circle cx="8" cy="3" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="13" r="1.1" fill="currentColor" stroke="none"/></symbol><symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></symbol><symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol><symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></symbol><symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z"/></symbol><symbol id="i-flag" viewBox="0 0 16 16"><path d="M4 14V2.5M4 3h8l-2 3 2 3H4"/></symbol><symbol id="i-hand" viewBox="0 0 16 16"><path d="M6 8V3.5a1 1 0 0 1 2 0V8M8 7.5V3a1 1 0 0 1 2 0v5M10 8V4.5a1 1 0 0 1 2 0V10a4 4 0 0 1-4 4H7.5a3 3 0 0 1-2.4-1.2L3 9.5a1 1 0 0 1 1.6-1.2L6 10"/></symbol><symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></symbol><symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2v3M10 2v3M4 5h8v2a4 4 0 0 1-8 0zM8 11v3"/></symbol><symbol id="i-sparkle" viewBox="0 0 16 16"><path d="M8 2l1.4 3.6L13 7l-3.6 1.4L8 12l-1.4-3.6L3 7l3.6-1.4z"/></symbol><symbol id="i-tray" viewBox="0 0 16 16"><path d="M2 9h3.5l1 2h3l1-2H14M2 9l1.5-5h9L14 9v4H2z"/></symbol><symbol id="i-tag" viewBox="0 0 16 16"><path d="M2 2h6l6 6-6 6-6-6z"/><circle cx="5" cy="5" r="1" fill="currentColor" stroke="none"/></symbol><symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10V4a1 1 0 0 1 1-1h6"/></symbol><symbol id="i-ext" viewBox="0 0 16 16"><path d="M7 3H3.5A.5.5 0 0 0 3 3.5v9a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V9M9 3h4v4M13 3L7.5 8.5"/></symbol><symbol id="i-archive" viewBox="0 0 16 16"><path d="M2 3h12v3H2zM3 6v7h10V6M6.5 9h3"/></symbol><symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"/></symbol><symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol><symbol id="i-info" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 6.5h2M5 9.5h2M9 6.5h2.5M9 9.5h2.5"/></symbol><symbol id="i-globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/></symbol><symbol id="i-laptop" viewBox="0 0 16 16"><rect x="3" y="3.5" width="10" height="6.5" rx="1"/><path d="M1.5 12.5h13"/></symbol><symbol id="i-cpu" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1"/><rect x="6.5" y="6.5" width="3" height="3"/><path d="M6 1.5v2.5M10 1.5v2.5M6 12v2.5M10 12v2.5M1.5 6h2.5M1.5 10h2.5M12 6h2.5M12 10h2.5"/></symbol><symbol id="i-asterisk" viewBox="0 0 16 16"><path d="M8 2v12M2.8 5l10.4 6M2.8 11l10.4-6"/></symbol><symbol id="i-cursor" viewBox="0 0 16 16"><path d="M3 2.5l10 4.5-4.5 1.5L7 13z"/></symbol><symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol><symbol id="i-bubble" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol><symbol id="i-question" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M6.8 6a1.3 1.3 0 1 1 1.9 1.1c-.5.3-.7.6-.7 1.1M8 9.8v.1"/></symbol><symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.5l6 11H2z"/><path d="M8 7v3M8 11.5v.1"/></symbol><symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M3.6 12.4l1.3-1.3M11.1 4.9l1.3-1.3"/></symbol><symbol id="i-port" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5V6M8 10v4.5M1.5 8H6M10 8h4.5"/></symbol><symbol id="i-pin" viewBox="0 0 16 16"><path d="M9.5 2l4.5 4.5-2 .5-2.5 2.5v3L8 11 5 14M8 11L5 8H2l2.5-2.5.5-2z"/></symbol><symbol id="i-milestone" viewBox="0 0 16 16"><path d="M3 2v12M3 3h8l2 2.5-2 2.5H3"/></symbol><symbol id="i-skills" viewBox="0 0 16 16"><path d="M3 4h10v8H3zM3 7h10M6.5 7v5"/></symbol><symbol id="i-model" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8"/><circle cx="8" cy="8" r="5.5" stroke-dasharray="2 2.5"/></symbol><symbol id="i-list" viewBox="0 0 16 16"><path d="M5 4h8M5 8h8M5 12h8M2.5 4h.1M2.5 8h.1M2.5 12h.1"/></symbol><symbol id="i-send" viewBox="0 0 16 16"><path d="M2 8l12-5.5L9.5 14 8 9z"/></symbol><symbol id="i-shell" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3.5"/></symbol><symbol id="i-lock" viewBox="0 0 16 16"><rect x="4" y="7" width="8" height="7" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol><symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></symbol><symbol id="i-inspector" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></symbol><symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/></symbol><symbol id="i-box" viewBox="0 0 16 16"><path d="M8 1.5l6 3.2v6.6L8 14.5l-6-3.2V4.7z"/><path d="M2.2 4.8L8 8l5.8-3.2M8 8v6.5"/></symbol></svg>
+<div class="win">
+  <div class="toolbar">
+    <div class="lights"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>
+    <span class="ib"><svg class="icon "><use href="#i-sidebar"/></svg></span>
+    <div style="display:flex;flex-direction:column;line-height:1.15;margin-left:6px"><span class="title">Fable · main</span><span class="sub">@maastrich · ~/.scope/sandboxes/maastrich/claude-desktop-ui-research/scope</span></div>
+    <span class="pill" style="margin-left:auto"><span class="dot running pulse"></span> Editing README.md</span>
+    <span class="chip"><svg class="icon "><use href="#i-bolt"/></svg> 5 h · 38 %</span>
+    <span class="ib"><svg class="icon "><use href="#i-bubble"/></svg></span>
+    <span class="ib"><svg class="icon "><use href="#i-cursor"/></svg></span>
+    <span class="ib" style="background:var(--fill-pressed);color:var(--ink)"><svg class="icon "><use href="#i-inspector"/></svg></span>
+  </div>
+  <div class="cols">
+    <div class="sidebar">
+      <div class="sb-head">
+        <span class="tile" style="background:#6B4FD8">M<span class="mk sq"></span></span><span class="cur">@maastrich</span>
+        <div class="others"><span class="tile" style="background:#0F7C6C">m<span class="mk ring"></span></span><span class="tile" style="background:#8A7400">w</span><span class="tile" style="background:#1B6F94">a<span class="mk dot"></span></span><span class="more">+2</span></div>
+      </div>
+      <div class="gv"><span class="b"><svg class="icon "><use href="#i-tray"/></svg> Inbox <span class="cnt urgent">2</span></span><span class="b"><svg class="icon "><use href="#i-pr"/></svg> PRs <span class="cnt">4</span></span><span class="b"><svg class="icon "><use href="#i-box"/></svg> Graph</span></div>
+      <div class="filter"><svg class="icon "><use href="#i-search"/></svg> Filter <span class="k kbd">⌥⌘F</span></div>
+      <div class="sb-list">
+        <div class="grp">Needs you <span class="cnt">2</span></div>
+        <div class="trow detail"><span class="g waiting"><svg class="icon "><use href="#i-question"/></svg></span><div class="tx"><div class="n">gh-stack-tree · label sync</div><div class="c"><span class="k">Asks:</span> keep the legacy label?</div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+        <div class="trow detail"><span class="g waiting"><svg class="icon "><use href="#i-hand"/></svg></span><div class="tx"><div class="n">vitest-plugin-cache · flaky replay</div><div class="c"><span class="k">Waiting for your permission</span></div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+        <div class="grp">Working <span class="cnt">3</span></div>
+        <div class="trow detail sel"><span class="g running"><svg class="icon "><use href="#i-play"/></svg></span><div class="tx"><div class="n">claude-desktop-ui-research</div><div class="c">Editing README.md · <span class="fl">✗ checks</span> on #79</div></div><div class="tr"><span class="dot running pulse"></span></div></div>
+        <div class="thr sel"><span class="g"><svg class="icon "><use href="#i-asterisk"/></svg></span><div class="tx"><div class="n">Fable · main</div><div class="c">Editing README.md</div></div><span class="dot running"></span></div>
+        <div class="thr"><span class="g agent"><svg class="icon "><use href="#i-asterisk"/></svg></span><div class="tx"><div class="n">research · web</div><div class="c">Finished · 2 min</div></div><span class="dot done"></span></div>
+        <div class="thr last"><span class="g"><svg class="icon "><use href="#i-terminal"/></svg></span><div class="tx"><div class="n">shell</div><div class="c">http.server 4310</div></div><span class="dot ring"></span></div>
+        <div class="trow detail"><span class="g running"><svg class="icon "><use href="#i-play"/></svg></span><div class="tx"><div class="n">workout-calendar · strava backfill</div><div class="c">Running pnpm test · 2 agents</div></div><div class="tr"><span class="dot running"></span></div></div>
+        <div class="trow detail"><span class="g pend"><svg class="icon "><use href="#i-clock"/></svg></span><div class="tx"><div class="n">usage-assist-measures</div><div class="c"><span class="ok">✓ approved</span> · checks running · 3 PRs</div></div><div class="tr"><span class="dot idle"></span></div></div>
+        <div class="grp">Finished, not read <span class="cnt">1</span></div>
+        <div class="trow detail"><span class="g done"><svg class="icon "><use href="#i-flag"/></svg></span><div class="tx"><div class="n">hashup · symlinks</div><div class="c">Finished · 14 min · “Symlinks now resolve…”</div></div><div class="tr"><span class="dot done"></span></div></div>
+        <div class="grp">Quiet <span class="cnt">2</span></div>
+        <div class="trow"><span class="g merged"><svg class="icon "><use href="#i-merge"/></svg></span><div class="tx"><div class="n">gh-next · turn-based sort</div></div><div class="tr"><span class="chip pass" style="height:16px;font-size:10px">merged</span></div></div>
+        <div class="trow"><span class="g quiet"><svg class="icon "><use href="#i-branch"/></svg></span><div class="tx"><div class="n">logger · figures set <span class="ink3" style="font-size:11px">· idle 4 d</span></div></div><div class="tr"><span class="dot ring"></span></div></div>
+        <div class="grp" style="margin-top:10px">Repositories <span class="cnt">31 · 3 changed</span><span class="ib"><svg class="icon "><use href="#i-chev-r"/></svg></span></div>
+      </div>
+      <div class="sb-foot"><svg class="icon "><use href="#i-bolt"/></svg> 5 h · 38 % <span class="sp"><span class="kbd">⌘T</span><span class="kbd">⌘⇧T</span></span></div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-h"><span class="crumb">@maastrich</span> › <span class="crumb">claude-desktop-ui-research</span> › <span class="crumb">Fable · main</span><span style="margin-left:auto">claude · sandbox · <span style="color:var(--st-running)">working</span></span></div>
+      <div class="term"><span class="dim">╭──────────────────────────────────────────────────────────╮
+│</span> <span class="acc">✻</span> Claude Code · Fable 5.1 · high                         <span class="dim">│
+╰──────────────────────────────────────────────────────────╯</span>
+
+<span class="dim">></span> Rends les maquettes en PNG et écris le rapport.
+
+<span class="acc">●</span> Je rends les 9 pages en clair et sombre, puis le rapport.
+
+<span class="ok">●</span> <b>Bash</b>(python3 docs/research/claude-desktop-ui/mockups/build.py)
+  <span class="dim">⎿</span>  rendered png/inspector-overview-light.png
+     rendered png/inspector-overview-dark.png
+     <span class="dim">… +16 lines</span>
+
+<span class="ok">●</span> <b>Read</b>(docs/research/claude-desktop-ui/mockups/png/window-light.png)
+  <span class="dim">⎿</span>  Read image (1440×900)
+
+<span class="ok">●</span> <b>Write</b>(docs/research/claude-desktop-ui/README.md)
+  <span class="dim">⎿</span>  Wrote 212 lines
+
+<span class="acc">●</span> <b>Edit</b>(docs/research/claude-desktop-ui/README.md)
+  <span class="dim">⎿</span>  Updated with 4 additions and 1 removal
+       <span class="ok">+ ## Ce qu'on reprend</span>
+       <span class="ok">+ - Rail en cartes, une ligne par fait</span>
+
+<span class="warn">✶</span> Writing… <span class="dim">(2 min · ↓ 38 % context)</span>
+
+<span class="dim">╭──────────────────────────────────────────────────────────╮
+│</span> <span class="dim">></span> <span class="cursor"></span>                                                   <span class="dim">│
+╰──────────────────────────────────────────────────────────╯
+  bypass permissions · ⌘↩ newline</span></div>
+    </div>
+
+    <div class="pane">
+      <div class="band">
+        <div class="subject"><svg class="icon ink2"><use href="#i-diff"/></svg><span class="name">Changes</span><span class="scope">· since last turn</span></div>
+        <span class="ib ink3" style="margin-left:auto"><svg class="icon "><use href="#i-copy"/></svg></span><span class="ib ink3"><svg class="icon "><use href="#i-x"/></svg></span>
+      </div>
+      <div class="diff">
+        <div class="dfile"><svg class="icon ink3"><use href="#i-chev-d"/></svg><span class="p"><span class="dir">docs/research/claude-desktop-ui/</span>README.md</span><span class="plus">+71</span></div>
+        <div class="hunk">@@ -0,0 +1,71 @@</div>
+        <div class="ln add"><span class="g"></span><span class="g c">1</span><span class="code"># Claude Code Desktop : ce qu'on reprend</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">2</span><span class="code"></span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">3</span><span class="code">## Ce qui plaît</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">4</span><span class="code">- Le rail : des cartes, une ligne par fait.</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">5</span><span class="code">- Changes : une ligne par PR, stats et checks.</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">6</span><span class="code">- Sidebar : Needs input / Working / Completed.</span></div>
+        <div class="hunk">⋯ 65 more lines</div>
+        <div class="dfile"><svg class="icon ink3"><use href="#i-chev-d"/></svg><span class="p"><span class="dir">App/Scope/Views/Inspector/</span>InspectorView.swift</span><span class="plus">+18</span><span class="minus">−6</span></div>
+        <div class="hunk">@@ -88,12 +88,18 @@</div>
+        <div class="ln ctx"><span class="g">89</span><span class="g c">89</span><span class="code">    private func body(for s: InspectorSection)</span></div>
+        <div class="ln del"><span class="g">90</span><span class="g c"></span><span class="code">        CollapsibleSection(s) {</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">90</span><span class="code">        InspectorCard(s, summary: summary(s)) {</span></div>
+        <div class="ln ctx"><span class="g">91</span><span class="g c">91</span><span class="code">            switch s {</span></div>
+        <div class="ln del"><span class="g">93</span><span class="g c"></span><span class="code">            case .task: TaskSection(task)</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">93</span><span class="code">            case .task: EnvironmentCard(task)</span></div>
+        <div class="ln add"><span class="g"></span><span class="g c">94</span><span class="code">            case .artifacts: ArtifactsCard(task)</span></div>
+        <div class="ln cmt"><div class="comment" style="margin-left:60px"><div class="who">You · queued</div>Setup state stays on the card, not in the band.</div></div>
+        <div class="dfile"><svg class="icon ink3"><use href="#i-chev-r"/></svg><span class="p"><span class="dir">App/Scope/Views/Shared/</span>CollapsibleSection.swift</span><span class="plus">+9</span><span class="minus">−4</span></div>
+        <div class="dfile"><svg class="icon ink3"><use href="#i-chev-r"/></svg><span class="p"><span class="dir">App/Scope/Views/Shared/</span>Theme.swift</span><span class="plus">+4</span><span class="minus">−2</span></div>
+      </div>
+      <div class="review-bar" style="margin:0"><span class="btn ghost"><svg class="icon "><use href="#i-bubble"/></svg> 1 comment</span><span class="btn primary" style="margin-left:auto">Send review</span></div>
+    </div>
+
+    <div class="rail">
+      <div class="band">
+        <div class="subject"><svg class="icon ink2"><use href="#i-branch"/></svg><span class="name">claude-desktop-ui-research</span></div>
+        <div class="pane-strip">
+          <span class="pb on"><svg class="icon "><use href="#i-info"/></svg></span><span class="pb on" style="background:var(--sel-tint)"><svg class="icon "><use href="#i-diff"/></svg><span class="badge">6</span></span><span class="pb"><svg class="icon "><use href="#i-shell"/></svg></span><span class="pb"><svg class="icon "><use href="#i-pr"/></svg><span class="badge fail">1</span></span><span class="pb"><svg class="icon "><use href="#i-folder"/></svg></span><span class="pb"><svg class="icon "><use href="#i-dots"/></svg></span>
+        </div>
+      </div>
+      <div class="rail-scroll">
+        <div class="card">
+          <div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-d"/></svg></span><span class="ttl">Environment</span><div class="acts"><span class="ib"><svg class="icon "><use href="#i-terminal"/></svg></span><span class="ib"><svg class="icon "><use href="#i-folder"/></svg></span></div></div>
+          <div class="card-b">
+            <div class="version"><span class="br">explore/scope-claude-desktop-ui</span><span class="from">from main @ b078522</span><span class="chip mono" style="margin-left:auto">↑3</span></div>
+            <div class="row"><svg class="icon ic"><use href="#i-box"/></svg><span class="lbl">scope <span class="ink3 mono">~/.scope/sandboxes/…</span></span><span class="val"><span class="plus">+108</span> <span class="minus">−12</span></span><span class="dot done"></span></div>
+            <div class="row"><svg class="icon ic"><use href="#i-gear"/></svg><span class="lbl">Setup <span class="ink3 mono">swift build</span></span><span class="chip pass"><svg class="icon "><use href="#i-check"/></svg> 42 s</span></div>
+            <div class="row"><svg class="icon ic"><use href="#i-port"/></svg><span class="lbl">Ports</span><span class="port">localhost:4310 ↗</span><span class="port">4311 ↗</span></div>
+            <div class="proc"><span class="dot running"></span><span class="cmd">python3 -m http.server 4310</span><span class="meta">shell · 12 min</span></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-r"/></svg></span><span class="ttl">Changes</span><span class="sum">6 files · <span class="plus">+108</span> <span class="minus">−12</span> · 1 comment</span></div></div>
+        <div class="card">
+          <div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-d"/></svg></span><span class="ttl">Pull requests <span class="ink3" style="font-weight:500">2</span></span><div class="acts"><span class="ib"><svg class="icon "><use href="#i-ext"/></svg></span></div></div>
+          <div class="card-b" style="gap:0">
+            <div class="pr-row sel"><span class="st" style="color:var(--ck-fail)"><svg class="icon "><use href="#i-x"/></svg></span><div class="t"><div class="l1">docs(research): Claude Code Desktop UI</div><div class="l2"><span class="mono">scope #79</span><span class="plus mono">+1204</span><span class="minus mono">−3</span><span class="chip fail">✗ 1 / 4</span></div></div></div>
+            <div class="pr-row"><span class="st" style="color:var(--ck-pass)"><svg class="icon "><use href="#i-merge"/></svg></span><div class="t"><div class="l1">feat(tasks): show every pull request</div><div class="l2"><span class="mono">scope #78</span><span class="chip pass">merged · 2 d</span></div></div></div>
+            <div class="checks">
+              <div class="ck"><span class="ic" style="color:var(--ck-fail)"><svg class="icon "><use href="#i-x"/></svg></span><span class="n">build · macos-15</span><span class="d">3 min</span><span class="ib hover"><svg class="icon "><use href="#i-send"/></svg></span></div>
+              <div class="ck"><span class="ic" style="color:var(--ck-pend)"><svg class="icon "><use href="#i-clock"/></svg></span><span class="n">test · ScopeKitTests</span><span class="d">running</span></div>
+              <div class="ck"><span class="ic" style="color:var(--ck-pass)"><svg class="icon "><use href="#i-check"/></svg></span><span class="n">lint · docs</span><span class="d">48 s</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-d"/></svg></span><span class="ttl">Artifacts</span><span class="sum">3 files · 1 page</span></div>
+          <div class="card-b" style="gap:0">
+            <div class="art"><svg class="icon ic"><use href="#i-doc"/></svg><span class="n">REPORT.md <span class="ink3">· deliverable</span></span><span class="m">6 min</span></div>
+            <div class="art"><svg class="icon ic"><use href="#i-file"/></svg><span class="n">mockups/png/window-light.png</span><span class="m">turn 9</span></div>
+            <div class="art"><svg class="icon ic"><use href="#i-globe"/></svg><span class="n">Mockups · summary page</span><span class="m">published</span><span class="ib ink3"><svg class="icon "><use href="#i-ext"/></svg></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-d"/></svg></span><span class="ttl">Context</span><span class="sum">Fable 5.1 · 38 %</span></div>
+          <div class="card-b">
+            <div class="brief" style="-webkit-line-clamp:2">Recherche UI + maquettes pour l'app Scope. S'inspirer du panneau de droite de Claude Code Desktop…</div>
+            <div class="row"><svg class="icon ic"><use href="#i-doc"/></svg><span class="lbl">CLAUDE.local.md</span><span class="val">1.8 kB</span></div>
+            <div class="row"><svg class="icon ic"><use href="#i-skills"/></svg><span class="lbl">Skills</span><span class="chips" style="padding:0"><span class="chip">scope</span><span class="chip">artifact-design</span></span></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><span class="chev"><svg class="icon "><use href="#i-chev-r"/></svg></span><span class="ttl">Connectors</span><span class="sum">3 · <span style="color:var(--ck-pend)">1 needs auth</span></span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
