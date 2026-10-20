@@ -462,14 +462,24 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
 <p>The right-hand panel, all about the selection. A band at the top names the task and carries the <b>pane
-strip</b> — Overview, Changes (badge: changed files), Shell, Browser, Pull requests (badge: failing checks), Files, and <code>⋮</code>
-for the Cards menu — then a column of cards, one header each: closed, a card costs one line and its header still says
+strip</b> — Overview, Details, Changes (badge: changed files), Shell, Browser, Pull requests (badge: failing checks),
+Files, and <code>⋮</code> for the Cards menu — then a column of cards, one header each: closed, a card costs one line and its header still says
 the essential at its right; open, it shows the rest. Each card answers one question and says one thing per line: a
 glyph, a name, a value. Several can be open at once — the lists share the height, and you drag the gap between two of
 them (double-click it to even them out). The cards hold lists only: a diff or a base file opens in a reading column
 between the terminal and the inspector, the height of the window and half the terminal's width by default (drag its
 edge, double-click it to go back to half; ✕ or Esc closes it). A button of the strip opens its card <i>and</i> its
-pane when it has one; Overview closes the pane. It is not a tab bar: every card stays in the column.</p>
+pane when it has one, turning to the page the card is on; Overview goes back to its page and closes the pane.</p>
+<p>The cards sit on two pages. <b>Overview</b> says what is happening: Plan, Changes, Pull requests, Subagents,
+Background and Artifacts, each only while it has something to say — a plan, changed files, a linked pull request, a
+sub-agent at work, a background command or a cron, a report, a file written or a page published (checkpoints alone do
+not count) — always in that order. <b>Details</b> (<kbd>⇧⌘D</kbd>, the ⓘ button) holds what you go and look up:
+Environment, Context, Connectors, the Overview cards while they are empty, then Repository, Files, Search and History.
+A card coming up or going down fades in place (no motion under Reduce Motion). One that goes quiet stays on Overview
+for three minutes with its final state — <i>finished 2m ago</i>, <code>4 done</code> — before it goes down, and one you
+left open stays until you fold it or change task. When a card went down while you were elsewhere, the Details button
+carries a small dot until you open it. Alone on Overview, Changes takes the whole height; a quiet task says <i>Nothing
+happening yet</i> with a link to Details.</p>
 <p>The same column holds the task's <b>Shell</b> pane (<kbd>⌃`</kbd>, or <i>Shell</i> in the Task menu and the
 palette): your login shell in the task's working directory, with the <code>SCOPE_*</code> variables a thread gets —
 <code>SCOPE_TASK</code>, <code>SCOPE_TASK_ROOT</code>, <code>SCOPE_PORT</code>, <code>SCOPE_HOME</code>, <code>SCOPE_SOCK</code> — so
@@ -502,10 +512,11 @@ the task tears them down.</p>
   <tr><td><b>Repository</b></td><td>the branch and how far behind it is</td><td>the HEAD commit of the untouched checkout</td><td><kbd>⇧⌘B</kbd></td></tr>
   <tr><td><b>Files</b>, <b>Search</b>, <b>History</b></td><td>the file count, the last query, the HEAD commit</td><td>the base's tree, a search across it, its recent commits</td><td></td></tr>
 </table>
-<p>The inspector remembers which cards are open, and which the Cards menu hides, per scope, with and without a task
-(the last visible card cannot be hidden; <b>Reset to defaults</b> brings them all back, and <kbd>⌘D</kbd> on a hidden
-Changes shows it again). Without a task, the task's cards stay in place, dimmed, and Repository follows the selected
-repository. Drag the panel's left edge to resize — every divider in the window catches the pointer a few points on
+<p>The Cards menu sets, card by card, <b>When it has something</b> (<b>In Details</b> for the reference cards),
+<b>Always in Overview</b> — pinned, even empty; a pinned Environment goes first — or <b>Hidden</b>. The inspector
+remembers that choice and which cards are open per scope, the open ones with and without a task (the last visible card
+cannot be hidden; <b>Reset to defaults</b> brings them all back, and <kbd>⌘D</kbd> on a hidden Changes shows it again).
+Without a task there is one page, the base checkout's cards, and Repository follows the selected repository. Drag the panel's left edge to resize — every divider in the window catches the pointer a few points on
 either side of the line, and a double-click puts the column back at its default width; <kbd>⌥⌘I</kbd> hides it.</p>
 
 <h2 id="global-views">Inbox, Pull Requests and Graph</h2>
@@ -1681,6 +1692,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌥Space</kbd></td><td>From any app: the <a href="concepts.html#quick-panel">quick panel</a> — Ask a scope's orchestrator (<kbd>⌃1</kbd>–<kbd>⌃9</kbd> picks the scope) or the Inbox; configurable</td></tr>
   <tr><td><kbd>⌥⇧Space</kbd></td><td>From any app: show the window, or hide Scope when it is in front; configurable</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Changes / Repository / Pull requests</td></tr>
+  <tr><td><kbd>⇧⌘D</kbd></td><td>The inspector's Details page, and back to Overview</td></tr>
   <tr><td><kbd>⌃`</kbd></td><td>The task's shell pane: show, or hide it again</td></tr>
   <tr><td><kbd>⌃⇧B</kbd></td><td>The task's browser pane: show, or hide it again</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>

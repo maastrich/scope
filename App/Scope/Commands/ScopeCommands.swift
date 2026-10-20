@@ -339,6 +339,10 @@ struct ScopeCommands: Commands {
             Button("Changes") { model?.showInspector(.delta) }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(model == nil)
+            // The inspector's second page; the menu item is also what the ⌘-held hint on its button reads.
+            Button("Details") { model?.toggleInspectorDetails() }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(model?.currentTask == nil)
             Button("Pull Requests") { model?.showInspector(.pullRequest) }
                 .disabled(model == nil)
             Button("Repository") { model?.showInspector(.base) }

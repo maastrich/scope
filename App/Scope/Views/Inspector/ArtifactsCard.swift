@@ -7,6 +7,9 @@ import ScopeTasks
 /// 3 files · 1 page`, else the checkpoints, else *nothing yet*. Open, four groups: the report with a preview of its
 /// opening and *Read*; the files the threads wrote where git does not look, the newest image as a thumbnail; the pages
 /// the agent published; the checkpoints. The card reads: nothing here copies, moves or deletes a file.
+///
+/// What it reads is loaded by `InspectorView`, not here: the card may sit on Details, unbuilt, and still has to say
+/// whether it has something for Overview.
 struct ArtifactsCard: View {
     @Environment(AppModel.self) private var model
     let bodyHeight: Double?
@@ -36,14 +39,6 @@ struct ArtifactsCard: View {
             }
         } content: {
             if let task { content(task) }
-        }
-        // On the card, not its body: the closed header's summary needs the artifacts too, and the body is only built
-        // while the card is open. The activity is not observed: a turn opening or closing moves `turnRevision`, the
-        // sandbox `changeTick`.
-        .task(id: task.map(refreshKey)) {
-            guard let task else { return }
-            if !task.checkpointsLoaded { await model.reloadCheckpoints(of: task.id) }
-            await model.refreshArtifacts(of: task)
         }
     }
 
@@ -98,11 +93,6 @@ struct ArtifactsCard: View {
                 .padding(.vertical, 6)
             }
         }
-    }
-
-    private func refreshKey(_ task: TaskState) -> String {
-        let turns = model.threads(in: task.id).map { "\($0.id.rawValue):\($0.turnRevision)" }.joined(separator: ",")
-        return "\(task.id.rawValue)|\(task.changeTick)|\(task.checkpoints.count)|\(turns)"
     }
 }
 
@@ -475,25 +465,29 @@ enum ArtifactAge {
     }
 }
 
-/// The centred two lines a card shows while it has nothing: what is missing, and what will fill it.
+/// The centred two lines a card shows while it has nothing: what is missing, and what will fill it — the second on
+/// Details only, so a card pinned to Overview stays short there.
 struct CardEmptyState: View {
     let title: String
     let detail: String
+    @Environment(\.inspectorPage) private var page
 
     var body: some View {
         VStack(spacing: 3) {
             Text(title)
                 .font(.scopeBody)
-                .foregroundStyle(Ink.primary)
-            Text(detail)
-                .font(.scopeCaption)
-                .foregroundStyle(Ink.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(page == .overview ? Ink.secondary : Ink.primary)
+            if page == .details {
+                Text(detail)
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
-        .padding(.vertical, 18)
+        .padding(.vertical, page == .overview ? 10 : 18)
     }
 }
 
