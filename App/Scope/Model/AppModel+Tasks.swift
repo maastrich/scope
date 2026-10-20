@@ -550,8 +550,12 @@ extension AppModel {
         let runner = await commandRunner()
         do {
             let record = try await env.tasks.runSetup(task.id, commands: commands, runCommands: runCommands,
-                                                      runner: runner, only: only) { record in
-                await MainActor.run { task.update(record: record) }
+                                                      runner: runner, only: only) { [weak self] record in
+                await MainActor.run {
+                    task.update(record: record)
+                    // The reading column stands on its own: a setup log open there follows the run, card shown or not.
+                    self?.refreshSetupLogReading(of: task)
+                }
             }
             // A setup is what fills a sandbox (`node_modules`): the size shown is stale until measured again.
             refreshDiskUsage(of: task)

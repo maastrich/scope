@@ -36,6 +36,10 @@ struct EnvironmentCard: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
+                // After a relaunch nothing has resolved the commands yet: a setup that never ran still shows its line.
+                .task(id: task.id) {
+                    if task.setupCommands == nil { await model.loadSetupCommands(of: task) }
+                }
             }
         }
     }
@@ -113,7 +117,6 @@ private struct TaskSetupRow: View {
             .help("Open the setup log in the reading column")
             .accessibilityLabel("Setup: \(facts.stateLabel). Open the log")
             .usageID("task-setup", label: "Task setup")
-            .onChange(of: task.record.setup) { model.refreshSetupLogReading(of: task) }
         }
     }
 
