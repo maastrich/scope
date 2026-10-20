@@ -22,6 +22,9 @@ public struct ThreadNotificationContent: Equatable, Sendable {
         /// The agent's last answer: its opening for a finished turn, its closing paragraph for a question —
         /// that is where an answer that ends on a question asks it.
         case reply(String)
+        /// What a permission asks to do: the command, or the tool and its target. Quoted as is — a command's `*` and
+        /// `__` are not Markdown.
+        case request(String)
     }
 
     /// Most characters a quoted body keeps; the rest becomes `…`.
@@ -31,7 +34,7 @@ public struct ThreadNotificationContent: Equatable, Sendable {
     /// (only `inputRequested`, `permissionRequested`, `turnEnded` and `turnFailed` notify). `failure` is the
     /// driver's error code for `turnFailed` (`rate_limit`, …), shown in words. `said`, when it has anything left
     /// once Markdown is stripped, becomes the body of a question or a finished turn, and the generic words move to
-    /// the subtitle; a permission request and a failed turn keep their words.
+    /// the subtitle; so does what a permission asks to do (`Said.request`). A failed turn keeps its words.
     public static func make(event: ThreadStateEvent, driver: String, scope: String, task: String? = nil,
                             failure: String? = nil, said: Said? = nil) -> ThreadNotificationContent? {
         let generic: String
@@ -44,7 +47,11 @@ public struct ThreadNotificationContent: Equatable, Sendable {
         }
         let parts = [driver, scope] + (task.map { [$0] } ?? [])
         let title = parts.joined(separator: " · ")
-        guard event == .inputRequested || event == .turnEnded, let quote = said.flatMap({ quoted($0, for: event) }) else {
+        let quotes = switch (event, said) {
+        case (.inputRequested, _?), (.turnEnded, _?), (.permissionRequested, .request?): true
+        default: false
+        }
+        guard quotes, let quote = said.flatMap({ quoted($0, for: event) }) else {
             return ThreadNotificationContent(title: title, body: generic)
         }
         return ThreadNotificationContent(title: title, subtitle: generic, body: quote)
@@ -54,6 +61,7 @@ public struct ThreadNotificationContent: Equatable, Sendable {
         switch said {
         case .question(let text): excerpt(text, from: .opening)
         case .reply(let text): excerpt(text, from: event == .turnEnded ? .opening : .closing)
+        case .request(let text): text.isEmpty ? nil : capped(collapsed(text), limit: excerptLimit)
         }
     }
 

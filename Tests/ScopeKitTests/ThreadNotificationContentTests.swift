@@ -59,6 +59,17 @@ import Testing
         #expect(failure == ThreadNotificationContent(title: "C · s", body: "stopped on an error: overloaded"))
     }
 
+    @Test func aPermissionQuotesWhatItAsksAsIs() {
+        let content = ThreadNotificationContent.make(event: .permissionRequested, driver: "C", scope: "s",
+                                                     said: .request("rm -rf **/node_modules\n  && ls *.swift"))
+        #expect(content == ThreadNotificationContent(title: "C · s", subtitle: "asks for a permission",
+                                                     body: "rm -rf **/node_modules && ls *.swift"))
+        let long = ThreadNotificationContent.make(event: .permissionRequested, driver: "C", scope: "s",
+                                                  said: .request(String(repeating: "word ", count: 80)))
+        #expect(long?.body.count ?? 0 <= ThreadNotificationContent.excerptLimit)
+        #expect(long?.body.hasSuffix("…") == true)
+    }
+
     @Test func nothingReadableFallsBackToTheGenericBody() {
         let content = ThreadNotificationContent.make(event: .turnEnded, driver: "C", scope: "s", said: .reply("```swift\nlet x = 1\n```\n\n---"))
         #expect(content == ThreadNotificationContent(title: "C · s", body: "finished its turn"))

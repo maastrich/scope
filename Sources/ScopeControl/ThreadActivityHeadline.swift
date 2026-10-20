@@ -33,16 +33,19 @@ public struct ThreadActivityHeadline: Sendable, Equatable {
     /// `nil` when there is nothing better than what a row says without it: an exited thread, one that never
     /// reported anything, one idle after a wait was dismissed.
     /// `compacting`: Claude Code is compacting the conversation (`ClaudeCompactions.isRunning`), mid-turn or at rest —
-    /// what it is doing then, whatever the last tool was.
+    /// what it is doing then, whatever the last tool was. `pending` is what a Claude Code session says it is asking
+    /// (`ClaudePendingRequests.current`): while the thread waits, it words the line rather than the tool name.
     public static func make(_ activity: ThreadActivity, state: ThreadState, compacting: Bool = false,
-                            finished: FinishedThreadLine = .elapsed) -> ThreadActivityHeadline? {
+                            finished: FinishedThreadLine = .elapsed,
+                            pending: ClaudePendingRequest? = nil) -> ThreadActivityHeadline? {
         if compacting, state != .exited { return ThreadActivityHeadline(text: compactingText) }
-        return make(activity, state: state)?.showing(finished)
+        return make(activity, state: state, pending: pending)?.showing(finished)
     }
 
     public static let compactingText = "Compacting…"
 
-    private static func make(_ activity: ThreadActivity, state: ThreadState) -> ThreadActivityHeadline? {
+    private static func make(_ activity: ThreadActivity, state: ThreadState,
+                             pending: ClaudePendingRequest?) -> ThreadActivityHeadline? {
         switch state {
         case .running:
             // A tool from before this turn says what the agent did last time, not what it is doing.
@@ -52,6 +55,7 @@ public struct ThreadActivityHeadline: Sendable, Equatable {
             }
             return ThreadActivityHeadline(text: "Working…")
         case .waiting(let reason):
+            if let pending { return asking(pending) }
             if let request = activity.pendingRequest {
                 // A question reads best as itself; a permission as what the agent asks to do.
                 if request.name == "AskUserQuestion", let question = request.target, !question.isEmpty {
@@ -83,6 +87,33 @@ public struct ThreadActivityHeadline: Sendable, Equatable {
             }
         case .exited:
             return nil
+        }
+    }
+
+    /// What `request` asks, in one line: the question itself, `Asks to run git push`, `Asks to use probe_echo on probe`,
+    /// `Plan: <its first bullet>`, `probe asks: Pick a tier`. The help holds the whole of it.
+    static func asking(_ request: ClaudePendingRequest) -> ThreadActivityHeadline {
+        switch request.kind {
+        case .question:
+            let all = request.questions.map(\.question).joined(separator: "\n")
+            return ThreadActivityHeadline(text: request.headline, detail: all.isEmpty ? nil : all)
+        case .plan:
+            return ThreadActivityHeadline(text: request.headline, detail: request.plan)
+        case .elicitation:
+            let message = request.message ?? "asks for input"
+            let text = request.mcpServer.map { "\($0) asks: \(message)" } ?? "An MCP server \(message)"
+            return ThreadActivityHeadline(text: text, detail: request.message)
+        case .permission:
+            if let tool = request.mcpTool {
+                let text = "Asks to use \(tool)" + (request.mcpServer.map { " on \($0)" } ?? "")
+                return ThreadActivityHeadline(text: text, detail: request.summary)
+            }
+            let target = request.command ?? request.filePath ?? request.url ?? request.query
+            let phrase = ToolPhrase(ThreadActivity.Tool(name: request.tool ?? "", target: target.flatMap(firstLine),
+                                                        at: request.askedAt))
+            // A command of several lines shows its first; the help has it whole.
+            let detail = request.command.flatMap { $0.contains("\n") ? $0 : nil } ?? phrase.detail
+            return ThreadActivityHeadline(text: phrase.request, detail: detail)
         }
     }
 

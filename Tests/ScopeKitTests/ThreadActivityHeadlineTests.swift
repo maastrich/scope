@@ -176,4 +176,55 @@ import Testing
         #expect(Self.line(Self.finished(.ended), .exited) == nil)
         #expect(Self.line(Self.finished(.permissionRequested), .idle) == nil)
     }
+
+    // MARK: What a Claude Code session asks
+
+    static func asked(_ payloads: [String]) -> ClaudePendingRequest? {
+        var pending = ClaudePendingRequests()
+        for payload in payloads {
+            guard let body = JSONValue(json: payload) else { continue }
+            pending.apply(ClaudeHookFacts(body: body, at: at(3)))
+        }
+        return pending.current
+    }
+
+    @Test("a waiting thread words what its session asks, the whole of it in the help")
+    func pendingRequests() throws {
+        let waiting = ThreadState.waiting(reason: .permission)
+        let bash = ThreadActivityHeadline.make(ThreadActivity(), state: waiting,
+                                               pending: Self.asked(Array(ClaudePendingFixtures.bash[2...3])))
+        #expect(bash?.text == "Asks to run echo probe hello")
+        let mcp = ThreadActivityHeadline.make(ThreadActivity(), state: waiting,
+                                              pending: Self.asked(Array(ClaudePendingFixtures.mcp[4...5])))
+        #expect(mcp?.text == "Asks to use probe_echo on probe")
+        let write = ThreadActivityHeadline.make(ThreadActivity(), state: waiting,
+                                                pending: Self.asked(Array(ClaudePendingFixtures.write[2...3])))
+        #expect(write?.text == "Asks to write notes.txt")
+        #expect(write?.detail == "/w/notes.txt")
+        let input = ThreadState.waiting(reason: .input)
+        let two = ThreadActivityHeadline.make(ThreadActivity(), state: input,
+                                              pending: Self.asked([ClaudePendingFixtures.twoQuestions]))
+        #expect(two?.text == "Which color? (+1 more)")
+        #expect(two?.detail == "Which color?\nWhich size?")
+        let form = ThreadActivityHeadline.make(ThreadActivity(), state: input,
+                                               pending: Self.asked(Array(ClaudePendingFixtures.elicitation[4...5])))
+        #expect(form?.text == "probe asks: Pick a deployment tier")
+        let plan = ThreadActivityHeadline.make(ThreadActivity(), state: input, pending: Self.asked(ClaudePendingFixtures.plan))
+        #expect(plan?.text == "Plan: Create `hello.txt` in the project root (`/w`).")
+    }
+
+    @Test("a command of several lines shows its first, and the help keeps it whole")
+    func multilineCommand() throws {
+        let payload = #"{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"cd /w && git add -A\ngit commit -m x"}}"#
+        let line = ThreadActivityHeadline.make(ThreadActivity(), state: .waiting(reason: .permission),
+                                               pending: Self.asked([payload, ClaudePendingFixtures.permissionPrompt]))
+        #expect(line?.text == "Asks to run git add -A")
+        #expect(line?.detail == "cd /w && git add -A\ngit commit -m x")
+    }
+
+    @Test("what the session asks only words a waiting thread")
+    func pendingOnlyWhileWaiting() {
+        let request = Self.asked(Array(ClaudePendingFixtures.bash[2...3]))
+        #expect(ThreadActivityHeadline.make(Self.working("Bash", "make"), state: .running, pending: request)?.text == "Running make")
+    }
 }
