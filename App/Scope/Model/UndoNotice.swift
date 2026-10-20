@@ -27,6 +27,8 @@ enum CloseRequester: Sendable, Equatable {
     case user
     /// An agent over the control socket, by its name when it gave one.
     case agent(String?)
+    /// Scope itself, for the reason the toast gives (`archiveIfMerged`): never the user's keystroke either.
+    case automatic(String)
 
     var isAgent: Bool { self != .user }
 }
@@ -58,6 +60,7 @@ final class UndoNotice: Identifiable {
         let by: String = switch requester {
         case .user: ""
         case .agent(let name): " by \(name ?? "an agent")"
+        case .automatic(let reason): ": \(reason)"
         }
         return switch action {
         case .closedThread(let closed): "“\(closed.record.title)” closed\(by)"

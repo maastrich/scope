@@ -72,7 +72,7 @@ extension AppModel {
     }
 
     /// Settings ▸ Tasks ▸ Archive a task when its pull request merges: through the sidebar's own archive, one quiet
-    /// notice with Restore. Only once every pull request of the task is merged or closed, and one merged: a task
+    /// notice with Restore and the undo toast (no ⌘Z: the user did not ask for it). Only once every pull request of the task is merged or closed, and one merged: a task
     /// with two pull requests waits for the second. Then only once nothing holds it (`MergedTaskArchive`): a thread
     /// at work or waiting, a task launched from it still open, changes not committed or not pushed, a turn started
     /// since the merge. A restored task stays.
@@ -89,7 +89,7 @@ extension AppModel {
         let merged = task.record.pullRequests.filter(\.isMerged)
         let what = merged.count == 1 ? "pull request merged" : "\(merged.count) pull requests merged"
         do {
-            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): \(what)")
+            try await dismantleTask(task.id, .archive, notice: "Archived \(task.name): \(what)", by: .automatic(what))
         } catch {
             dismantleFailed(task, verb: "archive", error: error)
         }
