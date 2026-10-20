@@ -42,7 +42,8 @@ enum TaskStatusStyle {
     }
 }
 
-/// The leading glyph of a task row, in the glyph slot the thread rows give their driver icon.
+/// The glyph of a task's status, where one is still drawn: the hover card and its list of child tasks. The sidebar
+/// rows no longer carry it — the dot at the end of the row and the group it sits in say what matters.
 struct TaskStatusGlyph: View {
     var status: TaskStatus
     var size: CGFloat = 12
@@ -52,7 +53,7 @@ struct TaskStatusGlyph: View {
         Image(systemName: TaskStatusStyle.symbol(status))
             .font(.system(size: size, weight: .semibold))
             .foregroundStyle(isOnAccent ? AnyShapeStyle(Ink.onAccent) : TaskStatusStyle.color(status))
-            .frame(width: SidebarMetrics.glyphSlot)
+            .frame(width: 16)
             .accessibilityLabel(status.label)
     }
 }
@@ -61,10 +62,14 @@ struct TaskStatusGlyph: View {
 /// whatever the sidebar width.
 enum SidebarMetrics {
     static let disclosureSlot = CGFloat(SidebarRowLayout.disclosureSlot)
-    static let glyphSlot = CGFloat(SidebarRowLayout.glyphSlot)
     static let spacing = CGFloat(SidebarRowLayout.spacing)
     static let indent = CGFloat(SidebarRowLayout.indent)
     static let stateDot = CGFloat(SidebarRowLayout.stateDot)
+    static let stateDotColumn = CGFloat(SidebarRowLayout.stateDotColumn)
+    static let rowInset = CGFloat(SidebarRowLayout.rowInset)
+    static let selectionInset = CGFloat(SidebarRowLayout.selectionInset)
+
+    static let keptUnderHover = CGFloat(SidebarRowLayout.keptUnderHover)
 
     static func rowHeight(detailed: Bool) -> CGFloat {
         CGFloat(SidebarRowLayout.height(detailed: detailed))
@@ -99,25 +104,85 @@ struct SidebarDisclosure: View {
 }
 
 /// The state dot at the end of a sidebar row, or the blank that holds its column when there is nothing to report.
+///
+/// The dot sits in a column wide enough for its pulse, and the column clips: the halo used to run past the rounded
+/// edge of the selection fill and come out cut.
 struct SidebarStateDot: View {
     var state: ThreadState?
     var pulses = false
 
     var body: some View {
-        if let state {
-            StateDot(state: state, size: SidebarMetrics.stateDot, pulses: pulses)
-        } else {
-            Color.clear.frame(width: SidebarMetrics.stateDot, height: 1)
+        Group {
+            if let state {
+                StateDot(state: state, size: SidebarMetrics.stateDot, pulses: pulses)
+            } else {
+                Color.clear
+            }
         }
+        .frame(width: SidebarMetrics.stateDotColumn, height: SidebarMetrics.stateDotColumn)
+        .clipped()
+    }
+}
+
+/// What a one-line row of a task whose pull requests have all landed shows in place of the dot: the dot would say
+/// *idle* about a task whose only news is that it is done.
+struct SidebarMergedChip: View {
+    var body: some View {
+        // Whole or not at all: the name gives way first.
+        Chip(text: "merged", tint: PullRequestStyle.passing)
+            .fixedSize()
+            .accessibilityLabel("Pull request merged")
+    }
+}
+
+/// Where a nested row hangs: under which parent, and whether it is the last one (the rule stops at its tick).
+struct SidebarNesting: Equatable {
+    var parentDepth: Int
+    var isLast: Bool
+}
+
+/// The 1 px rule from a parent row's chevron down its nested rows, with a tick towards each (`SidebarRowLayout`).
+/// Drawn in device pixels, so it is a hairline on every display.
+private struct SidebarNestedRule: View {
+    var nesting: SidebarNesting
+    @Environment(\.displayScale) private var scale
+
+    var body: some View {
+        GeometryReader { geometry in
+            let pixel = 1 / scale
+            let x = (CGFloat(SidebarRowLayout.ruleColumn(parentDepth: nesting.parentDepth)) * scale).rounded() / scale + pixel / 2
+            let middle = (geometry.size.height / 2 * scale).rounded() / scale + pixel / 2
+            Path { path in
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: nesting.isLast ? middle : geometry.size.height))
+                path.move(to: CGPoint(x: x, y: middle))
+                path.addLine(to: CGPoint(x: x + CGFloat(SidebarRowLayout.ruleTick), y: middle))
+            }
+            .stroke(Surface.stroke, lineWidth: pixel)
+        }
+        .accessibilityHidden(true)
     }
 }
 
 extension View {
+    /// Hangs the row from its parent's rule when it is nested (`SidebarNesting`); nothing otherwise.
+    @ViewBuilder
+    func sidebarNested(_ nesting: SidebarNesting?) -> some View {
+        if let nesting {
+            background { SidebarNestedRule(nesting: nesting) }
+        } else {
+            self
+        }
+    }
+
     /// Draws `controls` over the trailing end of a row while `active`, left of the state dot, and fades the text out
     /// under them. The controls are always laid out — invisible and inert at rest — so their real width is known
     /// before the first hover: the cleared span is what they measure, not a guess that drifts when one is added.
-    func sidebarHoverControls<Controls: View>(_ active: Bool, @ViewBuilder controls: () -> Controls) -> some View {
-        modifier(SidebarHoverControls(active: active, controls: controls()))
+    /// `kept` is the trailing span that stays drawn: the dot's column by default, a chip's width when the row ends
+    /// with one.
+    func sidebarHoverControls<Controls: View>(_ active: Bool, kept: CGFloat = SidebarMetrics.keptUnderHover,
+                                              @ViewBuilder controls: () -> Controls) -> some View {
+        modifier(SidebarHoverControls(active: active, kept: kept, controls: controls()))
     }
 
     /// Fades the trailing span of a row out, so hover controls can be drawn on top without reserving any width for
@@ -140,11 +205,12 @@ extension View {
 
 private struct SidebarHoverControls<Controls: View>: ViewModifier {
     var active: Bool
+    var kept: CGFloat
     var controls: Controls
     @State private var width: CGFloat = 0
 
     func body(content: Content) -> some View {
-        let fade = SidebarRowLayout.HoverFade(controls: width)
+        let fade = SidebarRowLayout.HoverFade(controls: width, kept: kept)
         content
             .trailingFade(active, fade)
             .overlay(alignment: .trailing) {

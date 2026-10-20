@@ -396,7 +396,8 @@ goes either way (<b>Go to Parent Task</b>, <b>Tasks Started From Here</b>).</p>
 </ul>
 <p>A task with a single thread says the same while its agent works, waits or has a result you have not read; after
 that its own status (its pull request, its checks) takes the line back. The toolbar under the thread's path says what
-the agent is doing while it works or waits. Compact rows stay one line.</p>
+the agent is doing while it works or waits. Compact rows — the default — stay one line, except a task that is waiting
+for you or working: it takes the second line for as long as that lasts.</p>
 
 <h2 id="states">States</h2>
 <p>The dot on a sidebar row, the pill in the toolbar and the Dock badge all say the same thing:</p>
@@ -406,13 +407,21 @@ the agent is doing while it works or waits. Compact rows stay one line.</p>
   <li><span class="dot idle"></span><b>Idle</b> — alive, nothing in flight.</li>
   <li><span class="dot done"></span><b>Done</b> — the turn ended.</li>
 </ul>
-<p>A task row carries one glyph instead: the most pressing thing about the task, picked in this order —
-waiting on you, running, setup running, setup failed, done, conflicts, checks failing, checks running, checks
-passed, draft pull request, pull request open, changed, clean. Each has its own symbol shape, so it reads without
-colour and on the selection highlight. The row's other side is the task's <code>+N −M</code>; rest the pointer on
-it for the branch, the repositories, the pull request and its checks, the age and the prompt. A task with a
-single thread is a single row — selecting it shows that thread's terminal — and its threads only appear nested
-from the second one on.</p>
+<p>A task row carries the same dot — the most urgent of its threads — and nothing in front of its name: no driver
+icon on a thread row, no status glyph on a task row, since the terminal on the right says which driver runs and the
+group the row sits in says what state it is in. The task's status glyph lives on in its hover card: the most pressing
+thing about the task, picked in this order — waiting on you, running, setup running, setup failed, done, conflicts,
+checks failing, checks running, checks passed, draft pull request, pull request open, changed, clean. The end of the
+row is one mark: the state dot of its threads, or a <code>merged</code> chip once its pull requests have landed. The <code>+N −M</code> counts live in the hover card and
+the inspector, not in the row, so the name keeps the width; rest the pointer on the row for the branch, the
+repositories, the pull request and its checks, the counts, the age and the prompt. A task with a single thread is a
+single row — selecting it shows that thread's terminal — and its threads only appear nested from the second one on,
+along a thin rule hanging from the task's chevron.</p>
+<p>Rows are arranged <b>by state</b> by default — <i>Needs you</i>, <i>Working</i>, <i>Finished, not read</i>,
+<i>Quiet</i>, <i>Dormant</i>, each header with its count, empty groups skipped — so what wants you is at the top.
+<kbd>⌃⌘G</kbd> (or <b>Settings ▸ Sidebar ▸ Arrange</b>) switches to the tree, where tasks keep their order and sit
+under their topic; <kbd>⌃⌘L</kbd> switches between compact and detailed rows. A choice already saved is kept
+across updates: only a fresh install starts by state with compact rows.</p>
 <p><b>Mark as Read</b> (<kbd>⇧⌘U</kbd>, or the thread's context menu) clears a waiting thread's attention once
 you have seen it: the mark, the badge and the notification go. The next question it asks brings them back.</p>
 <p><b>Since your last visit.</b> Coming back to a scope — switching to it, or bringing the app back after 20
@@ -508,8 +517,7 @@ TASKS = """
 names the branch the way your repository already names branches.</p>
 
 <h2 id="create">Creating a task</h2>
-<p><kbd>⇧⌘T</kbd>, <b>New Task…</b> in the palette, or the <b>New Task</b> button under the sidebar once
-<i>Settings › Sidebar</i> shows it (it is hidden by default). The first step asks for two things: what
+<p><kbd>⇧⌘T</kbd>, or <b>New Task…</b> in the palette. The first step asks for two things: what
 you want done, and which driver should do it. Nothing else — the repositories, the branch and the folder come
 from the prompt.</p>
 FIG_PROMPT
@@ -995,7 +1003,7 @@ the clean rebase, or the message to the thread, on demand. A scope may set its o
 (<code>followMain</code> on the scope's declaration).</p>
 <p>A task left open with no thread activity for 3 days (<b>Settings ▸ General ▸ Tasks ▸ Idle after</b>), or whose
 pull request was closed without merging, says so in its row — <code>idle 4d</code>, <code>PR closed</code>, ahead of
-what its agent last did, or at the end of a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
+what its agent last did, or after the name on a compact row — and, arranged by state, goes under <b>Dormant</b>, unless it is waiting for you or working.</p>
 """
 
 GRAPH = """
@@ -1665,7 +1673,7 @@ FIGURES = {
     "FIG_AGENT_DELTA": figure("agent-delta", "The whole window: a task's thread on the left, the task's diff in the inspector on the right."),
     "FIG_DELTA": figure("delta-files", "Delta groups the changed files by repository."),
     "FIG_DELTA_PANEL": figure("delta-panel", "Delta: files by repository, the diff, and commit / push / create PR."),
-    "FIG_SIDEBAR": figure("sidebar", "The sidebar: loose threads, then each task with its threads; repositories on demand."),
+    "FIG_SIDEBAR": figure("sidebar", "The sidebar: what needs you first, then what is working, finished, quiet; each task with its threads under it; repositories on demand."),
     "FIG_SETTINGS": figure("settings", "Settings → General.", "shot narrow"),
     "FIG_PROMPT": figure("newtask-prompt", "Step one: the request, the driver, the repositories."),
     "FIG_LOADING": figure("newtask-loading", "The driver runs headless while the derived name stands in."),

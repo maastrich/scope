@@ -7,25 +7,37 @@ import Testing
     }
 
     /// A task and the loose-threads group open with a disclosure slot; the threads nested under either are indented
-    /// one level instead. All of them must put their glyph, and their title, in the same column.
+    /// one level instead. All of them must put their title in the same column, under the parent's title.
     @Test func groupTaskAndNestedThreadShareTheirColumns() {
-        let task = SidebarRowLayout.glyphColumn(depth: 0, disclosure: true)
-        let group = SidebarRowLayout.glyphColumn(depth: 0, disclosure: true)
-        let nestedThread = SidebarRowLayout.glyphColumn(depth: 1, disclosure: false)
+        let task = SidebarRowLayout.titleColumn(depth: 0, disclosure: true)
+        let group = SidebarRowLayout.titleColumn(depth: 0, disclosure: true)
+        let nestedThread = SidebarRowLayout.titleColumn(depth: 1, disclosure: false)
         #expect(task == group)
         #expect(task == nestedThread)
-        #expect(SidebarRowLayout.titleColumn(depth: 0, disclosure: true)
-                == SidebarRowLayout.titleColumn(depth: 1, disclosure: false))
     }
 
-    @Test func theTitleFollowsTheGlyphSlot() {
-        #expect(SidebarRowLayout.titleColumn(depth: 0, disclosure: false)
-                == SidebarRowLayout.glyphSlot + SidebarRowLayout.spacing)
+    @Test func aRowWithoutDisclosureStartsAtTheEdge() {
+        #expect(SidebarRowLayout.titleColumn(depth: 0, disclosure: false) == 0)
+    }
+
+    /// The rule hangs from the centre of the parent's chevron and ends, with its tick, before the nested title.
+    @Test func theRuleHangsFromTheChevronLeftOfTheNestedTitle() {
+        let rule = SidebarRowLayout.ruleColumn(parentDepth: 0)
+        #expect(rule == SidebarRowLayout.disclosureSlot / 2)
+        #expect(rule + SidebarRowLayout.ruleTick < SidebarRowLayout.titleColumn(depth: 1, disclosure: false))
+        #expect(SidebarRowLayout.ruleColumn(parentDepth: 1) == SidebarRowLayout.indent + SidebarRowLayout.disclosureSlot / 2)
     }
 
     @Test func rowHeightsFollowTheSetting() {
         #expect(SidebarRowLayout.height(detailed: false) == 28)
         #expect(SidebarRowLayout.height(detailed: true) == 42)
+    }
+
+    /// The pulse ring grows to 2.1× the dot: the column must hold it (the halo is clipped to the column), and the
+    /// column must end inside the selection fill with a point to spare.
+    @Test func thePulsingDotStaysInsideItsColumnAndTheSelection() {
+        #expect(SidebarRowLayout.stateDotColumn >= SidebarRowLayout.stateDot * 2.1)
+        #expect(SidebarRowLayout.rowInset >= SidebarRowLayout.selectionInset + 2)
     }
 
     /// Three 16 pt icons in a 3 pt wash with 2 pt between them are 70 pt, more than the 62 the row used to clear:
@@ -39,7 +51,7 @@ import Testing
 
     @Test func theStateDotStaysDrawnUnderHover() {
         let fade = SidebarRowLayout.HoverFade(controls: 22)
-        #expect(fade.kept == SidebarRowLayout.stateDot + SidebarRowLayout.spacing)
+        #expect(fade.kept == SidebarRowLayout.stateDotColumn + SidebarRowLayout.spacing)
         #expect(fade.kept < fade.clearFrom)
     }
 
