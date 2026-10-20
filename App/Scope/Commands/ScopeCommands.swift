@@ -163,6 +163,11 @@ struct ScopeCommands: Commands {
                     if let task = model?.currentTask { Reveal.inFinder(task.record.rootURL) }
                 }
                 .disabled(model?.currentTask == nil)
+                Divider()
+                // ⌃ rather than ⌘, like the scopes: nothing an agent TUI reads uses ⌃`.
+                Button("Shell") { model?.toggleTaskShell() }
+                    .keyboardShortcut("`", modifiers: .control)
+                    .disabled(model?.currentTask == nil)
             }
 
             Divider()

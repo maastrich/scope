@@ -29,6 +29,8 @@ struct InspectorViewerColumn: View {
                 PathFileViewer(leading: AnyView(backButton), trailing: AnyView(closeButton))
             case .reading:
                 ReadingViewer(leading: AnyView(backButton), trailing: AnyView(closeButton))
+            case .shell:
+                TaskShellPane(leading: AnyView(backButton), trailing: AnyView(closeButton))
             case nil:
                 EmptyView()
             }
@@ -53,7 +55,8 @@ struct InspectorViewerColumn: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .help(previous == .diff ? "Back to the diff" : previous == .reading ? "Back to the text" : "Back to the previous file")
+            .help(previous == .diff ? "Back to the diff" : previous == .reading ? "Back to the text"
+                  : previous == .shell ? "Back to the shell" : "Back to the previous file")
             .accessibilityLabel("Back")
             .usageID("back", label: "Back (reading column)")
         }

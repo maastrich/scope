@@ -23,6 +23,12 @@ extension PaletteModel {
         items.append(PaletteItem(id: "task-copy-branch", section: .actions, icon: "doc.on.doc", label: "Copy Branch Name",
                                  hint: task.branch) { Pasteboard.copy(task.branch) })
         if !task.isArchived {
+            items.append(PaletteItem(id: "task-shell", section: .actions, icon: "terminal", label: "Shell",
+                                     hint: "a shell of \(task.name) in the reading column", shortcut: "⌃`") {
+                model.toggleTaskShell()
+            })
+        }
+        if !task.isArchived {
             items.append(PaletteItem(id: "task-add-branch", section: .actions, icon: "arrow.triangle.branch", label: "Add Branch…",
                                      hint: "a second worktree of a repository of \(task.name), on its own branch") {
                 model.addBranchFromUI(task)
