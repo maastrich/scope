@@ -62,9 +62,9 @@ session's transcript. It lives beside the thread's record, in <code>~/.scope/thr
 survives a restart, and goes when the thread is closed.</p>
 <h3 id="limits">Your plan's limits</h3>
 <p>A Claude subscription (Pro, Max) is not a budget of tokens: it is a rolling five-hour window and a weekly one,
-sometimes a weekly one per model, each a percentage that resets. That is what the toolbar meter leads with — the
-window nearest its ceiling, as <i>31% · 35 min</i>, coloured as it tightens — and its popover lists every window
-with its percentage and when it resets, the tokens under them.</p>
+sometimes a weekly one per model, each a percentage that resets. That is what the meter at the bottom of the sidebar
+leads with — the window nearest its ceiling, as <i>31% · 35 min</i>, a bar coloured as it tightens — and clicking it
+lists every window with its percentage and when it resets, the tokens under them.</p>
 <p>The figures are Claude Code's own. The JSON Claude Code hands its status line on every answer carries
 <code>rate_limits</code>: one object per window with <code>used_percentage</code> and <code>resets_at</code>, for
 claude.ai subscribers only, after the session's first answer. The per-thread settings file Scope passes on the
@@ -87,7 +87,7 @@ bytes appended, off the main thread — and sums the <code>usage</code> of each 
 writes and cache reads, with the model and the time. A response is written as several lines carrying the same
 message id; it counts once. The transcripts of the subagents a session runs (the Task tool) count towards its
 thread, since they spend the same quota. The transcripts are only read, never written.</p>
-<p>The toolbar meter shows the last five hours across every scope; its popover adds today, the last seven days,
+<p>Without reported limits the band shows the last five hours across every scope; its popover adds today, the last seven days,
 each scope and the threads that spent most, with what the five hours are made of. A task's total sits beside its
 name in the inspector band and in its hover card. The figures include cache reads, which are most of any total.
 The tokens say who spent the limits above; where Claude Code reports no limits they are the meter's main figure,

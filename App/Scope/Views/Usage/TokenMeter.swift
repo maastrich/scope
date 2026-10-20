@@ -4,61 +4,79 @@ import ScopeControl
 import ScopeCore
 import ScopeTasks
 
-/// The toolbar's usage meter. With a subscription it leads with what matters to one: the share consumed of the window
-/// nearest its ceiling and the time to its reset (`31% · 35 min`), coloured by how close it is, as Claude Code reports
-/// it to its status line. The popover details every window — the 5-hour session, the week, a per-model week when the
-/// plan has one — and, under them, the tokens: what the threads consumed, who spent most. Without limits (an API
-/// key, or no thread answered yet) the meter is the token count it used to be, and says the limits are unknown.
-struct TokenMeterToolbarButton: View {
+/// The usage meter, a band at the bottom of the sidebar. With a subscription it leads with what matters to one: the
+/// share consumed of the window nearest its ceiling and the time to its reset (`84% · 3 d 4 h`), a bar under it
+/// coloured by how close it is, as Claude Code reports it to its status line. Clicking it opens the detail of every
+/// window — the 5-hour session, the week, a per-model week when the plan has one — and, under them, the tokens: what
+/// the threads consumed, who spent most. Without limits (an API key, or no thread answered yet) the band is the token
+/// count it used to be, and the detail says the limits are unknown.
+struct UsageMeterBand: View {
     @Environment(AppModel.self) private var model
     @State private var shown = false
+    @State private var hovered = false
 
     var body: some View {
         let usage = model.tokenUsage
         if model.config.preferences.showTokenMeter, usage.hasUsage {
             let now = usage.clock
-            let windows = usage.snapshot.all
-            let budget = model.config.preferences.tokenBudgetPer5h
-            Button {
-                shown.toggle()
-            } label: {
-                HStack(spacing: 5) {
-                    if let limits = usage.currentLimits(now: now), let tightest = limits.tightest(now: now) {
-                        LimitRing(percentage: tightest.usedPercentage)
-                            .frame(width: 12, height: 12)
-                        Text(RateLimitText.headline(tightest, now: now))
-                            .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(limits.isStale(now: now) ? Ink.secondary : Ink.primary)
-                        Text(tightest.shortLabel)
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.tertiary)
-                    } else {
-                        Image(systemName: "circle.dotted.circle")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Ink.secondary)
-                        Text(TokenUsageText.compact(windows.fiveHours.counts.total))
-                            .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(Ink.primary)
-                        Text("5h")
-                            .font(.scopeCaption)
-                            .foregroundStyle(Ink.tertiary)
-                        if budget > 0 {
-                            TokenGauge(used: windows.fiveHours.counts.total, budget: budget)
-                                .frame(width: 28)
+            VStack(spacing: 0) {
+                Divider()
+                Button {
+                    shown.toggle()
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        if let limits = usage.currentLimits(now: now), let tightest = limits.tightest(now: now) {
+                            HStack(spacing: 6) {
+                                LimitRing(percentage: tightest.usedPercentage)
+                                    .frame(width: 10, height: 10)
+                                Text(tightest.label)
+                                    .font(.scopeCaption)
+                                    .foregroundStyle(Ink.secondary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                                Text(RateLimitText.headline(tightest, now: now))
+                                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(limits.isStale(now: now) ? Ink.secondary : Ink.primary)
+                                    .lineLimit(1)
+                            }
+                            LimitBar(percentage: tightest.usedPercentage, height: 3)
+                        } else {
+                            let windows = usage.snapshot.all
+                            let budget = model.config.preferences.tokenBudgetPer5h
+                            HStack(spacing: 6) {
+                                Image(systemName: "circle.dotted.circle")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Ink.secondary)
+                                Text("Tokens · 5h")
+                                    .font(.scopeCaption)
+                                    .foregroundStyle(Ink.secondary)
+                                Spacer(minLength: 4)
+                                Text(TokenUsageText.compact(windows.fiveHours.counts.total)
+                                     + (budget > 0 ? " / " + TokenUsageText.compact(budget) : ""))
+                                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(Ink.primary)
+                            }
+                            if budget > 0 {
+                                TokenGauge(used: windows.fiveHours.counts.total, budget: budget)
+                            }
                         }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(hovered ? Fill.hover : .clear)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 22)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .onHover { hovered = $0 }
+                .usageID("sidebar.usage-meter", label: "Usage meter (sidebar)")
+                .help(help(now: now))
+                .accessibilityLabel(accessibility(now: now))
+                .popover(isPresented: $shown, arrowEdge: .trailing) {
+                    TokenUsagePopover()
+                }
             }
-            .buttonStyle(.scopeGhost)
-            .usageID("toolbar.token-meter", label: "Usage meter (toolbar)")
-            .help(help(now: now))
-            .accessibilityLabel(accessibility(now: now))
-            .popover(isPresented: $shown, arrowEdge: .bottom) {
-                TokenUsagePopover()
-            }
+            .background(Surface.surface)
         }
     }
 
@@ -92,7 +110,7 @@ enum RateLimitStyle {
     }
 }
 
-/// A small ring filled to `percentage`, the toolbar's glyph for a limit.
+/// A small ring filled to `percentage`, the band's glyph for a limit.
 struct LimitRing: View {
     let percentage: Double
 
@@ -109,9 +127,10 @@ struct LimitRing: View {
     }
 }
 
-/// A 4 pt bar of `percentage` of a limit, coloured by level.
+/// A thin bar of `percentage` of a limit, coloured by level.
 struct LimitBar: View {
     let percentage: Double
+    var height: CGFloat = 4
 
     var body: some View {
         let fraction = min(1, max(0, percentage / 100))
@@ -120,7 +139,7 @@ struct LimitBar: View {
                 .fill(RateLimitStyle.color(RateLimitLevel(percentage: percentage)))
                 .frame(width: proxy.size.width * fraction)
         }
-        .frame(height: 4)
+        .frame(height: height)
         .background(Fill.pressed, in: Capsule())
         .accessibilityHidden(true)
     }

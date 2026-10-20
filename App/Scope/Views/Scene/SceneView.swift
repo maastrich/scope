@@ -81,7 +81,6 @@ struct SceneView: View {
             if model.config.preferences.attentionCounter == .toolbar {
                 AttentionToolbarButton()
             }
-            TokenMeterToolbarButton()
             if let session = model.currentThread, session.deliversEvents {
                 Button {
                     model.readReply(of: session)

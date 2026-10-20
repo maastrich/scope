@@ -2,7 +2,7 @@ import SwiftUI
 import ScopeControl
 import ScopeCore
 
-/// Settings ▸ General ▸ Usage: the toolbar meter (plan limits first, tokens under them), an optional token budget of
+/// Settings ▸ General ▸ Usage: the sidebar's meter (plan limits first, tokens under them), an optional token budget of
 /// the user's own, the API-equivalent cost.
 struct TokenUsageSettingsSection: View {
     @Environment(AppModel.self) private var model
@@ -11,9 +11,9 @@ struct TokenUsageSettingsSection: View {
 
     var body: some View {
         SettingsSection("Usage") {
-            Toggle("Show the usage meter in the toolbar", isOn: preference(\.showTokenMeter))
+            Toggle("Show the usage meter at the bottom of the sidebar", isOn: preference(\.showTokenMeter))
                 .toggleStyle(.scope)
-                .usageID("show-token-meter", label: "Show the usage meter in the toolbar")
+                .usageID("show-token-meter", label: "Show the usage meter at the bottom of the sidebar")
             SettingsRow("Token budget per 5 h", caption: "Optional, for an API key: turns the token count into a gauge against your own figure, e.g. 20M.") {
                 TextField("Budget", text: $budgetText, prompt: Text("none"))
                     .textFieldStyle(.plain)

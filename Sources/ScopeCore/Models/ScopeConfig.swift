@@ -540,7 +540,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// may override it (`ScopeDeclaration.allowTryInCheckout`).
     public var allowTryInCheckout: Bool
 
-    /// The token meter in the toolbar: what Claude Code threads consumed over five hours and seven days. On by default.
+    /// The usage meter at the bottom of the sidebar: the plan's limits as Claude Code reports them, else what Claude Code
+    /// threads consumed over five hours and seven days. On by default.
     public var showTokenMeter: Bool
     /// Tokens the user expects to spend per five hours; above 0 the meter becomes a gauge against it. Scope cannot know
     /// a plan's real limit, so it is the user's own figure. 0 by default: consumption only.
