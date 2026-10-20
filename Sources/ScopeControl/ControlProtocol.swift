@@ -1016,10 +1016,14 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
     /// then the latest finished. Absent when there is none.
     public var background: [BackgroundTaskSummary]?
 
+    /// Its Claude Code sub-agents still running and the last few that finished (`SubagentList.summaries`); absent
+    /// for a thread that launched none.
+    public var subagents: [SubagentSummary]?
+
     public init(id: String, title: String, driver: String, model: String? = nil, scope: String, scopeSlug: String, task: String?,
                 cwd: String, state: String, alive: Bool, openedBy: String, depth: Int, parent: String? = nil,
                 resident: String? = nil, activity: String? = nil, tokens: String? = nil, session: ClaudeSessionSummary? = nil,
-                background: [BackgroundTaskSummary]? = nil) {
+                background: [BackgroundTaskSummary]? = nil, subagents: [SubagentSummary]? = nil) {
         self.id = id
         self.title = title
         self.driver = driver
@@ -1038,6 +1042,7 @@ public struct ThreadSummary: Codable, Sendable, Equatable {
         self.tokens = tokens
         self.session = session
         self.background = background
+        self.subagents = subagents
     }
 }
 
@@ -1337,6 +1342,9 @@ public struct ThreadReadResult: Codable, Sendable, Equatable {
     public var untrusted: Bool
     /// What the thread runs or has scheduled in the background (`ThreadSummary.background`).
     public var background: [BackgroundTaskSummary]?
+    /// Every sub-agent of the thread's Claude Code session Scope still keeps, with the start of each one's report;
+    /// absent when it launched none.
+    public var subagents: [SubagentSummary]?
 
     public init(thread: String, title: String, state: String, page: ThreadTranscript.Page, note: String? = nil) {
         self.thread = thread
@@ -1385,6 +1393,8 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         public var staleReply: Bool?
         /// Sub-agents of the driver still running in the background, when any: why an `idle` thread is not settled.
         public var agents: Int?
+        /// Its sub-agents still running and the last few that finished (`SubagentList.summaries`), when it launched any.
+        public var subagents: [SubagentSummary]?
         /// The task the thread runs in, when it does, and that task's pull request as Scope last saw it — refreshed
         /// when the wait ends, so the answer says whether the work is merged, mergeable or failing its checks.
         public var task: String?
@@ -1394,8 +1404,8 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
         public var background: [BackgroundTaskSummary]?
 
         public init(thread: String, title: String, state: String, settled: Bool, reply: AgentReply? = nil,
-                    lastPromptAt: Date? = nil, agents: Int = 0, task: String? = nil, pullRequest: PullRequestSummary? = nil,
-                    background: [BackgroundTaskSummary]? = nil) {
+                    lastPromptAt: Date? = nil, agents: Int = 0, subagents: [SubagentSummary]? = nil, task: String? = nil,
+                    pullRequest: PullRequestSummary? = nil, background: [BackgroundTaskSummary]? = nil) {
             self.thread = thread
             self.title = title
             self.state = state
@@ -1404,6 +1414,7 @@ public struct ThreadWaitResult: Codable, Sendable, Equatable {
             self.replyAt = reply?.at
             self.staleReply = reply.map { ThreadWait.isStale($0, lastPromptAt: lastPromptAt) }
             self.agents = agents > 0 ? agents : nil
+            self.subagents = subagents
             self.task = task
             self.pullRequest = pullRequest
             self.background = background

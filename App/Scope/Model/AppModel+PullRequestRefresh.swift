@@ -103,7 +103,7 @@ extension AppModel {
             let launching = if case .launching = session.phase { true } else { false }
             let starts = activity.turns.compactMap(\.startedAt) + [activity.turnStartedAt].compactMap { $0 }
             return MergedTaskArchive.Thread(
-                state: session.displayState, runningAgents: activity.runningAgents(now: now), launching: launching,
+                state: session.displayState, runningAgents: session.runningSubagents(now: now), launching: launching,
                 interrupted: activity.turns.last?.outcome == .exited || (activity.inTurn && !session.phase.isAlive),
                 lastTurnStartedAt: starts.max())
         }

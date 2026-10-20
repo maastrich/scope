@@ -30,6 +30,8 @@ public struct ClaudeSession: Sendable, Equatable {
     public var pullRequests = ClaudeSessionPullRequests()
     /// Background shells, Monitors, the `/loop` wake-up and the crons (`ClaudeBackgroundWork`).
     public var background = ClaudeBackgroundWork()
+    /// The sub-agents the session launched (`ClaudeSubagents`).
+    public var subagents = ClaudeSubagents()
 
     public init() {}
 
@@ -53,10 +55,12 @@ public struct ClaudeSession: Sendable, Equatable {
         model.apply(facts)
         pullRequests.apply(facts)
         background.apply(facts)
+        subagents.apply(facts)
     }
 
     /// Folds what the transcript gained, in file order.
     public mutating func apply(_ records: [ClaudeTranscriptRecord]) {
+        subagents.apply(records)
         for record in records {
             switch record {
             case .permissionMode(let mode):

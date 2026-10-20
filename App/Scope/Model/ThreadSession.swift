@@ -53,6 +53,8 @@ final class ThreadSession: Identifiable {
     /// Claude Code's own state beyond the turn: background work, sub-agents, the permission mode… (`ClaudeSession`).
     /// Observed, and only set when it moves; fed by every hook event, late ones included, and by the transcript.
     private(set) var claude = ClaudeSession()
+    /// The sub-agent the Subagents card shows the detail of, picked there or from its sidebar row.
+    var focusedSubagent: String?
     /// Where the transcript was last read up to (`AppModel+ClaudeSession`).
     @ObservationIgnored var transcriptTail = ClaudeTranscriptTail()
     @ObservationIgnored var transcriptTailReading = false
@@ -61,6 +63,10 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored var onClaudeSessionStarted: (@MainActor (ThreadSession, String) -> Void)?
     /// The session opened, merged or linked pull requests it had not reported yet (`ClaudeSessionPullRequests`).
     @ObservationIgnored var onClaudePullRequests: (@MainActor (ThreadSession, [ClaudeSessionPullRequests.Entry]) -> Void)?
+    /// Times each sub-agent's `meta.json` was looked for and not found: given up on after a few.
+    @ObservationIgnored var subagentMetaMisses: [String: Int] = [:]
+    /// When the last running sub-agent finished, by hook or by the transcript (`ThreadWait.Snapshot.subagentsEndedAt`).
+    @ObservationIgnored private(set) var subagentsEndedAt: Date?
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
@@ -379,7 +385,15 @@ final class ThreadSession: Identifiable {
         return ThreadWait.Snapshot(state: displayState.name, expectingSince: expectingTurnSince,
                                    reportsTurnStart: AdapterInstaller.reportsTurnStart(profile), starting: starting,
                                    replyAt: lastReply?.at, turnStartedAt: lastTurnStartedAt, lastPromptAt: lastPromptAt,
-                                   agents: phase.isAlive ? activity.runningAgents() : 0)
+                                   agents: phase.isAlive ? runningSubagents() : 0, subagentsEndedAt: subagentsEndedAt)
+    }
+
+    /// Sub-agents still at work: the hooks' count (`ThreadActivity.agents`) checked against what the session's
+    /// transcript says ended, plus launches whose start hook was lost (`ClaudeSubagents.runningCount`). A process
+    /// that is gone keeps the hooks' word alone: nothing tells the transcript it died.
+    func runningSubagents(now: Date = .now) -> Int {
+        guard phase.isAlive else { return activity.runningAgents(now: now) }
+        return claude.subagents.runningCount(hookAgents: activity.agents, now: now, limit: ThreadActivity.agentLimit)
     }
 
     /// `running`, yet the agent answered after anything that started a turn (`ThreadWait.hasOutlivedItsTurn`): the
@@ -402,6 +416,7 @@ final class ThreadSession: Identifiable {
         // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
+        let subagentsBefore = event.kind == .agentEnded ? runningSubagents() : 0
         let next = ThreadStateMachine.next(adapterState ?? .initial, on: event, after: activity, promptPending: promptPending)
         if event.kind.changesState, !late { expectingTurnSince = nil }
         if event.kind == .turnStarted, !late { lastTurnStartedAt = event.receivedAt }
@@ -411,7 +426,8 @@ final class ThreadSession: Identifiable {
         // The last background sub-agent reported between turns: the driver is about to open a turn on its result.
         // Expected like a prompt, so a wait does not slip through the gap — but not a prompt: the last answer stays
         // the answer it is, and `startGrace` lets the thread go if no turn follows.
-        if event.kind == .agentEnded, !activity.inTurn, activity.runningAgents() == 0, expectingTurnSince == nil,
+        if subagentsBefore > 0, runningSubagents() == 0 { subagentsEndedAt = event.receivedAt }
+        if event.kind == .agentEnded, !activity.inTurn, runningSubagents() == 0, expectingTurnSince == nil,
            adapterState != .running {
             expectingTurnSince = event.receivedAt
         }
@@ -444,7 +460,18 @@ final class ThreadSession: Identifiable {
     /// Folds what the transcript gained.
     func applyTranscript(_ records: [ClaudeTranscriptRecord]) {
         guard !records.isEmpty else { return }
-        updateClaude { $0.apply(records) }
+        let started = if case .alive(_, let since) = phase { since } else { Date?.none }
+        let runningBefore = runningSubagents()
+        updateClaude { session in
+            // Before the records: what a relaunch reads back from an earlier process is not running any more.
+            if let started { session.subagents.processStarted(at: started) }
+            session.apply(records)
+        }
+        // The last background sub-agent reported in the transcript (its notification) rather than by a hook: the
+        // driver is about to open a turn on its result, expected as after `agent.ended` in `apply(_:)`.
+        guard runningBefore > 0, runningSubagents() == 0 else { return }
+        subagentsEndedAt = .now
+        if !activity.inTurn, expectingTurnSince == nil, adapterState != .running { expectingTurnSince = .now }
     }
 
     /// What the configuration declares for the session's MCP servers (`ClaudeMCPConfig`).
@@ -455,6 +482,14 @@ final class ThreadSession: Identifiable {
     /// Scope is about to signal background task `id` (`AppModel.stopBackgroundTask`).
     func markBackgroundStopRequested(_ id: String) {
         updateClaude { $0.background.markStopRequested(id) }
+    }
+
+    /// Folds the `meta.json` files read for its sub-agents: (agent id, meta, the sub-agent's transcript beside it).
+    func applySubagentMeta(_ metas: [(agentID: String, meta: ClaudeSubagentMeta, transcript: String)]) {
+        guard !metas.isEmpty else { return }
+        updateClaude { session in
+            for entry in metas { session.subagents.apply(entry.meta, agentID: entry.agentID, transcriptPath: entry.transcript) }
+        }
     }
 
     /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call.
