@@ -63,8 +63,9 @@ final class AppModel {
     @ObservationIgnored var stateWatchers: StateWatchers?
     /// Threads that exited live: the tab stays (greyed) while the toast shows; see `threadExited`.
     private(set) var exitNotices: [ThreadExitNotice] = []
-    /// Threads closed in the last 30 s, most recent last (⇧⌘T restores the last one).
-    private(set) var recentlyClosed: [ClosedThread] = []
+    /// Closes and archives that can still be taken back (`AppModel+Undo`), and the toasts offering it.
+    var undoLedger = UndoLedger<UndoableAction>(window: TimeInterval(AppModel.undoWindow.components.seconds))
+    var undoNotices: [UndoNotice] = []
 
     /// Drives the sidebar highlight and, through `syncThreadFromSelection`, the scene: a thread row selects
     /// its tab, a task row its last thread, a scope or repo row shows the scope's empty view.
@@ -199,7 +200,8 @@ final class AppModel {
     }
 
     @ObservationIgnored private lazy var logos = ScopeLogoStore(folder: ScopeHome.scopeLogosURL(home: env.home))
-    @ObservationIgnored private var undoTimers: [ThreadID: Task<Void, Never>] = [:]
+    /// Drops expired undo entries, so the Edit menu follows the window without being asked.
+    @ObservationIgnored var undoExpiry: Task<Void, Never>?
     @ObservationIgnored private var isRestoringUIState = false
     @ObservationIgnored private var reportedShellWarning = false
     @ObservationIgnored private var launcher: ThreadLauncher
@@ -1262,10 +1264,12 @@ final class AppModel {
         session.stop()
     }
 
-    /// Closes a thread. With a running process and the preference on, asks first; returns `false` when cancelled.
-    /// A resident thread is never closed — it is stopped at most — except when its scope is removed (`evenResident`).
+    /// Closes a thread. With something to lose (`CloseGuard.threadRisks`: an agent mid-turn, a shell with a live
+    /// process) and the preference on, asks first; returns `false` when cancelled. Whatever asked, the thread can be
+    /// reopened for `undoWindow` (`AppModel+Undo`). A resident thread is never closed — it is stopped at most —
+    /// except when its scope is removed (`evenResident`).
     @discardableResult
-    func close(_ id: ThreadID, force: Bool, evenResident: Bool = false) async -> Bool {
+    func close(_ id: ThreadID, force: Bool, evenResident: Bool = false, by requester: CloseRequester = .user) async -> Bool {
         guard let session = session(id) else { return true }
         guard evenResident || session.record.resident == nil else {
             NSSound.beep()
@@ -1275,8 +1279,9 @@ final class AppModel {
         residentHolds[id] = nil
         residentQuickExits[id] = nil
         if session.isAlive {
-            if !force, config.preferences.confirmCloseRunningThread {
-                guard await confirmClose(session) else { return false }
+            let risks = CloseGuard.threadRisks(isAlive: true, isWorking: session.isWorking, reportsActivity: session.deliversEvents)
+            if !force, CloseGuard.shouldConfirm(risks, preference: config.preferences.confirmCloseRunningThread) {
+                guard await confirmClose(session, risks: risks) else { return false }
             }
             closingThreads.insert(id)
             defer { closingThreads.remove(id) }
@@ -1293,46 +1298,9 @@ final class AppModel {
         session.onActivityChanged = nil
         await keepTimeline(of: session.record, activity: session.activity)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
-        rememberClosed(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
-                                    selection: restoreSelection))
+        remember(.closedThread(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
+                                            selection: restoreSelection)), by: requester)
         return true
-    }
-
-    // MARK: Undo close
-
-    static let undoCloseWindow: Duration = .seconds(30)
-
-    var canUndoCloseThread: Bool { !recentlyClosed.isEmpty }
-
-    /// Keeps the record for `undoCloseWindow` so ⇧⌘T can bring the thread back.
-    private func rememberClosed(_ closed: ClosedThread) {
-        recentlyClosed.append(closed)
-        undoTimers[closed.id]?.cancel()
-        undoTimers[closed.id] = Task { [weak self] in
-            try? await Task.sleep(for: AppModel.undoCloseWindow)
-            guard !Task.isCancelled, let self else { return }
-            self.recentlyClosed.removeAll { $0.id == closed.id }
-            self.undoTimers[closed.id] = nil
-        }
-    }
-
-    /// ⇧⌘T: reopens the most recently closed thread with the same record (resumed when the driver can).
-    /// Synchronous for menu items and palette actions; the launch runs in its own task.
-    func undoCloseThread() {
-        guard let closed = recentlyClosed.popLast() else { return }
-        Task { await restoreClosed(closed) }
-    }
-
-    private func restoreClosed(_ closed: ClosedThread) async {
-        undoTimers[closed.id]?.cancel()
-        undoTimers[closed.id] = nil
-        guard scope(closed.record.scopeID) != nil, session(closed.id) == nil else { return }
-        let session = ThreadSession(record: closed.record, profile: closed.profile)
-        register(session, activity: closed.activity)
-        await env.threadRecords.save(closed.record)
-        selection = .thread(closed.id)
-        selectedThreadID = closed.id
-        await launch(session, mode: session.canResume ? .resume : .launch)
     }
 
     /// Removes the tab (and the terminal view with it) and moves the selection to a neighbour of the same group —
@@ -1389,21 +1357,28 @@ final class AppModel {
         forgetAssist(id)
     }
 
-    private func confirmClose(_ session: ThreadSession) async -> Bool {
+    private func confirmClose(_ session: ThreadSession, risks: [CloseGuard.Risk]) async -> Bool {
+        await confirmDestructive(title: "Close “\(session.title)”?", verb: "Close", risks: risks)
+    }
+
+    /// The one question before a close or an archive that would lose something. Cancel is the default button: a
+    /// Return typed for the terminal a moment earlier must not confirm, and the destructive answer takes a click.
+    func confirmDestructive(title: String, verb: String, risks: [CloseGuard.Risk]) async -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Close “\(session.title)”?"
-        let pid = session.pid.map { " (pid \($0))" } ?? ""
-        alert.informativeText = "The process\(pid) will be sent SIGHUP."
-        alert.addButton(withTitle: "Close").hasDestructiveAction = true
+        alert.messageText = title
+        alert.informativeText = CloseGuard.describe(risks).joined(separator: "\n")
         alert.addButton(withTitle: "Cancel")
+        let destructive = alert.addButton(withTitle: verb)
+        destructive.hasDestructiveAction = true
+        destructive.keyEquivalent = ""
         let response: NSApplication.ModalResponse
         if let window = NSApp.keyWindow {
             response = await alert.beginSheetModal(for: window)
         } else {
             response = alert.runModal()
         }
-        return response == .alertFirstButtonReturn
+        return response == .alertSecondButtonReturn
     }
 
     /// A live exit keeps the tab (greyed, ring dot) and shows a toast for 10 s (Relaunch / Details);
@@ -1460,6 +1435,7 @@ final class AppModel {
     /// the driver session like every other Relaunch.
     func relaunchExitNotice(_ id: ThreadID) async {
         guard let notice = takeExitNotice(id), scope(notice.record.scopeID) != nil else { return }
+        forgetUndo(id: "thread:\(id.rawValue)")
         let session: ThreadSession
         if let existing = self.session(id) {
             session = existing

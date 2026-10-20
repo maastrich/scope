@@ -138,8 +138,12 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Confirmations") {
-                Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
+                Toggle("Ask before closing a thread mid-turn or archiving a task with work in progress", isOn: preference(\.confirmCloseRunningThread))
                     .toggleStyle(.scope)
+                Text("Only when something would be lost: an agent in the middle of a turn, uncommitted changes, an open pull request. A close or an archive can be taken back with ⌘Z either way.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
                     .toggleStyle(.scope)
             }

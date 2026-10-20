@@ -108,7 +108,17 @@ struct ScopeCommands: Commands {
 
     /// SwiftTerm's find bar: the actions reach the terminal view only while it is first responder
     /// (the focused thread pane); anywhere else they are no-ops.
+    @CommandsBuilder
     private var editMenu: some Commands {
+        // ⌘Z takes a close or an archive back while one is inside its window (`AppModel+Undo`); the rest of the
+        // time the key stays with the text views' own undo.
+        CommandGroup(before: .undoRedo) {
+            Button(model?.undoTitle ?? "Undo") {
+                model?.undoLast()
+            }
+            .keyboardShortcut(canUndo ? KeyboardShortcut("z", modifiers: .command) : nil)
+            .disabled(!canUndo)
+        }
         CommandGroup(after: .pasteboard) {
             Divider()
             Button("Find…") { CommandServices.textFinder(.showFindInterface) }
@@ -451,6 +461,10 @@ struct ScopeCommands: Commands {
 
     private var canUndoClose: Bool {
         model?.canUndoCloseThread == true
+    }
+
+    private var canUndo: Bool {
+        model?.canUndo == true
     }
 
     private var threadCount: Int {

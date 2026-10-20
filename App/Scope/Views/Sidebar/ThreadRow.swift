@@ -17,8 +17,10 @@ import ScopeCore
 /// *needs you* caption that used to come with it made three signals for one fact.
 ///
 /// The trailing group lays out from the right: the state dot at a fixed inset, then the caption, which takes what
-/// is left and truncates. The close button appears on hover over the end of the caption, left of the dot, and the
-/// text fades out under it, so no width is held open for it. Nothing here has a fixed width, so a narrow sidebar shortens the caption and
+/// is left and truncates. A "…" menu appears on hover over the end of the caption, left of the dot, and the text
+/// fades out under it, so no width is held open for it. Nothing destructive sits under the pointer: the close
+/// used to be a bare × here, and a thread in the middle of its turn went with one stray click — it is in the menu
+/// now, behind one more deliberate choice, and undoable (`AppModel+Undo`). Nothing here has a fixed width, so a narrow sidebar shortens the caption and
 /// then the title, and never pushes the dot off the edge.
 struct ThreadRow: View {
     @Environment(AppModel.self) private var model
@@ -74,8 +76,7 @@ struct ThreadRow: View {
 
             SidebarStateDot(state: session.displayState, pulses: session.isWorking)
         }
-        // A resident thread has no close button: it cannot be closed.
-        .sidebarHoverControls(isHovered && session.record.resident == nil) { closeButton }
+        .sidebarHoverControls(isHovered) { hoverMenu }
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
@@ -97,19 +98,12 @@ struct ThreadRow: View {
         .accessibilityAddTraits(isListSelected ? .isSelected : [])
     }
 
-    private var closeButton: some View {
-        Button {
-            Task { _ = await model.close(session.id, force: false) }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Ink.secondary)
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
+    /// The row's context menu, reachable with the pointer: Close Thread is its last item, after a divider.
+    private var hoverMenu: some View {
+        ScopeIconMenu(systemImage: "ellipsis", title: "More") {
+            ThreadMenuItems(session: session)
         }
-        .buttonStyle(.iconTight)
-        .help("Close Thread (⌘W)")
-        .accessibilityLabel("Close \(model.displayTitle(for: session))")
+        .usageID("sidebar.thread.more", label: "Thread row “…” menu")
     }
 
     private var rowHints: [String] {

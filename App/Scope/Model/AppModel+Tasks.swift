@@ -576,28 +576,43 @@ extension AppModel {
         return scope.repos.filter { !taken.contains($0.id) && !$0.id.isEmpty }
     }
 
-    /// Removes the worktrees, keeps the branches and the record. One click, no question: uncommitted changes are
-    /// saved first and the notice offers them back (`reopenTask`).
+    /// The user's Archive: removes the worktrees, keeps the branches and the record. Uncommitted changes are saved
+    /// first and the notice offers them back (`reopenTask`); the toast and ⌘Z undo it (`AppModel+Undo`). It asks
+    /// only when the task has something going (`CloseGuard.taskRisks`) and the preference is on; a finished, merged
+    /// task goes in one click, since nothing is lost and the undo stands.
     func archiveTask(_ taskID: TaskID) async {
         guard let task = task(taskID), !task.isDismantling else { return }
-        do { try await dismantle(task, .archive) } catch { dismantleFailed(task, verb: "archive", error: error) }
+        guard await confirmDismantle(task, verb: "Archive") else { return }
+        do { try await dismantle(task, .archive, by: .user) } catch { dismantleFailed(task, verb: "archive", error: error) }
     }
 
-    /// Closes the task for good: threads hung up, worktrees removed, record deleted, the branch too when asked.
-    /// Nothing asks: what could be lost is saved under `refs/scope/salvage/` and the notice says where.
+    /// The user's Close: threads hung up, worktrees removed, record deleted, the branch too when asked. Nothing to
+    /// undo afterwards, so the same question as the archive stands in front of it; what could be lost is saved under
+    /// `refs/scope/salvage/` and the notice says where.
     func closeTask(_ taskID: TaskID, deleteBranch: Bool) async {
         guard let task = task(taskID), !task.isDismantling else { return }
-        do { try await dismantle(task, .close(deleteBranch: deleteBranch)) } catch {
+        guard await confirmDismantle(task, verb: "Close") else { return }
+        do { try await dismantle(task, .close(deleteBranch: deleteBranch), by: .user) } catch {
             dismantleFailed(task, verb: "close", error: error)
         }
     }
 
-    /// Archive or close for the control socket: the failure goes back to the caller instead of the problem list.
-    /// `notice` is the title of a notice posted whatever was saved (`archiveIfMerged`), with Restore on an archive.
+    /// Nothing to ask when the preference is off or the task has nothing running, dirty or under review.
+    private func confirmDismantle(_ task: TaskState, verb: String) async -> Bool {
+        let risks = CloseGuard.taskRisks(taskFacts(for: task))
+        guard CloseGuard.shouldConfirm(risks, preference: config.preferences.confirmCloseRunningThread) else { return true }
+        return await confirmDestructive(title: "\(verb) “\(task.name)”?", verb: verb, risks: risks)
+    }
+
+    /// Archive or close for the control socket and the automatic archive: no question, the failure goes back to the
+    /// caller instead of the problem list. `notice` is the title of a notice posted whatever was saved
+    /// (`archiveIfMerged`), with Restore on an archive; `requester` is who the undo toast names, `nil` for an
+    /// automatic archive, which keeps to its notice.
     @discardableResult
-    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode, notice: String? = nil) async throws -> DismantleOutcome {
+    func dismantleTask(_ taskID: TaskID, _ mode: DismantleMode, notice: String? = nil,
+                       by requester: CloseRequester? = nil) async throws -> DismantleOutcome {
         guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
-        return try await dismantle(task, mode, notice: notice)
+        return try await dismantle(task, mode, notice: notice, by: requester)
     }
 
     /// The Retry of a failed archive or close: the same run again, from where the last one stopped.
@@ -612,6 +627,7 @@ extension AppModel {
     /// The Restore of an archive notice: the task comes back with its sandboxes and the changes it had.
     func reopenTask(_ taskID: TaskID) async {
         guard let task = task(taskID), task.record.isArchived else { return }
+        forgetUndo(id: "task:\(taskID.rawValue)")
         do {
             try await restoreTask(taskID)
             selection = .task(taskID)
@@ -636,7 +652,8 @@ extension AppModel {
     /// Archive and close: the row leaves the live list at once, the task manager does the rest (threads hung up
     /// inside its lock, through `prepare`), and the outcome is reported.
     @discardableResult
-    private func dismantle(_ task: TaskState, _ mode: DismantleMode, notice: String? = nil) async throws -> DismantleOutcome {
+    private func dismantle(_ task: TaskState, _ mode: DismantleMode, notice: String? = nil,
+                           by requester: CloseRequester? = nil) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
         // A base still on the task's branch goes back first: the branch may be about to be deleted.
@@ -663,8 +680,12 @@ extension AppModel {
             task.stopWatching()
             task.update(record: record)
             scope(task.scopeID)?.refreshFacts()
+            if let requester, mode == .archive {
+                remember(.archivedTask(id: task.id, name: task.name, scope: task.scopeID), by: requester)
+            }
         } else {
             forgetClosedTask(task)
+            forgetUndo(id: "task:\(task.id.rawValue)")
         }
         reportOutcome(outcome, task: task, mode: mode, notice: notice)
         Task { await collectGarbage() }
