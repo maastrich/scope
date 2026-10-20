@@ -64,9 +64,9 @@ struct BackgroundCard: View {
 
 /// One thread's background work: running, recent, scheduled.
 private struct BackgroundThreadGroup: View {
+    @Environment(AppModel.self) private var model
     let thread: ThreadSession
     let titled: Bool
-    @State private var expanded: String?
 
     var body: some View {
         let work = thread.claude.background
@@ -104,10 +104,11 @@ private struct BackgroundThreadGroup: View {
 
     @ViewBuilder
     private func row(_ task: ClaudeBackgroundWork.Task, now: Date) -> some View {
-        BackgroundTaskRow(thread: thread, task: task, now: now, expanded: expanded == task.id) {
-            withAnimation(.easeOut(duration: 0.12)) { expanded = expanded == task.id ? nil : task.id }
+        let expanded = model.inspector.backgroundOutput == task.id
+        BackgroundTaskRow(thread: thread, task: task, now: now, expanded: expanded) {
+            withAnimation(.easeOut(duration: 0.12)) { model.inspector.backgroundOutput = expanded ? nil : task.id }
         }
-        if expanded == task.id {
+        if expanded {
             BackgroundOutputView(thread: thread, task: task)
                 .padding(.leading, 24)
                 .padding(.bottom, 6)

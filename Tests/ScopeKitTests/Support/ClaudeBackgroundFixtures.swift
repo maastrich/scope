@@ -100,10 +100,10 @@ enum ClaudeBackgroundFixtures {
         <summary>Monitor "<text>" script failed (exit 144)</summary>
         """, at: "2026-10-20T10:01:30.000Z")
 
-    // ScheduleWakeup and the crons, in the shapes their tool results take (the cron ones seen in a real session).
+    // ScheduleWakeup and the crons, as a real session wrote their results.
     static let wakeupUse = toolUse("toolu_wake", "ScheduleWakeup", input: #"{"delaySeconds":1200,"reason":"<text>","prompt":"<prompt>"}"#,
                                    at: "2026-10-20T10:00:00.000Z")
-    static let wakeupSet = toolResult("toolu_wake", content: "<text>", result: #"{"scheduledFor":1792490400000,"stopped":false}"#,
+    static let wakeupSet = toolResult("toolu_wake", content: "<text>", result: #"{"scheduledFor":1792490400000,"clampedDelaySeconds":1200,"wasClamped":false}"#,
                                       at: "2026-10-20T10:00:01.000Z")
     static let cronUse = toolUse("toolu_cron", "CronCreate", input: #"{"cron":"17 3 1 1 *","prompt":"<prompt>","recurring":false}"#,
                                  at: "2026-10-20T10:00:00.000Z")
