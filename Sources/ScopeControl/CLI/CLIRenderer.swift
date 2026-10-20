@@ -26,6 +26,7 @@ public enum CLIRenderer {
         case .release(let result): try encoder.encode(result)
         case .schedules(let result): try encoder.encode(result)
         case .taskBranches(let result): try encoder.encode(result)
+        case .browser(let result): try encoder.encode(result)
         }
         return String(decoding: data, as: UTF8.self)
     }
@@ -170,6 +171,8 @@ public enum CLIRenderer {
             return schedules(result)
         case .taskBranches(let result):
             return branches(result)
+        case .browser(let result):
+            return BrowserText.render(result)
         }
     }
 

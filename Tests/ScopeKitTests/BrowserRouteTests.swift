@@ -103,6 +103,17 @@ import Testing
         #expect(tabs.tab(of: "t1", serving: URL(string: "http://localhost:41000/")!)?.id == "b")
     }
 
+    @Test func theAgentsTabNeitherTakesLinksNorTheScreen() {
+        var tabs = BrowserTabs()
+        tabs.open("u", in: "t", url: URL(string: "http://localhost:41000/")!)
+        tabs.open("a", in: "t", url: URL(string: "http://localhost:41000/")!, agent: true, select: false)
+        #expect(tabs.selectedTab(of: "t")?.id == "u")
+        tabs.select("a")
+        #expect(tabs.tab(of: "t", serving: URL(string: "http://localhost:41000/x")!)?.id == "u")
+        tabs.close("u")
+        #expect(tabs.tab(of: "t", serving: URL(string: "http://localhost:41000/x")!) == nil)
+    }
+
     @Test func closingATabShowsItsRightNeighbourThenItsLeft() {
         var tabs = BrowserTabs()
         tabs.open("a", in: "t", url: nil)
@@ -115,5 +126,34 @@ import Testing
         #expect(tabs.selectedTab(of: "t")?.id == "a")
         #expect(tabs.closeAll(of: "t").map(\.id) == ["a"])
         #expect(tabs.tabs.isEmpty)
+    }
+}
+
+@Suite struct BrowserServerDetectionTests {
+    @Test func portsOutsideTheBlockButNotEphemeralOnesAreServers() {
+        let block = PortBlock(base: 41_000)
+        let listeners = [5173, 41_000, 41_003, 3000, 55_123, 80].map { ListeningPorts.Listener(port: $0, pid: 1) }
+            + [ListeningPorts.Listener(port: 5173, pid: 2)]
+        #expect(block.otherServerPorts(in: listeners) == [3000, 5173])
+        #expect(block.ports(in: listeners) == [41_000, 41_003])
+    }
+
+    @Test func aLaunchFileGivesPortsAndURLs() {
+        let json = """
+        {
+          // Claude Code desktop
+          "version": "0.0.1",
+          "configurations": [
+            {"name": "web", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev"], "port": 5173},
+            {"name": "docs", "url": "http://localhost:4000/docs"},
+            {"name": "worker", "runtimeExecutable": "node"},
+            {"name": "api", "port": "8080"}
+          ]
+        }
+        """
+        let servers = LaunchConfig.servers(Data(json.utf8))
+        #expect(servers.map(\.name) == ["web", "docs", "api"])
+        #expect(servers.map { $0.address?.absoluteString } == ["http://localhost:5173", "http://localhost:4000/docs", "http://localhost:8080"])
+        #expect(LaunchConfig.servers(Data("not json".utf8)).isEmpty)
     }
 }

@@ -499,7 +499,18 @@ console and network. Their cookies and storage go to a data store of the scope's
 from Safari's and from anything an agent uses. Which links come here is <i>Settings › General › Browser</i>: any
 <code>localhost</code> by default, while the rest of the web goes to your default browser, where you are signed in;
 <kbd>⌥</kbd>-click sends a link to the other one. Hiding the pane keeps the pages; closing a tab, archiving or closing
-the task tears them down.</p>
+the task tears them down. The footer's <b>Console</b> shows what the page logged, errors counted in red.</p>
+<p>The task's agents have a browser of their own: <code>scope_browser_open</code>, <code>_read</code>,
+<code>_screenshot</code> and <code>_console</code> (or <code>scope browser …</code> from a thread) drive an <b>agent tab</b> on a
+data store of the task's own — none of your cookies, none of your tabs — removed with the task. It works behind your
+back: nothing changes on screen until you open the pane, where the agent's tab sits beside yours, outlined in violet
+under a band naming the thread and its last action. An agent drives the browser of its own task only. <i>Open</i>
+without a URL goes to the task's first server: a port of its block something listens on, else another port its
+processes serve (5173 without <code>--port $SCOPE_PORT</code>), else what <code>.claude/launch.json</code> declares.
+<i>Read</i> hands back the page's text and its interactive elements with refs, read where the page's scripts cannot
+interfere, framed as <code>&lt;untrusted-page&gt;</code> with hidden text marked; <i>screenshot</i> writes a JPEG
+(1280 px wide at most) under <code>SCOPE_HOME/browser/shots/</code> and the agent gets the image itself;
+<i>console</i> gives what was logged since its last look.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
@@ -1224,6 +1235,8 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
+scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
 scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
 scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
@@ -1386,7 +1399,9 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
 <code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_branch_add</code>,
 <code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,
-<code>scope_task_restore_checkpoint</code>, <code>scope_gc</code>, <code>scope_release</code>, <code>scope_ping</code>. Arguments are snake_case, and the
+<code>scope_task_restore_checkpoint</code>, <code>scope_browser_open</code>, <code>scope_browser_read</code>,
+<code>scope_browser_screenshot</code>, <code>scope_browser_console</code>, <code>scope_gc</code>, <code>scope_release</code>,
+<code>scope_ping</code>. Arguments are snake_case, and the
 spellings an agent guesses from the command line are understood as meant — <code>dryRun</code>,
 <code>no_thread</code> for <code>open_thread: false</code>, <code>message</code> for <code>text</code>, a single
 <code>repo</code>. Anything else is refused rather than ignored, with the list of what the tool takes. They are the same

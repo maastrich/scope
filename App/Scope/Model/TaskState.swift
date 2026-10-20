@@ -61,6 +61,10 @@ final class TaskState: Identifiable {
     var checkpointsLoaded = false
     /// The ports of the task's block something listens on, ascending (`AppModel+Ports`): the servers it is running.
     var listeningPorts: [Int] = []
+    /// Ports its processes listen on outside the block (5173, 3000), from the same pass: the browser looks there too.
+    var otherPorts: [Int] = []
+    /// What `.claude/launch.json` in its sandboxes declares, read on the same pass.
+    var launchServers: [LaunchConfig.Server] = []
     /// The processes behind `listeningPorts`, read while the Environment card is open (`AppModel+Ports`).
     var listeningProcesses: [ListeningProcesses.Process] = []
     /// The setup commands of the task's repositories, each once; `nil` until resolved (`AppModel.loadSetupCommands`).

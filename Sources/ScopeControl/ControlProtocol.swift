@@ -97,6 +97,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskBranchList = "task.branch.list"
     /// A secondary worktree removed from the task, its uncommitted changes saved first; the branch stays.
     case taskBranchRemove = "task.branch.remove"
+    /// One action on a task's agent browser tab: open, read, screenshot, console (`BrowserAction`).
+    case browser
 
     /// `false` for the calls that only read.
     public var isMutating: Bool {
@@ -105,7 +107,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
              .taskBranchList: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
              .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
-             .taskBranchAdd, .taskBranchRemove: true
+             .taskBranchAdd, .taskBranchRemove, .browser: true
         }
     }
 
@@ -233,6 +235,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskBranchAdd(TaskBranchAddParams)
     case taskBranchList(TaskBranchListParams)
     case taskBranchRemove(TaskBranchRemoveParams)
+    case browser(BrowserParams)
 
     public var method: ControlMethod {
         switch self {
@@ -267,6 +270,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskBranchAdd: .taskBranchAdd
         case .taskBranchList: .taskBranchList
         case .taskBranchRemove: .taskBranchRemove
+        case .browser: .browser
         }
     }
 
@@ -290,6 +294,8 @@ public enum ControlCall: Sendable, Equatable {
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
         // Marking done starts the validation; the answer waits for it, up to its own limit.
         case .milestoneDone: .seconds(1900)
+        // A page load is bounded by the app (30 s); a screenshot of a heavy page takes a few more.
+        case .browser: .seconds(60)
         // The app answers at the wait's own deadline; the margin covers the reply on the way back.
         case .threadWait(let params): .seconds(params.effectiveTimeout + 15)
         }
@@ -1504,6 +1510,7 @@ public enum ControlResultPayload: Sendable, Equatable {
     case release(ReleaseResult)
     case schedules(ScheduleListResult)
     case taskBranches(TaskBranchListResult)
+    case browser(BrowserResult)
 
     public var method: ControlMethod {
         switch self {
@@ -1521,6 +1528,7 @@ public enum ControlResultPayload: Sendable, Equatable {
         case .release: .release
         case .schedules: .scheduleList
         case .taskBranches: .taskBranchList
+        case .browser: .browser
         }
     }
 }

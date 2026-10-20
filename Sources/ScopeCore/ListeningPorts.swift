@@ -81,3 +81,52 @@ public struct PortBlock: Sendable, Equatable, Hashable {
         URL(string: "http://localhost:\(port)")!
     }
 }
+
+extension PortBlock {
+    /// Ports the task's processes listen on outside the block — Vite's 5173, Next's 3000 when nobody passed
+    /// `--port $SCOPE_PORT` — ascending. The ephemeral range is left out: a debugger or a language server binds
+    /// there, not a dev server.
+    public func otherServerPorts(in listeners: [ListeningPorts.Listener]) -> [Int] {
+        Array(Set(listeners.map(\.port).filter { !contains($0) && (1024..<49152).contains($0) })).sorted()
+    }
+}
+
+/// `.claude/launch.json`, the file Claude Code's desktop app reads to start a project's dev servers: each
+/// configuration may say the `port` it serves, or a `url`. Read only for the ports, so the task's browser knows where
+/// to look before anything listens.
+public enum LaunchConfig {
+    public struct Server: Equatable, Sendable {
+        public var name: String?
+        public var port: Int?
+        public var url: URL?
+
+        public init(name: String? = nil, port: Int? = nil, url: URL? = nil) {
+            self.name = name
+            self.port = port
+            self.url = url
+        }
+
+        /// Where the browser goes for it: the url as written, else `http://localhost:<port>`.
+        public var address: URL? { url ?? port.map(PortBlock.url(for:)) }
+    }
+
+    /// The servers a launch.json declares; nothing for a file that does not parse. Comments (`//`) are allowed, as in
+    /// VS Code's own launch.json.
+    public static func servers(_ data: Data) -> [Server] {
+        let text = String(decoding: data, as: UTF8.self)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+                return trimmed.hasPrefix("//") ? "" : line
+            }
+            .joined(separator: "\n")
+        guard let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              let configurations = object["configurations"] as? [[String: Any]] else { return [] }
+        return configurations.compactMap { entry in
+            let port = (entry["port"] as? Int) ?? (entry["port"] as? String).flatMap(Int.init)
+            let url = (entry["url"] as? String).flatMap(URL.init(string:))
+            guard port != nil || url != nil else { return nil }
+            return Server(name: entry["name"] as? String, port: port, url: url)
+        }
+    }
+}

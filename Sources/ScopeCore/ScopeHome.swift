@@ -126,6 +126,11 @@ public enum ScopeHome {
         home.appending(path: "releases", directoryHint: .isDirectory)
     }
 
+    /// `<home>/browser/shots/<task>/`: the screenshots an agent took of its task's browser, removed with the task.
+    public static func browserShotsURL(home: URL, task: String) -> URL {
+        home.appending(path: "browser/shots/\(task)", directoryHint: .isDirectory)
+    }
+
     /// `<home>/sandboxes/`
     public static func sandboxesURL(home: URL) -> URL {
         home.appending(path: "sandboxes", directoryHint: .isDirectory)

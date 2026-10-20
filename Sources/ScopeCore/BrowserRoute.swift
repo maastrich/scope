@@ -154,11 +154,14 @@ public struct BrowserTabs: Sendable, Equatable {
         public var task: String
         /// Where the tab stands, as last reported by its page.
         public var url: URL?
+        /// The tab the task's agents drive: a link the user clicks never lands in it.
+        public var agent: Bool
 
-        public init(id: String, task: String, url: URL?) {
+        public init(id: String, task: String, url: URL?, agent: Bool = false) {
             self.id = id
             self.task = task
             self.url = url
+            self.agent = agent
         }
     }
 
@@ -178,16 +181,17 @@ public struct BrowserTabs: Sendable, Equatable {
         return own.last
     }
 
-    /// The task's tab already on `url`'s server, the shown one first.
+    /// The task's tab already on `url`'s server, the shown one first; never the agent's.
     public func tab(of task: String, serving url: URL) -> Tab? {
-        let own = tabs(of: task).filter { $0.url.map { BrowserRoute.sameServer($0, url) } ?? false }
+        let own = tabs(of: task).filter { !$0.agent && ($0.url.map { BrowserRoute.sameServer($0, url) } ?? false) }
         if let shown = selectedTab(of: task), own.contains(shown) { return shown }
         return own.first
     }
 
-    public mutating func open(_ id: String, in task: String, url: URL?) {
-        tabs.append(Tab(id: id, task: task, url: url))
-        selection[task] = id
+    /// A new tab after the task's others, shown at once unless `select` is false (an agent's, opened behind the user).
+    public mutating func open(_ id: String, in task: String, url: URL?, agent: Bool = false, select: Bool = true) {
+        tabs.append(Tab(id: id, task: task, url: url, agent: agent))
+        if select || selection[task] == nil { selection[task] = id }
     }
 
     public mutating func select(_ id: String) {

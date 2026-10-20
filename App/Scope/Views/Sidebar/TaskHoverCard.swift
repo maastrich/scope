@@ -81,7 +81,7 @@ struct TaskHoverCard: View {
                         .foregroundStyle(lag.hasConflicts ? PullRequestStyle.failing : Ink.secondary)
                 }
             }
-            if !task.listeningPorts.isEmpty {
+            if !task.listeningPorts.isEmpty || !task.otherPorts.isEmpty {
                 row("Serving") {
                     TaskPortChips(task: task, compact: true)
                 }

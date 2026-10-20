@@ -234,7 +234,18 @@ console and network. Their cookies and storage go to a data store of the scope's
 from Safari's and from anything an agent uses. Which links come here is <i>Settings › General › Browser</i>: any
 <code>localhost</code> by default, while the rest of the web goes to your default browser, where you are signed in;
 <kbd>⌥</kbd>-click sends a link to the other one. Hiding the pane keeps the pages; closing a tab, archiving or closing
-the task tears them down.</p>
+the task tears them down. The footer's <b>Console</b> shows what the page logged, errors counted in red.</p>
+<p>The task's agents have a browser of their own: <code>scope_browser_open</code>, <code>_read</code>,
+<code>_screenshot</code> and <code>_console</code> (or <code>scope browser …</code> from a thread) drive an <b>agent tab</b> on a
+data store of the task's own — none of your cookies, none of your tabs — removed with the task. It works behind your
+back: nothing changes on screen until you open the pane, where the agent's tab sits beside yours, outlined in violet
+under a band naming the thread and its last action. An agent drives the browser of its own task only. <i>Open</i>
+without a URL goes to the task's first server: a port of its block something listens on, else another port its
+processes serve (5173 without <code>--port $SCOPE_PORT</code>), else what <code>.claude/launch.json</code> declares.
+<i>Read</i> hands back the page's text and its interactive elements with refs, read where the page's scripts cannot
+interfere, framed as <code>&lt;untrusted-page&gt;</code> with hidden text marked; <i>screenshot</i> writes a JPEG
+(1280 px wide at most) under <code>SCOPE_HOME/browser/shots/</code> and the agent gets the image itself;
+<i>console</i> gives what was logged since its last look.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>

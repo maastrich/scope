@@ -78,6 +78,7 @@ extension AppModel {
     func closeBrowserTabs(of taskID: TaskID) {
         browser.removeAll(of: taskID)
         dismissBrowserPaneIfEmpty(task: taskID)
+        removeAgentBrowserData(of: taskID)
     }
 
     /// The page of the shown tab, in the system browser.

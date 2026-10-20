@@ -50,8 +50,15 @@ enum ScopeMCP {
                 let payload = try await client.call(call, onPending: { message in
                     FileHandle.standardError.write(Data("scope mcp: \(message)\n".utf8))
                 })
+                var content: [Tool.Content] = [.text(text: MCPBridge.text(for: payload), annotations: nil, _meta: nil)]
+                // A screenshot crosses the socket as a path (its cap is 1 MiB); the image is read here, on the agent's
+                // side, and sent once — never again in `structuredContent`, which would double it.
+                if case .browser(let result) = payload, let path = result.screenshot,
+                   let data = FileManager.default.contents(atPath: path) {
+                    content.append(.image(data: data.base64EncodedString(), mimeType: "image/jpeg", annotations: nil, _meta: nil))
+                }
                 return CallTool.Result(
-                    content: [.text(text: MCPBridge.text(for: payload), annotations: nil, _meta: nil)],
+                    content: content,
                     structuredContent: (try? MCPBridge.structured(for: payload)).flatMap {
                         try? JSONDecoder().decode(Value.self, from: $0)
                     }
