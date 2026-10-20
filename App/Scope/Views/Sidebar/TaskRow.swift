@@ -13,7 +13,7 @@ import ScopeTasks
 /// and at the sidebar's width the counts truncated the name. Both live on in the hover card.
 ///
 /// One line by default; a second while the task is waiting for you or working, saying what its agent is doing.
-/// The name takes the whole width: the hover controls (editor, archive, menu) are drawn over the end of the name,
+/// The name takes the whole width: the hover controls (editor, menu) are drawn over the end of the name,
 /// left of the dot, instead of holding a gutter open when the pointer is elsewhere. The rest — branch, repositories,
 /// pull request, counts, prompt — is in the hover card.
 ///
@@ -80,9 +80,9 @@ struct TaskRow: View {
                                 .foregroundStyle(Ink.tertiary)
                         }
                         if let headline = activityHeadline(threads) {
-                            ThreadActivityCaption(headline: headline)
+                            ThreadActivityCaption(headline: headline, planSummary: planSummary(threads))
                         } else {
-                            Text(TaskStatus.summary(status, facts: facts))
+                            Text(SidebarRowLayout.caption(TaskStatus.summary(status, facts: facts), planSummary: planSummary(threads)))
                                 .font(.scopeCaption)
                                 .foregroundStyle(Ink.tertiary)
                                 .lineLimit(1)
@@ -154,6 +154,12 @@ struct TaskRow: View {
         return only.activityHeadline(model.config.preferences.finishedThreadLine)
     }
 
+    /// The plan of the thread at work, else of the first thread that has one in progress: the second line ends with
+    /// its `3/7 steps` (`ThreadSession.planSummary`).
+    private func planSummary(_ threads: [ThreadSession]) -> String? {
+        (threads.first { $0.isWorking && $0.planSummary != nil } ?? threads.first { $0.planSummary != nil })?.planSummary
+    }
+
     private var hoverControls: some View {
         HStack(spacing: 2) {
             Button {
@@ -168,22 +174,13 @@ struct TaskRow: View {
             .buttonStyle(.iconTight)
             .help("Open Task in Editor (⇧⌘E)")
             .accessibilityLabel("Open \(task.name) in Editor")
+            .usageID("sidebar.task.open-editor", label: "Open task in editor (row hover)")
 
-            Button {
-                Task { await model.archiveTask(task.id) }
-            } label: {
-                Image(systemName: "archivebox")
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.secondary)
-                    .frame(width: 16, height: 16)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.iconTight)
-            .help("Archive: remove the sandboxes, keep the branch")
-
+            // Archive is in the menu, not under the pointer: a row's hover controls are what a stray click lands on.
             ScopeIconMenu(systemImage: "ellipsis", title: "More") {
                 TaskContextMenu(task: task)
             }
+            .usageID("sidebar.task.more", label: "Task row “…” menu")
         }
     }
 

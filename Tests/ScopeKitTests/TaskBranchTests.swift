@@ -281,8 +281,8 @@ import ScopeGit
         #expect(record.activeSandboxes.map(\.branch) == ["feat/x", "docs/x"])
         #expect(record.sandboxes(onBranch: "docs/x").map(\.sandboxPath) == ["/t/api@x"])
         // One merged, the other open: the task stays until the second lands.
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "open"], threads: [], enabled: true, keptOpenAfterMerge: false) != .archive)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "merged"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "closed"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
+        #expect(MergedTaskArchive.decide(.init(pullRequests: [.init(state: "merged", mergedAt: .distantPast), .init(state: "open", mergedAt: .distantPast)])) != .archive)
+        #expect(MergedTaskArchive.decide(.init(pullRequests: [.init(state: "merged", mergedAt: .distantPast), .init(state: "merged", mergedAt: .distantPast)])) == .archive)
+        #expect(MergedTaskArchive.decide(.init(pullRequests: [.init(state: "merged", mergedAt: .distantPast), .init(state: "closed", mergedAt: .distantPast)])) == .archive)
     }
 }

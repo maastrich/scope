@@ -153,6 +153,10 @@ enum PaletteModel {
             items.append(PaletteItem(id: "undo-close", section: .actions, icon: "arrow.uturn.backward.circle", label: "Undo Close Thread",
                                      shortcut: "⇧⌘T") { model.undoCloseThread() })
         }
+        if model.canUndo {
+            items.append(PaletteItem(id: "undo-last", section: .actions, icon: "arrow.uturn.backward", label: model.undoTitle,
+                                     shortcut: model.undoClaimsKey ? "⌘Z" : nil) { model.undoLast() })
+        }
         items.append(PaletteItem(id: "declare", section: .actions, icon: "folder.badge.plus", label: "Declare a Scope…", shortcut: "⌘O") {
             Task {
                 let urls = await FolderPicker.chooseFolders()

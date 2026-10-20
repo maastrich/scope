@@ -30,6 +30,7 @@ public enum PullRequestSet {
         for var link in links {
             if let index = result.firstIndex(where: { $0.url == link.url }) {
                 if link.repo == nil { link.repo = result[index].repo }
+                if link.headRefOid == nil { link.headRefOid = result[index].headRefOid }
                 result[index] = link
             } else {
                 result.append(link)

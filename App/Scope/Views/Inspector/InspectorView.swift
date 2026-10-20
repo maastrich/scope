@@ -99,6 +99,8 @@ struct InspectorView: View {
         switch section {
         case .environment:
             EnvironmentCard(bodyHeight: height, onNatural: natural(for: .environment))
+        case .plan:
+            PlanCard(bodyHeight: height, onNatural: natural(for: .plan))
         case .delta:
             DeltaSection(bodyHeight: height, sash: sash(above: .delta, heights: heights, order: order))
         case .pullRequest:

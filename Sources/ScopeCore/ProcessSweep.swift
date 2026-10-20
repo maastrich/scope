@@ -134,23 +134,41 @@ public enum ProcessSweep {
     }
 
     /// `KERN_PROCARGS2`: argc, the executable path, then argv and the environment as NUL-separated strings.
-    /// Readable for the current user's own processes only, which are the only ones swept.
-    static func environment(_ pid: pid_t) -> [String: String] {
-        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        var size = 0
-        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return [:] }
-        var buffer = [UInt8](repeating: 0, count: size)
-        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return [:] }
-        let argc = buffer.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
-        let strings = buffer[MemoryLayout<Int32>.size..<size]
-            .split(separator: 0, omittingEmptySubsequences: true)
-            .map { String(decoding: $0, as: UTF8.self) }
+    /// Readable for the current user's own processes only, which are the only ones swept. The kernel keeps the
+    /// environment of Apple's platform binaries to itself; their `argv` is still given.
+    public static func environment(_ pid: pid_t) -> [String: String] {
+        guard let (argc, strings) = processArguments(pid) else { return [:] }
         // strings[0] is the executable path, then argc arguments, then the environment.
         var environment: [String: String] = [:]
-        for entry in strings.dropFirst(1 + Int(max(argc, 0))) {
+        for entry in strings.dropFirst(1 + argc) {
             guard let equals = entry.firstIndex(of: "=") else { continue }
             environment[String(entry[..<equals])] = String(entry[entry.index(after: equals)...])
         }
         return environment
+    }
+
+    /// `argv` of a process of the current user — `["python3", "-m", "http.server", "4310"]` — or empty when the
+    /// kernel gives nothing (gone, another user's).
+    public static func arguments(_ pid: pid_t) -> [String] {
+        guard let (argc, strings) = processArguments(pid), argc > 0 else { return [] }
+        return Array(strings.dropFirst().prefix(argc))
+    }
+
+    /// The parent of a process, `nil` for a pid the kernel no longer knows.
+    public static func parent(of pid: pid_t) -> pid_t? {
+        bsdInfo(pid).map { pid_t($0.pbi_ppid) }
+    }
+
+    private static func processArguments(_ pid: pid_t) -> (argc: Int, strings: [String])? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return nil }
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return nil }
+        let argc = buffer.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
+        let strings = buffer[MemoryLayout<Int32>.size..<size]
+            .split(separator: 0, omittingEmptySubsequences: true)
+            .map { String(decoding: $0, as: UTF8.self) }
+        return (Int(max(argc, 0)), strings)
     }
 }

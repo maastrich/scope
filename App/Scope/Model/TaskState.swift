@@ -61,8 +61,18 @@ final class TaskState: Identifiable {
     var checkpointsLoaded = false
     /// The ports of the task's block something listens on, ascending (`AppModel+Ports`): the servers it is running.
     var listeningPorts: [Int] = []
+    /// The processes behind `listeningPorts`, read while the Environment card is open (`AppModel+Ports`).
+    var listeningProcesses: [ListeningProcesses.Process] = []
+    /// The setup commands of the task's repositories, each once; `nil` until resolved (`AppModel.loadSetupCommands`).
+    var setupCommands: [String]?
     /// What the task's sandboxes take on disk, when last measured (`AppModel+DiskUsage`).
     var diskUsage: SandboxSize.Measurement?
+    /// What the task produced besides its diff (`AppModel+Artifacts`): the report, the files written where git does
+    /// not look, the pages published. `nil` until first computed; recomputed when a turn moves or the sandbox changes.
+    var artifacts: TaskArtifacts?
+    /// The report's opening, parsed for the card's preview; `nil` without a report.
+    var reportPreview: MarkdownDocument?
+    @ObservationIgnored var artifactsJob: Task<Void, Never>?
 
     @ObservationIgnored private let git: GitClientRegistry
     @ObservationIgnored private var watcher: FSEventsWatcher?

@@ -32,6 +32,14 @@ struct TaskBriefExcerpt: View {
                             .help(Self.keptHelp(kept))
                             .usageID("inspector.task.read-deliverable", label: "Read the deliverable")
                     }
+                    if let topic = task.record.topic?.trimmingCharacters(in: .whitespaces), !topic.isEmpty {
+                        HStack(spacing: 4) {
+                            Text("· topic")
+                                .foregroundStyle(Ink.tertiary)
+                            ContextChip(text: topic)
+                        }
+                        .help("The task's topic (scope task topic, scope_task_topic): what it is about, in a word")
+                    }
                 }
                 .buttonStyle(.plain)
                 .font(.scopeCaption)

@@ -138,8 +138,12 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             SettingsSection("Confirmations") {
-                Toggle("Ask before closing a running thread", isOn: preference(\.confirmCloseRunningThread))
+                Toggle("Ask before closing a thread mid-turn or archiving a task with work in progress", isOn: preference(\.confirmCloseRunningThread))
                     .toggleStyle(.scope)
+                Text("Only when something would be lost: an agent in the middle of a turn, uncommitted changes, an open pull request. A close or an archive can be taken back with ⌘Z either way.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Toggle("Ask before quitting with running threads", isOn: preference(\.confirmQuitWithRunningThreads))
                     .toggleStyle(.scope)
             }
@@ -186,7 +190,7 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Toggle("Archive a task when its pull request merges", isOn: preference(\.archiveMergedTasks))
                     .toggleStyle(.scope)
-                Text("Every open task's pull request is read from GitHub every 5 minutes. Once it is merged and no thread of the task is running, the task is archived and a notice offers it back. A task you restore after its merge stays open. A pull request closed without merging never archives anything.")
+                Text("Every open task's pull request is read from GitHub every 5 minutes. Once it is merged, the task is archived and a notice offers it back — but not while a thread of it is working or waiting, a task it launched is still open, it has uncommitted or unpushed changes, or a turn started after the merge. A task you restore after its merge stays open. A pull request closed without merging never archives anything.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)

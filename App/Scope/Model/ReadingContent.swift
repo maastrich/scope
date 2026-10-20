@@ -14,6 +14,12 @@ struct ReadingContent: Equatable {
         case brief(TaskID)
         /// A checkpoint of a task against its sandboxes now (`AppModel+Checkpoints`).
         case checkpoint(TaskID, Int)
+        /// A context file the task's agent reads (`TaskContextFiles`), by path.
+        case contextFile(TaskID, String)
+        /// The task's report as it is on disk now (`AppModel+Artifacts`).
+        case report(TaskID)
+        /// What a task's setup commands printed (`TaskSetupRecord.log`), live while the setup runs.
+        case setupLog(TaskID)
     }
 
     var kind: Kind
@@ -36,9 +42,11 @@ struct ReadingContent: Equatable {
         if turn?.historyIndex != nil { return "clock" }
         return switch kind {
         case .reply: "text.bubble"
-        case .deliverable: "doc.richtext"
+        case .deliverable, .report: "doc.richtext"
         case .brief: "text.quote"
         case .checkpoint: "clock.arrow.circlepath"
+        case .contextFile: "doc.text"
+        case .setupLog: "gearshape"
         }
     }
 }

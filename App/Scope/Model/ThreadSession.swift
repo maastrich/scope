@@ -50,13 +50,26 @@ final class ThreadSession: Identifiable {
     /// What the driver has been doing, folded from its events (`ThreadActivity`). Changes on every tool call, so not
     /// observed either; `AppModel+Activity` loads and saves it.
     @ObservationIgnored private(set) var activity = ThreadActivity()
+    /// Claude Code's own state beyond the turn: background work, sub-agents, the permission mode… (`ClaudeSession`).
+    /// Observed, and only set when it moves; fed by every hook event, late ones included, and by the transcript.
+    private(set) var claude = ClaudeSession()
+    /// Where the transcript was last read up to (`AppModel+ClaudeSession`).
+    @ObservationIgnored var transcriptTail = ClaudeTranscriptTail()
+    @ObservationIgnored var transcriptTailReading = false
     /// The activity in words, for the sidebar and the toolbar (`ThreadActivityHeadline`). Observed, and only set
     /// when the words move: a tool call on the same file, or a second permission prompt, redraws nothing.
     private(set) var activityHeadline: ThreadActivityHeadline?
     /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
     private(set) var assistNote: AssistNote?
-    /// Bumped when a turn opens or closes: what the task timeline redraws on, since `activity` itself is not observed.
+    /// Bumped when a turn opens or closes, or the agent's plan moves: what the task timeline and the Plan card redraw
+    /// on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
+    /// `3/7 steps` while the agent's plan has steps left (`AgentPlan.summary`); `nil` otherwise. Observed, and only
+    /// set when the words move: the sidebar caption ends with it.
+    private(set) var planSummary: String?
+    /// How full the driver's context window is, with its model and version (`ThreadActivity.contextWindow`), observed
+    /// for the Context card: set only when the report moved, so a status line that repeats itself redraws nothing.
+    private(set) var contextWindow: ContextWindowReport?
     /// Called when the activity changed in a way worth keeping across a restart (a turn closed, a reply, a
     /// transcript) — not on each tool call, which only moves `lastTool`.
     @ObservationIgnored var onActivityChanged: (@MainActor (ThreadSession) -> Void)?
@@ -376,6 +389,8 @@ final class ThreadSession: Identifiable {
     @discardableResult
     func apply(_ event: AdapterEvent) -> Bool {
         guard phase.isAlive else { return false }
+        // Before the turn logic: what Claude Code reports between turns is still news here.
+        if let facts = ClaudeHookFacts.from(event) { updateClaude { $0.apply(facts) } }
         // Decided on the activity before the event: a report that belongs to a turn already over moves nothing.
         let promptPending = expectingTurnSince != nil
         let late = activity.isLate(event, promptPending: promptPending)
@@ -411,16 +426,49 @@ final class ThreadSession: Identifiable {
         return !late
     }
 
+    /// A `limits.reported` event: the status line said how full the context window is. Only the activity moves —
+    /// the state machine has nothing to say about it, and the record is not touched.
+    func receiveStatus(_ event: AdapterEvent) {
+        guard event.kind == .limitsReported, event.payload[HookEvent.contextKey] != nil else { return }
+        setActivity(activity.apply(event))
+    }
+
+    /// Folds what the transcript gained.
+    func applyTranscript(_ records: [ClaudeTranscriptRecord]) {
+        guard !records.isEmpty else { return }
+        updateClaude { $0.apply(records) }
+    }
+
+    /// Writes `claude` only when it moved: it is observed, and a hook arrives per tool call.
+    private func updateClaude(_ change: (inout ClaudeSession) -> Void) {
+        var next = claude
+        change(&next)
+        if next != claude { claude = next }
+    }
+
     /// Replaces the activity; `onActivityChanged` only when what is saved moved.
     func setActivity(_ next: ThreadActivity) {
         let previous = activity
         activity = next
         refreshActivityHeadline()
-        if next.turns != previous.turns || next.inTurn != previous.inTurn { turnRevision &+= 1 }
+        let planMoved = next.plan != previous.plan
+        if next.turns != previous.turns || next.inTurn != previous.inTurn || planMoved { turnRevision &+= 1 }
+        let summary = next.plan.flatMap { $0.isInProgress ? $0.summary : nil }
+        if planSummary != summary { planSummary = summary }
+        if next.contextWindow != contextWindow { contextWindow = next.contextWindow }
+        // The context report is saved when its figure moves by a point, or the model or version changes: a status line
+        // after `Stop` would otherwise live in memory only, and the gauge vanish at the next launch. Not on every
+        // status line, which comes with each message.
+        let contextMoved = Self.savedContext(next.contextWindow) != Self.savedContext(previous.contextWindow)
         if next.turns != previous.turns || next.lastReply != previous.lastReply
-            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn {
+            || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved || planMoved {
             onActivityChanged?(self)
         }
+    }
+
+    /// What of a context report is worth a write: the rounded percentage, the model and the driver's version.
+    private static func savedContext(_ report: ContextWindowReport?) -> [String?] {
+        [report?.usedPercentage.map { String(Int($0.rounded())) }, report?.modelID, report?.modelName, report?.driverVersion]
     }
 
     private func refreshActivityHeadline() {

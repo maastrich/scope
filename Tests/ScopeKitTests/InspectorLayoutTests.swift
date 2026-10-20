@@ -20,6 +20,16 @@ import Testing
         #expect(sections.visible == InspectorSection.allCases)
     }
 
+    /// The Plan card is a block about the task, right after Environment: closed at rest, dimmed without a task.
+    @Test func thePlanCardIsATaskBlockAfterEnvironment() {
+        #expect(InspectorSection.allCases.firstIndex(of: .plan) == InspectorSection.allCases.firstIndex(of: .environment)! + 1)
+        #expect(InspectorSection.plan.title == "Plan")
+        #expect(InspectorSection.plan.needsTask)
+        #expect(!InspectorSection.plan.fills)
+        #expect(!InspectorSections.defaults.isOpen(.plan, hasTask: true))
+        #expect(!InspectorSections.defaults.isOpen(.plan, hasTask: false))
+    }
+
     @Test func aHiddenCardIsNeitherVisibleNorOpen() {
         var sections = InspectorSections.defaults
         sections.setVisible(.delta, false)

@@ -24,8 +24,11 @@ public struct HookEvent: Codable, Sendable, Equatable {
     /// `agent.started` / `agent.ended` say a sub-agent of the driver began or finished (Claude Code's
     /// `SubagentStart` / `SubagentStop`, `payload["agent"]` its id): they move no state either, but a turn that
     /// ends while one still runs in the background is not the end of the work (`ThreadWait`). `limits.reported`
-    /// carries the subscription's `rate_limits` as Claude Code gave them to its status line (`payload["limits"]`,
-    /// the object as compact JSON): about the account, not the thread, and read by the meter alone.
+    /// carries what Claude Code gave its status line: the subscription's `rate_limits` (`payload["limits"]`, the
+    /// object as compact JSON — about the account, read by the meter) and the session's context window, model and
+    /// driver version (`payload["context"]` — about the thread, kept on its activity). `driver.reported`
+    /// is a Claude Code hook that only informs — a compaction, a permission dialog about to open, a tool that failed,
+    /// a model switch: it moves nothing and is read through its `hook` payload (`ClaudeHookFacts`).
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case turnStarted = "turn.started"
         case turnEnded = "turn.ended"
@@ -38,12 +41,13 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case agentStarted = "agent.started"
         case agentEnded = "agent.ended"
         case limitsReported = "limits.reported"
+        case driverReported = "driver.reported"
 
         /// `true` for the events that move the thread state (everything but the informational ones:
-        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`, `limits.reported`).
+        /// `session.started`, `turn.said`, `agent.started`, `agent.ended`, `limits.reported`, `driver.reported`).
         public var changesState: Bool {
             switch self {
-            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported: false
+            case .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported, .driverReported: false
             default: true
             }
         }
@@ -114,6 +118,13 @@ extension HookEvent {
     /// Payload key of `limits.reported`: the status line's `rate_limits` object as compact JSON
     /// (`HookStdin.rateLimitsJSON`, parsed by `RateLimits.parse`).
     public static let limitsKey = "limits"
+    /// Payload key of `limits.reported`: the session's context window, model and driver version as compact JSON
+    /// (`HookStdin.contextWindowJSON`, parsed by `ContextWindowReport.parse`).
+    public static let contextKey = "context"
+
+    /// Payload key under which `scope-hook` forwards a Claude Code hook's whole stdin, clamped so it always fits and
+    /// parses (`ClaudeHookFacts.wirePayload`), on every event but `turn.said`.
+    public static let hookKey = "hook"
 
     /// Encodes the event as the wire JSON (sorted keys, ISO-8601 with fractional seconds).
     public func encoded() throws -> Data {

@@ -48,6 +48,9 @@ public struct HookStdin: Sendable, Equatable {
     public var agentID: String?
     /// A status-line payload: its `rate_limits` object as compact JSON (`RateLimits.extract`), `nil` when absent.
     public var rateLimitsJSON: String?
+    /// A status-line payload: the session's context window, model and driver version as compact JSON
+    /// (`ContextWindowReport.extract`), `nil` when it says none of them.
+    public var contextWindowJSON: String?
     /// A status-line payload: where the session works (`workspace.project_dir`, else `cwd`), where a project's own
     /// `.claude/settings*.json` would be.
     public var projectDirectory: String?
@@ -174,6 +177,7 @@ public struct HookStdin: Sendable, Equatable {
         result.agentID = (object["agent_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.transcriptPath = (object["transcript_path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.rateLimitsJSON = RateLimits.extract(statusline: data)
+        result.contextWindowJSON = ContextWindowReport.extract(statusline: data)
         let workspace = object["workspace"] as? [String: Any]
         result.projectDirectory = ((workspace?["project_dir"] as? String) ?? (object["cwd"] as? String))
             .flatMap { $0.hasPrefix("/") ? $0 : nil }
@@ -237,13 +241,14 @@ public enum ClaudeQuestionTools {
 
 /// The event names `scope-hook` accepts on its command line: every `HookEvent.Kind` raw value plus
 /// `notification`, which is resolved from stdin with `ClaudeNotificationMapping`, and `statusline`, Claude Code's
-/// status-line command, which sends `limits.reported` when the payload carries `rate_limits` and then runs the
-/// status line the user configured (`ClaudeStatusline`).
+/// status-line command, which sends `limits.reported` when the payload carries `rate_limits` or a context window
+/// and then runs the status line the user configured (`ClaudeStatusline`).
 public enum HookCommandEvent: Sendable, Equatable {
     case fixed(HookEvent.Kind)
     /// Resolved from `notification_type` on stdin (`--stdin` is implied).
     case notification
-    /// Resolved from `rate_limits` on stdin (`--stdin` is implied): `limits.reported`, or nothing to send.
+    /// Resolved from `rate_limits` and `context_window` on stdin (`--stdin` is implied): `limits.reported`, or
+    /// nothing to send.
     case statusline
 
     /// The command-line word for the derived event.
@@ -270,7 +275,7 @@ public enum HookCommandEvent: Sendable, Equatable {
             .inputRequested
         case .fixed(let kind): kind
         case .notification: ClaudeNotificationMapping.kind(for: stdin.notificationType)
-        case .statusline: stdin.rateLimitsJSON == nil ? nil : .limitsReported
+        case .statusline: stdin.rateLimitsJSON == nil && stdin.contextWindowJSON == nil ? nil : .limitsReported
         }
     }
 
