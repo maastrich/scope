@@ -88,7 +88,7 @@ public enum FollowMainMode: String, Codable, Sendable, CaseIterable {
 public enum SidebarRows: String, Codable, Sendable, CaseIterable {
     /// Two lines: the name, then what the task or thread is doing, in words.
     case detailed
-    /// One line: the name and the state mark.
+    /// One line: the name and the state mark; a task that is waiting or working takes a second line meanwhile.
     case compact
 
     public var title: String {
@@ -493,9 +493,9 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var attentionCounter: AttentionCounterPlacement
     /// Whether what an agent opens comes to the front. Only when nothing is being read, by default.
     public var agentOpenedFocus: AgentOpenedFocus
-    /// Detailed by default.
+    /// Compact by default (since 0.28; a config written before keeps what it says).
     public var sidebarRows: SidebarRows
-    /// As a tree by default.
+    /// By state by default (since 0.28; a config written before keeps what it says).
     public var sidebarArrangement: SidebarArrangement
     /// When it finished, by default.
     public var finishedThreadLine: FinishedThreadLine
@@ -503,9 +503,6 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var scopeTileOrder: ScopeTileOrder
     /// A two-finger horizontal swipe over the sidebar switches scope. On by default.
     public var swipeBetweenScopes: Bool
-    /// The New Thread / New Task buttons under the sidebar. Off by default: ⌘T, ⇧⌘T, the palette, the CLI and the
-    /// orchestrator open threads and tasks, and the list takes the height the footer gave up.
-    public var showSidebarFooter: Bool
     /// The brand's by default.
     public var chromeTheme: ChromeTheme
     /// Holding ⌘ alone for a moment shows each control's shortcut in a keycap beside it (`CommandHoldDetector`).
@@ -609,12 +606,11 @@ public struct Preferences: Codable, Sendable, Equatable {
         driverModels: [String: String] = [:],
         attentionCounter: AttentionCounterPlacement = .sidebar,
         agentOpenedFocus: AgentOpenedFocus = .whenIdle,
-        sidebarRows: SidebarRows = .detailed,
-        sidebarArrangement: SidebarArrangement = .tree,
+        sidebarRows: SidebarRows = .compact,
+        sidebarArrangement: SidebarArrangement = .byState,
         finishedThreadLine: FinishedThreadLine = .elapsed,
         scopeTileOrder: ScopeTileOrder = .byImportance,
         swipeBetweenScopes: Bool = true,
-        showSidebarFooter: Bool = false,
         chromeTheme: ChromeTheme = .brand,
         showShortcutHints: Bool = true,
         showGitActions: Bool = false,
@@ -665,7 +661,6 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.finishedThreadLine = finishedThreadLine
         self.scopeTileOrder = scopeTileOrder
         self.swipeBetweenScopes = swipeBetweenScopes
-        self.showSidebarFooter = showSidebarFooter
         self.chromeTheme = chromeTheme
         self.showShortcutHints = showShortcutHints
         self.showGitActions = showGitActions
@@ -699,7 +694,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
              terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
-             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, showSidebarFooter, chromeTheme, showShortcutHints, showGitActions,
+             attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showShortcutHints, showGitActions,
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
@@ -748,7 +743,6 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.finishedThreadLine
         scopeTileOrder = (try? container.decodeIfPresent(ScopeTileOrder.self, forKey: .scopeTileOrder)) ?? defaults.scopeTileOrder
         swipeBetweenScopes = (try? container.decodeIfPresent(Bool.self, forKey: .swipeBetweenScopes)) ?? defaults.swipeBetweenScopes
-        showSidebarFooter = (try? container.decodeIfPresent(Bool.self, forKey: .showSidebarFooter)) ?? defaults.showSidebarFooter
         chromeTheme = (try? container.decodeIfPresent(ChromeTheme.self, forKey: .chromeTheme)) ?? defaults.chromeTheme
         showShortcutHints = (try? container.decodeIfPresent(Bool.self, forKey: .showShortcutHints)) ?? defaults.showShortcutHints
         showGitActions = (try? container.decodeIfPresent(Bool.self, forKey: .showGitActions)) ?? defaults.showGitActions

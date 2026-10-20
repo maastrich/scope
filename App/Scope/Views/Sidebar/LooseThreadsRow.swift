@@ -22,11 +22,6 @@ struct LooseThreadsRow: View {
                 model.expansionChanged()
             }
 
-            Image(systemName: "text.line.first.and.arrowtriangle.forward")
-                .font(.scopeBody)
-                .foregroundStyle(Ink.secondary)
-                .frame(width: SidebarMetrics.glyphSlot)
-
             Text("Loose threads")
                 .font(.scopeBody)
                 .foregroundStyle(Ink.secondary)

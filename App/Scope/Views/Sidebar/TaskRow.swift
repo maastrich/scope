@@ -3,19 +3,19 @@ import ScopeControl
 import ScopeCore
 import ScopeTasks
 
-/// Sidebar row for a task: one status glyph, the name, `+N −M`, the state dot of its threads.
+/// Sidebar row for a task: the name, and one mark at the end of the row — the state dot of its threads, or a
+/// `merged` chip (`SidebarTaskRowPolicy`).
 ///
-/// The glyph is `TaskStatus.resolve` — the single most pressing thing about the task, a thread waiting on you
-/// first, then its checks, its pull request, its changes — and replaces what used to be a branch icon and a PR chip
-/// that each said part of it. The trailing dot is the rule every sidebar row follows: the agents' state, in the
-/// shapes `StateDot` gives it, at the end of the row — a thread's own, the most urgent of a group's or a task's
-/// threads — so the eye can run down one column and find every thread that wants it. A task with no thread keeps
-/// the column blank.
+/// The trailing dot is the rule every sidebar row follows: the agents' state, in the shapes `StateDot` gives it, at
+/// the end of the row — a thread's own, the most urgent of a group's or a task's threads — so the eye can run down
+/// one column and find every thread that wants it. A task with no thread keeps the column blank. No status glyph
+/// in front of the name any more, and no `+N −M` after it: the glyph said what the dot and the group already say,
+/// and at the sidebar's width the counts truncated the name. Both live on in the hover card.
 ///
-/// The name takes the whole width: the hover controls (editor, archive, menu) are drawn over the end of the name
-/// and the counts, left of the dot, instead of holding a gutter open when the pointer is elsewhere. The counts step
-/// aside while they are there — a number half under a button reads as a different number. The rest — branch,
-/// repositories, pull request, prompt — is in the hover card.
+/// One line by default; a second while the task is waiting for you or working, saying what its agent is doing.
+/// The name takes the whole width: the hover controls (editor, archive, menu) are drawn over the end of the name,
+/// left of the dot, instead of holding a gutter open when the pointer is elsewhere. The rest — branch, repositories,
+/// pull request, counts, prompt — is in the hover card.
 ///
 /// A task with one thread is one row: selecting it already shows that thread's terminal, so a nested row with the
 /// same title only doubled the list. The chevron and the nested rows come with the second thread; until then the
@@ -29,6 +29,8 @@ struct TaskRow: View {
     @State private var isHovered = false
     @State private var showsCard = false
     @State private var cardDelay: Task<Void, Never>?
+    /// The merged chip's width, so the hover controls leave it clear the way they leave the dot clear.
+    @State private var chipWidth: CGFloat = 0
 
     /// Long enough that sweeping the pointer down the list opens nothing.
     private static let cardDelay: Duration = .milliseconds(700)
@@ -37,19 +39,32 @@ struct TaskRow: View {
         let threads = model.threads(in: task.id)
         let facts = model.taskFacts(for: task)
         let status = TaskStatus.resolve(facts)
+        let secondLine = SidebarTaskRowPolicy.showsSecondLine(rows: model.config.preferences.sidebarRows, status: status)
+        let trailing = SidebarTaskRowPolicy.trailing(status: status, secondLine: secondLine)
         HStack(spacing: SidebarMetrics.spacing) {
             SidebarDisclosure(isExpanded: threads.count > 1 ? task.isExpanded : nil) {
                 task.isExpanded.toggle()
             }
 
-            TaskStatusGlyph(status: status)
-
             VStack(alignment: .leading, spacing: 1) {
-                Text(task.name)
-                    .font(.scopeBody)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if detailed {
+                HStack(spacing: 0) {
+                    Text(task.name)
+                        .font(.scopeBody)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    // On a one-line row, what would open the second line follows the name instead: `· idle 4d`.
+                    if !secondLine {
+                        if let mission = task.record.mission, !mission.milestones.isEmpty {
+                            Text(" · \(mission.progress.reached)/\(mission.progress.total)")
+                                .font(.scopeCaption.monospacedDigit())
+                                .foregroundStyle(Ink.tertiary)
+                                .fixedSize()
+                                .help(mission.caption)
+                        }
+                        TaskDormancyCaption(task: task, leading: true)
+                    }
+                }
+                if secondLine {
                     HStack(spacing: 0) {
                         TaskDormancyCaption(task: task, separated: true)
                         if let mission = task.record.mission, !mission.milestones.isEmpty {
@@ -80,32 +95,23 @@ struct TaskRow: View {
 
             Spacer(minLength: 4)
 
-            if !detailed {
-                if let mission = task.record.mission, !mission.milestones.isEmpty {
-                    Text("\(mission.progress.reached)/\(mission.progress.total)")
-                        .font(.scopeCaption.monospacedDigit())
-                        .foregroundStyle(Ink.tertiary)
-                        .help(mission.caption)
-                        .opacity(isHovered ? 0 : 1)
-                }
-                TaskDormancyCaption(task: task)
-                    .opacity(isHovered ? 0 : 1)
+            switch trailing {
+            case .mergedChip:
+                SidebarMergedChip()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { chipWidth = $0 }
+            case .stateDot:
+                SidebarStateDot(
+                    state: ThreadState.mostUrgent(threads.map(\.displayState)),
+                    pulses: threads.contains(where: \.isWorking)
+                )
             }
-
-            // Whole or not at all: the name gives way first, and the controls cover the counts outright.
-            DeltaCounts(additions: task.totalAdditions, deletions: task.totalDeletions)
-                .fixedSize()
-                .opacity(isHovered ? 0 : 1)
-
-            SidebarStateDot(
-                state: ThreadState.mostUrgent(threads.map(\.displayState)),
-                pulses: threads.contains(where: \.isWorking)
-            )
         }
-        .sidebarHoverControls(isHovered) { hoverControls }
+        .sidebarHoverControls(isHovered, kept: trailing == .mergedChip ? chipWidth + SidebarMetrics.spacing : SidebarMetrics.keptUnderHover) {
+            hoverControls
+        }
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
+        .frame(height: SidebarMetrics.rowHeight(detailed: secondLine))
         .contentShape(Rectangle())
         .onHover(perform: hover)
         .popover(isPresented: $showsCard, arrowEdge: .trailing) {
@@ -123,9 +129,6 @@ struct TaskRow: View {
             Button("Archive") { Task { await model.archiveTask(task.id) } }
         }
     }
-
-    /// Settings ▸ Sidebar ▸ Rows: a second line saying what the task is doing.
-    private var detailed: Bool { model.config.preferences.sidebarRows == .detailed }
 
     /// The row the List highlights.
     private var isListSelected: Bool {

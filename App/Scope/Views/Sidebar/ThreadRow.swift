@@ -2,9 +2,11 @@ import SwiftUI
 import ScopeControl
 import ScopeCore
 
-/// Sidebar row for a thread: driver icon, title, trailing caption (`scope root` / repo path; none under a task,
-/// the indentation already says "sandbox"), state dot. A detailed row's second line is what the agent is doing
-/// (`ThreadActivityCaption`) whenever its driver has said, and the state and the place otherwise.
+/// Sidebar row for a thread: title, trailing caption (`scope root` / repo path; none under a task, the rule from
+/// its row already says "sandbox"), state dot. No driver icon: the terminal on the right shows which driver runs.
+/// A detailed row's second line is what the agent is doing (`ThreadActivityCaption`) whenever its driver has said,
+/// and the state and the place otherwise. A row nested under a task or **Loose threads** hangs from that row's
+/// rule (`SidebarNesting`).
 ///
 /// One row at a time may look selected, and it is the List's: the thread the scene shows used to carry an accent
 /// bar and a bold title of its own, which read as a second selection whenever the List highlighted the task row
@@ -23,17 +25,14 @@ struct ThreadRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: ThreadSession
     /// 1 under a task or the loose-threads group, and among the tasks of a state group: a thread row has no
-    /// disclosure slot, so one level of indent is what puts its icon in the column of a task's glyph.
+    /// disclosure slot, so one level of indent is what puts its title in the column of a task's name.
     var depth = 0
+    /// Set under a task or the loose-threads group: the rule from the parent's chevron runs down this row.
+    var nesting: SidebarNesting? = nil
     @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: SidebarMetrics.spacing) {
-            Image(systemName: session.profile.icon ?? "terminal")
-                .font(.scopeBody)
-                .foregroundStyle(glyphInk)
-                .frame(width: SidebarMetrics.glyphSlot)
-
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.displayTitle(for: session))
                     .font(.scopeBody)
@@ -80,10 +79,11 @@ struct ThreadRow: View {
         .padding(.leading, CGFloat(depth) * SidebarMetrics.indent)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: detailed))
+        .sidebarNested(nesting)
         .contentShape(Rectangle())
         // Left of the state dot, over the caption: the row's number among the scope's threads (⌘1…⌘9, the menu's
         // order) and ⌥↩ when a reply can go under the row.
-        .keyHints(.custom(.trailing, CGSize(width: -(SidebarMetrics.stateDot + 10), height: 0))) { rowHints }
+        .keyHints(.custom(.trailing, CGSize(width: -(SidebarMetrics.stateDotColumn + 6), height: 0))) { rowHints }
         .help(helpText)
         .onHover { hovering in
             if reduceMotion {
@@ -123,8 +123,7 @@ struct ThreadRow: View {
         return hints
     }
 
-    // The selected row is a neutral fill (`sidebarRow`), so its glyph and caption keep their ordinary tiers.
-    private var glyphInk: Color { Ink.secondary }
+    // The selected row is a neutral fill (`sidebarRow`), so the caption keeps its ordinary tier.
     private var captionInk: Color { Ink.tertiary }
 
     /// Settings ▸ Sidebar ▸ Rows: a second line with the state in words and where the thread runs.

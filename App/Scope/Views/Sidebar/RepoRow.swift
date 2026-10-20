@@ -11,11 +11,6 @@ struct RepoRow: View {
 
     var body: some View {
         HStack(spacing: SidebarMetrics.spacing) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.scopeBody)
-                .foregroundStyle(Ink.secondary)
-                .frame(width: SidebarMetrics.glyphSlot)
-
             Text(repo.shortName)
                 .font(.scopeBody)
                 .lineLimit(1)
@@ -30,17 +25,18 @@ struct RepoRow: View {
                 Chip(text: branch, mono: true)
             }
 
-            // Keeps the branch chip clear of the dot column, so the chip does not read as the dot's label.
-            Color.clear.frame(width: SidebarMetrics.glyphSlot, height: 1)
-
-            if repo.isDirty {
-                Circle()
-                    .fill(ThreadStateStyle.waiting)
-                    .frame(width: SidebarMetrics.stateDot, height: SidebarMetrics.stateDot)
-                    .help("Uncommitted changes")
-            } else {
-                Color.clear.frame(width: SidebarMetrics.stateDot, height: 1)
+            // The dot in the column every other row ends with, so the chip does not read as the dot's label.
+            Group {
+                if repo.isDirty {
+                    Circle()
+                        .fill(ThreadStateStyle.waiting)
+                        .frame(width: SidebarMetrics.stateDot, height: SidebarMetrics.stateDot)
+                        .help("Uncommitted changes")
+                } else {
+                    Color.clear
+                }
             }
+            .frame(width: SidebarMetrics.stateDotColumn, height: SidebarMetrics.stateDotColumn)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.rowHeight(detailed: false))

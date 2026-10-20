@@ -233,12 +233,17 @@ struct ListSelectionHighlightRemover: NSViewRepresentable {
 extension View {
     /// A sidebar row: no separator, and a rounded neutral fill of its own when selected, in place of the system's
     /// full-width accent bar. The text keeps its ordinary colours on it.
+    ///
+    /// The row's insets are explicit: the state dot's column has to end inside the rounded fill, or a pulsing dot's
+    /// halo comes out cut by its edge (`SidebarRowLayout.rowInset`, `selectionInset`). No vertical inset, so the
+    /// rule under a task runs unbroken down its threads.
     func sidebarRow(selected: Bool) -> some View {
         listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: SidebarMetrics.rowInset, bottom: 0, trailing: SidebarMetrics.rowInset))
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(selected ? Fill.pressed : Color.clear)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, SidebarMetrics.selectionInset)
             )
     }
 

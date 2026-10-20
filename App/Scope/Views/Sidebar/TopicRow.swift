@@ -28,11 +28,6 @@ struct TopicRow: View {
                 }
             }
 
-            Image(systemName: "tag")
-                .font(.scopeBody)
-                .foregroundStyle(Ink.secondary)
-                .frame(width: SidebarMetrics.glyphSlot)
-
             Text(topic)
                 .font(.scopeBody)
                 .foregroundStyle(Ink.secondary)

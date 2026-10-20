@@ -56,11 +56,14 @@ struct PullRequestReadAge: View {
 struct TaskDormancyCaption: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
+    /// `· ` after the caption, when the agent's activity follows it on a second line.
     var separated = false
+    /// ` · ` before the caption, when it follows the name on a one-line row.
+    var leading = false
 
     var body: some View {
         if let caption = model.dormancy(of: task).caption {
-            Text(separated ? "\(caption) · " : caption)
+            Text(leading ? " · \(caption)" : separated ? "\(caption) · " : caption)
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)

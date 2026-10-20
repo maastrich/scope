@@ -6,15 +6,16 @@ import ScopeTasks
 /// The sidebar: the work of the current scope. A header row with the scope name as a switcher (`ScopeSwitcher`),
 /// the two scope-wide views as buttons (`GlobalViewsRow`: Pull Requests and Graph, each a sheet over the window),
 /// the filter field (⌥⌘F, Esc clears; fuzzy subsequence on task / thread / repo names), then a `List(selection:)`
-/// of `SidebarItem`s as **one tree** — the scope's orchestrator and terminal, a **Loose threads** group holding the threads that belong to no task, then
-/// the tasks with their own threads nested — followed by **Repositories** (collapsed by default,
-/// `ScopeState.reposShown`), which is a launcher rather than work. The New Thread / New Task footer closes it when the preference shows it. Other scopes are reached through the switcher, ⌘K or ⌘O.
+/// of `SidebarItem`s — by state (the default: what needs you first, then what is working, finished, quiet, dormant,
+/// each header with its count) or as **one tree** — the scope's orchestrator and terminal, a **Loose threads** group
+/// holding the threads that belong to no task, then the tasks with their own threads nested — followed by
+/// **Repositories** (collapsed by default, `ScopeState.reposShown`), which is a launcher rather than work. The usage
+/// band closes it. Other scopes are reached through the switcher, ⌘K or ⌘O.
 /// It is the only thread switcher: picking a thread hands the keyboard straight back to its terminal.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @State private var scopeBeingRenamed: ScopeState?
     @State private var renameText = ""
-    @State private var footerWidth: CGFloat = 0
     @FocusState private var filterFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Where a swipe has dragged the list, positive to the right (`ScopeSwipe`).
@@ -28,9 +29,6 @@ struct SidebarView: View {
     @State private var scopeSwitchAnimation = Self.keyboardSwitch
 
     private static let keyboardSwitch = Animation.easeOut(duration: 0.12)
-
-    /// Below this width the footer buttons drop their titles.
-    private static let footerTitleThreshold: CGFloat = 230
 
     private var filter: String { model.searchUI.sidebarFilter.trimmingCharacters(in: .whitespaces) }
     private var isFiltering: Bool { !filter.isEmpty }
@@ -102,16 +100,11 @@ struct SidebarView: View {
                 }
             }
         }
+        // The plan's limits, or the tokens: one quiet band at the very bottom, in every scope alike. Nothing under
+        // it: the New Thread / New Task buttons that used to close the sidebar are gone for good — ⌘T, ⇧⌘T, the
+        // palette and the agents open threads and tasks, and the list is the better use of the height.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                // The plan's limits, or the tokens: one quiet band above the buttons, in every scope alike.
-                UsageMeterBand()
-                // Off by default (Settings › Sidebar): ⌘T, ⇧⌘T, the palette and the agents open threads and tasks, and
-                // the list is the better use of the height.
-                if model.config.preferences.showSidebarFooter {
-                    footer
-                }
-            }
+            UsageMeterBand()
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
         // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
@@ -391,8 +384,10 @@ struct SidebarView: View {
             InlineReplySlot(thread: replying, depth: depth + 1)
         }
         if model.threads(in: task.id).count > 1, task.isExpanded || isFiltering {
-            ForEach(visibleThreads(in: task)) { session in
-                ThreadRow(session: session, depth: depth + 1)
+            let threads = visibleThreads(in: task)
+            ForEach(threads) { session in
+                ThreadRow(session: session, depth: depth + 1,
+                          nesting: SidebarNesting(parentDepth: depth, isLast: session.id == threads.last?.id))
                     .tag(SidebarItem.thread(session.id))
                 if model.messageUI.replyingTo == session.id {
                     InlineReplySlot(thread: session.id, depth: depth + 1)
@@ -401,19 +396,24 @@ struct SidebarView: View {
         }
     }
 
-    /// Settings ▸ Sidebar ▸ Arrange ▸ By state: the same rows under four headers, what needs the user first. A
-    /// task and a loose thread are peers here — the question is "what wants me", not "where was it opened" — and an
-    /// empty group is skipped. Rows move between groups as their state changes; that is the price of the answer.
+    /// Settings ▸ Sidebar ▸ Arrange ▸ By state (the default): the same rows under headers, what needs the user
+    /// first, each header counting its rows (`SidebarGroup.sections`). A task and a loose thread are peers here —
+    /// the question is "what wants me", not "where was it opened" — and an empty group is skipped. Rows move between
+    /// groups as their state changes; that is the price of the answer.
     @ViewBuilder
     private func stateGroups(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let loose = visibleScopeThreads(in: scope)
-        ForEach(SidebarGroup.allCases, id: \.self) { group in
-            let groupTasks = tasks.filter {
-                SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0)), dormancy: model.dormancy(of: $0)) == group
-            }
-            let groupThreads = loose.filter { SidebarGroup($0.displayState) == group }
-            if !groupTasks.isEmpty || !groupThreads.isEmpty {
-                SectionLabel(text: group.title, trailing: "\(groupTasks.count + groupThreads.count)")
+        let tasksByGroup = Dictionary(grouping: tasks) {
+            SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0)), dormancy: model.dormancy(of: $0))
+        }
+        let threadsByGroup = Dictionary(grouping: loose) { SidebarGroup($0.displayState) }
+        let sections = SidebarGroup.sections(tasksByGroup.flatMap { group, tasks in tasks.map { _ in group } }
+                                             + threadsByGroup.flatMap { group, threads in threads.map { _ in group } })
+        ForEach(sections, id: \.group) { section in
+            let groupTasks = tasksByGroup[section.group] ?? []
+            let groupThreads = threadsByGroup[section.group] ?? []
+            Group {
+                SectionLabel(text: section.title, trailing: "\(section.count)")
                     .selectionDisabled()
                 ForEach(groupTasks) { task in taskRows(task) }
                 ForEach(groupThreads) { session in
@@ -453,7 +453,7 @@ struct SidebarView: View {
                 .selectionDisabled()
             if scope.looseThreadsShown || isFiltering {
                 ForEach(threads) { session in
-                    ThreadRow(session: session, depth: 1)
+                    ThreadRow(session: session, depth: 1, nesting: SidebarNesting(parentDepth: 0, isLast: session.id == threads.last?.id))
                         .tag(SidebarItem.thread(session.id))
                     if model.messageUI.replyingTo == session.id {
                         InlineReplySlot(thread: session.id, depth: 1)
@@ -524,68 +524,6 @@ struct SidebarView: View {
         .font(.scopeCaption)
         .help(message)
         .selectionDisabled()
-    }
-
-    /// Two equal-width buttons: New Thread — always a loose one, even with a task selected (a thread inside a
-    /// task comes from the task's context menu) — and New Task (⇧⌘T).
-    /// Titles are shown down to `footerTitleThreshold` points, icons only below (measured, so the text is
-    /// never clipped mid-word).
-    private var footer: some View {
-        VStack(spacing: 0) {
-            Divider()
-            Group {
-                if footerWidth >= Self.footerTitleThreshold {
-                    footerButtons(.titleAndIcon)
-                } else {
-                    footerButtons(.iconOnly)
-                }
-            }
-            .buttonStyle(.scopeSecondaryLarge)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { footerWidth = $0 }
-        }
-        .background(Surface.surface)
-    }
-
-    private func footerButtons(_ style: some LabelStyle) -> some View {
-        HStack(spacing: 6) {
-            // A `Menu` would draw its chrome around its label and come out half the width of its neighbour,
-            // so the driver choice hangs off the right-click menu of an ordinary button instead.
-            Button {
-                Task { await model.newLooseThread() }
-            } label: {
-                Label("New Thread", systemImage: "plus")
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
-            .contextMenu {
-                ForEach(model.drivers.profiles) { profile in
-                    Button(profile.name) {
-                        Task { await model.newLooseThread(driverID: profile.id) }
-                    }
-                }
-            }
-            .disabled(model.currentScope == nil)
-            .commandKeyHint("command.new-thread")
-            .help("New loose thread \(model.looseThreadTargetDescription ?? "") — right-click to choose a driver; "
-                  + "a thread inside a task is on the task's own menu")
-            .accessibilityLabel("New Thread")
-
-            Button {
-                model.presentNewTask()
-            } label: {
-                Label("New Task", systemImage: "arrow.triangle.branch")
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
-            .disabled(model.currentScope == nil || model.currentScope?.kind == .missing)
-            .commandKeyHint("command.new-task")
-            .help("New Task (⇧⌘T)")
-            .accessibilityLabel("New Task")
-        }
-        .labelStyle(style)
     }
 }
 
