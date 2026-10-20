@@ -37,6 +37,14 @@ struct ArtifactsCard: View {
         } content: {
             if let task { content(task) }
         }
+        // On the card, not its body: the closed header's summary needs the artifacts too, and the body is only built
+        // while the card is open. The activity is not observed: a turn opening or closing moves `turnRevision`, the
+        // sandbox `changeTick`.
+        .task(id: task.map(refreshKey)) {
+            guard let task else { return }
+            if !task.checkpointsLoaded { await model.reloadCheckpoints(of: task.id) }
+            await model.refreshArtifacts(of: task)
+        }
     }
 
     @ViewBuilder
@@ -89,11 +97,6 @@ struct ArtifactsCard: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
             }
-        }
-        // The activity is not observed: a turn opening or closing moves `turnRevision`, the sandbox `changeTick`.
-        .task(id: refreshKey(task)) {
-            if !task.checkpointsLoaded { await model.reloadCheckpoints(of: task.id) }
-            await model.refreshArtifacts(of: task)
         }
     }
 
@@ -182,6 +185,9 @@ private struct KeptDeliverableRow: View {
 /// long first paragraph does not swallow the card.
 private struct ReportPreview: View {
     let document: MarkdownDocument
+    @State private var isCut = false
+
+    static let maxHeight: CGFloat = 150
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -189,9 +195,20 @@ private struct ReportPreview: View {
                 blockView(block)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: Bool.self) { $0.size.height > Self.maxHeight } action: { isCut = $0 }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(maxHeight: 150, alignment: .top)
+        .frame(maxHeight: Self.maxHeight, alignment: .top)
         .clipped()
+        // A cut line fades out rather than showing half its glyphs; a preview that fits is left as is.
+        .mask {
+            if isCut {
+                LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.78),
+                                       .init(color: .black.opacity(0), location: 1)], startPoint: .top, endPoint: .bottom)
+            } else {
+                Color.black
+            }
+        }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(Surface.ground, in: RoundedRectangle(cornerRadius: 6))
