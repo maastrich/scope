@@ -2,59 +2,89 @@ import Foundation
 import Network
 import Synchronization
 
-/// Client side of the one-message-per-connection protocol: connect, send, half-close, done.
+/// Client side of the one-message-per-connection protocol: connect, send, half-close, wait for the server to close.
 ///
 /// This is what `scope-hook` does. A missing or dead socket fails fast (`.unreachable`) instead of waiting for
 /// the path to come back, and everything is bounded by `timeout`.
 public enum UnixSocketClient {
-    /// Sends `payload` to the unix socket at `path` and returns once the server has taken it.
-    /// - Throws: `UnixSocketError.payloadTooLarge`, `.unreachable`, `.timedOut`, or the underlying `NWError`.
+    /// Sends `payload` to the unix socket at `path` and returns once the server has read it and closed the
+    /// connection.
+    ///
+    /// Returning as soon as the bytes are buffered is not enough: `NWListener` silently drops a connection whose
+    /// client has closed before it was accepted, so a hook that hung up at once lost its event whenever the app was
+    /// slow to accept. The server closes only once it has read the message; that close is the receipt. Plain BSD
+    /// sockets rather than `NWConnection`, which on a loaded machine reports a local socket as "Network is down"
+    /// and leaves no way to tell a receipt from a failure.
+    /// - Throws: `UnixSocketError.payloadTooLarge`, `.pathTooLong`, `.unreachable`, `.timedOut`.
     public static func send(_ payload: Data, to path: String, timeout: Duration = .seconds(2)) async throws {
         guard payload.count <= UnixSocketServer.maxMessageBytes else {
             throw UnixSocketError.payloadTooLarge(bytes: payload.count)
         }
-        let parameters = NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
-        let connection = NWConnection(to: .unix(path: path), using: parameters)
-        let queue = DispatchQueue(label: "dev.scope.sock.client", qos: .userInitiated)
-        let outcome = Outcome()
-
+        let deadline = Date.now.addingTimeInterval(timeout.timeInterval)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    connection.send(content: payload, contentContext: .finalMessage, isComplete: true,
-                                    completion: .contentProcessed { error in
-                        if let error {
-                            outcome.finish(continuation, throwing: error)
-                        } else {
-                            outcome.finish(continuation, throwing: nil)
-                        }
-                        connection.stateUpdateHandler = nil
-                        connection.cancel()
-                    })
-                case .failed(let error):
-                    outcome.finish(continuation, throwing: UnixSocketError.unreachable(path: path, reason: error.localizedDescription))
-                    connection.stateUpdateHandler = nil
-                    connection.cancel()
-                case .waiting(let error):
-                    // For a local unix socket "waiting" means nobody is listening; do not sit on it.
-                    outcome.finish(continuation, throwing: UnixSocketError.unreachable(path: path, reason: error.localizedDescription))
-                    connection.stateUpdateHandler = nil
-                    connection.cancel()
-                case .cancelled:
-                    outcome.finish(continuation, throwing: UnixSocketError.unreachable(path: path, reason: "cancelled"))
-                default:
-                    break
-                }
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try deliver(payload, to: path, deadline: deadline) })
             }
-            queue.asyncAfter(deadline: .now() + timeout.timeInterval) {
-                if outcome.finish(continuation, throwing: UnixSocketError.timedOut(path: path)) {
-                    connection.stateUpdateHandler = nil
-                    connection.cancel()
-                }
-            }
-            connection.start(queue: queue)
         }
+    }
+
+    /// The blocking part of `send`, on a non-blocking descriptor polled up to `deadline`.
+    private static func deliver(_ payload: Data, to path: String, deadline: Date) throws {
+        guard SocketPath.fits(path) else { throw UnixSocketError.pathTooLong(path) }
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { throw unreachable(path, errno) }
+        defer { close(descriptor) }
+        var on: Int32 = 1
+        setsockopt(descriptor, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        _ = fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) | O_NONBLOCK)
+
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: path.utf8.prefix($0.count - 1)) }
+        while true {
+            let result = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
+            }
+            if result == 0 || errno == EISCONN { break }
+            // A full backlog or a connect under way: the listener is there, just behind. Anything else means nobody is.
+            guard [EAGAIN, EINTR, EINPROGRESS, EALREADY].contains(errno) else { throw unreachable(path, errno) }
+            try wait(descriptor, for: Int16(POLLOUT), until: deadline, path: path)
+        }
+
+        try payload.withUnsafeBytes { buffer in
+            var offset = 0
+            while offset < buffer.count {
+                let written = write(descriptor, buffer.baseAddress! + offset, buffer.count - offset)
+                if written > 0 { offset += written; continue }
+                guard written < 0, errno == EAGAIN || errno == EINTR else { throw unreachable(path, errno) }
+                try wait(descriptor, for: Int16(POLLOUT), until: deadline, path: path)
+            }
+        }
+        shutdown(descriptor, SHUT_WR)
+
+        // The server writes nothing on this path: the end of file (or a reset, the same close seen late) is the receipt.
+        var byte: UInt8 = 0
+        while true {
+            let count = read(descriptor, &byte, 1)
+            if count >= 0 || errno == ECONNRESET { return }
+            guard errno == EAGAIN || errno == EINTR else { throw unreachable(path, errno) }
+            try wait(descriptor, for: Int16(POLLIN), until: deadline, path: path)
+        }
+    }
+
+    private static func wait(_ descriptor: Int32, for events: Int16, until deadline: Date, path: String) throws {
+        let remaining = deadline.timeIntervalSinceNow
+        guard remaining > 0 else { throw UnixSocketError.timedOut(path: path) }
+        var entry = pollfd(fd: descriptor, events: events, revents: 0)
+        // A full backlog does not wake `poll` when it drains: look again every few milliseconds.
+        let slice = events == Int16(POLLOUT) ? min(remaining, 0.01) : remaining
+        _ = poll(&entry, 1, Int32((slice * 1000).rounded(.up)))
+    }
+
+    private static func unreachable(_ path: String, _ code: Int32) -> UnixSocketError {
+        .unreachable(path: path, reason: String(cString: strerror(code)))
     }
 
     /// Sends a control frame and reads the whole reply (newline-separated JSON lines, ended by
@@ -146,28 +176,6 @@ public enum UnixSocketClient {
             }
             guard first else { return false }
             continuation.resume(with: result)
-            return true
-        }
-    }
-
-    /// Guarantees the continuation is resumed exactly once whichever callback wins.
-    private final class Outcome: Sendable {
-        private let resumed = Mutex(false)
-
-        /// Resumes the continuation if nobody did yet; returns `true` when this call was the one.
-        @discardableResult
-        func finish(_ continuation: CheckedContinuation<Void, any Error>, throwing error: (any Error)?) -> Bool {
-            let first = resumed.withLock { flag -> Bool in
-                if flag { return false }
-                flag = true
-                return true
-            }
-            guard first else { return false }
-            if let error {
-                continuation.resume(throwing: error)
-            } else {
-                continuation.resume()
-            }
             return true
         }
     }
