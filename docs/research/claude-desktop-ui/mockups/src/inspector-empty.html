@@ -1,0 +1,71 @@
+<!-- title: Inspector · empty states (no task, fresh task) -->
+<!-- size: 770x620 -->
+<style>
+  body { width: 770px; height: 620px; overflow: hidden; display: flex; }
+  .half { width: 385px; height: 620px; }
+  .half + .half { border-left: 1px solid var(--stroke); }
+  .lbl-top { height: 22px; display: flex; align-items: center; padding: 0 12px; font-size: 10.5px; color: var(--ink-3); background: var(--surface); border-bottom: 1px solid var(--stroke); }
+</style>
+<div class="half">
+  <div class="lbl-top">No task selected · a thread at the scope root</div>
+  <div class="rail" style="border-left:none;height:598px">
+    <div class="band">
+      <div class="subject">{i:box:ink2}<span class="name">scope</span><span class="scope">· repository</span></div>
+      <div class="pane-strip"><span class="pb on">{i:info}</span><span class="pb">{i:shell}</span><span class="pb">{i:folder}</span><span class="pb">{i:search}</span><span class="pb">{i:dots}</span></div>
+    </div>
+    <div class="rail-scroll">
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Repository</span><span class="chip" style="margin-left:2px">Follow selection {i:chev-d}</span><div class="acts"><span class="ib">{i:terminal}</span><span class="ib">{i:folder}</span></div></div>
+        <div class="card-b">
+          <div class="row"><span class="lbl"><span class="mono" style="font-size:13px;font-weight:700">main</span></span><span class="chip">up to date</span></div>
+          <div class="row sub" style="padding-left:0">{i:clock:ic}<span class="lbl"><span class="mono">b078522</span> chore(release): v0.27.0 <span class="ink3">· 2 d</span></span></div>
+          <div class="row" style="height:22px"><span class="lbl ink3" style="font-size:11px">Base checkout · follows the selected thread.</span></div>
+        </div>
+      </div>
+      <div class="card" style="opacity:.6"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Changes</span><span class="sum">no task</span></div></div>
+      <div class="card" style="opacity:.6"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Pull requests</span><span class="sum">no task</span></div></div>
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Context</span><span class="sum">Fable 5.1 · 12 %</span></div>
+        <div class="card-b">
+          <div class="row">{i:doc:ic}<span class="lbl">CLAUDE.md <span class="ink3">· repository's own</span></span><span class="val">6.1 kB</span></div>
+          <div class="row">{i:model:ic}<span class="lbl">Fable 5.1 <span class="ink3">· medium</span></span><span class="meter" style="max-width:80px"><i style="width:12%"></i></span><span class="val mono">12 %</span></div>
+        </div>
+      </div>
+      <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Connectors</span><span class="sum">2</span></div></div>
+      <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Files</span><span class="sum">1 242 files</span></div></div>
+    </div>
+  </div>
+</div>
+<div class="half">
+  <div class="lbl-top">A task just created · setup running, nothing changed yet</div>
+  <div class="rail" style="border-left:none;height:598px">
+    <div class="band">
+      <div class="subject">{i:branch:ink2}<span class="name">dark-mode-tokens</span><span class="scope">· @maastrich</span></div>
+      <div class="pane-strip"><span class="pb on">{i:info}</span><span class="pb">{i:diff}</span><span class="pb">{i:shell}</span><span class="pb">{i:pr}</span><span class="pb">{i:folder}</span><span class="pb">{i:dots}</span></div>
+    </div>
+    <div class="rail-scroll">
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Environment</span></div>
+        <div class="card-b">
+          <div class="version"><span class="br">feat/dark-mode-tokens</span><span class="from">from main @ b078522</span></div>
+          <div class="row">{i:box:ic}<span class="lbl">scope <span class="ink3 mono">~/.scope/sandboxes/…/scope</span></span><span class="val">clean</span><span class="dot done"></span></div>
+          <div class="row">{i:gear:ic}<span class="lbl">Setup <span class="ink3 mono">swift build</span></span><span class="val"><span class="chip pend"><span class="dot running" style="width:6px;height:6px"></span> running · 18 s</span></span></div>
+          <div class="row">{i:port:ic}<span class="lbl">Ports <span class="ink3">block 4320–4329</span></span><span class="val ink3">nothing listening</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Changes</span></div>
+        <div class="empty"><b>No changes yet</b>The agent has not written anything. The first checkpoint lands here after its first turn.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Pull requests</span></div>
+        <div class="empty"><b>No pull request yet</b>Push the branch and open one; Scope binds the task to it. <span class="ink3">Or ask the agent.</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="chev">{i:chev-d}</span><span class="ttl">Artifacts</span></div>
+        <div class="empty"><b>Nothing produced yet</b>REPORT.md, files written outside the diff and published pages appear here.</div>
+      </div>
+      <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Context</span><span class="sum">Fable 5.1 · brief 3 lines</span></div></div>
+    </div>
+  </div>
+</div>

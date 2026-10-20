@@ -1,0 +1,60 @@
+/* Scope design tokens, copied from App/Scope/Assets.xcassets (brand palette) and Theme.swift.
+   Light = Daylight (Ivory ground, white panels, Electric accent).
+   Dark  = Midnight (Onyx ground, marine panels, Periwinkle accent). */
+:root {
+  --ground: #FFFFF9; --surface: #FFFFF9; --panel: #FFFFFF; --elevated: #FFFFFF;
+  --stroke: #DEDFDB; --field: #FFFFFF;
+  --fill-quiet: #F1F1EC; --fill-hover: #F6F6F1; --fill-pressed: #EAEAE6;
+  --sel-inactive: #D7DCEB; --sel-tint: #DDE7F9;
+  --ink: #141826; --ink-2: #6D7076; --ink-3: #6D7076; --on-accent: #FFFFFF;
+  --accent: #0E55FB; --origin-agent: #6B5FBF;
+  --st-idle: #8A8C90; --st-running: #04796C; --st-waiting: #A05E12; --st-done: #1F6F9E;
+  --ck-pass: #04796C; --ck-fail: #C43A2E; --ck-pend: #A05E12;
+  --lavender: #DFCEFF; --mint: #D6F0DC; --butter: #FAF6B9; --mist: #D8EFF9;
+  --diff-add-bg: #E6F4EA; --diff-del-bg: #FBE9E7; --diff-add-ink: #1F6F3A; --diff-del-ink: #B3261E;
+  --term-bg: #FFFFFF; --term-ink: #141826;
+  --shadow: 0 1px 2px rgba(20,24,38,.06), 0 6px 20px rgba(20,24,38,.08);
+}
+[data-theme="dark"] {
+  --ground: #101010; --surface: #101010; --panel: #191D2C; --elevated: #232838;
+  --stroke: #363635; --field: #191D2C;
+  --fill-quiet: #232323; --fill-hover: #1E1E1E; --fill-pressed: #2D2D2C;
+  --sel-inactive: #262C40; --sel-tint: #16233F;
+  --ink: #FFFFF9; --ink-2: #AEAEAA; --ink-3: #939390; --on-accent: #141826;
+  --accent: #9789E6; --origin-agent: #DFCEFF;
+  --st-idle: #7C7C79; --st-running: #00B8A2; --st-waiting: #F96B1A; --st-done: #7BC2EA;
+  --ck-pass: #00B8A2; --ck-fail: #FE7272; --ck-pend: #FDA63F;
+  --diff-add-bg: #15302A; --diff-del-bg: #3A1F22; --diff-add-ink: #5FD39E; --diff-del-ink: #FE7272;
+  --term-bg: #0B0B0B; --term-ink: #E8E8E2;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--ground); color: var(--ink);
+  font: 13px/1.35 -apple-system, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: "SF Mono", Menlo, ui-monospace, monospace; font-size: 11px; }
+.t-title { font-size: 13px; font-weight: 600; }
+.t-body { font-size: 13px; }
+.t-row { font-size: 11.5px; }
+.t-cap { font-size: 11px; color: var(--ink-2); }
+.t-micro { font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.ink2 { color: var(--ink-2); } .ink3 { color: var(--ink-3); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot.running { background: var(--st-running); } .dot.waiting { background: var(--st-waiting); }
+.dot.done { background: var(--st-done); } .dot.idle { background: var(--st-idle); }
+.dot.failed { background: var(--ck-fail); } .dot.ring { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-idle); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; background: var(--fill-quiet); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.chip.mono { font-size: 10.5px; }
+.chip.pass { color: var(--ck-pass); } .chip.fail { color: var(--ck-fail); } .chip.pend { color: var(--ck-pend); }
+.chip.accent { color: var(--accent); background: var(--sel-tint); }
+.plus { color: var(--diff-add-ink); } .minus { color: var(--diff-del-ink); }
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--stroke); border-radius: 5px; background: var(--panel); color: var(--ink); font-size: 11.5px; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.icon { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hair { border-top: 1px solid var(--stroke); }
+.kbd { font: 10px/1 ui-monospace, Menlo, monospace; padding: 2px 4px; border: 1px solid var(--stroke); border-bottom-width: 2px; border-radius: 3px; color: var(--ink-2); background: var(--panel); }
+.frame-note { position: fixed; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-size: 10px; color: var(--ink-3); background: var(--surface); border-top: 1px solid var(--stroke); }

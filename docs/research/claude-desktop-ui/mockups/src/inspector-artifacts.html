@@ -1,0 +1,59 @@
+<!-- title: Inspector · Artifacts & reports -->
+<!-- size: 380x960 -->
+<style>
+  body { width: 380px; height: 960px; overflow: hidden; }
+  .prev { margin: 4px 0 6px; padding: 8px 10px; border: 1px solid var(--stroke); border-radius: 6px; background: var(--ground); font-size: 11.5px; line-height: 1.45; color: var(--ink-2); }
+  .prev h4 { margin: 0 0 4px; font-size: 12px; color: var(--ink); }
+  .prev ul { margin: 2px 0 0 14px; padding: 0; }
+  .thumb { width: 100%; height: 84px; border-radius: 5px; border: 1px solid var(--stroke); background: linear-gradient(90deg, var(--fill-quiet) 0 26%, var(--panel) 26% 60%, var(--sel-tint) 60%); position: relative; }
+  .thumb::after { content: "window-light.png · 1440×900"; position: absolute; left: 8px; bottom: 6px; font-size: 10px; color: var(--ink-3); }
+</style>
+<div class="rail" style="border-left:none">
+  <div class="band">
+    <div class="subject">{i:branch:ink2}<span class="name">claude-desktop-ui-research</span><span class="scope">· @maastrich</span></div>
+    <div class="pane-strip">
+      <span class="pb on">{i:info}</span><span class="pb">{i:diff}<span class="badge">6</span></span><span class="pb">{i:shell}</span>
+      <span class="pb">{i:pr}<span class="badge fail">1</span></span><span class="pb">{i:folder}</span><span class="pb">{i:dots}</span>
+    </div>
+  </div>
+  <div class="rail-scroll">
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Environment</span><span class="sum"><span class="mono">explore/scope-claude-desktop-ui</span> · ↑3 · 2 ports</span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Changes</span><span class="sum">6 files · <span class="plus">+108</span> <span class="minus">−12</span></span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Pull requests</span><span class="sum"><span class="mono">#79</span> <span class="chip fail">✗ 1 / 4</span></span></div></div>
+
+    <div class="card fill">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Artifacts</span>
+        <div class="acts"><span class="ib">{i:folder}</span><span class="ib">{i:refresh}</span></div>
+      </div>
+      <div class="card-b" style="gap:0">
+        <div class="t-micro" style="padding:4px 0 2px">Report</div>
+        <div class="art">{i:doc:ic}<span class="n">REPORT.md <span class="ink3">· deliverable</span></span><span class="m">6 min · <span class="plus">+71</span></span><span class="btn ghost" style="padding:1px 6px">Read</span></div>
+        <div class="prev">
+          <h4>Claude Code Desktop : ce qu'on reprend</h4>
+          Cartes empilées dans le rail, une ligne par fait ; Changes = une ligne par PR avec stats et checks ; sidebar groupée par état avec sessions imbriquées…
+          <ul><li>Rail en cartes (S)</li><li>Pane Shell (M)</li><li>Carte Artifacts (M)</li></ul>
+        </div>
+
+        <div class="t-micro" style="padding:6px 0 2px">Files written this task <span class="ink3" style="font-weight:500;text-transform:none;letter-spacing:0">· outside the repo diff</span></div>
+        <div class="thumb"></div>
+        <div class="art">{i:file:ic}<span class="n">mockups/png/window-light.png</span><span class="m">turn 9 · 412 kB</span></div>
+        <div class="art">{i:file:ic}<span class="n">mockups/png/sidebar-dark.png</span><span class="m">turn 9 · 96 kB</span></div>
+        <div class="art">{i:file:ic}<span class="n">sources/INDEX.md</span><span class="m">turn 4</span></div>
+
+        <div class="t-micro" style="padding:6px 0 2px">Published</div>
+        <div class="art">{i:globe:ic}<span class="n">Mockups · summary page</span><span class="m">claude.ai/artifact/…</span><span class="ib ink3">{i:ext}</span></div>
+        <div class="art">{i:pr:ic}<span class="n">Pull request #79</span><span class="m">github.com</span><span class="ib ink3">{i:ext}</span></div>
+
+        <div class="t-micro" style="padding:6px 0 2px">Checkpoints <span class="ink3" style="font-weight:500">9</span></div>
+        <div class="cpk"><span class="t">12:04</span><span class="n">render mockups <span class="ink3">· turn 9</span></span><span class="val mono ink2"><span class="plus">+86</span></span><span class="ib ink3">{i:diff}</span></div>
+        <div class="cpk"><span class="t">11:52</span><span class="n">write report <span class="ink3">· turn 8</span></span><span class="val mono ink2"><span class="plus">+71</span></span><span class="ib ink3">{i:diff}</span></div>
+        <div class="cpk"><span class="t">11:31</span><span class="n">tokens + ui css <span class="ink3">· turn 6</span></span><span class="val mono ink2"><span class="plus">+140</span></span><span class="ib ink3">{i:diff}</span></div>
+        <div class="row" style="height:22px"><span class="lbl"><a style="color:var(--accent);font-size:11.5px">Show all 9</a></span></div>
+      </div>
+    </div>
+
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Context</span><span class="sum">Fable 5.1 · 38 %</span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Connectors</span><span class="sum">3</span></div></div>
+  </div>
+</div>

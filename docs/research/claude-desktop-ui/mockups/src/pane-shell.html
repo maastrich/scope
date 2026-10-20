@@ -1,0 +1,68 @@
+<!-- title: Reading column · Shell pane and Diff pane -->
+<!-- size: 1040x620 -->
+<style>
+  body { width: 1040px; height: 620px; overflow: hidden; display: flex; }
+  .pane { width: 520px; }
+  .pane:first-child { border-left: none; }
+  .foot { height: 26px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-top: 1px solid var(--stroke); background: var(--panel); font-size: 10.5px; color: var(--ink-3); }
+</style>
+<!-- Shell pane: a scratch terminal of the task, not the agent's thread -->
+<div class="pane">
+  <div class="band">
+    <div class="subject">{i:shell:ink2}<span class="name">Shell</span><span class="scope">· sandbox · scope</span></div>
+    <div class="tabs">
+      <span class="tab on">{i:terminal} zsh</span>
+      <span class="tab"><span class="spin"></span> swift test · 1 min</span>
+      <span class="tab">{i:plus}</span>
+    </div>
+    <span class="ib ink3" style="margin-left:auto">{i:ext}</span><span class="ib ink3">{i:x}</span>
+  </div>
+  <div class="term"><span class="dim">~/.scope/sandboxes/maastrich/claude-desktop-ui-research/scope</span>
+<span class="acc">❯</span> git log --oneline -3
+<span class="warn">4f2a9c1</span> docs(research): mockups rendered in light and dark
+<span class="warn">b078522</span> chore(release): v0.27.0
+<span class="warn">ec6549d</span> feat(tasks): show every pull request of a task (#78)
+<span class="acc">❯</span> python3 docs/research/claude-desktop-ui/mockups/build.py
+rendered png/inspector-overview-light.png
+rendered png/inspector-overview-dark.png
+rendered png/sidebar-light.png
+rendered png/sidebar-dark.png
+rendered png/window-light.png
+rendered png/window-dark.png
+<span class="acc">❯</span> gh pr checks 79
+<span class="ok">✓</span>  lint       <span class="dim">48s   https://github.com/…/runs/1</span>
+<span class="ok">✓</span>  docs       <span class="dim">21s   https://github.com/…/runs/2</span>
+<span class="err">✗</span>  build      <span class="dim">3m2s  https://github.com/…/runs/3</span>
+<span class="warn">●</span>  test       <span class="dim">pending</span>
+<span class="acc">❯</span> <span class="cursor"></span></div>
+  <div class="foot"><span>SCOPE_TASK · SCOPE_PORT=4310 injected</span><span style="margin-left:auto">⌃` toggles · ⌘⇧D diff · ⎋ closes</span></div>
+</div>
+
+<!-- Diff pane, the existing reading column with file sections and a line comment -->
+<div class="pane">
+  <div class="band">
+    <div class="subject">{i:diff:ink2}<span class="name">Changes</span><span class="scope">· since last turn · 6 files</span></div>
+    <span class="chip">{i:list} Files</span>
+    <span class="ib ink3" style="margin-left:auto">{i:copy}</span><span class="ib ink3">{i:ext}</span><span class="ib ink3">{i:x}</span>
+  </div>
+  <div class="diff">
+    <div class="dfile">{i:chev-d:ink3}<span class="p"><span class="dir">App/Scope/Views/Inspector/</span>InspectorView.swift</span><span class="turn ink3" style="font-size:10px">turn 8</span><span class="plus">+18</span><span class="minus">−6</span><span class="cb" style="width:12px;height:12px;border:1px solid var(--stroke);border-radius:3px"></span></div>
+    <div class="hunk">@@ -88,12 +88,18 @@ struct InspectorView: View</div>
+    <div class="ln ctx"><span class="g">88</span><span class="g c">88</span><span class="code">    @ViewBuilder</span></div>
+    <div class="ln ctx"><span class="g">89</span><span class="g c">89</span><span class="code">    private func body(for section: InspectorSection) -> some View {</span></div>
+    <div class="ln del"><span class="g">90</span><span class="g c"></span><span class="code">        CollapsibleSection(section) {</span></div>
+    <div class="ln add"><span class="g"></span><span class="g c">90</span><span class="code">        InspectorCard(section, summary: summary(for: section)) {</span></div>
+    <div class="ln ctx"><span class="g">91</span><span class="g c">91</span><span class="code">            switch section {</span></div>
+    <div class="ln ctx"><span class="g">92</span><span class="g c">92</span><span class="code">            case .task:</span></div>
+    <div class="ln del"><span class="g">93</span><span class="g c"></span><span class="code">                TaskSection(task: task)</span></div>
+    <div class="ln add"><span class="g"></span><span class="g c">93</span><span class="code">                EnvironmentCard(task: task, ports: model.ports(of: task))</span></div>
+    <div class="ln cmt"><div class="comment"><div class="who">You · queued · line 93</div>Keep the setup state on the Environment card, not in the band: the band is for the subject.</div></div>
+    <div class="ln add"><span class="g"></span><span class="g c">94</span><span class="code">            case .artifacts:</span></div>
+    <div class="ln add"><span class="g"></span><span class="g c">95</span><span class="code">                ArtifactsCard(task: task, deliverable: model.deliverable(of: task))</span></div>
+    <div class="ln ctx"><span class="g">94</span><span class="g c">96</span><span class="code">            case .delta:</span></div>
+    <div class="hunk">⋯ 41 unmodified lines</div>
+    <div class="dfile">{i:chev-r:ink3}<span class="p"><span class="dir">App/Scope/Views/Shared/</span>CollapsibleSection.swift</span><span class="turn ink3" style="font-size:10px">turn 8</span><span class="plus">+9</span><span class="minus">−4</span><span class="cb" style="width:12px;height:12px;background:var(--accent);border-radius:3px"></span></div>
+    <div class="dfile">{i:chev-r:ink3}<span class="p"><span class="dir">App/Scope/Views/Shared/</span>Theme.swift</span><span class="turn ink3" style="font-size:10px">turn 7</span><span class="plus">+4</span><span class="minus">−2</span><span class="cb" style="width:12px;height:12px;background:var(--accent);border-radius:3px"></span></div>
+  </div>
+  <div class="foot"><span>Click a line number to comment</span><span style="margin-left:auto">j / k files · [ / ] hunks · v viewed</span></div>
+</div>

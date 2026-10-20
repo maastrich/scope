@@ -1,0 +1,112 @@
+<!-- title: Sidebar · grouped by state -->
+<!-- size: 560x860 -->
+<style>
+  body { width: 560px; height: 860px; overflow: hidden; display: flex; }
+  .sidebar { width: 280px; }
+  .sidebar + .sidebar { border-left: none; }
+  .lbl-top { height: 22px; display: flex; align-items: center; padding: 0 10px; font-size: 10.5px; color: var(--ink-3); background: var(--surface); border-bottom: 1px solid var(--stroke); flex: none; }
+</style>
+
+<!-- Left: by state, detailed rows -->
+<div class="sidebar">
+  <div class="lbl-top">By state · detailed rows (⌃⌘G / ⌃⌘L)</div>
+  <div class="sb-head">
+    <span class="tile" style="background:#6B4FD8">M<span class="mk sq"></span></span><span class="cur">@maastrich</span>
+    <div class="others"><span class="tile" style="background:#0F7C6C">m<span class="mk ring"></span></span><span class="tile" style="background:#8A7400">w</span><span class="tile" style="background:#1B6F94">a<span class="mk dot"></span></span><span class="more">+2</span></div>
+  </div>
+  <div class="gv"><span class="b">{i:tray} Inbox <span class="cnt urgent">2</span></span><span class="b">{i:pr} PRs <span class="cnt">4</span></span><span class="b">{i:box} Graph</span></div>
+  <div class="digest"><b>Since 11:40</b> — <a>1 question for you</a> · <a>checks failing on claude-desktop-ui</a> · PR merged on usage-assist · 2 turns finished</div>
+  <div class="filter">{i:search} Filter <span class="k kbd">⌥⌘F</span></div>
+  <div class="sb-list">
+    <div class="grp">Needs you <span class="cnt">2</span></div>
+    <div class="trow detail">
+      <span class="g waiting">{i:question}</span>
+      <div class="tx"><div class="n">gh-stack-tree · label sync</div><div class="c"><span class="k">Asks:</span> keep the legacy label or drop it?</div></div>
+      <div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div>
+    </div>
+    <div class="trow detail">
+      <span class="g waiting">{i:hand}</span>
+      <div class="tx"><div class="n">vitest-plugin-cache · flaky replay</div><div class="c"><span class="k">Waiting for your permission</span> · Run pnpm test</div></div>
+      <div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div>
+    </div>
+
+    <div class="grp">Working <span class="cnt">3</span></div>
+    <div class="trow detail sel">
+      <span class="g running">{i:play}</span>
+      <div class="tx"><div class="n">claude-desktop-ui-research</div><div class="c">Editing README.md · <span class="fl">✗ checks</span> on #79</div></div>
+      <div class="tr"><span class="dot running pulse"></span></div>
+    </div>
+    <div class="thr sel"><span class="g">{i:asterisk}</span><div class="tx"><div class="n">Fable · main</div><div class="c">Editing README.md</div></div><span class="dot running"></span></div>
+    <div class="thr"><span class="g agent">{i:asterisk}</span><div class="tx"><div class="n">research · web</div><div class="c">Finished · 2 min</div></div><span class="dot done"></span></div>
+    <div class="thr last"><span class="g">{i:terminal}</span><div class="tx"><div class="n">shell</div><div class="c">python3 -m http.server 4310</div></div><span class="dot ring"></span></div>
+    <div class="trow detail hover">
+      <span class="g running">{i:play}</span>
+      <div class="tx"><div class="n">workout-calendar · strava backfill</div><div class="c">Running pnpm test · 2 agents · from <a style="color:var(--accent)">orchestrator</a></div></div>
+      <div class="tr"><span class="dot running"></span></div>
+      <div class="hov"><span class="ib">{i:terminal}</span><span class="ib">{i:archive}</span><span class="ib">{i:dots}</span></div>
+    </div>
+    <div class="trow detail">
+      <span class="g pend">{i:clock}</span>
+      <div class="tx"><div class="n">usage-assist-measures</div><div class="c"><span class="ok">✓ approved</span> · checks running on #76 · 3 PRs</div></div>
+      <div class="tr"><span class="dot idle"></span></div>
+    </div>
+
+    <div class="grp">Finished, not read <span class="cnt">1</span></div>
+    <div class="trow detail">
+      <span class="g done">{i:flag}</span>
+      <div class="tx"><div class="n">hashup · deterministic hash for symlinks</div><div class="c">Finished · 14 min · “Symlinks now resolve to their target…”</div></div>
+      <div class="tr"><span class="dot done"></span></div>
+    </div>
+
+    <div class="grp">Quiet <span class="cnt">2</span><span class="ib">{i:chev-d}</span></div>
+    <div class="trow">
+      <span class="g merged">{i:merge}</span>
+      <div class="tx"><div class="n">gh-next · turn-based sort</div></div>
+      <div class="tr"><span class="chip pass" style="height:16px;font-size:10px">merged</span></div>
+    </div>
+    <div class="trow">
+      <span class="g quiet">{i:branch}</span>
+      <div class="tx"><div class="n">logger · figures set <span class="ink3" style="font-size:11px">· idle 4 d</span></div></div>
+      <div class="tr"><span class="dot ring"></span></div>
+    </div>
+
+    <div class="grp" style="margin-top:10px">Repositories <span class="cnt">31 · 3 changed</span><span class="ib">{i:chev-r}</span></div>
+  </div>
+  <div class="sb-foot">{i:bolt} 5 h · 38 % <span class="sp"><span class="kbd">⌘T</span><span class="kbd">⌘⇧T</span></span></div>
+</div>
+
+<!-- Right: tree, compact rows, topics -->
+<div class="sidebar">
+  <div class="lbl-top">Tree by topic · compact rows</div>
+  <div class="sb-head">
+    <span class="tile" style="background:#6B4FD8">M<span class="mk sq"></span></span><span class="cur">@maastrich</span>
+    <div class="others"><span class="tile" style="background:#0F7C6C">m<span class="mk ring"></span></span><span class="tile" style="background:#8A7400">w</span><span class="tile" style="background:#1B6F94">a<span class="mk dot"></span></span><span class="more">+2</span></div>
+  </div>
+  <div class="gv"><span class="b">{i:tray} Inbox <span class="cnt urgent">2</span></span><span class="b">{i:pr} PRs <span class="cnt">4</span></span><span class="b">{i:box} Graph</span></div>
+  <div class="filter">{i:search} Filter <span class="k kbd">⌥⌘F</span></div>
+  <div class="sb-list">
+    <div class="trow"><span class="g quiet">{i:sparkle}</span><div class="tx"><div class="n">Orchestrator</div></div><div class="tr"><span class="dot idle"></span></div></div>
+    <div class="trow"><span class="g quiet">{i:terminal}</span><div class="tx"><div class="n">Terminal</div></div><div class="tr"><span class="dot ring"></span></div></div>
+
+    <div class="grp">{i:tag} ui-research <span class="cnt">2</span><span class="ib">{i:plus}</span></div>
+    <div class="trow sel"><span class="g running">{i:play}</span><div class="tx"><div class="n">claude-desktop-ui-research</div></div><div class="tr"><span class="dot running pulse"></span></div></div>
+    <div class="thr"><span class="g">{i:asterisk}</span><div class="tx"><div class="n">Fable · main</div></div><span class="dot running"></span></div>
+    <div class="thr"><span class="g agent">{i:asterisk}</span><div class="tx"><div class="n">research · web</div></div><span class="dot done"></span></div>
+    <div class="thr last"><span class="g">{i:terminal}</span><div class="tx"><div class="n">shell</div></div><span class="dot ring"></span></div>
+    <div class="trow"><span class="g merged">{i:merge}</span><div class="tx"><div class="n">diff-review-research <span class="ink3" style="font-size:11px">· merged</span></div></div><div class="tr"><span class="dot idle"></span></div></div>
+
+    <div class="grp">{i:tag} usage <span class="cnt">2</span></div>
+    <div class="trow"><span class="g pend">{i:clock}</span><div class="tx"><div class="n">usage-assist-measures</div></div><div class="tr"><span class="chip" style="height:16px;font-size:10px">3 PRs</span><span class="dot idle"></span></div></div>
+    <div class="trow"><span class="g done">{i:flag}</span><div class="tx"><div class="n">usage-ideas-wave-4</div></div><div class="tr"><span class="dot done"></span></div></div>
+
+    <div class="grp">Tasks <span class="cnt">5</span></div>
+    <div class="trow"><span class="g waiting">{i:question}</span><div class="tx"><div class="n">gh-stack-tree · label sync</div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+    <div class="trow"><span class="g waiting">{i:hand}</span><div class="tx"><div class="n">vitest-plugin-cache · flaky replay</div></div><div class="tr"><span class="dot waiting" style="border-radius:2px"></span></div></div>
+    <div class="trow"><span class="g running">{i:play}</span><div class="tx"><div class="n">workout-calendar · strava backfill</div></div><div class="tr"><span class="dot running"></span></div></div>
+    <div class="trow"><span class="g done">{i:flag}</span><div class="tx"><div class="n">hashup · deterministic hash for symlinks</div></div><div class="tr"><span class="dot done"></span></div></div>
+    <div class="trow"><span class="g quiet">{i:branch}</span><div class="tx"><div class="n">logger · figures set <span class="ink3" style="font-size:11px">· idle 4 d</span></div></div><div class="tr"><span class="dot ring"></span></div></div>
+
+    <div class="grp" style="margin-top:10px">Repositories <span class="cnt">31 · 3 changed</span><span class="ib">{i:chev-r}</span></div>
+  </div>
+  <div class="sb-foot">{i:bolt} 5 h · 38 % <span class="sp"><span class="kbd">⌘T</span><span class="kbd">⌘⇧T</span></span></div>
+</div>

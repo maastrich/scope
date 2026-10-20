@@ -1,0 +1,77 @@
+<!-- title: Inspector · Pull requests -->
+<!-- size: 380x960 -->
+<style>
+  body { width: 380px; height: 960px; overflow: hidden; }
+  .kv { display: grid; grid-template-columns: 64px 1fr; gap: 3px 8px; font-size: 11.5px; padding: 6px 6px 2px; }
+  .kv .k { color: var(--ink-3); }
+  .rev { display: flex; align-items: center; gap: 8px; height: 24px; font-size: 11.5px; padding-left: 6px; }
+  .av { width: 16px; height: 16px; border-radius: 50%; background: var(--lavender); color: #3b2d7a; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+</style>
+<div class="rail" style="border-left:none">
+  <div class="band">
+    <div class="subject">{i:branch:ink2}<span class="name">usage-assist-measures</span><span class="scope">· @maastrich</span></div>
+    <div class="pane-strip">
+      <span class="pb">{i:info}</span><span class="pb">{i:diff}</span><span class="pb">{i:shell}</span>
+      <span class="pb on">{i:pr}<span class="badge pass">2</span></span><span class="pb">{i:folder}</span><span class="pb">{i:dots}</span>
+    </div>
+  </div>
+  <div class="rail-scroll">
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Environment</span><span class="sum"><span class="mono">fix/usage-assist</span> · ↑0 · setup ✓</span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Changes</span><span class="sum">no uncommitted change</span></div></div>
+
+    <div class="card fill">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Pull requests <span class="ink3" style="font-weight:500">3</span></span>
+        <div class="acts"><span class="ib">{i:ext}</span><span class="ib">{i:refresh}</span></div>
+      </div>
+      <div class="card-b" style="gap:0">
+        <div class="row" style="height:24px">{i:milestone:ic}<span class="lbl ink2" style="font-size:11.5px">Issue <span class="mono">#74</span> · Usage counts time on screen even when hidden</span></div>
+
+        <div class="pr-row">
+          <span class="st" style="color:var(--ck-pass)">{i:merge}</span>
+          <div class="t"><div class="l1">fix(usage): count time on screen only while looked at</div>
+          <div class="l2"><span class="mono">scope #77</span><span class="chip pass">merged · 3 d</span></div></div>
+        </div>
+        <div class="pr-row sel">
+          <span class="st" style="color:var(--ck-pass)">{i:check}</span>
+          <div class="t"><div class="l1">feat(control): fewer round trips for agents driving Scope</div>
+          <div class="l2"><span class="mono">scope #76</span><span class="plus mono">+412</span><span class="minus mono">−96</span><span class="chip pass">✓ 4 / 4</span><span class="chip pass">approved</span></div></div>
+          <span class="ib ink3">{i:dots}</span>
+        </div>
+        <div class="pr-row">
+          <span class="st" style="color:var(--ck-pend)">{i:clock}</span>
+          <div class="t"><div class="l1">docs(site): usage page</div>
+          <div class="l2"><span class="mono">maastrich.github.io #12</span><span class="chip pend">● 1 / 2</span><span class="ink3">draft</span></div></div>
+        </div>
+
+        <div class="hair" style="margin:6px -10px 4px"></div>
+        <div class="kv">
+          <span class="k">Branch</span><span class="mono">fix/usage-assist → main</span>
+          <span class="k">Author</span><span>maastrich · opened 3 d ago · updated 12 min</span>
+          <span class="k">Main</span><span><span style="color:var(--ck-pass)">✓</span> up to date with main · mergeable</span>
+        </div>
+        <div class="rev"><span class="av">cl</span><span>claude[bot] <span class="ink3">· approved · “LGTM, one nit on naming”</span></span></div>
+        <div class="rev"><span class="av" style="background:var(--mint);color:#1f5a3a">mp</span><span>maastrich <span class="ink3">· review requested</span></span></div>
+
+        <div class="t-micro" style="padding:10px 6px 2px">Checks · 4 passed</div>
+        <div class="checks">
+          <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">build · macos-15</span><span class="d">4 min 12</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">test · ScopeKitTests</span><span class="d">2 min 40</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">lint · swiftformat</span><span class="d">31 s</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ink-3)">{i:check}</span><span class="n ink3">release · dry run <span class="ink3">(skipped)</span></span><span class="d"></span></div>
+        </div>
+
+        <div style="flex:1"></div>
+        <div class="review-bar" style="gap:6px">
+          <span class="chip pass" style="height:20px">{i:check} Ready to merge</span>
+          <span class="ink3" style="font-size:11px">read 1 min ago</span>
+          <span class="btn ghost" style="margin-left:auto">{i:send} Ask the agent</span>
+          <span class="btn">Merge…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Artifacts</span><span class="sum">no report yet</span></div></div>
+    <div class="card"><div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Context</span><span class="sum">Opus 5.5 · 61 %</span></div></div>
+  </div>
+</div>

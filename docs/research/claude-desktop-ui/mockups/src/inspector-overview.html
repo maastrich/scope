@@ -1,0 +1,130 @@
+<!-- title: Inspector · overview -->
+<!-- size: 380x960 -->
+<style>
+  body { width: 380px; height: 960px; overflow: hidden; }
+</style>
+<div class="rail" style="border-left:none">
+  <div class="band">
+    <div class="subject">
+      {i:branch:ink2}
+      <span class="name">claude-desktop-ui-research</span>
+      <span class="scope">· @maastrich</span>
+    </div>
+    <div class="pane-strip">
+      <span class="pb on" title="Overview">{i:info}</span>
+      <span class="pb" title="Delta ⌘D">{i:diff}<span class="badge">6</span></span>
+      <span class="pb" title="Shell ⌃`">{i:shell}</span>
+      <span class="pb" title="Pull requests">{i:pr}<span class="badge fail">1</span></span>
+      <span class="pb" title="Files">{i:folder}</span>
+      <span class="pb" title="More">{i:dots}</span>
+    </div>
+  </div>
+
+  <div class="rail-scroll">
+
+    <!-- Environment: where the task runs -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Environment</span>
+        <div class="acts"><span class="ib">{i:terminal}</span><span class="ib">{i:folder}</span><span class="ib">{i:refresh}</span></div>
+      </div>
+      <div class="card-b">
+        <div class="version"><span class="br">explore/scope-claude-desktop-ui</span><span class="from">from main @ b078522</span><span class="chip mono" style="margin-left:auto">↑3</span></div>
+        <div class="row">{i:box:ic}<span class="lbl">scope <span class="ink3 mono">~/.scope/sandboxes/…/scope</span></span><span class="val"><span class="plus">+108</span> <span class="minus">−12</span></span><span class="dot done"></span></div>
+        <div class="row">{i:gear:ic}<span class="lbl">Setup <span class="ink3 mono">swift build</span></span><span class="val"><span class="chip pass">{i:check} 42 s</span></span></div>
+        <div class="row">{i:port:ic}<span class="lbl">Ports <span class="ink3">block 4310–4319</span></span></div>
+        <div class="ports" style="padding-left:22px"><span class="port">localhost:4310 ↗</span><span class="port">localhost:4311 ↗</span><span class="port dead">4312</span></div>
+        <div class="proc"><span class="dot running"></span><span class="cmd">python3 -m http.server 4310</span><span class="meta">shell · 12 min</span></div>
+        <div class="proc"><span class="dot running"></span><span class="cmd">Scope Debug.app (SCOPE_HOME=/tmp/scope-demo)</span><span class="meta">pid 5120</span></div>
+        <div class="row" style="height:22px">{i:laptop:ic}<span class="lbl ink2" style="font-size:11px">This Mac · 312 MB on disk · 2 h 14 of agent time</span></div>
+      </div>
+    </div>
+
+    <!-- Changes: collapsed, summary in the header -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-r}</span><span class="ttl">Changes</span>
+        <span class="sum"><span class="chip">Since last turn</span>6 files · <span class="plus">+108</span> <span class="minus">−12</span> · 2 comments</span>
+      </div>
+    </div>
+
+    <!-- Pull requests: one row per PR, Claude's Changes-card shape with Scope's semantics -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Pull requests <span class="ink3" style="font-weight:500">2</span></span>
+        <div class="acts"><span class="ib">{i:ext}</span><span class="ib">{i:refresh}</span></div>
+      </div>
+      <div class="card-b" style="gap:0">
+        <div class="pr-row sel">
+          <span class="st" style="color:var(--ck-fail)">{i:x}</span>
+          <div class="t">
+            <div class="l1">docs(research): Claude Code Desktop UI, what to borrow</div>
+            <div class="l2"><span class="mono">scope #79</span><span class="plus mono">+1204</span><span class="minus mono">−3</span><span class="chip fail">✗ 1 / 4 checks</span><span class="ink3">review needed</span></div>
+          </div>
+          <span class="ib ink3">{i:dots}</span>
+        </div>
+        <div class="pr-row">
+          <span class="st" style="color:var(--ck-pass)">{i:merge}</span>
+          <div class="t">
+            <div class="l1">feat(tasks): show every pull request of a task</div>
+            <div class="l2"><span class="mono">scope #78</span><span class="chip pass">merged · 2 d</span></div>
+          </div>
+        </div>
+        <div class="checks">
+          <div class="ck"><span class="ic" style="color:var(--ck-fail)">{i:x}</span><span class="n">build · macos-15</span><span class="d">3 min</span><span class="ib hover">{i:send}</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ck-pend)">{i:clock}</span><span class="n">test · ScopeKitTests</span><span class="d">running</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">lint · swiftformat</span><span class="d">48 s</span><span class="ib">{i:ext}</span></div>
+          <div class="ck"><span class="ic" style="color:var(--ck-pass)">{i:check}</span><span class="n">docs · build-docs</span><span class="d">21 s</span><span class="ib">{i:ext}</span></div>
+        </div>
+        <div class="row" style="height:24px;margin-top:2px"><span class="lbl ink2" style="font-size:11px">{i:warn:ic} behind main by 2 · no conflict · read 4 min ago</span></div>
+      </div>
+    </div>
+
+    <!-- Artifacts & reports -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Artifacts</span>
+        <span class="sum">REPORT.md · 3 files · 1 page</span>
+      </div>
+      <div class="card-b" style="gap:0">
+        <div class="art">{i:doc:ic}<span class="n">REPORT.md <span class="ink3">· deliverable</span></span><span class="m">updated 6 min</span><span class="ib ink3">{i:eye}</span></div>
+        <div class="art">{i:file:ic}<span class="n">mockups/png/window-light.png</span><span class="m">turn 9</span></div>
+        <div class="art">{i:globe:ic}<span class="n">Mockups · summary page <span class="ink3">· claude.ai/artifact</span></span><span class="m">published</span><span class="ib ink3">{i:ext}</span></div>
+        <div class="art">{i:clock:ic}<span class="n">Checkpoint 9 <span class="ink3">· 12:04 · “render mockups”</span></span><span class="m"><span class="plus">+86</span> <span class="minus">−0</span></span></div>
+      </div>
+    </div>
+
+    <!-- Context -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Context</span>
+        <span class="sum">Fable 5.1 · 38 %</span>
+      </div>
+      <div class="card-b">
+        <div class="brief">Recherche UI + maquettes pour l'app Scope. Pas de code de prod. S'inspirer du panneau de droite de Claude Code Desktop (diff, terminal, environnement, artifacts, contexte, connecteurs, PR)…</div>
+        <div class="row" style="height:22px"><span class="lbl"><a style="color:var(--accent);font-size:11.5px">Read in full</a></span></div>
+        <div class="row">{i:doc:ic}<span class="lbl">CLAUDE.local.md <span class="ink3">· written by Scope</span></span><span class="val">1.8 kB</span></div>
+        <div class="row">{i:model:ic}<span class="lbl">Fable 5.1 <span class="ink3">· high</span></span><span class="meter" style="max-width:90px"><i style="width:38%"></i></span><span class="val mono">38 %</span></div>
+        <div class="row">{i:skills:ic}<span class="lbl">Skills loaded</span><span class="val">3</span></div>
+        <div class="chips" style="padding-left:22px"><span class="chip">scope</span><span class="chip">artifact-design</span><span class="chip">create-pr</span></div>
+      </div>
+    </div>
+
+    <!-- Connectors -->
+    <div class="card">
+      <div class="card-h">
+        <span class="chev">{i:chev-d}</span><span class="ttl">Connectors</span>
+        <span class="sum">3 · <span style="color:var(--ck-pend)">1 needs auth</span></span>
+      </div>
+      <div class="card-b" style="gap:0">
+        <div class="conn">{i:plug:ic}<span class="n">scope <span class="ink3">· MCP, this app</span></span><span class="tools">28 tools</span><span class="st" style="background:var(--st-running)"></span></div>
+        <div class="conn">{i:plug:ic}<span class="n">github</span><span class="tools">12 tools</span><span class="st" style="background:var(--st-running)"></span></div>
+        <div class="conn">{i:plug:ic}<span class="n">linear</span><span class="chip pend">re-authenticate</span><span class="st" style="background:var(--ck-pend)"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="chev">{i:chev-r}</span><span class="ttl">Repository</span><span class="sum"><span class="mono">main</span> · up to date · 1 242 files</span></div>
+    </div>
+  </div>
+</div>
