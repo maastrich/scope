@@ -60,9 +60,25 @@ in sidebar order, <kbd>⇧⌘[</kbd>/<kbd>⇧⌘]</kbd> cycle.</p>
 </table>
 <p>Stopping a thread (<kbd>⌘.</kbd>) leaves its row greyed with an exit toast for ten seconds — long enough to
 relaunch or read the status. Turn on <b>Close exited threads</b> in Settings to have them disappear instead;
-<kbd>⇧⌘T</kbd> undoes a close. A stopped thread stays stopped across a restart; only the ones still running
+<kbd>⌘Z</kbd> or <kbd>⇧⌘T</kbd> undoes a close for thirty seconds, Edit ▸ Undo for five minutes. A stopped thread stays stopped across a restart; only the ones still running
 when Scope went down come back on their own (<b>Relaunch running threads when Scope opens</b>, same section),
 and an agent brought back mid-turn is asked to continue its work (<b>Ask agents to continue after a restart</b>).</p>
+
+<h3 id="closing">Closing a thread, without regret</h3>
+<p>Nothing destructive sits under the pointer in the sidebar: a row's hover controls are <b>Open in Editor</b>
+(tasks) and a <b>…</b> menu, and <b>Close Thread</b>, <b>Archive</b> and <b>Close Task</b> live in that menu, in
+the context menu, in the menu bar (<kbd>⌘W</kbd>, Thread ▸ Task) and in the palette. Scope asks before closing
+or archiving only when something would be lost — an agent in the middle of a turn, a shell with a process still
+running, uncommitted changes, an open pull request (<b>Ask before closing a thread mid-turn or archiving a task
+with work in progress</b> in Settings, one switch for both) — and <b>Cancel</b> is the default button, so a
+Return typed for the terminal confirms nothing. A quiet thread or a finished, merged task goes in one click.</p>
+<p>Either way it can be taken back for five minutes: a toast says <i>“Title” closed — Reopen</i> or <i>“Name”
+archived — Undo</i> for ten seconds (naming the agent when one asked over <code>scope thread close</code> or
+<code>scope_task_archive</code>), and <b>Edit ▸ Undo</b> or the palette do the same afterwards. <kbd>⌘Z</kbd> and
+<kbd>⇧⌘T</kbd> (the last thread) work for thirty seconds after a close or archive of your own; an agent's is
+never on a shortcut, so a <kbd>⌘Z</kbd> typed in a text field stays a text undo. A reopened thread picks its driver session back up when the profile knows how; a restored task comes
+back with its sandboxes and its changes. Closing a task for good has no undo, which is why it stands behind the
+same question.</p>
 
 <h3 id="residents">Orchestrator and terminal</h3>
 <p>Every scope keeps two threads at its root that you never open yourself: an <b>Orchestrator</b> — an agent to
@@ -251,7 +267,7 @@ you and on Ask otherwise (a setting pins one or the other). A click anywhere els
 what you are looking at. Both shortcuts need no permission: they are registered with the system, not read from
 other apps. macOS does not say when another app holds the same chord; if a press never reaches Scope, pick another
 one in Settings.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#closing">Closing a thread, without regret</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

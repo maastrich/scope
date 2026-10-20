@@ -111,8 +111,9 @@ final class AppControlService: ControlService {
                                             + "while the scope is declared. Stop it instead (`scope thread stop`); it stays "
                                             + "stopped until someone relaunches it or Scope opens again."))
                 }
-                // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on.
-                _ = await model.close(session.id, force: true)
+                // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on. The user can
+                // still take it back: the toast names the agent.
+                _ = await model.close(session.id, force: true, by: requester(origin))
                 return .success(.action(ActionResult(message: "closed \(session.id.rawValue) — \(session.title)",
                                                      thread: session.id.rawValue), .threadClose))
             }
@@ -840,7 +841,7 @@ final class AppControlService: ControlService {
         let slug = task.record.slug
         let outcome: DismantleOutcome
         do {
-            outcome = try await model.dismantleTask(task.id, mode)
+            outcome = try await model.dismantleTask(task.id, mode, by: requester(origin))
         } catch {
             return .failure(.failed("could not \(mode == .archive ? "archive" : "close") the task \(slug)",
                                     detail: String(describing: error)))
@@ -1409,5 +1410,18 @@ private extension Result where Failure == ControlError {
     var failureError: ControlError {
         if case .failure(let error) = self { return error }
         return .failed("unexpected success")
+    }
+}
+
+extension AppControlService {
+    /// Who the undo toast says did it: the thread by its title, an external client by its name, or the user.
+    @MainActor
+    func requester(_ origin: ControlOrigin) -> CloseRequester {
+        switch origin {
+        case .user: .user
+        case .thread(let id, _): .agent(model.session(id).map { "“\(model.displayTitle(for: $0))”" })
+        case .strangerThread: .agent(nil)
+        case .externalAgent(let client): .agent(client)
+        }
     }
 }
