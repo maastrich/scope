@@ -27,6 +27,13 @@ import Testing
         #expect(TokenUsageText.threadField(nil) == nil)
     }
 
+    @Test func theContextCaptionCountsEverythingReadAndTheCachedShare() {
+        let counts = TokenCounts(input: 20_000, output: 22_000, cacheCreation: 52_000, cacheRead: 112_000)
+        #expect(TokenUsageText.contextCaption(counts) == "184k in · 22k out · 61 % cached")
+        #expect(TokenUsageText.contextCaption(TokenCounts(output: 500)) == "0 in · 500 out")
+        #expect(TokenUsageText.contextCaption(.zero) == nil)
+    }
+
     @Test func aBudgetIsTypedTheWayItReads() {
         #expect(TokenUsageText.budget("20M") == 20_000_000)
         #expect(TokenUsageText.budget(" 1.5m ") == 1_500_000)

@@ -164,8 +164,11 @@ enum HookCLI {
         }
         if let thread = environment["SCOPE_THREAD"], !thread.isEmpty,
            let socketPath = environment["SCOPE_SOCK"], !socketPath.isEmpty,
-           let limits = parsed.rateLimitsJSON {
-            let event = HookEvent(thread: thread, event: .limitsReported, payload: [HookEvent.limitsKey: limits], sentAt: .now)
+           parsed.rateLimitsJSON != nil || parsed.contextWindowJSON != nil {
+            var payload: [String: String] = [:]
+            if let limits = parsed.rateLimitsJSON { payload[HookEvent.limitsKey] = limits }
+            if let context = parsed.contextWindowJSON { payload[HookEvent.contextKey] = context }
+            let event = HookEvent(thread: thread, event: .limitsReported, payload: payload, sentAt: .now)
             do {
                 try await UnixSocketClient.send(try event.encoded(), to: socketPath, timeout: .seconds(2))
             } catch {

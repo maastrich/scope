@@ -122,6 +122,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// The agent's last answer, its end kept within `replyLimit`. `thread.read` keeps answering from the full one.
     public var lastReply: AgentReply?
     public var transcriptPath: String?
+    /// How full the session's context window is, its model and its driver's version, as the driver last told its
+    /// status line (`limits.reported`'s `context`); `nil` for a driver that reports none.
+    public var contextWindow: ContextWindowReport?
     /// When the driver sent the event that closed the last turn as ended or failed (`AdapterEvent.sentAt`): anything
     /// it sent before that belongs to that turn, however late it reaches the app (see `isLate(_:)`).
     public var turnEndSentAt: Date?
@@ -142,6 +145,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// open turn as `.exited` (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
         case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
+        case contextWindow
     }
 
     /// The calls of the last turn that ended or failed, or of the one in progress: what "this turn" means to a reader.
@@ -259,7 +263,10 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
             // A new session of the driver (a relaunch, a resume): whatever the previous one ran is gone with it.
             next.agents = [:]
         case .limitsReported:
-            break
+            if let json = event.payload[HookEvent.contextKey],
+               let report = ContextWindowReport.parse(json, reportedAt: at) {
+                next.contextWindow = report
+            }
         }
         return next
     }
@@ -284,6 +291,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         next.lastReply = lastReply ?? saved.lastReply
         next.transcriptPath = transcriptPath ?? saved.transcriptPath
         next.turnEndSentAt = turnEndSentAt ?? saved.turnEndSentAt
+        next.contextWindow = contextWindow ?? saved.contextWindow
         return next
     }
 
