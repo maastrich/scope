@@ -244,7 +244,9 @@ private struct ListeningProcessRow: View {
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.tertiary)
                 .lineLimit(1)
-                .fixedSize()
+                .truncationMode(.tail)
+                .frame(maxWidth: 140, alignment: .trailing)
+                .help(process.threadID.map { "Started from the thread \(owner) (\($0))" } ?? "No thread of the task is its ancestor")
         }
         .padding(.leading, 5)
         .frame(height: 20)

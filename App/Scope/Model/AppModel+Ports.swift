@@ -72,7 +72,7 @@ extension AppModel {
                 // `lsof` exits 1 when nothing matched: an empty list, not a failure.
                 let entries = ListeningProcesses.parse(result.stdoutText)
                 return ListeningProcesses.processes(entries) { pid in
-                    ProcessSweep.arguments(pid).joined(separator: " ")
+                    ListeningProcesses.commandLine(arguments: ProcessSweep.arguments(pid))
                 } owner: { pid in
                     ListeningProcesses.owner(of: pid, threads: shells, environment: ProcessSweep.environment, parent: ProcessSweep.parent)
                 }

@@ -110,6 +110,15 @@ public enum ListeningProcesses {
         }
     }
 
+    /// `argv` as one line, the program by its name alone: `/opt/homebrew/bin/python3 -m http.server 4310` is
+    /// `python3 -m http.server 4310` — the path is what the middle truncation would eat first anyway, and the help
+    /// text keeps the whole of it.
+    public static func commandLine(arguments: [String]) -> String {
+        guard let program = arguments.first else { return "" }
+        let name = program.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? program
+        return ([name] + arguments.dropFirst()).joined(separator: " ")
+    }
+
     /// Which Scope thread a process belongs to: the `SCOPE_THREAD` of its environment when the kernel shows it, else
     /// the first ancestor (itself included) that is a thread's shell. `threads` maps a thread's shell pid to its id.
     /// The kernel hides the environment of Apple's platform binaries (`/usr/bin/python3`), which is what the

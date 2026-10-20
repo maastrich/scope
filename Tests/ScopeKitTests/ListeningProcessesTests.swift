@@ -79,6 +79,12 @@ import Testing
         #expect(ListeningProcesses.owner(of: 900, threads: [:], environment: { _ in [:] }, parent: { _ in nil }) == nil)
     }
 
+    @Test func commandLineNamesTheProgramWithoutItsPath() {
+        #expect(ListeningProcesses.commandLine(arguments: ["/opt/homebrew/bin/python3", "-m", "http.server", "4310"]) == "python3 -m http.server 4310")
+        #expect(ListeningProcesses.commandLine(arguments: ["node"]) == "node")
+        #expect(ListeningProcesses.commandLine(arguments: []) == "")
+    }
+
     @Test func setupCommandsComeFromTheLogHeaders() {
         let log = """
         [api] copied .env from the base checkout
