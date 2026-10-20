@@ -41,7 +41,9 @@ struct ScopeEmptyView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 420)
             }
-            HStack(spacing: 8) {
+            // Wraps, centred: one button per installed driver, and a custom profile or two made the row wider
+            // than the scene, which then pushed itself over the sidebar.
+            FlowRow(spacing: 8, centered: true) {
                 if let preferred = model.preferredProfile {
                     Button {
                         Task { await model.newThreadInCurrentContext(driverID: preferred.id) }
@@ -75,6 +77,7 @@ struct ScopeEmptyView: View {
                     .usageID("empty.new-thread-other-driver", label: "New thread, another driver (empty scope)")
                 }
             }
+            .frame(maxWidth: 560)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
