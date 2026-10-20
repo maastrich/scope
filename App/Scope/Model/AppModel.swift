@@ -232,6 +232,10 @@ final class AppModel {
     @ObservationIgnored var pullRequestRefresher: Task<Void, Never>?
     /// Follows the Claude Code transcripts (`AppModel+ClaudeSession`).
     @ObservationIgnored var claudeTranscriptReader: Task<Void, Never>?
+    /// A task's pull requests asked about again because one of its threads reported one (`AppModel+ClaudeSession`).
+    @ObservationIgnored var claudePullRequestRefreshes: [TaskID: Task<Void, Never>] = [:]
+    /// Pull requests a transcript reported before this launch are history, not news: no `gh` call for them.
+    @ObservationIgnored let claudeSessionWatchStart = Date.now
     /// The loop behind `AppModel+Ports`.
     @ObservationIgnored var portScanner: Task<Void, Never>?
     /// The tasks whose Environment card is open — their listening processes are read with the ports — and the `lsof`
@@ -1121,12 +1125,14 @@ final class AppModel {
         old.onRecordChanged = nil
         old.onExit = nil
         old.onActivityChanged = nil
+        old.onClaudePullRequests = nil
         wire(new, activity: old.activity)
         threads[index] = new
     }
 
     private func wire(_ session: ThreadSession, activity: ThreadActivity?) {
         wireActivity(session, carrying: activity)
+        wireClaudeSession(session)
         session.onRecordChanged = { [weak self] record in
             // The exits a quit causes would clear `processAlive`; `terminateNow` wrote the records it needs already.
             guard let self, !self.isTerminating else { return }
@@ -1308,6 +1314,7 @@ final class AppModel {
         detach(session)
         // A process that outlived the wait still exits later, and its closing turn would write the file back.
         session.onActivityChanged = nil
+        session.onClaudePullRequests = nil
         await keepTimeline(of: session.record, activity: session.activity)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
         // A thread hung up by its task's archive or close comes back with the task, not on its own: its worktree is gone.
@@ -1354,6 +1361,7 @@ final class AppModel {
         takeExitNotice(id)
         detach(session)
         session.onActivityChanged = nil
+        session.onClaudePullRequests = nil
         session.onRecordChanged = nil
         env.knownThreads.remove(id)
         autoRelaunchBlocks[id] = nil

@@ -20,6 +20,14 @@ public struct ClaudeSession: Sendable, Equatable {
     public var permissionMode: String?
     /// The reasoning effort the last tool hook ran at (`effort.level`).
     public var effort: String?
+    /// The session's MCP servers and how each stands (`ClaudeMCPServers`).
+    public var mcpServers = ClaudeMCPServers()
+    /// Compactions, and the one under way (`ClaudeCompactions`).
+    public var compactions = ClaudeCompactions()
+    /// The model the session runs on now (`ClaudeSessionModel`).
+    public var model = ClaudeSessionModel()
+    /// Pull requests the session opened, merged or linked (`ClaudeSessionPullRequests`).
+    public var pullRequests = ClaudeSessionPullRequests()
 
     public init() {}
 
@@ -38,6 +46,10 @@ public struct ClaudeSession: Sendable, Equatable {
             if let mode = facts.permissionMode { permissionMode = mode }
             if let effort = facts.effort { self.effort = effort }
         }
+        mcpServers.apply(facts)
+        compactions.apply(facts)
+        model.apply(facts)
+        pullRequests.apply(facts)
     }
 
     /// Folds what the transcript gained, in file order.
@@ -50,5 +62,8 @@ public struct ClaudeSession: Sendable, Equatable {
                 break
             }
         }
+        mcpServers.apply(records)
+        compactions.apply(records)
+        pullRequests.apply(records)
     }
 }
