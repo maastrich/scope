@@ -10,6 +10,7 @@ sets stay in one design system. `src/<name>.html` fragments become `<name>.html`
 """
 import importlib.util, pathlib, sys
 
+sys.dont_write_bytecode = True  # importing the base build must not leave a __pycache__ in its folder
 HERE = pathlib.Path(__file__).resolve().parent
 BASE = HERE.parent / "claude-desktop-ui" / "mockups"
 
