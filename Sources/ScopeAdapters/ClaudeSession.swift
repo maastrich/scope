@@ -32,6 +32,8 @@ public struct ClaudeSession: Sendable, Equatable {
     public var background = ClaudeBackgroundWork()
     /// The sub-agents the session launched (`ClaudeSubagents`).
     public var subagents = ClaudeSubagents()
+    /// What the session is asking the user, with its content (`ClaudePendingRequests`).
+    public var pending = ClaudePendingRequests()
 
     public init() {}
 
@@ -56,6 +58,7 @@ public struct ClaudeSession: Sendable, Equatable {
         pullRequests.apply(facts)
         background.apply(facts)
         subagents.apply(facts)
+        pending.apply(facts)
     }
 
     /// Folds what the transcript gained, in file order.
@@ -73,5 +76,6 @@ public struct ClaudeSession: Sendable, Equatable {
         compactions.apply(records)
         pullRequests.apply(records)
         background.apply(records)
+        pending.apply(records)
     }
 }

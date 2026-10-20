@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAdapters
 import ScopeCore
 
 /// Turns a result into what the terminal shows. Pure, so what the CLI prints is under test.
@@ -125,6 +126,7 @@ public enum CLIRenderer {
             }
             if let note = result.note { lines.append(note) }
             if let background = BackgroundWorkReport.line(result.background, now: .now) { lines.append(background) }
+            if let request = result.pendingRequest { lines += pending(request) }
             lines += quoted(result.text)
             if let older = result.olderCursor {
                 lines.append("older lines: cursor \(older) (scope thread read \(result.thread) --cursor \(older))")
@@ -146,6 +148,7 @@ public enum CLIRenderer {
                 }
                 lines += subagents(entry.subagents, withResults: false)
                 if let pr = entry.pullRequest { lines.append("pull request \(pr.line) \(pr.url.absoluteString)" + (entry.task.map { " · task \($0)" } ?? "")) }
+                if let request = entry.pendingRequest { lines += pending(request) }
                 if let reply = entry.reply {
                     lines.append("last reply" + (entry.replyAt.map { " at " + time($0) } ?? "") + ":")
                     if entry.staleReply == true { lines.append(staleNotice) }
@@ -496,6 +499,44 @@ public enum CLIRenderer {
     }
 
     static let staleNotice = "(from before its latest prompt: that one has not been answered yet)"
+
+    /// What a waiting thread asks: one line saying what kind of request, then its content between the untrusted
+    /// markers — the agent wrote it.
+    static func pending(_ request: ClaudePendingRequest) -> [String] {
+        let who = request.agentType.map { " (sub-agent \($0))" } ?? ""
+        var body: [String] = []
+        let header: String
+        switch request.kind {
+        case .permission:
+            header = "waiting on a permission for \(request.tool ?? "a tool")\(who):"
+            if let tool = request.mcpTool { body.append("MCP tool \(tool)" + (request.mcpServer.map { " on server \($0)" } ?? "")) }
+            if let command = request.command { body.append(command) }
+            if let path = request.filePath { body.append(path + (request.edit.map { " (\($0))" } ?? "")) }
+            if let url = request.url { body.append(url) }
+            if let query = request.query { body.append("search: \(query)") }
+            if let summary = request.summary { body.append("— \(summary)") }
+            if !request.suggestions.isEmpty { body.append("can remember: " + request.suggestions.joined(separator: "; ")) }
+        case .question:
+            header = "waiting on an answer to \(request.questions.count == 1 ? "a question" : "\(request.questions.count) questions")\(who):"
+            for question in request.questions {
+                body.append((question.header.map { "[\($0)] " } ?? "") + question.question
+                    + (question.multiSelect ? " (several choices)" : ""))
+                for (index, option) in question.options.enumerated() {
+                    body.append("  \(index + 1). \(option.label)" + (option.description.map { " — \($0)" } ?? ""))
+                }
+            }
+        case .plan:
+            header = "waiting on approval of a plan\(who):"
+            if let plan = request.plan { body.append(plan) }
+            if let file = request.planFilePath { body.append("(plan file: \(file))") }
+        case .elicitation:
+            header = "waiting on a form from MCP server \(request.mcpServer ?? "?")\(who):"
+            if let message = request.message { body.append(message) }
+            if !request.fields.isEmpty { body.append("fields: " + request.fields.joined(separator: ", ")) }
+            if let url = request.url { body.append(url) }
+        }
+        return [header] + quoted(ThreadTranscript.defused(body.joined(separator: "\n")))
+    }
 
     static func time(_ date: Date) -> String {
         date.formatted(.iso8601)

@@ -20,7 +20,7 @@ import ScopeCore
 /// | `SessionEnd`                          | `thread.ended`          | done                  |
 /// | `MessageDisplay`                      | `turn.said`             | unchanged (the answer, as it is written) |
 /// | `SubagentStart` / `SubagentStop`      | `agent.started` / `agent.ended` | unchanged (a sub-agent running in the background holds `thread.wait`) |
-/// | `PreCompact`, `PostCompact`, `PermissionRequest`, `PermissionDenied`, `PostToolUseFailure`, `PostModelSwitch`, `TaskCreated`, `TaskCompleted` | `driver.reported` | unchanged (`ClaudeSession`; the two task hooks feed the `AgentPlan`) |
+/// | `PreCompact`, `PostCompact`, `PermissionRequest`, `PermissionDenied`, `PostToolUseFailure`, `PostModelSwitch`, `TaskCreated`, `TaskCompleted`, `Elicitation`, `ElicitationResult` | `driver.reported` | unchanged (`ClaudeSession`; the two task hooks feed the `AgentPlan`) |
 ///
 /// Every event also carries the hook's stdin, clamped, under `payload["hook"]` (`ClaudeHookFacts`).
 ///
@@ -80,8 +80,11 @@ public enum ClaudeHooksAdapter {
     /// Hooks that only inform (`driver.reported`): read through `ClaudeHookFacts`, they never move the thread state.
     /// `PermissionRequest` is here as information only — what is being asked, at once — and still not as the signal
     /// that someone must act (see above); `scope-hook` answers nothing, so the dialog opens as it would without it.
+    /// `Elicitation` and `ElicitationResult` say what an MCP server's form asks and when it was answered: the
+    /// `elicitation_dialog` notification alone says neither (`ClaudePendingRequests`).
     static let informational = ["PreCompact", "PostCompact", "PermissionRequest", "PermissionDenied", "PostToolUseFailure",
-                                "PostModelSwitch", "TaskCreated", "TaskCompleted"]
+                                "PostModelSwitch", "TaskCreated", "TaskCompleted",
+                                "Elicitation", "ElicitationResult"]
 
     /// `<home>/threads/<thread-id>.claude-settings.json`
     public static func settingsURL(home: URL, threadID: ThreadID) -> URL {

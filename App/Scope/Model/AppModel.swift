@@ -1564,6 +1564,7 @@ final class AppModel {
             refreshReading(for: session, turnEnded: event.kind == .turnEnded || event.kind == .turnFailed)
         }
         readClaudeTranscriptSoon(session)
+        if event.kind == .driverReported { confirmPermissionSoon(session) }
         flushDeliveries(for: session)
         acknowledgeShownResult()
     }

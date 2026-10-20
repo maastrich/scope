@@ -73,8 +73,23 @@ extension AppModel {
                                                            scope: scope.name, task: task(of: session)?.name,
                                                            failure: event.payload[HookEvent.errorKey],
                                                            said: config.preferences.notificationsQuoteAgent
-                                                               ? .from(event, activity: session.activity) : nil)
+                                                               ? .from(event, activity: session.activity,
+                                                                       pending: session.claude.pending.current) : nil)
         else { return }
+        // A permission confirmed early by `claude agents` shows at once in the app but does not ring: a companion's own
+        // `PermissionRequest` hook may be asking the same person right now. `permission_prompt` rings, six seconds in.
+        if event.payload[HookEvent.viaKey] == Self.viaAgents { return }
+        let asked = kind == .permissionRequested ? session.claude.pending.current : nil
+        if let asked, session.notifiedRequestID == asked.id { return }
+        // A permission Scope can answer gets Allow / Deny instead of a Reply, whose ↩ would pick the dialog's
+        // highlighted Yes. Allow only when the banner shows the whole command.
+        if let request = asked, request.kind == .permission, ClaudeDialogAnswer.isAnswerable(request) {
+            let whole = request.command.map { !content.body.hasSuffix("…") && !$0.contains("\n") } ?? true
+            notifier.post(content, threadID: session.id, permission: request.id, allows: whole)
+            session.notifiedRequestID = request.id
+            return
+        }
+        if let asked { session.notifiedRequestID = asked.id }
         // A finished turn the assistant read as blocking gets a *Not blocking* answer on its notification.
         notifier.post(content, threadID: session.id, triaged: event.kind == .turnEnded && triage?.interrupts == true)
     }

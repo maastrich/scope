@@ -15,6 +15,14 @@ final class ThreadNotifier {
     nonisolated static let seeDeltaAction = "seeDelta"
     nonisolated static let replyAction = "reply"
     nonisolated static let notBlockingAction = "notBlocking"
+    /// A permission Scope can answer (`ClaudeDialogAnswer`): Allow and Deny in place of Reply, whose ↩ would pick the
+    /// dialog's highlighted *Yes*. Without Allow when the banner cannot show the whole command.
+    nonisolated static let permissionCategory = "thread-permission"
+    nonisolated static let permissionDenyOnlyCategory = "thread-permission-deny"
+    nonisolated static let allowAction = "allow"
+    nonisolated static let denyAction = "deny"
+    /// `userInfo` key of the request a permission notification is about.
+    nonisolated static let requestKey = "request"
 
     private var categoryRegistered = false
 
@@ -36,18 +44,37 @@ final class ThreadNotifier {
         }
     }
 
+    /// A permission's notification: `requestID` rides along so the answer goes to that request and no other.
+    func post(_ content: ThreadNotificationContent, threadID: ThreadID, permission requestID: String, allows: Bool) {
+        registerCategoryIfNeeded()
+        let center = UNUserNotificationCenter.current()
+        let request = Self.request(content, threadID: threadID, triaged: false,
+                                   category: allows ? Self.permissionCategory : Self.permissionDenyOnlyCategory,
+                                   userInfo: [Self.requestKey: requestID])
+        Task { @MainActor in
+            do {
+                guard try await center.requestAuthorization(options: [.alert, .sound, .badge]) else { return }
+                try await center.add(request)
+            } catch {
+                Log.threads.warning("notification: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     func clear(threadID: ThreadID) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [threadID.rawValue])
         center.removeDeliveredNotifications(withIdentifiers: [threadID.rawValue])
     }
 
-    private static func request(_ content: ThreadNotificationContent, threadID: ThreadID, triaged: Bool) -> UNNotificationRequest {
+    private static func request(_ content: ThreadNotificationContent, threadID: ThreadID, triaged: Bool,
+                                category: String? = nil, userInfo: [String: String] = [:]) -> UNNotificationRequest {
         let body = UNMutableNotificationContent()
         body.title = content.title
         if let subtitle = content.subtitle { body.subtitle = subtitle }
         body.body = content.body
-        body.categoryIdentifier = triaged ? triagedCategory : category
+        body.categoryIdentifier = category ?? (triaged ? triagedCategory : Self.category)
+        body.userInfo = userInfo
         body.threadIdentifier = threadID.rawValue
         body.sound = .default
         return UNNotificationRequest(identifier: threadID.rawValue, content: body, trigger: nil)
@@ -66,6 +93,12 @@ final class ThreadNotifier {
         let notBlocking = UNNotificationAction(identifier: Self.notBlockingAction, title: "Not Blocking", options: [])
         let triaged = UNNotificationCategory(identifier: Self.triagedCategory, actions: [reply, goTo, delta, notBlocking],
                                              intentIdentifiers: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category, triaged])
+        let allow = UNNotificationAction(identifier: Self.allowAction, title: "Allow", options: [])
+        let deny = UNNotificationAction(identifier: Self.denyAction, title: "Deny", options: [])
+        let permission = UNNotificationCategory(identifier: Self.permissionCategory, actions: [allow, deny, goTo],
+                                                intentIdentifiers: [])
+        let denyOnly = UNNotificationCategory(identifier: Self.permissionDenyOnlyCategory, actions: [deny, goTo],
+                                              intentIdentifiers: [])
+        UNUserNotificationCenter.current().setNotificationCategories([category, triaged, permission, denyOnly])
     }
 }

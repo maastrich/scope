@@ -1249,7 +1249,9 @@ A driver whose profile has no <code>modelArgs</code> — the shell — refuses o
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
 before. It is how an agent finds out what another thread said, without typing into it — its own child, or a
 thread in another task or scope. <code>--reply</code> prints only the agent's last answer, as Claude Code and
-Codex report it at the end of a turn: what it concluded, without the spinners and redraws of its terminal.</p>
+Codex report it at the end of a turn: what it concluded, without the spinners and redraws of its terminal. While a
+Claude Code thread waits, both say what it waits on (<code>pendingRequest</code> in JSON): the permission with its
+command, file, URL or MCP tool and server, the question with its options, the plan, the MCP server's form.</p>
 <p><code>scope thread wait</code> takes one thread id or more and returns once each has finished its turn, needs an
 answer or a permission, or exited — then prints every thread's state and last reply. <code>--any</code> returns at
 the first one, <code>--timeout</code> (600 s by default) answers anyway and names those still at work. A thread
@@ -1470,11 +1472,18 @@ thread and starts the CLI with <code>--settings</code>. The events it subscribes
   <tr><td><code>UserPromptSubmit</code>, <code>PostToolUse</code></td><td>running — after a <code>Stop</code>, only a new prompt starts the next turn: a background command or sub-agent still reporting, or a hook delivered late, leaves the thread done</td></tr>
   <tr><td><code>PreToolUse</code> on <code>AskUserQuestion</code> / <code>ExitPlanMode</code></td><td><span class="dot waiting"></span>waiting — <b>question</b></td></tr>
   <tr><td><code>Notification</code></td><td><span class="dot waiting"></span>waiting — <b>permission</b> once a permission dialog has sat unanswered for about six seconds (an elicitation dialog is a question) — and a macOS notification when Scope is in the background. A permission that auto mode, <code>bypassPermissions</code> or another <code>PermissionRequest</code> hook grants never shows as waiting</td></tr>
+  <tr><td><code>PermissionRequest</code>, <code>Elicitation</code>, <code>ElicitationResult</code>, <code>PermissionDenied</code>, <code>PostToolUseFailure</code></td><td>no change by themselves: they say <i>what</i> is asked — the command, the file, the MCP tool, the form — and when it was decided. A permission nobody decided within a second makes Scope ask <code>claude agents --json</code> whether the dialog is up; if it is, the thread shows as waiting right away (the macOS notification still waits for <code>permission_prompt</code>), and goes back to running as soon as another hook answers</td></tr>
   <tr><td><code>Stop</code>, <code>SessionEnd</code></td><td><span class="dot done"></span>done</td></tr>
   <tr><td><code>SubagentStart</code>, <code>SubagentStop</code></td><td>no change; the sub-agents still running are counted, and <code>scope thread wait</code> holds while one of them runs in the background after a <code>Stop</code></td></tr>
   <tr><td><code>StopFailure</code></td><td>failed, with the reason (rate limit, billing, overloaded)</td></tr>
   <tr><td><code>TaskCreated</code>, <code>TaskCompleted</code></td><td>no change; the task goes into the thread's plan (the <b>Plan</b> card)</td></tr>
 </table>
+<p>What a waiting thread asks shows in its sidebar line, its Inbox item, its notification and a card over its
+terminal: the command, file, URL or MCP tool of a permission and the rules Claude Code offers to remember, a
+question with its options, a plan, a form. <b>Allow</b>, <b>Deny</b> and a question's options answer from Scope,
+from the card, the Inbox or the notification: Scope types the keys you would (<kbd>1</kbd> for Yes, <kbd>Esc</kbd>
+for No, the option's digit), and only after reading the terminal and finding that very dialog on it. A plan and a
+form are answered in the terminal.</p>
 <p>Two moments have no hook at all, and come from what you type into the thread instead: <b>Esc</b> or
 <b>Ctrl-C</b> during a turn ends it (idle), and <b>Return</b> on a permission prompt resumes it (running).
 Claude Code's <code>idle_prompt</code> notification, sent a minute after any answer you have not replied to, is

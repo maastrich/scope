@@ -48,6 +48,32 @@ import Testing
         #expect(ThreadNotificationContent.Said.from(input, activity: activity) == nil)
     }
 
+    static func pending(_ payloads: [String]) -> ClaudePendingRequest? {
+        var pending = ClaudePendingRequests()
+        for payload in payloads {
+            guard let body = JSONValue(json: payload) else { continue }
+            pending.apply(ClaudeHookFacts(body: body, at: Date(timeIntervalSince1970: 1_000)))
+        }
+        return pending.current
+    }
+
+    @Test func aPermissionQuotesTheCommandOrWhatItUses() {
+        let prompt = Self.event(.permissionRequested, 2)
+        let bash = Self.pending(Array(ClaudePendingFixtures.bash[2...3]))
+        #expect(ThreadNotificationContent.Said.from(prompt, activity: ThreadActivity(), pending: bash) == .request("echo probe hello"))
+        let mcp = Self.pending(Array(ClaudePendingFixtures.mcp[4...5]))
+        #expect(ThreadNotificationContent.Said.from(prompt, activity: ThreadActivity(), pending: mcp) == .request("probe_echo on probe"))
+        // Without the session's word, a permission keeps its generic body.
+        #expect(ThreadNotificationContent.Said.from(prompt, activity: ThreadActivity()) == nil)
+    }
+
+    @Test func anMCPFormQuotesItsServerAndMessage() {
+        let dialog = Self.event(.inputRequested, 2, raw: ClaudePendingFixtures.elicitation[5])
+        let form = Self.pending(Array(ClaudePendingFixtures.elicitation[4...5]))
+        #expect(ThreadNotificationContent.Said.from(dialog, activity: ThreadActivity(), pending: form)
+            == .question("probe: Pick a deployment tier"))
+    }
+
     @Test func otherEventsQuoteNothing() {
         let failed = Self.event(.turnFailed, 2, raw: #"{"error":"rate_limit"}"#)
         #expect(ThreadNotificationContent.Said.from(failed, activity: Self.fold([failed])) == nil)

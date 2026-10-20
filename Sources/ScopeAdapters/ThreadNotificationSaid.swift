@@ -8,11 +8,20 @@ extension ThreadNotificationContent.Said {
     /// nothing when it carries none: the one `activity` holds is then an earlier turn's. A
     /// question quotes itself when the hook says it, else the last answer, but only one given since the last turn
     /// started: a question tool fires mid-turn, and the answer before it belongs to an earlier exchange.
-    public static func from(_ event: AdapterEvent, activity: ThreadActivity) -> Self? {
+    ///
+    /// `pending` is what the Claude Code session says it asks (`ClaudePendingRequests.current`): the command or the
+    /// tool a permission is for, the message of an MCP server's form.
+    public static func from(_ event: AdapterEvent, activity: ThreadActivity, pending: ClaudePendingRequest? = nil) -> Self? {
         switch event.kind {
         case .turnEnded:
             return AgentReply.from(event).map { .reply($0.text) }
+        case .permissionRequested:
+            guard let pending, pending.kind == .permission else { return nil }
+            return .request(pending.command ?? pending.headline)
         case .inputRequested:
+            if let pending, pending.kind == .elicitation, pending.message != nil {
+                return .question(pending.headline)
+            }
             if let question = event.raw.flatMap({ HookStdin.parse(Data($0.utf8)).question }) {
                 return .question(question)
             }
@@ -20,7 +29,7 @@ extension ThreadNotificationContent.Said {
             let started = [activity.turnStartedAt, activity.turns.last?.startedAt].compactMap(\.self).max()
             if let started, started > reply.at { return nil }
             return .reply(reply.text)
-        case .turnStarted, .turnFailed, .permissionRequested, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
+        case .turnStarted, .turnFailed, .threadEnded, .sessionStarted, .turnSaid, .agentStarted, .agentEnded, .limitsReported,
              .driverReported:
             return nil
         }

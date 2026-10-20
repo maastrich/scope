@@ -192,6 +192,7 @@ extension AppModel {
         let text = switch said {
         case .question(let text): "The agent asks:\n" + TranscriptTail.quoting(text)
         case .reply(let text): "The agent's last message:\n" + TranscriptTail.quoting(text)
+        case .request(let text): "The agent asks permission to run:\n" + TranscriptTail.quoting(text)
         }
         let input = TranscriptTail.tokens(in: text) > TranscriptTail.defaultTokenBudget
             ? String(text.suffix(TranscriptTail.defaultTokenBudget * TranscriptTail.charactersPerToken)) : text

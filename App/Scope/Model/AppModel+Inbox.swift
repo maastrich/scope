@@ -72,7 +72,9 @@ extension AppModel {
             text = ThreadNotificationContent.failureDescription(code).map { "Stopped on an error: \($0)" }
                 ?? "Stopped on an error"
         } else {
-            text = ThreadActivityHeadline.make(activity, state: state, finished: .reply).map { $0.reply ?? $0.text }
+            text = ThreadActivityHeadline.make(activity, state: state, finished: .reply,
+                                               pending: state.needsAttention ? session.claude.pending.current : nil)
+                .map { $0.reply ?? $0.text }
                 ?? (activity.lastReply ?? session.lastReply)?.text
         }
         return Inbox.ThreadInput(id: session.id, scopeID: session.record.scopeID,
@@ -133,6 +135,13 @@ extension AppModel {
             next.dismiss(item)
             inbox.setDismissals(next)
         }
+    }
+
+    /// A Claude Code dialog is up in the item's thread: typed text would land in it (a digit picks an option, ↩ the
+    /// highlighted one), so the item offers no Reply — Allow / Deny for a permission, Open for the rest.
+    func inboxItemShowsADialog(_ item: Inbox.Item) -> Bool {
+        guard let thread = item.threadID, let request = pendingRequest(of: thread) else { return false }
+        return request.kind == .permission || request.kind == .question
     }
 
     /// Sends `text` the way the sidebar's reply does; `false` when nothing went.
