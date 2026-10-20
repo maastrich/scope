@@ -1,0 +1,72 @@
+<!-- title: Reading column · Browser pane beside the Shell pane -->
+<!-- size: 1100x660 -->
+<style>
+  body { width: 1100px; height: 660px; overflow: hidden; display: flex; }
+  .pane { width: 440px; } .pane.wide { width: 660px; }
+  .pane:first-child { border-left: none; }
+  .foot { height: 26px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-top: 1px solid var(--stroke); background: var(--panel); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+  .urlbar { height: 34px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--stroke); }
+  .urlbar .ib { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--ink-2); }
+  .url { flex: 1; height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; background: var(--fill-quiet); font: 11.5px "SF Mono", Menlo, monospace; color: var(--ink-2); min-width: 0; }
+  .url b { color: var(--ink); font-weight: 500; }
+  .page { flex: 1; background: #fff; color: #1b1b1f; position: relative; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; }
+  .page .nav { height: 46px; display: flex; align-items: center; gap: 18px; padding: 0 22px; border-bottom: 1px solid #ececec; font-size: 13px; }
+  .page .nav .logo { font-weight: 700; font-size: 15px; margin-right: auto; }
+  .page .hero { padding: 34px 22px 0; }
+  .page h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -.01em; }
+  .page p { margin: 0 0 18px; color: #555; font-size: 13.5px; max-width: 460px; }
+  .page .cta { display: inline-block; padding: 8px 14px; border-radius: 7px; background: #111; color: #fff; font-size: 13px; }
+  .page .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 26px 22px; }
+  .page .grid div { height: 92px; border-radius: 10px; background: #f3f3f5; }
+  .console { height: 118px; flex: none; border-top: 1px solid var(--stroke); background: var(--panel); font: 11px/1.6 "SF Mono", Menlo, monospace; padding: 4px 10px; overflow: hidden; }
+  .console .h { display: flex; gap: 12px; font: 600 11px -apple-system, system-ui; color: var(--ink-2); height: 22px; align-items: center; }
+  .console .h .on { color: var(--ink); }
+  .console .e { color: var(--ck-fail); } .console .w { color: var(--ck-pend); } .console .d { color: var(--ink-3); }
+</style>
+<div class="pane">
+  <div class="band">
+    <div class="subject">{i:shell:ink2}<span class="name">Shell</span><span class="scope">· sandbox</span></div>
+    <div class="tabs"><span class="tab on">{i:terminal} zsh</span><span class="tab"><span class="spin"></span> pnpm dev</span></div>
+    <span class="ib ink3" style="margin-left:auto">{i:x}</span>
+  </div>
+  <div class="term"><span class="dim">~/.scope/sandboxes/maastrich/checkout-v2/web</span>
+<span class="acc">❯</span> pnpm dev --port $SCOPE_PORT
+
+  <span class="ok">VITE v7.1.3</span>  ready in 412 ms
+
+  ➜  Local:   <span class="acc">http://localhost:41000/</span>   <span class="dim">⌘-click → Browser pane</span>
+  ➜  Network: use --host to expose
+
+<span class="dim">12:04:18</span> <span class="warn">[vite]</span> hmr update /src/Checkout.tsx
+<span class="dim">12:04:31</span> <span class="warn">[vite]</span> hmr update /src/Cart.tsx
+<span class="cursor"></span></div>
+  <div class="foot"><span>Port 41000 detected (task block) · opened in the Browser pane</span></div>
+</div>
+<div class="pane wide">
+  <div class="band">
+    <div class="subject">{i:globe:ink2}<span class="name">Browser</span><span class="scope">· checkout-v2 · your store</span></div>
+    <div class="tabs">
+      <span class="tab on">{i:port} :41000</span>
+      <span class="tab">{i:pr} #212 checks</span>
+      <span class="tab">{i:plus}</span>
+    </div>
+    <span class="ib ink3" style="margin-left:auto">{i:split}</span><span class="ib ink3">{i:ext}</span><span class="ib ink3">{i:x}</span>
+  </div>
+  <div class="urlbar">
+    <span class="ib">{i:back}</span><span class="ib">{i:fwd}</span><span class="ib">{i:refresh}</span>
+    <div class="url"><span class="chip mono" style="background:var(--panel)">sandbox</span><b>localhost:41000</b>/checkout</div>
+    <span class="ib">{i:camera}</span><span class="ib">{i:dots}</span>
+  </div>
+  <div class="page">
+    <div class="nav"><span class="logo">Acme</span><span>Shop</span><span>Cart (2)</span><span>Account</span></div>
+    <div class="hero"><h1>Checkout</h1><p>Two items in your cart. Delivery estimated Thursday. Promo codes apply at the next step.</p><span class="cta">Continue to payment</span></div>
+    <div class="grid"><div></div><div></div><div></div></div>
+  </div>
+  <div class="console">
+    <div class="h"><span class="on">Console 3</span><span>Network 24</span><span style="margin-left:auto;font-weight:400" class="d">Web Inspector ⌥⌘I</span></div>
+    <div class="e">✕ TypeError: cart.total is undefined  <span class="d">Checkout.tsx:41</span></div>
+    <div class="w">⚠ [HMR] Cart.tsx changed, full reload</div>
+    <div class="e">✕ GET /api/promo 404  <span class="d">12 ms</span></div>
+  </div>
+  <div class="foot"><span>Data store of this task · cookies apart from yours</span><span style="margin-left:auto">⌘L address · ⌘R reload · ⌃⇧B toggles</span></div>
+</div>
