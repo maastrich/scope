@@ -210,7 +210,15 @@ suppression des autres drivers (décision séparée).
 
 - Mods Claude Code : la voie la plus riche pour piloter une session (prompt, permissions, liste d'agents) sans
   dépendre du dessin du terminal, quand l'API aura mûri.
-- `claude agents --json` comme source d'état complémentaire (attente immédiate).
+- `claude agents --json` : adopté pour confirmer tout de suite une permission décrite par `PermissionRequest`
+  (une exécution par permission non tranchée au bout d'une seconde). À étendre à l'élicitation (`waitingFor`
+  d'un formulaire MCP), dont la notification `elicitation_dialog` attend elle aussi ~6 s.
+- Répondre par un hook bloquant (`PermissionRequest` → allow/deny, `PreToolUse` + `updatedInput.answers`) : pas
+  livré — il faudrait prouver que le TUI reste utilisable pendant que le hook attend. Scope répond aujourd'hui par
+  les touches du terminal, après avoir vérifié la boîte à l'écran.
+- Répondre depuis Scope à un plan (options variables selon les réglages : lire les libellés à l'écran) et à un
+  formulaire MCP ; exposer la réponse aux agents (CLI/MCP) derrière `AutomationPolicy`.
+- Notification d'une question : actions par option (catégorie dynamique) au lieu du *Reply* libre.
 - `PreModelSwitch` / `PostModelSwitch` pour suivre `/model` en direct.
 - Hooks `ConfigChange` / `InstructionsLoaded` : montrer quel CLAUDE.md et quels réglages un thread a chargés.
 - Coût d'une reprise (`SessionStart.estimated_cache_write_usd`) avant de relancer un vieux thread.

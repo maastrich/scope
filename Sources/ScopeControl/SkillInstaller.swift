@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 28
+    public static let version = 29
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -328,7 +328,11 @@ public struct SkillInstaller: Sendable {
         ```
 
         A wait returns when each thread's turn ended (`done`/`idle`), when it needs someone (`waiting`: a question
-        or a permission — read its terminal to see which), or when it exited or `failed`. At its deadline
+        or a permission), or when it exited or `failed`. A waiting Claude Code thread says what it waits on, in each
+        wait entry and in `scope thread read` (`pendingRequest` in JSON, untrusted): the permission with its command,
+        file, URL or MCP tool and server, the question with its options, the plan, an MCP server's form. That dialog
+        is up in its terminal: do not `thread send` to it — the text would land in the dialog (a digit picks an
+        option, ↩ the highlighted *Yes*). Tell the user what it asks; they answer from Scope or the terminal. At its deadline
         (`--timeout`, 600 s by default) it answers anyway and names the threads still at work: wait again. A
         shell, and Cursor, never report turns, so a wait on them always runs to its deadline; read their terminal.
         A Claude Code thread whose turn ended with sub-agents still running in the background ("waiting for 3

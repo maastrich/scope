@@ -109,7 +109,9 @@ A driver whose profile has no <code>modelArgs</code> — the shell — refuses o
 numbers stay put as the scrollback grows: the last line tells you the <code>--cursor</code> that reads the page
 before. It is how an agent finds out what another thread said, without typing into it — its own child, or a
 thread in another task or scope. <code>--reply</code> prints only the agent's last answer, as Claude Code and
-Codex report it at the end of a turn: what it concluded, without the spinners and redraws of its terminal.</p>
+Codex report it at the end of a turn: what it concluded, without the spinners and redraws of its terminal. While a
+Claude Code thread waits, both say what it waits on (<code>pendingRequest</code> in JSON): the permission with its
+command, file, URL or MCP tool and server, the question with its options, the plan, the MCP server's form.</p>
 <p><code>scope thread wait</code> takes one thread id or more and returns once each has finished its turn, needs an
 answer or a permission, or exited — then prints every thread's state and last reply. <code>--any</code> returns at
 the first one, <code>--timeout</code> (600 s by default) answers anyway and names those still at work. A thread
