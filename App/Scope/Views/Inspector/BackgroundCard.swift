@@ -4,7 +4,7 @@ import ScopeControl
 import ScopeCore
 
 /// The Background card: what the task's Claude Code threads run or have scheduled in the background
-/// (`ClaudeBackgroundWork`). Closed, `2 running` or *nothing running*; open, per thread, the running shells and
+/// (`ClaudeBackgroundWork`). Closed, `2 running`, *finished 2m ago* or *nothing running*; open, per thread, the running shells and
 /// Monitors first — what they run and for how long — then the ones that finished lately with their exit code, then
 /// the `/loop` wake-up and the crons. A click on a task shows the end of its output, refreshed while it is shown; a
 /// running one can be stopped from its row, after a confirmation.
@@ -39,6 +39,11 @@ struct BackgroundCard: View {
                 Text("\(running) running").monospacedDigit()
             } else if scheduled > 0 {
                 Text("\(scheduled) scheduled").monospacedDigit().foregroundStyle(Ink.secondary)
+            } else if let ended = threads.flatMap(\.claude.background.tasks).compactMap(\.endedAt).max(),
+                      context.date.timeIntervalSince(ended) < 3600 {
+                // The final state a card keeps while it lingers on Overview before going down to Details.
+                let age = InboxAge.label(ended, now: context.date)
+                Text(age == "now" ? "finished just now" : "finished \(age) ago").foregroundStyle(Ink.secondary)
             } else {
                 Text("nothing running").foregroundStyle(Ink.tertiary)
             }

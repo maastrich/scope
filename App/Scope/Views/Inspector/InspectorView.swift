@@ -4,14 +4,19 @@ import ScopeGit
 import ScopeTasks
 
 /// Right-hand inspector, about the selection alone: a 30 pt band naming the subject, level with the window toolbar,
-/// with the pane strip at its right, then a column of cards — Environment, Changes, Pull requests, Artifacts,
-/// Context, Connectors, Subagents, Background, Repository, Files, Search, History.
+/// with the pane strip at its right, then a column of cards on one of two pages (`InspectorPlacement`).
 ///
-/// Cards, not tabs: every one is there (unless taken out through the Cards menu), so the column says at a glance
-/// what exists, and a closed one costs a line while its header keeps the essential (`+108 −12`, the branch and its
-/// lag, the checks). Several can be open; the lists among them share the height and the sash between two open lists
-/// moves it. Which are open and which are shown is kept per scope (`ScopePlace`), separately with and without a task,
-/// and comes back as it was left.
+/// Overview holds what is happening — Plan, Changes, Pull requests, Subagents, Background, Artifacts — each only
+/// while it has something to say, in that order whatever order they came up in, plus whatever the Cards menu pinned
+/// there. Details holds what you go and look up — Environment, Context, Connectors, Repository, Files, Search,
+/// History — and every event card while it is empty. A card coming up or going down fades in place (cut under Reduce
+/// Motion); one that went quiet lingers with its final state, and one left open stays until it is folded or the task
+/// changes, so nothing moves out from under the eye. Without a task there is one page, the base checkout's.
+///
+/// A closed card costs a line while its header keeps the essential (`+108 −12`, the branch and its lag, the checks).
+/// Several can be open; the lists among them share the height and the sash between two open lists moves it — alone
+/// on Overview, Changes takes all of it. Which are open, shown and pinned is kept per scope (`ScopePlace`), the open
+/// ones separately with and without a task, and comes back as it was left.
 ///
 /// The sections hold lists only. A diff or a base file opens in `InspectorViewerColumn`, a column of its own beside
 /// the inspector — VSCode's editor area to this sidebar — so reading one never moves a section header.
@@ -21,6 +26,9 @@ struct InspectorView: View {
     @Environment(AppModel.self) private var model
     /// Height each block section's content asks for, reported by the section.
     @State private var naturals: [InspectorSection: Double] = [:]
+    /// Bumped when a lingering card's time runs out, so the column is placed again.
+    @State private var lingerTick = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private typealias Layout = InspectorSectionLayout
     /// A card is its header, its body and the gap above it; the column ends on one more gap.
@@ -31,8 +39,21 @@ struct InspectorView: View {
     var body: some View {
         VStack(spacing: 0) {
             InspectorSubjectBand()
+            let _ = lingerTick
+            let placement = model.inspectorPlacement()
+            let page: InspectorPage = model.currentTask == nil ? .overview : model.inspector.page
             GeometryReader { geometry in
-                column(total: Double(geometry.size.height))
+                column(placement.cards(on: page), page: page, total: Double(geometry.size.height))
+            }
+            .environment(\.inspectorPage, page)
+            .onChange(of: PlacementKey(task: model.currentTask?.id, overview: placement.overview, details: placement.details,
+                                       open: InspectorSection.allCases.filter(model.isSectionOpen)), initial: true) {
+                model.inspectorPlacementChanged(placement)
+            }
+            .task(id: placement.nextChange) {
+                guard let next = placement.nextChange else { return }
+                try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow) + 0.5))
+                if !Task.isCancelled { lingerTick &+= 1 }
             }
             if let task = model.currentTask, !model.review.comments.isEmpty || model.queuedDelivery(in: task) != nil {
                 Divider()
@@ -49,6 +70,13 @@ struct InspectorView: View {
         .task(id: DeltaLoadKey(task: model.currentTask?.id, mode: model.delta.mode, tick: model.currentTask?.changeTick ?? 0)) {
             if let task = model.currentTask { await model.delta.load(task: task) }
         }
+        // Here rather than in the card, which may sit unbuilt on Details and still has to say whether it has
+        // something for Overview.
+        .task(id: model.currentTask.map(model.artifactsRefreshKey)) {
+            guard let task = model.currentTask else { return }
+            if !task.checkpointsLoaded { await model.reloadCheckpoints(of: task.id) }
+            await model.refreshArtifacts(of: task)
+        }
         .task(id: model.currentTask?.id) {
             guard let task = model.currentTask else { return }
             await model.review.show(task: task.id)
@@ -60,6 +88,13 @@ struct InspectorView: View {
         }
     }
 
+    private struct PlacementKey: Equatable {
+        let task: TaskID?
+        let overview: [InspectorSection]
+        let details: [InspectorSection]
+        let open: [InspectorSection]
+    }
+
     private struct DeltaLoadKey: Hashable {
         let task: TaskID?
         let mode: DeltaMode
@@ -69,8 +104,16 @@ struct InspectorView: View {
     // MARK: Column
 
     @ViewBuilder
-    private func column(total: Double) -> some View {
-        let visible = model.inspector.sections.visible
+    private func column(_ visible: [InspectorSection], page: InspectorPage, total: Double) -> some View {
+        if visible.isEmpty, page == .overview, model.currentTask != nil {
+            QuietOverview()
+        } else {
+            cards(visible, total: total)
+        }
+    }
+
+    @ViewBuilder
+    private func cards(_ visible: [InspectorSection], total: Double) -> some View {
         let items = visible.map { section in
             Layout.Item(section: section,
                         isOpen: model.isSectionAvailable(section) && model.isSectionOpen(section),
@@ -83,8 +126,10 @@ struct InspectorView: View {
             VStack(spacing: Self.gap) {
                 ForEach(visible, id: \.self) { section in
                     sectionView(section, heights: heights, order: visible)
+                        .transition(.opacity)
                 }
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: visible)
             .padding(.horizontal, Self.gap)
             .padding(.vertical, Self.gap)
         }
@@ -158,4 +203,34 @@ struct InspectorView: View {
             }
         )
     }
+}
+
+/// Overview with nothing to say yet: one line, and the way to Details.
+private struct QuietOverview: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Nothing happening yet")
+                .font(.scopeBody)
+                .foregroundStyle(Ink.secondary)
+            Button {
+                Usage.click("inspector.quiet.details", label: "Show Details from a quiet Overview")
+                model.showInspectorPage(.details)
+            } label: {
+                Text("Show Details")
+                    .font(.scopeCaption)
+            }
+            .buttonStyle(.link)
+            .keyHints(.after) { CommandKeyHints.shared.keys(for: "command.details").map { [$0] } ?? [] }
+        }
+        .padding(.top, 48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+/// The page a card is drawn on: on Overview an empty card (one pinned there) says what it is without the paragraph
+/// that explains it, which stays on Details.
+extension EnvironmentValues {
+    @Entry var inspectorPage: InspectorPage = .details
 }

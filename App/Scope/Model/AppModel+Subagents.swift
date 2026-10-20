@@ -11,5 +11,6 @@ extension AppModel {
         guard isSectionAvailable(.subagents) else { return }
         setSection(.subagents, visible: true)
         setSection(.subagents, open: true)
+        if let page = inspectorPlacement().page(of: .subagents) { showInspectorPage(page) }
     }
 }
