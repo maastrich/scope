@@ -563,7 +563,8 @@ public actor TaskManager {
         do {
             await prepare?()
             var notices = await runTeardown(record, teardown)
-            let swept = await sweep([record.rootURL])
+            // A repo scope task's secondary worktrees sit beside its root: swept by their own folder.
+            let swept = await sweep([record.rootURL] + record.activeSandboxes.filter(\.isSecondary).map(\.sandboxURL))
             if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
             // The processes are stopped, so the report is finished; the sandboxes are still there to read it from.
             TaskDeliverableStore.keep(TaskDeliverable(
@@ -1065,6 +1066,9 @@ public actor TaskManager {
         guard let worktree = record.repos[index].worktree(onBranch: branch) else { throw TaskError.branchNotInTask(branch: branch) }
         let sandbox = record.repos[index].sandbox(worktree)
         var notices: [DismantleNotice] = []
+        // Whatever still runs in the folder (a dev server a thread left) goes before the folder does.
+        let swept = await sweep([sandbox.sandboxURL])
+        if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
         if let saved = try await salvage(sandbox, task: record) {
             notices.append(.changesSaved(repo: sandbox.sandboxKey, ref: saved.ref, skipped: saved.skipped))
         }
