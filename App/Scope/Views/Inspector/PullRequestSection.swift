@@ -162,14 +162,11 @@ struct PullRequestSection: View {
         if let selected = model.selectedPullRequest(for: task) {
             VStack(alignment: .leading, spacing: 6) {
                 if let issue = task.record.issue { issueRow(issue) }
-                if task.record.pullRequests.count > 1 {
-                    PullRequestList(task: task, selected: selected)
-                    Divider()
-                        .padding(.vertical, 2)
-                }
+                PullRequestList(task: task, selected: selected)
                 detail(task, selected)
+                footer(task, selected)
             }
-            .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            .padding(EdgeInsets(top: 4, leading: 10, bottom: 8, trailing: 10))
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 if let issue = task.record.issue { issueRow(issue) }
@@ -183,26 +180,11 @@ struct PullRequestSection: View {
         }
     }
 
-    /// One pull request in full: what the record keeps, then what `gh` last said of it.
+    /// One pull request in full, under its row: `head → base`, author, review and merge chips, the base lag, then
+    /// every check of its rollup.
     @ViewBuilder
     private func detail(_ task: TaskState, _ linked: LinkedPullRequest) -> some View {
         let live = model.livePullRequest(for: task, link: linked)
-        let several = task.record.pullRequests.count > 1
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if several, let repo = model.repo(of: linked, in: task) {
-                Text(repo.name)
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.tertiary)
-                    .lineLimit(1)
-            }
-            Text(linked.label)
-                .font(.system(size: 11.5, design: .monospaced))
-                .foregroundStyle(Ink.secondary)
-            Text(live?.title ?? linked.title)
-                .font(.scopeCaption)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
         if let live {
             HStack(spacing: 6) {
                 Text(verbatim: "\(live.headRefName) → \(live.baseRefName)")
@@ -214,28 +196,13 @@ struct PullRequestSection: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
-            }
-            HStack(spacing: 5) {
-                if live.state != .open {
-                    PullRequestChip(text: live.state == .merged ? "Merged" : "Closed",
-                                    color: live.state == .merged ? PullRequestStyle.passing : .secondary)
-                }
-                if live.isDraft {
-                    PullRequestChip(text: "Draft", color: .secondary)
-                }
-                if let review = PullRequestStyle.review(live.reviewDecision) {
-                    PullRequestChip(text: review.text, color: review.color)
-                }
-                if live.mergeable == .conflicting {
-                    PullRequestChip(text: "Conflicts", color: PullRequestStyle.failing)
-                }
                 Spacer(minLength: 0)
-                Text(live.updatedAt, format: .relative(presentation: .named))
+                Text("updated \(live.updatedAt, format: .relative(presentation: .named))")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Ink.tertiary)
-                PullRequestReadAge(checkedAt: model.pullRequestCheckedAt(for: task, link: linked))
-                    .font(.system(size: 10.5))
+                    .lineLimit(1)
             }
+            .padding(.top, 4)
             lagLine(task)
             if !live.checkRuns.isEmpty {
                 TaskPullRequestPanel(task: task, pullRequest: live, link: linked, layout: .full)
@@ -279,20 +246,109 @@ struct PullRequestSection: View {
     }
 }
 
-/// Every pull request of a task, one row each: the repository (when the task spans several), the number, the
-/// title, then what GitHub says — merged, closed, draft, the checks as a glyph, the review — in the task's own order
-/// (`PullRequestSet.ordered`: repositories first, then numbers), which never moves with the states. A click picks
-/// the one the detail below and the header's buttons act on; the pick is kept per task.
+/// The foot of the card: what the pull request on show asks of you, in one line — *Ready to merge*, *2 checks
+/// failing*, *Conflicts with the base* (`PullRequestSet.verdict`) — with how old the reading is, and **Ask the agent**
+/// when the agent can act on it: fix the conflicts, fix the failing check, merge. *Merge…* itself stays behind
+/// Settings ▸ Git, as every git button does: the agent does the git.
+extension PullRequestSection {
+    @ViewBuilder
+    fileprivate func footer(_ task: TaskState, _ linked: LinkedPullRequest) -> some View {
+        if let live = model.livePullRequest(for: task, link: linked) {
+            let tally = PullRequestSet.tally(live.checkRuns)
+            let verdict = PullRequestSet.verdict(state: live.state, isDraft: live.isDraft, mergeable: live.mergeable,
+                                                 tally: tally, review: live.reviewDecision)
+            let color = Self.color(of: verdict)
+            HStack(spacing: 6) {
+                Image(systemName: Self.glyph(of: verdict))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(verdict.label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                PullRequestReadAge(checkedAt: model.pullRequestCheckedAt(for: task, link: linked))
+                    .font(.system(size: 10.5))
+                    .layoutPriority(-1)
+                Spacer(minLength: 4)
+                if verdict.asksTheAgent, !task.isArchived {
+                    ThreadPicker(task: task, title: "Ask the agent", systemImage: "paperplane", showsTitle: true) { thread in
+                        ask(verdict, of: task, pullRequest: linked, live: live, to: thread)
+                    }
+                    .fixedSize()
+                    .help(Self.askHelp(verdict))
+                    .usageID("inspector.pull-requests.ask-agent", label: "Ask the agent about the pull request")
+                }
+            }
+            .padding(.top, 6)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Conflicts go back as a merge request, a failure as its log, a green one as a merge to make.
+    private func ask(_ verdict: PullRequestSet.Verdict, of task: TaskState, pullRequest link: LinkedPullRequest,
+                     live: PullRequest, to thread: ThreadID) {
+        switch verdict {
+        case .conflicting:
+            model.askToFixConflicts(of: task, pullRequest: link, to: thread)
+        case .checksFailing:
+            if let failed = live.checkRuns.first(where: { $0.state == .failing }) {
+                Task { await model.sendCheckFailure(failed, of: task, pullRequest: link, to: thread) }
+            }
+        case .ready, .reviewNeeded:
+            model.askToMerge(of: task, pullRequest: link, to: thread)
+        default:
+            break
+        }
+    }
+
+    static func askHelp(_ verdict: PullRequestSet.Verdict) -> String {
+        switch verdict {
+        case .conflicting: "Ask the agent to bring the base in and resolve the conflicts"
+        case .checksFailing: "Send the agent the log of the failing check"
+        case .ready, .reviewNeeded: "Ask the agent to merge once nothing is left to push"
+        default: "Ask the agent"
+        }
+    }
+
+    static func glyph(of verdict: PullRequestSet.Verdict) -> String {
+        switch verdict {
+        case .merged: "arrow.triangle.merge"
+        case .closed: "xmark.circle"
+        case .conflicting: "exclamationmark.triangle"
+        case .checksFailing: "xmark"
+        case .changesRequested: "text.bubble"
+        case .draft: "pencil.line"
+        case .checksRunning: "clock"
+        case .reviewNeeded, .ready: "checkmark"
+        case .open: "circle"
+        }
+    }
+
+    static func color(of verdict: PullRequestSet.Verdict) -> Color {
+        switch verdict {
+        case .merged, .ready: PullRequestStyle.passing
+        case .conflicting, .checksFailing, .changesRequested: PullRequestStyle.failing
+        case .checksRunning: PullRequestStyle.pending
+        case .reviewNeeded: Ink.secondary
+        case .closed, .draft, .open: Ink.tertiary
+        }
+    }
+}
+
+/// Every pull request of a task, one compact row each — the shape of the mockups: a state glyph, the title, then
+/// `repo #n · +a −d · ✗ 1 / 4 · review` on a second line — in the task's own order (`PullRequestSet.ordered`:
+/// repositories first, then numbers), which never moves with the states. A click picks the one the detail below and
+/// the header's buttons act on; the pick is kept per task. With a single pull request the row still stands: it is
+/// where the number, the title and the counts live.
 struct PullRequestList: View {
     @Environment(AppModel.self) private var model
     let task: TaskState
     let selected: LinkedPullRequest
 
     var body: some View {
-        let several = Set(task.record.pullRequests.compactMap(\.repo)).count > 1 || task.record.repos.count > 1
         VStack(alignment: .leading, spacing: 1) {
             ForEach(task.record.pullRequests) { link in
-                row(link, named: several, branched: task.record.branches.count > 1, isSelected: link.url == selected.url)
+                row(link, branched: task.record.branches.count > 1, isSelected: link.url == selected.url)
             }
         }
         .accessibilityElement(children: .contain)
@@ -300,64 +356,88 @@ struct PullRequestList: View {
     }
 
     /// `branched`: the task works on several branches, so each row says which one its pull request is on.
-    private func row(_ link: LinkedPullRequest, named: Bool, branched: Bool, isSelected: Bool) -> some View {
+    private func row(_ link: LinkedPullRequest, branched: Bool, isSelected: Bool) -> some View {
         let live = model.livePullRequest(for: task, link: link)
         let state = live?.state ?? link.state.flatMap(PullRequest.State.init(rawValue:)) ?? .open
-        let checks = live?.checks ?? .none
+        let tally = PullRequestSet.tally(live?.checkRuns ?? [])
+        let verdict = PullRequestSet.verdict(state: state, isDraft: live?.isDraft ?? false, mergeable: live?.mergeable ?? .unknown,
+                                             tally: tally, review: live?.reviewDecision ?? .none)
+        let repoName = model.repo(of: link, in: task)?.name ?? PullRequest.repository(fromURL: link.url)?.split(separator: "/").last.map(String.init)
         return Button {
             model.selectPullRequest(link, for: task)
         } label: {
-            HStack(spacing: 6) {
-                if named, let repo = model.repo(of: link, in: task) {
-                    Text(repo.name)
-                        .font(.scopeCaption)
-                        .foregroundStyle(Ink.tertiary)
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: PullRequestSection.glyph(of: verdict))
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(PullRequestSection.color(of: verdict))
+                    .frame(width: 16, height: 16)
+                    .padding(.top, 1)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(live?.title ?? link.title)
+                        .font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
-                        .fixedSize()
-                }
-                if branched, let head = live?.headRefName ?? link.headRefName {
-                    Text(head)
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(Ink.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .layoutPriority(-1)
-                }
-                Text(link.label)
-                    .font(.system(size: 11.5, design: .monospaced))
-                    .foregroundStyle(Ink.secondary)
-                    .fixedSize()
-                Text(live?.title ?? link.title)
-                    .font(.scopeCaption)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 4)
-                if state != .open {
-                    PullRequestChip(text: state == .merged ? "Merged" : "Closed",
-                                    color: state == .merged ? PullRequestStyle.passing : .secondary)
-                } else if live?.isDraft == true {
-                    PullRequestChip(text: "Draft", color: .secondary)
-                } else if live?.mergeable == .conflicting {
-                    PullRequestChip(text: "Conflicts", color: PullRequestStyle.failing)
-                } else if let review = live.flatMap({ PullRequestStyle.review($0.reviewDecision) }) {
-                    PullRequestChip(text: review.text, color: review.color)
-                }
-                if checks != .none {
-                    Text(PullRequestStyle.glyph(checks))
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(PullRequestStyle.color(checks))
-                        .frame(width: 12)
-                        .accessibilityLabel("checks \(checks.rawValue)")
+                        .truncationMode(.tail)
+                    HStack(spacing: 6) {
+                        Text([repoName, link.label].compactMap { $0 }.joined(separator: " "))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Ink.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        if branched, let head = live?.headRefName ?? link.headRefName {
+                            Text(head)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(Ink.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .layoutPriority(-1)
+                        }
+                        if let live, live.additions != nil || live.deletions != nil {
+                            DeltaCounts(additions: live.additions ?? 0, deletions: live.deletions ?? 0)
+                        }
+                        if let caption = tally.caption {
+                            PullRequestChip(text: caption, color: PullRequestStyle.color(tally.checks))
+                        }
+                        trailing(state: state, live: live, verdict: verdict)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
             .padding(.horizontal, 6)
-            .frame(height: 22)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .background(isSelected ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .background(isSelected ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
-        .help("\(link.label) \(live?.title ?? link.title) — \(state.rawValue)" + (checks == .none ? "" : ", checks \(checks.rawValue)"))
-        .accessibilityLabel("\(link.label) \(live?.title ?? link.title), \(state.rawValue)")
+        .help("\(link.label) \(live?.title ?? link.title) — \(verdict.label)")
+        .accessibilityLabel("\(link.label) \(live?.title ?? link.title), \(verdict.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The last word of the second line: merged · age, closed, draft, conflicts, or the review decision.
+    @ViewBuilder
+    private func trailing(state: PullRequest.State, live: PullRequest?, verdict: PullRequestSet.Verdict) -> some View {
+        switch state {
+        case .merged:
+            PullRequestChip(text: live?.mergedAt.map { "merged · \(Self.age($0))" } ?? "merged", color: PullRequestStyle.passing)
+        case .closed:
+            PullRequestChip(text: "closed", color: .secondary)
+        case .open:
+            if live?.isDraft == true {
+                PullRequestChip(text: "draft", color: .secondary)
+            } else if live?.mergeable == .conflicting {
+                PullRequestChip(text: "conflicts", color: PullRequestStyle.failing)
+            } else if let review = live.flatMap({ PullRequestStyle.review($0.reviewDecision) }) {
+                Text(review.text.lowercased())
+                    .font(.scopeCaption)
+                    .foregroundStyle(review.color)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private static func age(_ date: Date) -> String {
+        PullRequestFreshness.age(since: date, now: .now)
     }
 }
