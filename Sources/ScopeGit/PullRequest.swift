@@ -26,6 +26,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     /// GitHub login of the author (`app/dependabot` for bots).
     public let author: String
     public let headRefName: String
+    /// The commit at the head of the pull request, as GitHub last saw it: once merged, what the merge took.
+    public let headRefOid: String?
     public let baseRefName: String
     public let isDraft: Bool
     public let reviewDecision: ReviewDecision
@@ -55,7 +57,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         updatedAt: Date = .now, url: URL, isCrossRepository: Bool = false, headOwner: String? = nil,
         mergeable: Mergeable = .unknown, checkRuns: [PullRequestCheck] = [], state: State = .open,
         createdAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil,
-        additions: Int? = nil, deletions: Int? = nil
+        additions: Int? = nil, deletions: Int? = nil, headRefOid: String? = nil
     ) {
         self.additions = additions
         self.deletions = deletions
@@ -68,6 +70,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         self.title = title
         self.author = author
         self.headRefName = headRefName
+        self.headRefOid = headRefOid
         self.baseRefName = baseRefName
         self.isDraft = isDraft
         self.reviewDecision = reviewDecision
@@ -81,7 +84,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
 
     /// The fields requested from `gh`.
     public static let jsonFields = [
-        "number", "title", "author", "headRefName", "baseRefName", "isDraft", "reviewDecision",
+        "number", "title", "author", "headRefName", "headRefOid", "baseRefName", "isDraft", "reviewDecision",
         "statusCheckRollup", "updatedAt", "url", "isCrossRepository", "headRepositoryOwner", "mergeable", "state",
         "createdAt", "mergedAt", "closedAt", "additions", "deletions",
     ].joined(separator: ",")
@@ -146,6 +149,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         var title: String
         var author: Login?
         var headRefName: String
+        var headRefOid: String?
         var baseRefName: String
         var isDraft: Bool?
         var reviewDecision: String?
@@ -191,7 +195,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
             },
             state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open,
             createdAt: Self.real(dto.createdAt), mergedAt: Self.real(dto.mergedAt), closedAt: Self.real(dto.closedAt),
-            additions: dto.additions, deletions: dto.deletions
+            additions: dto.additions, deletions: dto.deletions,
+            headRefOid: dto.headRefOid.flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

@@ -124,24 +124,3 @@ public enum PullRequestFreshness {
         }
     }
 }
-
-/// Whether a refresh that saw a task's pull request should archive the task.
-public enum MergedTaskArchive: Sendable, Equatable {
-    /// Archive it now.
-    case archive
-    /// Merged, but a thread is still at work: ask again on the next refresh.
-    case wait
-    /// Nothing to do: not merged, the preference is off, or the user brought the task back after a merge.
-    case keep
-
-    /// `pullRequestStates` are GitHub's (`open`, `merged`, `closed`), one per pull request of the task; `nil` for one
-    /// never read since it was bound, which counts as open. The task archives once none is open and at least one
-    /// merged (`PullRequestSet.aggregateState`): a task with two pull requests stays until the second lands. A
-    /// closed, unmerged pull request never archives on its own: the work did not land, and someone may yet reopen it
-    /// or push it elsewhere.
-    public static func decide(pullRequestStates: [String?], threads: [ThreadState], enabled: Bool,
-                              keptOpenAfterMerge: Bool) -> MergedTaskArchive {
-        guard enabled, !keptOpenAfterMerge, PullRequestSet.aggregateState(pullRequestStates) == "merged" else { return .keep }
-        return threads.contains(.running) ? .wait : .archive
-    }
-}

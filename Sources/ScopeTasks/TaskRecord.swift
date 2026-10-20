@@ -264,10 +264,13 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable, Identif
     /// Its head and base branches, as GitHub names them: a stacked pull request shows where it sits.
     public var headRefName: String?
     public var baseRefName: String?
+    /// The head commit GitHub last reported: commits of the branch past it are in no pull request
+    /// (`MergedTaskArchive`), even once the merged branch is deleted from the remote. `nil` on older links.
+    public var headRefOid: String?
 
     public init(number: Int, url: URL, title: String, headOwner: String? = nil, isCrossRepository: Bool = false,
                 state: String? = nil, openedAt: Date? = nil, mergedAt: Date? = nil, closedAt: Date? = nil,
-                repo: String? = nil, headRefName: String? = nil, baseRefName: String? = nil) {
+                repo: String? = nil, headRefName: String? = nil, baseRefName: String? = nil, headRefOid: String? = nil) {
         self.number = number
         self.url = url
         self.title = title
@@ -280,6 +283,7 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable, Identif
         self.repo = repo.map(TaskRepo.normalize)
         self.headRefName = headRefName
         self.baseRefName = baseRefName
+        self.headRefOid = headRefOid
     }
 
     /// The URL is what tells two pull requests apart: numbers repeat across repositories.
@@ -296,14 +300,15 @@ public struct LinkedPullRequest: Codable, Sendable, Equatable, Hashable, Identif
     public init(_ pr: PullRequest, repo: String? = nil) {
         self.init(number: pr.number, url: pr.url, title: pr.title, headOwner: pr.headOwner, isCrossRepository: pr.isCrossRepository,
                   state: pr.state.rawValue, openedAt: pr.createdAt, mergedAt: pr.mergedAt, closedAt: pr.closedAt,
-                  repo: repo, headRefName: pr.headRefName, baseRefName: pr.baseRefName)
+                  repo: repo, headRefName: pr.headRefName, baseRefName: pr.baseRefName, headRefOid: pr.headRefOid)
     }
 
     /// `pr` says something this link does not keep yet: a new title, state, branch or date.
     public func isStale(against pr: PullRequest) -> Bool {
         url == pr.url && (title != pr.title || state != pr.state.rawValue || openedAt != pr.createdAt
                           || mergedAt != pr.mergedAt || closedAt != pr.closedAt
-                          || headRefName != pr.headRefName || baseRefName != pr.baseRefName)
+                          || headRefName != pr.headRefName || baseRefName != pr.baseRefName
+                          || (pr.headRefOid != nil && headRefOid != pr.headRefOid))
     }
 
     /// This link with what `pr` says now, its repository kept.

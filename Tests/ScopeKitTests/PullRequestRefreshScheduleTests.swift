@@ -86,29 +86,35 @@ import ScopeCore
         #expect(PullRequestFreshness.age(since: start, now: start.addingTimeInterval(-5)) == "just now")
     }
 
-    // MARK: Archive on merge
+    // MARK: Archive on merge (the guards themselves: `MergedTaskArchiveTests`)
+
+    private func merged(_ states: [String?], threads: [ThreadState] = [], enabled: Bool = true,
+                        kept: Bool = false) -> MergedTaskArchive {
+        let mergedAt = Date(timeIntervalSince1970: 1_000)
+        return MergedTaskArchive.decide(.init(
+            pullRequests: states.map { .init(state: $0, mergedAt: $0 == "merged" ? mergedAt : nil) },
+            threads: threads.map { .init(state: $0) }, enabled: enabled, keptOpenAfterMerge: kept))
+    }
 
     @Test func aMergedPullRequestArchivesAQuietTask() {
-        for threads in [[], [ThreadState.idle], [.done], [.waiting(reason: .input)], [.exited]] {
-            #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: threads, enabled: true,
-                                             keptOpenAfterMerge: false) == .archive)
+        for threads in [[], [ThreadState.idle], [.done], [.exited]] {
+            #expect(merged(["merged"], threads: threads) == .archive)
         }
     }
 
     @Test func aRunningThreadPostponesTheArchive() {
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [.idle, .running], enabled: true,
-                                         keptOpenAfterMerge: false) == .wait)
+        #expect(merged(["merged"], threads: [.idle, .running]) == .hold(.threadBusy))
     }
 
     @Test func nothingButAMergeArchives() {
         for state in [nil, "open", "closed"] {
-            #expect(MergedTaskArchive.decide(pullRequestStates: [state], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
+            #expect(merged([state]) == .keep)
         }
     }
 
     @Test func thePreferenceAndARestoreKeepTheTask() {
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: false, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: true, keptOpenAfterMerge: true) == .keep)
+        #expect(merged(["merged"], enabled: false) == .keep)
+        #expect(merged(["merged"], kept: true) == .keep)
     }
 
     @Test func preferencesDefaultToArchivingMergedTasksAndThreeIdleDays() throws {
@@ -121,12 +127,12 @@ import ScopeCore
 
     @Test func aTaskWithSeveralPullRequestsArchivesOnceNoneIsOpen() {
         // One merged, one still open: the task stays. Once the second lands — or is dropped — it goes.
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "open"], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", nil], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "merged"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "closed"], threads: [], enabled: true, keptOpenAfterMerge: false) == .archive)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["closed", "closed"], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestStates: [], threads: [], enabled: true, keptOpenAfterMerge: false) == .keep)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged", "merged"], threads: [.running], enabled: true, keptOpenAfterMerge: false) == .wait)
+        #expect(merged(["merged", "open"]) == .keep)
+        #expect(merged(["merged", nil]) == .keep)
+        #expect(merged(["merged", "merged"]) == .archive)
+        #expect(merged(["merged", "closed"]) == .archive)
+        #expect(merged(["closed", "closed"]) == .keep)
+        #expect(merged([]) == .keep)
+        #expect(merged(["merged", "merged"], threads: [.running]) == .hold(.threadBusy))
     }
 }

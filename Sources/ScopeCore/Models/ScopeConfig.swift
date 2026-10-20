@@ -524,8 +524,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// Keep a log of which controls, commands and panels are used, under `SCOPE_HOME/usage` and nowhere else (`scope
     /// usage` reads it). On by default.
     public var recordUsage: Bool
-    /// A task is archived once a background refresh sees its pull request merged and none of its threads is at
-    /// work. On by default.
+    /// A task is archived once a background refresh sees its pull request merged and nothing holds it any more
+    /// (`MergedTaskArchive`). On by default.
     public var archiveMergedTasks: Bool
     /// Days without thread activity after which an open task is called idle (`TaskDormancy`); 0 never. 3 by default.
     public var dormantAfterDays: Int

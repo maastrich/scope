@@ -186,7 +186,7 @@ private struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Toggle("Archive a task when its pull request merges", isOn: preference(\.archiveMergedTasks))
                     .toggleStyle(.scope)
-                Text("Every open task's pull request is read from GitHub every 5 minutes. Once it is merged and no thread of the task is running, the task is archived and a notice offers it back. A task you restore after its merge stays open. A pull request closed without merging never archives anything.")
+                Text("Every open task's pull request is read from GitHub every 5 minutes. Once it is merged, the task is archived and a notice offers it back — but not while a thread of it is working or waiting, a task it launched is still open, it has uncommitted or unpushed changes, or a turn started after the merge. A task you restore after its merge stays open. A pull request closed without merging never archives anything.")
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
