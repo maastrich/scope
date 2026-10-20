@@ -7,7 +7,8 @@ import Synchronization
 /// This is what `scope-hook` does. A missing or dead socket fails fast (`.unreachable`) instead of waiting for
 /// the path to come back, and everything is bounded by `timeout`.
 public enum UnixSocketClient {
-    /// Sends `payload` to the unix socket at `path` and returns once the server has taken it.
+    /// Sends `payload` to the unix socket at `path` and returns once the server has read it and closed the
+    /// connection.
     /// - Throws: `UnixSocketError.payloadTooLarge`, `.unreachable`, `.timedOut`, or the underlying `NWError`.
     public static func send(_ payload: Data, to path: String, timeout: Duration = .seconds(2)) async throws {
         guard payload.count <= UnixSocketServer.maxMessageBytes else {
@@ -26,11 +27,19 @@ public enum UnixSocketClient {
                                     completion: .contentProcessed { error in
                         if let error {
                             outcome.finish(continuation, throwing: error)
-                        } else {
-                            outcome.finish(continuation, throwing: nil)
+                            connection.stateUpdateHandler = nil
+                            connection.cancel()
+                            return
                         }
+                        // Sent is only buffered: `NWListener` silently drops a connection whose client has closed
+                        // before it was accepted, so a hook that hung up here lost its event whenever the app was
+                        // slow to accept. The server closes once it has read the message; that close (end of file or
+                        // a reset) is the receipt.
                         connection.stateUpdateHandler = nil
-                        connection.cancel()
+                        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { _, _, _, _ in
+                            outcome.finish(continuation, throwing: nil)
+                            connection.cancel()
+                        }
                     })
                 case .failed(let error):
                     outcome.finish(continuation, throwing: UnixSocketError.unreachable(path: path, reason: error.localizedDescription))
