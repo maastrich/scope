@@ -218,30 +218,36 @@ import ScopeGit
 
     // MARK: Watchers
 
+    // The watchers run on a `TestClock`: a change reaches the debouncer whenever the system delivers it, but the
+    // delay only elapses when the test advances the clock. What is asserted is the coalescing and the filtering,
+    // not whether a loaded CI runner got a burst through inside a real 300 ms window.
+
     @Test func aBurstOfWritesWakesTheFolderWatcherOnce() async throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }
         let store = TaskRecordStore(home: home)
         let wakes = Mutex(0)
-        // Half a second rather than the app's 300 ms: a loaded CI runner spreads one burst over several FSEvents
-        // batches, and the test is about coalescing, not about the exact gap.
-        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(500)) {
+        let clock = TestClock()
+        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, clock: clock) {
             wakes.withLock { $0 += 1 }
         }
         watcher.start()
         defer { watcher.stop() }
-        try await Task.sleep(for: .milliseconds(300))
 
         for name in ["A", "B", "C", "D", "E"] {
             try await store.save(task(name))
-            try await Task.sleep(for: .milliseconds(20))
         }
-        try await Task.sleep(for: .seconds(2))
-        #expect(wakes.withLock { $0 } == 1)
+        // However many FSEvents batches the burst became, each one re-armed the same frozen timer.
+        #expect(await clock.settle())
+        #expect(wakes.withLock { $0 } == 0)
+        clock.advance(by: .milliseconds(300))
+        #expect(await eventually { wakes.withLock { $0 } == 1 })
+        #expect(clock.sleeping == 0)
 
-        // A file the names filter rejects does not wake anyone.
+        // A file the names filter rejects does not wake anyone: nothing gets armed.
         try Data("x".utf8).write(to: store.directory.appending(path: "scratch.txt"))
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(clock.sleeping == 0)
         #expect(wakes.withLock { $0 } == 1)
     }
 
@@ -250,33 +256,39 @@ import ScopeGit
         defer { try? FileManager.default.removeItem(at: home) }
         let store = TaskRecordStore(home: home)
         let reloads = Mutex<[Int]>([])
-        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, delay: .milliseconds(500)) {
+        let clock = TestClock()
+        let watcher = StateFolderWatcher(folder: store.directory, names: { $0.hasSuffix(".json") }, clock: clock) {
             let reload = await store.reloadExternalChanges()
             reloads.withLock { $0.append(reload.changed.count + reload.removed.count) }
         }
         // How many times the watcher woke depends on how FSEvents batched the events on this machine; what must
         // hold is that only the outside edit ever reloaded anything.
-        let reloaded = { reloads.withLock { $0 }.filter { $0 != 0 } }
+        let reloaded: @Sendable () -> [Int] = { reloads.withLock { $0 }.filter { $0 != 0 } }
+        let woken: @Sendable () -> Int = { reloads.withLock { $0 }.count }
         watcher.start()
         defer { watcher.stop() }
-        try await Task.sleep(for: .milliseconds(300))
 
         let record = task("Own")
         try await store.save(record)
-        try await Task.sleep(for: .milliseconds(1500))
+        #expect(await clock.settle())
+        clock.advance(by: .milliseconds(300))
         // Woken by its own write, with nothing to reload.
-        #expect(!reloads.withLock { $0 }.isEmpty)
+        #expect(await eventually { woken() >= 1 })
         #expect(reloaded() == [])
 
         var edited = record
         edited.name = "Own, edited"
         try editOutside(edited, at: store.url(for: record.id))
-        try await Task.sleep(for: .milliseconds(1500))
-        #expect(reloaded() == [1])
+        #expect(await clock.settle())
+        clock.advance(by: .milliseconds(300))
+        #expect(await eventually { reloaded() == [1] })
 
         // The app writes the record it just took in (what a reload that re-saved would do): no second reload.
+        let before = woken()
         try await store.save(edited)
-        try await Task.sleep(for: .milliseconds(1500))
+        #expect(await clock.settle())
+        clock.advance(by: .milliseconds(300))
+        #expect(await eventually { woken() > before })
         #expect(reloaded() == [1])
     }
 
@@ -285,35 +297,45 @@ import ScopeGit
         defer { try? FileManager.default.removeItem(at: home) }
         let url = ScopeHome.configURL(home: home)
         let wakes = Mutex(0)
-        let watcher = StateFileWatcher(file: url, delay: .milliseconds(150)) { wakes.withLock { $0 += 1 } }
+        let clock = TestClock()
+        let watcher = StateFileWatcher(file: url, clock: clock) { wakes.withLock { $0 += 1 } }
         watcher.start()
         defer { watcher.stop() }
-        try await Task.sleep(for: .milliseconds(200))
+
+        /// One change, however many vnode events it raised (a rename over the path is seen by both sources),
+        /// is one wake once the delay elapses.
+        func expectOneWake(after change: () throws -> Void, total: Int,
+                           sourceLocation: SourceLocation = #_sourceLocation) async throws {
+            try change()
+            #expect(await clock.settle(), sourceLocation: sourceLocation)
+            #expect(wakes.withLock { $0 } == total - 1, sourceLocation: sourceLocation)
+            clock.advance(by: .milliseconds(300))
+            #expect(await eventually { wakes.withLock { $0 } == total }, sourceLocation: sourceLocation)
+            #expect(clock.sleeping == 0, sourceLocation: sourceLocation)
+        }
 
         // The file does not exist yet: its creation is an entry added to the directory.
-        try JSONStore.save(ScopeConfig.empty, to: url)
-        try await Task.sleep(for: .seconds(1))
-        #expect(wakes.withLock { $0 } == 1)
+        try await expectOneWake(after: { try JSONStore.save(ScopeConfig.empty, to: url) }, total: 1)
 
         // Rewritten in place (no rename): the file's own source.
-        let handle = try FileHandle(forWritingTo: url)
-        try handle.seekToEnd()
-        try handle.write(contentsOf: Data("\n".utf8))
-        try handle.close()
-        try await Task.sleep(for: .seconds(1))
-        #expect(wakes.withLock { $0 } == 2)
+        try await expectOneWake(after: {
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("\n".utf8))
+            try handle.close()
+        }, total: 2)
 
         // Renamed over (an atomic write): the directory source, and the file source re-armed on the new inode.
-        var edited = ScopeConfig.empty
-        edited.preferences.branchPrefix = "feat/"
-        try JSONStore.save(edited, to: url)
-        try await Task.sleep(for: .seconds(1))
-        #expect(wakes.withLock { $0 } == 3)
-        let again = try FileHandle(forWritingTo: url)
-        try again.seekToEnd()
-        try again.write(contentsOf: Data("\n".utf8))
-        try again.close()
-        try await Task.sleep(for: .seconds(1))
-        #expect(wakes.withLock { $0 } == 4)
+        try await expectOneWake(after: {
+            var edited = ScopeConfig.empty
+            edited.preferences.branchPrefix = "feat/"
+            try JSONStore.save(edited, to: url)
+        }, total: 3)
+        try await expectOneWake(after: {
+            let again = try FileHandle(forWritingTo: url)
+            try again.seekToEnd()
+            try again.write(contentsOf: Data("\n".utf8))
+            try again.close()
+        }, total: 4)
     }
 }

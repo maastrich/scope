@@ -4,15 +4,20 @@ import Foundation
 ///
 /// Used to coalesce FSEvents bursts into one rescan. A `fire()` that arrives while `action` is
 /// running schedules another run after the current one.
+///
+/// The timer sleeps on `clock`: the real one in the app, a hand-driven one in tests, which then say exactly
+/// when the delay elapses instead of racing a wall-clock timer on a loaded machine.
 public actor Debouncer {
     private let delay: Duration
+    private let clock: any Clock<Duration>
     private let action: @Sendable () async -> Void
     private var pending = false
     private var generation: UInt64 = 0
     private var timer: Task<Void, Never>?
 
-    public init(delay: Duration, action: @escaping @Sendable () async -> Void) {
+    public init(delay: Duration, clock: any Clock<Duration> = ContinuousClock(), action: @escaping @Sendable () async -> Void) {
         self.delay = delay
+        self.clock = clock
         self.action = action
     }
 
@@ -22,8 +27,8 @@ public actor Debouncer {
         generation += 1
         let expected = generation
         timer?.cancel()
-        timer = Task.detached { [delay] in
-            try? await Task.sleep(for: delay)
+        timer = Task.detached { [delay, clock] in
+            try? await clock.sleep(for: delay)
             await self.timerFired(generation: expected)
         }
     }
@@ -57,14 +62,17 @@ public actor Debouncer {
 /// Used to keep `git status` refreshes at most one per repo per interval.
 public actor Throttle {
     private let minimumInterval: Duration
+    private let clock: any Clock<Duration>
     private let action: @Sendable () async -> Void
     private var inCooldown = false
     private var trailingPending = false
     private var generation: UInt64 = 0
     private var cooldown: Task<Void, Never>?
 
-    public init(minimumInterval: Duration, action: @escaping @Sendable () async -> Void) {
+    public init(minimumInterval: Duration, clock: any Clock<Duration> = ContinuousClock(),
+                action: @escaping @Sendable () async -> Void) {
         self.minimumInterval = minimumInterval
+        self.clock = clock
         self.action = action
     }
 
@@ -94,8 +102,8 @@ public actor Throttle {
         Task.detached {
             await action()
         }
-        cooldown = Task.detached { [minimumInterval] in
-            try? await Task.sleep(for: minimumInterval)
+        cooldown = Task.detached { [minimumInterval, clock] in
+            try? await clock.sleep(for: minimumInterval)
             await self.cooldownEnded(generation: expected)
         }
     }
