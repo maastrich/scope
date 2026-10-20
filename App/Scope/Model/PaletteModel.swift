@@ -167,6 +167,13 @@ enum PaletteModel {
         items.append(PaletteItem(id: "inspector", section: .actions, icon: "sidebar.right", label: "Toggle Inspector", shortcut: "⌥⌘I") {
             model.toggleInspector()
         })
+        if model.currentTask != nil {
+            let details = model.inspector.page == .details
+            items.append(PaletteItem(id: "inspector-details", section: .actions, icon: "info.circle",
+                                     label: details ? "Show Inspector Overview" : "Show Inspector Details", shortcut: "⇧⌘D") {
+                model.toggleInspectorDetails()
+            })
+        }
         if let thread = model.currentThread, thread.displayState.acknowledged != thread.displayState {
             items.append(PaletteItem(id: "mark-read", section: .actions, icon: "checkmark.circle", label: "Mark as Read",
                                      hint: thread.title) {
