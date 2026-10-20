@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 24
+    public static let version = 25
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -390,9 +390,11 @@ public struct SkillInstaller: Sendable {
         ## Finishing
 
         A task with a pull request stays open until it merges: Scope reads every open task's pull request from
-        GitHub every few minutes and archives the task itself once it is merged and none of its threads is running
-        (Settings › Tasks, on by default). Archiving it earlier hides the merge from Scope and leaves a failing check
-        no thread to go to. So do not keep a thread polling GitHub for the merge: open the pull request, report, stop.
+        GitHub every few minutes and archives the task itself once it is merged and nothing holds it any more
+        (Settings › Tasks, on by default): no thread at work, waiting or running sub-agents, no task launched from it
+        still open, nothing uncommitted or unpushed, and no turn started after the merge. Archiving it earlier hides
+        the merge from Scope and leaves a failing check no thread to go to. If you keep working in a task after its
+        pull request merged, Scope leaves it open for good: archive it yourself once that work is done. So do not keep a thread polling GitHub for the merge: open the pull request, report, stop.
         To know where a pull request stands, read `scope list tasks` (PR column), `scope task show` or the
         `pullRequest` of a wait: Scope already asked GitHub.
 

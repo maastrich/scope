@@ -170,8 +170,8 @@ import ScopeGit
 
         let reopened = try await manager.reopen(task.id)
         #expect(reopened.keptOpenAfterMerge)
-        #expect(MergedTaskArchive.decide(pullRequestStates: ["merged"], threads: [], enabled: true,
-                                         keptOpenAfterMerge: reopened.keptOpenAfterMerge) == .keep)
+        #expect(MergedTaskArchive.decide(.init(pullRequests: [.init(state: "merged", mergedAt: .distantPast)],
+                                               keptOpenAfterMerge: reopened.keptOpenAfterMerge)) == .keep)
     }
 
     @Test func closingDeletesAnUnmergedBranchOnceItsTipIsSaved() async throws {

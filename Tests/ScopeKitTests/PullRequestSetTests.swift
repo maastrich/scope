@@ -56,6 +56,16 @@ import ScopeGit
         #expect(merged[0].state == "merged" && merged[0].title == "PR 41 renamed" && merged[0].repo == "api")
     }
 
+    @Test func mergingKeepsAKnownHeadCommitALinkDoesNotCarry() {
+        var known = Self.link(41, repo: "api", state: "open")
+        known.headRefOid = "abc123"
+        let merged = PullRequestSet.merging([known], with: [Self.link(41, repo: "api", state: "merged")])
+        #expect(merged[0].headRefOid == "abc123" && merged[0].state == "merged")
+        var moved = Self.link(41, repo: "api", state: "merged")
+        moved.headRefOid = "def456"
+        #expect(PullRequestSet.merging([known], with: [moved])[0].headRefOid == "def456")
+    }
+
     @Test func theCaptionCountsWhatMattersMostFirst() {
         func facts(_ number: Int, _ state: PullRequest.State = .open, checks: PullRequest.Checks = .none,
                    mergeable: PullRequest.Mergeable = .unknown, draft: Bool = false) -> PullRequestFacts {
