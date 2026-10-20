@@ -44,6 +44,8 @@ final class AppModel {
     let inspector = InspectorModel()
     /// The shells of the tasks' shell panes (`AppModel+TaskShell`).
     let taskShells = TaskShellStore()
+    /// The tabs of the tasks' Browser panes (`AppModel+Browser`).
+    let browser = BrowserStore()
     /// Tokens Claude Code threads consumed (`AppModel+TokenUsage`).
     let tokenUsage = TokenUsageModel()
     /// What moved in a scope while the owner looked elsewhere (`AppModel+ReturnDigest`).
@@ -1142,7 +1144,9 @@ final class AppModel {
             self?.threadExited(session, status: status)
         }
         session.onOpenLink = { [weak self] session, link in
-            self?.openFileLink(link, from: session) ?? false
+            guard let self else { return false }
+            return self.openFileLink(link, from: session)
+                || self.openWebLink(link, task: session.record.taskID.flatMap { TaskID(rawValue: $0) }.flatMap(self.task))
         }
     }
 

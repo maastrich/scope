@@ -811,6 +811,7 @@ extension AppModel {
     private func hangUpThreads(of taskID: TaskID) async {
         cancelSetup(taskID)
         closeTaskShells(of: taskID)
+        closeBrowserTabs(of: taskID)
         for session in threads(in: taskID) {
             await close(session.id, force: true, undoable: false)
         }

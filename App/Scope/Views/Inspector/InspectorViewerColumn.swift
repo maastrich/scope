@@ -31,6 +31,8 @@ struct InspectorViewerColumn: View {
                 ReadingViewer(leading: AnyView(backButton), trailing: AnyView(closeButton))
             case .shell:
                 TaskShellPane(leading: AnyView(backButton), trailing: AnyView(closeButton))
+            case .browser:
+                BrowserPane(leading: AnyView(backButton), trailing: AnyView(closeButton))
             case nil:
                 EmptyView()
             }
@@ -56,7 +58,8 @@ struct InspectorViewerColumn: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .help(previous == .diff ? "Back to the diff" : previous == .reading ? "Back to the text"
-                  : previous == .shell ? "Back to the shell" : "Back to the previous file")
+                  : previous == .shell ? "Back to the shell" : previous == .browser ? "Back to the browser"
+                  : "Back to the previous file")
             .accessibilityLabel("Back")
             .usageID("back", label: "Back (reading column)")
         }

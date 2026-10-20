@@ -111,7 +111,7 @@ struct RootView: View {
     /// The viewer column shows with the inspector, or alone for an answer being read — never over a maximized thread.
     private var viewerPresented: Bool {
         guard let viewer = model.shownViewer, !model.threadMaximized else { return false }
-        return inspectorPresented.wrappedValue || viewer == .reading || viewer == .shell
+        return inspectorPresented.wrappedValue || viewer == .reading || viewer == .shell || viewer == .browser
     }
 
     private var inspectorWidth: Binding<Double> {

@@ -84,8 +84,8 @@ extension AppModel {
         }
     }
 
-    /// A port chip was clicked: the browser on it.
-    func openPort(_ port: Int) {
-        openOnGitHub(PortBlock.url(for: port))
+    /// A port chip of `task` was clicked: the task's Browser pane on it, or the system browser (`BrowserRoute`).
+    func openPort(_ port: Int, of task: TaskState) {
+        openWebLink(PortBlock.url(for: port).absoluteString, task: task)
     }
 }

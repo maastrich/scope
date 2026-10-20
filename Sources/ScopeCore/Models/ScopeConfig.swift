@@ -571,6 +571,10 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var assistSuggestsArchive: Bool
     /// At launch, a daily, weekday or weekly schedule missed in the last day fires once (spec §4.11). On by default.
     public var catchUpSchedules: Bool
+    /// Which web links open in the task's Browser pane rather than the system browser (`BrowserRoute`). Any
+    /// localhost by default: the task's dev servers come to the pane, the rest of the web stays where the user is
+    /// signed in.
+    public var openWebLinks: WebLinkDestination
 
     /// Allowed values of `assistDailyCap`.
     public static let assistDailyCapRange = 1...500
@@ -635,7 +639,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         quickPanelHotkey: KeyChord? = .optionSpace,
         toggleWindowHotkey: KeyChord? = .optionShiftSpace,
         quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting,
-        catchUpSchedules: Bool = true
+        catchUpSchedules: Bool = true,
+        openWebLinks: WebLinkDestination = .localhost
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -687,6 +692,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.toggleWindowHotkey = toggleWindowHotkey
         self.quickPanelLanding = quickPanelLanding
         self.catchUpSchedules = catchUpSchedules
+        self.openWebLinks = openWebLinks
     }
 
     public static let `default` = Preferences()
@@ -698,7 +704,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
-             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules
+             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules, openWebLinks
     }
 
     public init(from decoder: any Decoder) throws {
@@ -782,6 +788,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         quickPanelLanding = (try? container.decodeIfPresent(QuickPanel.Landing.self, forKey: .quickPanelLanding))
             ?? defaults.quickPanelLanding
         catchUpSchedules = (try? container.decodeIfPresent(Bool.self, forKey: .catchUpSchedules)) ?? defaults.catchUpSchedules
+        openWebLinks = (try? container.decodeIfPresent(WebLinkDestination.self, forKey: .openWebLinks)) ?? defaults.openWebLinks
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

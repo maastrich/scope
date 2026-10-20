@@ -11,6 +11,8 @@ enum InspectorViewer: Hashable, Sendable {
     case reading
     /// The task's shell pane (`TaskShellPane`): a login shell of the task, tabs for several.
     case shell
+    /// The task's Browser pane (`BrowserPane`): its dev servers in a web view, tabs for several.
+    case browser
 }
 
 /// A file opened from a link in a terminal: every file the link can mean (`FileLinkResolver`), which one is shown,

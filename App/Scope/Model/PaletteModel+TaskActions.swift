@@ -27,6 +27,10 @@ extension PaletteModel {
                                      hint: "a shell of \(task.name) in the reading column", shortcut: "⌃`") {
                 model.toggleTaskShell()
             })
+            items.append(PaletteItem(id: "task-browser", section: .actions, icon: "globe", label: "Browser",
+                                     hint: "the dev servers of \(task.name) in the reading column", shortcut: "⌃⇧B") {
+                model.toggleBrowser()
+            })
         }
         if !task.isArchived {
             items.append(PaletteItem(id: "task-add-branch", section: .actions, icon: "arrow.triangle.branch", label: "Add Branch…",

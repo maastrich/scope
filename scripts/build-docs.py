@@ -462,7 +462,7 @@ task run in its sandbox. <a href="tasks.html">Tasks and sandboxes →</a></p>
 
 <h2 id="inspector">The inspector</h2>
 <p>The right-hand panel, all about the selection. A band at the top names the task and carries the <b>pane
-strip</b> — Overview, Changes (badge: changed files), Shell, Pull requests (badge: failing checks), Files, and <code>⋮</code>
+strip</b> — Overview, Changes (badge: changed files), Shell, Browser, Pull requests (badge: failing checks), Files, and <code>⋮</code>
 for the Cards menu — then a column of cards, one header each: closed, a card costs one line and its header still says
 the essential at its right; open, it shows the rest. Each card answers one question and says one thing per line: a
 glyph, a name, a value. Several can be open at once — the lists share the height, and you drag the gap between two of
@@ -478,6 +478,18 @@ several shells (<b>+</b> opens one, ✕ closes it; a tab says the running comman
 the shell's name) and the footer says what was injected. <kbd>⌃`</kbd> shows and hides the pane; <kbd>⌘D</kbd> puts the
 diff over it and <kbd>⌃`</kbd> brings it back. Hiding the pane leaves its shells running; closing a tab, archiving or
 closing the task hangs them up.</p>
+<p>Beside it, the task's <b>Browser</b> pane (<kbd>⌃⇧B</kbd>, the globe of the strip, or <i>Browser</i> in the Task
+menu and the palette) shows what the task serves: a web view on the dev server of the sandbox, next to its terminal.
+A port chip opens it, and so does a <kbd>⌘</kbd>-click on <code>http://localhost:$SCOPE_PORT</code> in a thread or a
+shell, or a link in a reply. One tab per server — a link to a server a tab already shows navigates that tab; a page
+that opens a window opens a tab. The address bar takes a URL, <code>localhost:3000</code> or just <code>:41001</code>;
+back, forward and reload sit beside it, and <kbd>⌘L</kbd>, <kbd>⌘R</kbd>, <kbd>⌘[</kbd> and <kbd>⌘]</kbd> work while
+the page has the keyboard. The pages are inspectable: Safari ▸ Develop ▸ this Mac lists them, with the Web Inspector's
+console and network. Their cookies and storage go to a data store of the scope's own, kept between launches, apart
+from Safari's and from anything an agent uses. Which links come here is <i>Settings › General › Browser</i>: any
+<code>localhost</code> by default, while the rest of the web goes to your default browser, where you are signed in;
+<kbd>⌥</kbd>-click sends a link to the other one. Hiding the pane keeps the pages; closing a tab, archiving or closing
+the task tears them down.</p>
 <table>
   <tr><th>Card</th><th>Closed, the header says</th><th>Open, it shows</th><th>Key</th></tr>
   <tr><td><b>Environment</b></td><td>the branch, commits ahead, the base's lag, a setup running or failed</td><td>where the branch forked, one row per worktree with its state and <code>+N −M</code>, the setup command with its state as a chip (running with the seconds ticking, ✓ or ✗ with the duration; click for the log), the task's port block with the ports something listens on and one line per listening process (command line, the thread it came from or its pid), then the disk and the agent time; Add Branch, Copy name, Open in Editor and Reveal on hover</td><td></td></tr>
@@ -690,8 +702,8 @@ one scope, or to change the copied files, edit the scope in <code>~/.scope/confi
 <p>Every task gets its own block of ten ports, kept across restarts and never shared by two live tasks, so two
 sandboxes can run the same dev server side by side. Its threads get <code>SCOPE_PORT</code> too. While a thread of
 the task is alive, Scope looks every twenty seconds at which ports of the block its processes listen on, and the
-Task section and the task's hover card show each as a <code>localhost:41003 ↗</code> chip: a click opens the
-browser on it.</p>
+Task section and the task's hover card show each as a <code>localhost:41003 ↗</code> chip: a click opens it
+in the task's <a href="concepts.html#inspector">Browser pane</a> (<kbd>⌥</kbd>-click: the system browser).</p>
 <p>The same places say what the task's sandboxes take on disk, measured after each setup and every ten minutes;
 the scope's settings sheet adds the total over its open tasks and the three heaviest, and <code>scope gc
 --dry-run</code> prints the same figures. Archiving a task is what frees the space.</p>
@@ -1670,6 +1682,7 @@ the terminal, or use <b>Go → Command Palette…</b>, until that is fixed.</p><
   <tr><td><kbd>⌥⇧Space</kbd></td><td>From any app: show the window, or hide Scope when it is in front; configurable</td></tr>
   <tr><td><kbd>⌘D</kbd> / <kbd>⇧⌘B</kbd> / <kbd>⇧⌘P</kbd></td><td>Changes / Repository / Pull requests</td></tr>
   <tr><td><kbd>⌃`</kbd></td><td>The task's shell pane: show, or hide it again</td></tr>
+  <tr><td><kbd>⌃⇧B</kbd></td><td>The task's browser pane: show, or hide it again</td></tr>
   <tr><td><kbd>⌥⌘I</kbd></td><td>Toggle the inspector</td></tr>
   <tr><td><kbd>⌃⌘S</kbd></td><td>Show / hide the sidebar</td></tr>
   <tr><td><kbd>⌘M</kbd></td><td>Maximize the thread: it fills the window, <kbd>⌘M</kbd> again restores (minimize is <kbd>⌥⌘M</kbd>)</td></tr>
