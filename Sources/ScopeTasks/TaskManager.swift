@@ -408,7 +408,9 @@ public actor TaskManager {
     ) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard !record.isArchived else { throw TaskError.taskArchived }
-        let repos = record.activeRepos.filter { only?.map(TaskRepo.normalize).contains($0.repoRelativePath) ?? true }
+        // `only` names repositories (every worktree of each) or single sandboxes by key (`api@fix-login`).
+        let wanted = only.map { Set($0.map(TaskRepo.normalize)) }
+        let repos = record.activeSandboxes.filter { wanted?.contains($0.repoRelativePath) ?? true || wanted?.contains($0.sandboxKey) == true }
         let willRun = runCommands && repos.contains { commands[$0.repoRelativePath]?.setup != nil }
         let started = TaskSetupRecord(state: willRun ? .running : .skipped, startedAt: TaskRecord.roundedToMilliseconds(.now))
         record = try await mutate(id) { $0.setup = started }
@@ -420,7 +422,7 @@ public actor TaskManager {
         for repo in repos {
             let repoCommands = commands[repo.repoRelativePath] ?? SandboxCommands()
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
-            let name = repo.isScopeRoot ? record.scopeName : repo.repoRelativePath
+            let name = repo.isSecondary ? repo.sandboxLabel(scopeName: record.scopeName) : (repo.isScopeRoot ? record.scopeName : repo.repoRelativePath)
             var plan = SandboxFileCopy.plan(globs: repoCommands.copyFiles, base: base, sandbox: repo.sandboxURL)
             let resources = SandboxFileCopy.planResources(base: base, sandbox: repo.sandboxURL)
             plan.copies += resources.copies
@@ -481,7 +483,7 @@ public actor TaskManager {
     private func runTeardown(_ record: TaskRecord, _ teardown: Teardown?) async -> [DismantleNotice] {
         guard let teardown else { return [] }
         var notices: [DismantleNotice] = []
-        for repo in record.activeRepos where FileManager.default.fileExists(atPath: repo.sandboxPath) {
+        for repo in record.activeSandboxes where FileManager.default.fileExists(atPath: repo.sandboxPath) {
             guard let command = teardown.commands[repo.repoRelativePath]?.teardown else { continue }
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
             let client = try? await baseClient(for: repo.repoRelativePath, task: record)
@@ -489,7 +491,7 @@ public actor TaskManager {
                                                            defaultBranch: await client?.defaultBranch())
             let outcome = await teardown.runner.run(command, in: repo.sandboxURL, environment: environment, timeout: teardown.timeout)
             if !outcome.succeeded {
-                notices.append(.teardownFailed(repo: repo.repoRelativePath, summary: outcome.summary,
+                notices.append(.teardownFailed(repo: repo.sandboxKey, summary: outcome.summary,
                                                log: SetupLog.bounded("$ \(command)\n" + outcome.output)))
             }
         }
@@ -568,14 +570,28 @@ public actor TaskManager {
                 taskID: id.rawValue, savedAt: TaskRecord.roundedToMilliseconds(.now), replies: replies,
                 files: TaskDeliverable.collectFiles(named: record.deliverableNames, in: record.deliverableFolders)
             ), home: home)
-            for index in record.repos.indices where record.repos[index].state == .active {
-                // Saved and written down before the folder goes, so a failure in between never loses it.
-                if let saved = try await salvage(record.repos[index], task: record) {
+            for index in record.repos.indices {
+                // The secondary worktrees first: a repo scope task's root is its primary sandbox, and the others
+                // sit beside it. Each one saved and written down before its folder goes, so a failure in between
+                // never loses it.
+                for position in record.repos[index].worktrees.indices where record.repos[index].worktrees[position].state == .active {
+                    let sandbox = record.repos[index].sandbox(record.repos[index].worktrees[position])
+                    if let saved = try await salvage(sandbox, task: record) {
+                        record.repos[index].worktrees[position].salvageRef = saved.ref
+                        try await save(record)
+                        notices.append(.changesSaved(repo: sandbox.sandboxKey, ref: saved.ref, skipped: saved.skipped))
+                    }
+                    try await removeSandbox(sandbox, task: record)
+                    record.repos[index].worktrees[position].state = .archived
+                    try await save(record)
+                }
+                guard record.repos[index].state == .active else { continue }
+                if let saved = try await salvage(record.repos[index].primarySandbox, task: record) {
                     record.repos[index].salvageRef = saved.ref
                     try await save(record)
                     notices.append(.changesSaved(repo: record.repos[index].repoRelativePath, ref: saved.ref, skipped: saved.skipped))
                 }
-                try await removeSandbox(record.repos[index], task: record)
+                try await removeSandbox(record.repos[index].primarySandbox, task: record)
                 record.repos[index].state = .archived
                 try await save(record)
             }
@@ -607,19 +623,21 @@ public actor TaskManager {
     /// is deleted all the same once its last commit is kept under `refs/scope/salvage/`.
     private func deleteBranches(_ record: TaskRecord) async throws -> [DismantleNotice] {
         var notices: [DismantleNotice] = []
-        for repo in record.repos {
+        // Every worktree's branch: the task's own, and the ones added beside it.
+        for repo in record.sandboxes {
             let client = try await baseClient(for: repo.repoRelativePath, task: record)
             do {
                 try await client.deleteBranch(name: repo.branch)
             } catch let error as GitError where error.message.contains("not fully merged") {
-                let ref = Self.salvageRef(for: record, kind: "branch")
+                // Two unmerged branches of one repository would otherwise write the same ref within a second.
+                let ref = Self.salvageRef(for: record, kind: repo.isSecondary ? "branch-\(TaskBranch.slug(for: repo.branch))" : "branch")
                 do {
                     try await client.run(["update-ref", ref, "refs/heads/\(repo.branch)"])
                     try await client.deleteBranch(name: repo.branch, force: true)
                 } catch let error as GitError {
                     throw TaskError.git(repo: repo.repoRelativePath, error)
                 }
-                notices.append(.branchSaved(repo: repo.repoRelativePath, branch: repo.branch, ref: ref))
+                notices.append(.branchSaved(repo: repo.sandboxKey, branch: repo.branch, ref: ref))
             } catch let error as GitError where error.message.contains("not found") {
                 continue
             } catch let error as GitError {
@@ -650,8 +668,10 @@ public actor TaskManager {
     /// `nil` when the sandbox is clean or already gone.
     private func salvage(_ repo: TaskRepo, task: TaskRecord) async throws -> (ref: String, skipped: [String])? {
         do {
-            return try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: task, kind: "changes"),
-                                     message: "Scope: uncommitted changes of \(task.name) (\(repo.repoRelativePath)) when its sandbox was removed")
+            // Two worktrees of one repository saved within the same second would otherwise write the same ref.
+            let kind = repo.isSecondary ? "changes-\(TaskBranch.slug(for: repo.branch))" : "changes"
+            return try await salvage(sandbox: repo.sandboxURL, ref: Self.salvageRef(for: task, kind: kind),
+                                     message: "Scope: uncommitted changes of \(task.name) (\(repo.sandboxKey)) when its sandbox was removed")
                 .map { ($0.ref, $0.skipped) }
         } catch let error as GitError {
             throw TaskError.git(repo: repo.repoRelativePath, error)
@@ -690,18 +710,22 @@ public actor TaskManager {
                 let (sandbox, isNew) = try await makeSandbox(repoRelativePath: repo.repoRelativePath, task: record,
                                                              startPoint: .existingBranch(repo.branch))
                 created.append((sandbox, isNew))
-                if let ref = repo.salvageRef {
-                    let client = await registry.client(for: sandbox.sandboxURL)
-                    do {
-                        try await client.run(["-C", sandbox.sandboxURL.filesystemPath, "restore", "--source=\(ref)",
-                                              "--worktree", "--", "."], timeout: .seconds(600))
-                    } catch let error as GitError {
-                        throw TaskError.git(repo: repo.repoRelativePath, error)
-                    }
-                }
+                try await restoreSalvage(repo.salvageRef, into: sandbox)
                 record.repos[index].state = .active
                 record.repos[index].sandboxPath = sandbox.sandboxPath
                 record.repos[index].salvageRef = nil
+                // The other branches of the repository come back beside it, each with its own saved changes.
+                for position in record.repos[index].worktrees.indices {
+                    let worktree = record.repos[index].worktrees[position]
+                    let folder = URL(fileURLWithPath: worktree.sandboxPath, isDirectory: true)
+                    let (extra, extraIsNew) = try await makeSandbox(repoRelativePath: repo.repoRelativePath, task: record,
+                                                                    startPoint: .existingBranch(worktree.branch),
+                                                                    branch: worktree.branch, sandbox: folder)
+                    created.append((extra, extraIsNew))
+                    try await restoreSalvage(worktree.salvageRef, into: extra)
+                    record.repos[index].worktrees[position].state = .active
+                    record.repos[index].worktrees[position].salvageRef = nil
+                }
             }
         } catch {
             await rollback(created, task: record)
@@ -714,6 +738,18 @@ public actor TaskManager {
         record.portBase = allocatePort(excluding: id)
         try await save(record)
         return record
+    }
+
+    /// Puts the changes saved under `ref` back into `sandbox` as uncommitted changes; nothing without a ref.
+    private func restoreSalvage(_ ref: String?, into sandbox: TaskRepo) async throws {
+        guard let ref else { return }
+        let client = await registry.client(for: sandbox.sandboxURL)
+        do {
+            try await client.run(["-C", sandbox.sandboxURL.filesystemPath, "restore", "--source=\(ref)", "--worktree", "--", "."],
+                                 timeout: .seconds(600))
+        } catch let error as GitError {
+            throw TaskError.git(repo: sandbox.repoRelativePath, error)
+        }
     }
 
     // MARK: - Garbage collection
@@ -741,8 +777,10 @@ public actor TaskManager {
         let fileManager = FileManager.default
         let sandboxes = ScopeHome.sandboxesURL(home: home)
 
-        // Everything a task still owns or is about to own; the rest of `sandboxes/` is fair game.
-        var keep = records.values.filter { !$0.isArchived || $0.cleanup != nil || dismantling[$0.id] != nil }.map(\.rootURL)
+        // Everything a task still owns or is about to own; the rest of `sandboxes/` is fair game. A repo scope
+        // task's secondary worktrees sit beside its root, under the scope folder: owned folders of their own.
+        var keep = records.values.filter { !$0.isArchived || $0.cleanup != nil || dismantling[$0.id] != nil }
+            .flatMap { record in [record.rootURL] + record.sandboxes.filter(\.isSecondary).map(\.sandboxURL) }
         var orphans: [URL] = []
         // Compared resolved: a listing can spell the same folder differently than a record (`/var` → `/private/var`).
         let owned = Set(keep.map { $0.resolvingSymlinksInPath().path })
@@ -875,11 +913,16 @@ public actor TaskManager {
     ///
     /// `startPoint` decides what the worktree is based on: a new branch off the repository's base
     /// (`.defaultBranch`), an existing branch, or a pull request's head (see `createForPullRequest`).
+    ///
+    /// `branch` and `sandbox` default to the task's branch and the primary sandbox folder; a secondary worktree
+    /// (`addBranch`) names its own.
     private func makeSandbox(
-        repoRelativePath path: String, task: TaskRecord, startPoint requested: TaskStartPoint = .defaultBranch
+        repoRelativePath path: String, task: TaskRecord, startPoint requested: TaskStartPoint = .defaultBranch,
+        branch: String? = nil, sandbox: URL? = nil
     ) async throws -> (TaskRepo, Bool) {
         let client = try await baseClient(for: path, task: task)
-        let sandbox = path == "." ? task.rootURL : task.rootURL.appending(path: path, directoryHint: .isDirectory)
+        let branch = branch ?? task.branch
+        let sandbox = sandbox ?? Self.primarySandboxURL(task: task, repoRelativePath: path)
 
         let hasOrigin = await client.hasRemote("origin")
         if hasOrigin {
@@ -921,20 +964,115 @@ public actor TaskManager {
             guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
             startPoint = await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
         }
-        let branchWasNew = !(await client.branchExists(task.branch))
-        if !branchWasNew, let checkout = await client.worktreePath(ofBranch: task.branch) {
-            throw TaskError.branchAlreadyCheckedOut(repo: path, branch: task.branch, path: checkout)
+        let branchWasNew = !(await client.branchExists(branch))
+        if !branchWasNew, let checkout = await client.worktreePath(ofBranch: branch) {
+            throw TaskError.branchAlreadyCheckedOut(repo: path, branch: branch, path: checkout)
         }
 
         do {
-            try await client.createWorktree(at: sandbox, branch: task.branch, from: startPoint)
+            try await client.createWorktree(at: sandbox, branch: branch, from: startPoint)
         } catch let error as GitError {
             throw TaskError.git(repo: path, error)
         } catch let error as WorktreeError {
             throw TaskError.worktree(repo: path, error)
         }
-        let repo = TaskRepo(repoRelativePath: path, sandboxPath: sandbox.filesystemPath, branch: task.branch)
+        let repo = TaskRepo(repoRelativePath: path, sandboxPath: sandbox.filesystemPath, branch: branch)
         return (repo, branchWasNew)
+    }
+
+    /// `<root>/<repo>`, or the root itself for a repo scope.
+    static func primarySandboxURL(task: TaskRecord, repoRelativePath path: String) -> URL {
+        path == "." ? task.rootURL : task.rootURL.appending(path: path, directoryHint: .isDirectory)
+    }
+
+    // MARK: - Several branches
+
+    /// Adds a worktree on `branch` to a repository of a running task (spec §4.3, *Several branches in one task*):
+    /// the branch is created from `startPoint` — the repository's base by default, an existing branch, a pull
+    /// request's head — and checked out at `TaskRepo.secondarySandboxURL`, beside the primary sandbox. The
+    /// projection is rewritten so the new worktree gets the task's context file too. `repo` may be omitted on a
+    /// task of one repository.
+    ///
+    /// Refused when the branch is the task's own, already a worktree of the task, checked out somewhere else, or
+    /// reserved. The branch and the folder are removed again when anything after them fails.
+    public func addBranch(_ id: TaskID, branch requestedBranch: String, repo: String? = nil, startPoint: TaskStartPoint = .defaultBranch,
+                          scopeContext: String? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
+                          contextFiles: [String] = [], now: Date = .now) async throws -> TaskRecord {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let path: String
+        if let repo {
+            path = TaskRepo.normalize(repo)
+        } else if record.activeRepos.count == 1 {
+            path = record.activeRepos[0].repoRelativePath
+        } else {
+            throw TaskError.invalidRepoSelection("the task holds \(record.activeRepos.count) repositories: say which one with --repo")
+        }
+        guard let index = record.repos.firstIndex(where: { $0.repoRelativePath == path && $0.state == .active }) else {
+            throw TaskError.repoNotFound(repo: path)
+        }
+        let branch = (startPoint.requiredBranch ?? requestedBranch).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !branch.isEmpty, !TaskBranch.isReserved(branch) else { throw TaskError.invalidBranch(branch) }
+        guard !record.repos[index].branches.contains(branch) else { throw TaskError.branchAlreadyInTask(repo: path, branch: branch) }
+
+        let primary = record.repos[index].sandboxURL
+        var taken = Set(record.repos[index].worktrees.map { $0.sandboxURL.lastPathComponent })
+        if let siblings = try? FileManager.default.contentsOfDirectory(atPath: primary.deletingLastPathComponent().path) {
+            taken.formUnion(siblings)
+        }
+        let folder = TaskRepo.secondarySandboxURL(primary: primary, branch: branch, taken: taken)
+        let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record, startPoint: startPoint,
+                                                     branch: branch, sandbox: folder)
+        let base: String? = switch startPoint {
+        case .defaultBranch: nil
+        case .existingBranch(let name): name
+        case .pullRequest(let pr): "#\(pr.number)"
+        }
+        record.repos[index].worktrees.append(TaskWorktree(branch: branch, sandboxPath: sandbox.sandboxPath, base: base,
+                                                          branchCreated: isNew, createdAt: now))
+        do {
+            try await writeProjection(record, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+            try await persist(record)
+        } catch {
+            await rollback([(sandbox, isNew)], task: record)
+            throw error
+        }
+        records[id] = record
+        return record
+    }
+
+    /// Removes a secondary worktree from a running task: its uncommitted changes are saved under
+    /// `refs/scope/salvage/` first (`DismantleNotice.changesSaved`), the folder goes to the trash, the branch
+    /// stays — exactly what an archive does to a sandbox. The task branch itself cannot be removed this way.
+    public func removeBranch(_ id: TaskID, branch: String, repo: String? = nil) async throws -> (record: TaskRecord, notices: [DismantleNotice]) {
+        guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let wantedRepo = repo.map(TaskRepo.normalize)
+        let matches = record.repos.indices.filter { index in
+            (wantedRepo.map { $0 == record.repos[index].repoRelativePath } ?? true)
+                && record.repos[index].worktree(onBranch: branch) != nil
+        }
+        guard let index = matches.first else {
+            let primaries = record.activeRepos.filter { entry in wantedRepo.map { $0 == entry.repoRelativePath } ?? true }
+            if primaries.contains(where: { $0.branch == branch }) {
+                throw TaskError.invalidRepoSelection("\(branch) is the task's own branch; archive or close the task to remove it")
+            }
+            throw TaskError.branchNotInTask(branch: branch)
+        }
+        guard matches.count == 1 else {
+            throw TaskError.invalidRepoSelection("\(branch) is a worktree of \(matches.count) repositories of the task: say which one with --repo")
+        }
+        guard let worktree = record.repos[index].worktree(onBranch: branch) else { throw TaskError.branchNotInTask(branch: branch) }
+        let sandbox = record.repos[index].sandbox(worktree)
+        var notices: [DismantleNotice] = []
+        if let saved = try await salvage(sandbox, task: record) {
+            notices.append(.changesSaved(repo: sandbox.sandboxKey, ref: saved.ref, skipped: saved.skipped))
+        }
+        try await removeSandbox(sandbox, task: record)
+        record.repos[index].worktrees.removeAll { $0.branch == branch }
+        try await save(record)
+        emptyTrashInBackground()
+        return (record, notices)
     }
 
     private func rollback(_ created: [(TaskRepo, branchWasNew: Bool)], task: TaskRecord) async {
@@ -1098,27 +1236,32 @@ public actor TaskManager {
         let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, scopeContext: scopeContext,
                                                      repoSummaries: repoSummaries)
         let names = Self.contextFileNames(contextFiles)
-        let directory = record.threadCwd
-        // The thread starts inside a worktree whenever the cwd is a sandbox (always, for a repo scope).
-        let sandbox = record.activeRepos.first { $0.sandboxURL.filesystemPath == directory.filesystemPath }
+        // Where the threads start, and every secondary worktree: a thread opened on one of the task's other
+        // branches starts there, and must find the same context.
+        let secondary = record.activeSandboxes.filter(\.isSecondary)
+        let directories = [record.threadCwd] + secondary.map(\.sandboxURL)
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            for name in names {
-                let file = directory.appending(path: name, directoryHint: .notDirectory)
-                let companion = Self.companionContextFile[name].map { directory.appending(path: $0, directoryHint: .notDirectory) }
-                guard Self.isRepositoryOwned(file) else {
-                    try markdown.write(to: file, atomically: true, encoding: .utf8)
-                    if let sandbox { try await excludeFromGit(name, in: sandbox, task: record) }
-                    // The repository's own file is gone: a companion left from before would load the context twice.
-                    if let companion, Self.isGenerated(companion) { try? FileManager.default.removeItem(at: companion) }
-                    continue
+            for directory in directories {
+                // The thread starts inside a worktree whenever the cwd is a sandbox (always, for a repo scope).
+                let sandbox = record.activeSandboxes.first { $0.sandboxURL.filesystemPath == directory.filesystemPath }
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                for name in names {
+                    let file = directory.appending(path: name, directoryHint: .notDirectory)
+                    let companion = Self.companionContextFile[name].map { directory.appending(path: $0, directoryHint: .notDirectory) }
+                    guard Self.isRepositoryOwned(file) else {
+                        try markdown.write(to: file, atomically: true, encoding: .utf8)
+                        if let sandbox { try await excludeFromGit(name, in: sandbox, task: record) }
+                        // The repository's own file is gone: a companion left from before would load the context twice.
+                        if let companion, Self.isGenerated(companion) { try? FileManager.default.removeItem(at: companion) }
+                        continue
+                    }
+                    guard let companion, !Self.isRepositoryOwned(companion) else { continue }
+                    try markdown.write(to: companion, atomically: true, encoding: .utf8)
+                    if let sandbox { try await excludeFromGit(companion.lastPathComponent, in: sandbox, task: record) }
                 }
-                guard let companion, !Self.isRepositoryOwned(companion) else { continue }
-                try markdown.write(to: companion, atomically: true, encoding: .utf8)
-                if let sandbox { try await excludeFromGit(companion.lastPathComponent, in: sandbox, task: record) }
             }
             try await removeGeneratedContextFiles(names + names.compactMap { Self.companionContextFile[$0] },
-                                                  outside: directory, task: record)
+                                                  outside: directories, task: record)
             if !record.isMonoRepo {
                 try TaskProjection.workspaceJSON(task: record).write(to: record.workspaceURL, options: [.atomic])
             }
@@ -1158,10 +1301,11 @@ public actor TaskManager {
     }
 
     /// Deletes the generated context files of a task that sit somewhere the threads no longer start.
-    private func removeGeneratedContextFiles(_ names: [String], outside directory: URL, task: TaskRecord) async throws {
+    private func removeGeneratedContextFiles(_ names: [String], outside directories: [URL], task: TaskRecord) async throws {
         var stale: [URL] = [task.rootURL]
-        stale.append(contentsOf: task.repos.map(\.sandboxURL))
-        for base in stale where base.filesystemPath != directory.filesystemPath {
+        stale.append(contentsOf: task.sandboxes.map(\.sandboxURL))
+        let kept = Set(directories.map(\.filesystemPath))
+        for base in stale where !kept.contains(base.filesystemPath) {
             for name in names {
                 let file = base.appending(path: name, directoryHint: .notDirectory)
                 guard let existing = try? String(contentsOf: file, encoding: .utf8),

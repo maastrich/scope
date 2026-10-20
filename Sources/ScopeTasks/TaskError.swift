@@ -29,6 +29,10 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
     case branchAlreadyCheckedOut(repo: String, branch: String, path: String)
     /// `TaskCheckpoints`: the task has no checkpoint with that number (pruned, or never taken).
     case checkpointNotFound(Int)
+    /// `addBranch`: the repository already has a worktree on that branch in this task.
+    case branchAlreadyInTask(repo: String, branch: String)
+    /// `removeBranch`: no secondary worktree of the task is on that branch.
+    case branchNotInTask(branch: String)
 
     public var description: String {
         switch self {
@@ -46,6 +50,8 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .branchAlreadyCheckedOut(let repo, let branch, let path):
             "\(repo): \(branch) is already checked out at \(path) — a branch can only live in one working tree"
         case .checkpointNotFound(let number): "the task has no checkpoint \(number)"
+        case .branchAlreadyInTask(let repo, let branch): "\(repo): \(branch) is already a worktree of this task"
+        case .branchNotInTask(let branch): "no worktree of this task is on \(branch) — `scope task branch list` shows them"
         }
     }
 }

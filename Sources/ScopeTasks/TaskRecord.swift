@@ -36,7 +36,58 @@ public struct TaskID: Hashable, Codable, Sendable, CustomStringConvertible, Comp
     public static func < (lhs: TaskID, rhs: TaskID) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
+/// A second worktree of a task's repository, on a branch of its own (spec §4.3, *Several branches in one task*):
+/// the next pull request of a stack, a docs branch beside the prototype's. Kept on `TaskRepo.worktrees`, next to
+/// the primary worktree the repository entry itself describes, and managed exactly like it — salvaged, removed and
+/// rebuilt with the task, checkpointed and measured against main on its own.
+public struct TaskWorktree: Codable, Sendable, Equatable, Hashable, Identifiable {
+    public var branch: String
+    /// Absolute path of the worktree.
+    public var sandboxPath: String
+    /// What the branch was started from, as the caller named it (`origin/main`, `feat/base`, `#42`); informational.
+    public var base: String?
+    public var state: TaskRepo.State
+    /// `true` when the task created the branch (what a close may delete), `false` when it checked out one that existed.
+    public var branchCreated: Bool?
+    /// See `TaskRepo.salvageRef`.
+    public var salvageRef: String?
+    public var createdAt: Date?
+
+    public init(branch: String, sandboxPath: String, base: String? = nil, state: TaskRepo.State = .active,
+                branchCreated: Bool? = nil, salvageRef: String? = nil, createdAt: Date? = nil) {
+        self.branch = branch
+        self.sandboxPath = sandboxPath
+        self.base = base
+        self.state = state
+        self.branchCreated = branchCreated
+        self.salvageRef = salvageRef
+        self.createdAt = createdAt.map(TaskRecord.roundedToMilliseconds)
+    }
+
+    /// The branch is what tells two worktrees of one repository apart: git holds one worktree per branch.
+    public var id: String { branch }
+    public var sandboxURL: URL { URL(fileURLWithPath: sandboxPath, isDirectory: true) }
+
+    private enum CodingKeys: String, CodingKey { case branch, sandboxPath, base, state, branchCreated, salvageRef, createdAt }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        branch = try container.decode(String.self, forKey: .branch)
+        sandboxPath = try container.decode(String.self, forKey: .sandboxPath)
+        base = try container.decodeIfPresent(String.self, forKey: .base)
+        state = try container.decodeIfPresent(TaskRepo.State.self, forKey: .state) ?? .active
+        branchCreated = try container.decodeIfPresent(Bool.self, forKey: .branchCreated)
+        salvageRef = try container.decodeIfPresent(String.self, forKey: .salvageRef)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+    }
+}
+
 /// One repository of a task and its sandbox (spec §2: *Sandbox*).
+///
+/// The entry describes the repository's *primary* worktree — the one on the task branch — and carries the
+/// repository's other worktrees in `worktrees`. Code that works sandbox by sandbox reads `TaskRecord.sandboxes`,
+/// which hands every worktree back as a `TaskRepo` of its own (`isSecondary` set for the others), so a salvage, a
+/// checkpoint or a lag measure never has to know which kind it holds.
 public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     public enum State: String, Codable, Sendable, Equatable, Hashable {
         /// The worktree exists (or should exist) on disk.
@@ -58,15 +109,47 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     /// The commit holding what the sandbox had not committed when it was removed (`TaskManager.dismantle`),
     /// under `refs/scope/salvage/` in the base checkout; `nil` when it was clean.
     public var salvageRef: String?
+    /// The repository's other worktrees, each on a branch of its own (`scope task branch add`). Empty on records
+    /// written before a task could hold several, and on the sandbox views `sandboxes` hands out.
+    public var worktrees: [TaskWorktree] = []
+    /// `true` on the view of a secondary worktree (`TaskRecord.sandboxes`); never written to disk — the record
+    /// keeps secondary worktrees under `worktrees`, where their repository entry is.
+    public var isSecondary: Bool = false
 
     public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active,
-                branchCreated: Bool? = nil, salvageRef: String? = nil) {
+                branchCreated: Bool? = nil, salvageRef: String? = nil, worktrees: [TaskWorktree] = []) {
         self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
         self.sandboxPath = sandboxPath
         self.branch = branch
         self.state = state
         self.branchCreated = branchCreated
         self.salvageRef = salvageRef
+        self.worktrees = worktrees
+    }
+
+    private enum CodingKeys: String, CodingKey { case repoRelativePath, sandboxPath, branch, state, branchCreated, salvageRef, worktrees }
+
+    // Lenient on the newer fields: a record from before several worktrees per repository has none.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        repoRelativePath = TaskRepo.normalize(try container.decode(String.self, forKey: .repoRelativePath))
+        sandboxPath = try container.decode(String.self, forKey: .sandboxPath)
+        branch = try container.decode(String.self, forKey: .branch)
+        state = try container.decodeIfPresent(State.self, forKey: .state) ?? .active
+        branchCreated = try container.decodeIfPresent(Bool.self, forKey: .branchCreated)
+        salvageRef = try container.decodeIfPresent(String.self, forKey: .salvageRef)
+        worktrees = (try? container.decodeIfPresent([TaskWorktree].self, forKey: .worktrees)) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(repoRelativePath, forKey: .repoRelativePath)
+        try container.encode(sandboxPath, forKey: .sandboxPath)
+        try container.encode(branch, forKey: .branch)
+        try container.encode(state, forKey: .state)
+        try container.encodeIfPresent(branchCreated, forKey: .branchCreated)
+        try container.encodeIfPresent(salvageRef, forKey: .salvageRef)
+        if !worktrees.isEmpty { try container.encode(worktrees, forKey: .worktrees) }
     }
 
     public var id: String { repoRelativePath }
@@ -80,6 +163,71 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
         return path == "." ? "." : URL(fileURLWithPath: path).lastPathComponent
     }
     public var sandboxURL: URL { URL(fileURLWithPath: sandboxPath, isDirectory: true) }
+
+    // MARK: Several worktrees
+
+    /// What tells this sandbox from the others of the task: the repository path for the primary worktree —
+    /// what every record, checkpoint and lag was keyed on before a repository could hold several — and
+    /// `<repo>@<branch>` for a secondary one. Stable across archive and restore, unlike the folder.
+    public var sandboxKey: String { isSecondary ? "\(repoRelativePath)@\(branch)" : repoRelativePath }
+
+    /// `sandboxKey` for a repository and a branch, as a lookup names it.
+    public static func sandboxKey(repo repoRelativePath: String, branch: String, secondary: Bool) -> String {
+        secondary ? "\(normalize(repoRelativePath))@\(branch)" : normalize(repoRelativePath)
+    }
+
+    /// `name` for the primary worktree, `name · branch` for a secondary one: what a row calls the sandbox.
+    public func sandboxLabel(scopeName: String) -> String {
+        let base = isScopeRoot ? scopeName : name
+        return isSecondary ? "\(base) · \(branch)" : base
+    }
+
+    /// The primary worktree alone, as a sandbox view: the entry without its secondary worktrees.
+    public var primarySandbox: TaskRepo {
+        var copy = self
+        copy.worktrees = []
+        copy.isSecondary = false
+        return copy
+    }
+
+    /// `worktree` as a sandbox view of this repository: the same `repoRelativePath`, the worktree's own branch,
+    /// folder, state and salvage, `isSecondary` set.
+    public func sandbox(_ worktree: TaskWorktree) -> TaskRepo {
+        var copy = TaskRepo(repoRelativePath: repoRelativePath, sandboxPath: worktree.sandboxPath, branch: worktree.branch,
+                            state: worktree.state, branchCreated: worktree.branchCreated, salvageRef: worktree.salvageRef)
+        copy.isSecondary = true
+        return copy
+    }
+
+    /// Every worktree of the repository as a sandbox view, the primary first.
+    public var sandboxes: [TaskRepo] { [primarySandbox] + worktrees.map(sandbox) }
+
+    /// The secondary worktree on `branch`, if the repository has one.
+    public func worktree(onBranch branch: String) -> TaskWorktree? { worktrees.first { $0.branch == branch } }
+
+    /// The branches checked out in the repository's worktrees, the task branch first.
+    public var branches: [String] { [branch] + worktrees.map(\.branch) }
+
+    /// The folder of a secondary worktree: `<repo>@<short branch>` beside the primary sandbox — `api@fix-login`
+    /// next to `api` in the task root, `<slug>@fix-login` next to the sandbox of a repo scope task, whose root
+    /// is the worktree itself and can hold no other. `@` never appears in a slug or a repository folder, so the
+    /// name reads as *repo at branch* and can never collide with a task or a repository of the scope. The short
+    /// branch is its last path component (`fix/login` → `login`); when another worktree of the task already
+    /// took that folder, the whole branch is used (`fix-login`), and `-2`, `-3`… after that.
+    public static func secondarySandboxURL(primary: URL, branch: String, taken: Set<String>) -> URL {
+        let parent = primary.deletingLastPathComponent()
+        let stem = primary.lastPathComponent
+        let short = TaskBranch.slug(for: branch.split(separator: "/").last.map(String.init) ?? branch)
+        let full = TaskBranch.slug(for: branch)
+        var candidates = [short]
+        if full != short { candidates.append(full) }
+        for candidate in candidates where !taken.contains("\(stem)@\(candidate)") {
+            return parent.appending(path: "\(stem)@\(candidate)", directoryHint: .isDirectory)
+        }
+        var suffix = 2
+        while taken.contains("\(stem)@\(full)-\(suffix)") { suffix += 1 }
+        return parent.appending(path: "\(stem)@\(full)-\(suffix)", directoryHint: .isDirectory)
+    }
 
     /// `""`, `"/"`, `"./"` → `"."`; strips leading `./` and trailing `/`.
     public static func normalize(_ path: String) -> String {
@@ -348,6 +496,39 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Repo scope: the single repo is the scope folder itself, so the task root is the sandbox.
     public var isMonoRepo: Bool { repos.count == 1 && repos[0].isScopeRoot }
 
+    // MARK: Sandboxes
+
+    /// Every worktree of the task as a sandbox view (`TaskRepo.sandboxes`): the repositories in their order, each
+    /// one's primary worktree first, then its other branches. What salvage, checkpoints, the lag and the Delta
+    /// iterate; `repos` stays the list of repositories.
+    public var sandboxes: [TaskRepo] { repos.flatMap(\.sandboxes) }
+    /// `sandboxes` that are on disk (or should be).
+    public var activeSandboxes: [TaskRepo] { sandboxes.filter { $0.state == .active } }
+    /// The task holds a worktree beyond the primary one of some repository.
+    public var hasSecondaryWorktrees: Bool { repos.contains { !$0.worktrees.isEmpty } }
+    /// Every branch the task works on, the task branch first, once each.
+    public var branches: [String] {
+        var seen = Set<String>()
+        return repos.flatMap(\.branches).filter { seen.insert($0).inserted }
+    }
+
+    /// The sandbox `key` names (`TaskRepo.sandboxKey`), active or not.
+    public func sandbox(key: String) -> TaskRepo? {
+        sandboxes.first { $0.sandboxKey == key }
+    }
+
+    /// The worktree of `repo` on `branch`: the primary one when it is the task branch, else the secondary one.
+    public func sandbox(repo repoRelativePath: String, branch: String) -> TaskRepo? {
+        guard let repo = repo(at: repoRelativePath) else { return nil }
+        if repo.branch == branch { return repo.primarySandbox }
+        return repo.worktree(onBranch: branch).map(repo.sandbox)
+    }
+
+    /// The active worktrees on `branch`, in every repository: where a pull request on that branch may live.
+    public func sandboxes(onBranch branch: String) -> [TaskRepo] {
+        activeSandboxes.filter { $0.branch == branch }
+    }
+
     /// `<root>/<slug>.code-workspace`
     public var workspaceURL: URL { rootURL.appending(path: "\(slug).code-workspace", directoryHint: .notDirectory) }
     /// `<thread cwd>/AGENTS.md` — the pivot name, for callers that only need the default one.
@@ -377,16 +558,17 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// repositories' own skills and instructions would otherwise stay one level down, out of the driver's sight.
     public func additionalDirectories(forCwd cwd: String) -> [String] {
         let cwd = URL(fileURLWithPath: cwd).standardizedFileURL.path
-        return activeRepos.map(\.sandboxURL.standardizedFileURL.path).filter { sandbox in
+        return activeSandboxes.map(\.sandboxURL.standardizedFileURL.path).filter { sandbox in
             cwd != sandbox && !cwd.hasPrefix(sandbox + "/")
         }
     }
 
     /// The active sandbox `path` is in (or is), so a thread that wandered into a subfolder still names its
-    /// checkout. nil at the task root of a task of several repositories, and outside the task.
+    /// checkout — a secondary worktree included. nil at the task root of a task of several repositories, and
+    /// outside the task.
     public func sandbox(containing path: String) -> TaskRepo? {
         let path = URL(fileURLWithPath: path).standardizedFileURL.path
-        return activeRepos
+        return activeSandboxes
             .filter { repo in
                 let sandbox = repo.sandboxURL.standardizedFileURL.path
                 return path == sandbox || path.hasPrefix(sandbox + "/")
@@ -433,9 +615,9 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// Where `TaskDeliverable.collectFiles` looks: the task root, and every sandbox still there.
     public var deliverableFolders: [TaskDeliverable.Folder] {
         var folders = [TaskDeliverable.Folder(url: rootURL, label: nil)]
-        let active = activeRepos
+        let active = activeSandboxes
         for repo in active where repo.sandboxURL.standardizedFileURL != rootURL.standardizedFileURL {
-            folders.append(.init(url: repo.sandboxURL, label: active.count == 1 ? nil : repo.repoRelativePath))
+            folders.append(.init(url: repo.sandboxURL, label: active.count == 1 ? nil : repo.sandboxKey))
         }
         return folders
     }
