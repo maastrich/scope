@@ -125,6 +125,9 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// What the agent plans and how far it is (`AgentPlan`), folded from the todo and plan tools it reports; `nil`
     /// until it reports one. Kept in the file: a plan is as much the state of the work as the turns are.
     public var plan: AgentPlan?
+    /// How full the session's context window is, its model and its driver's version, as the driver last told its
+    /// status line (`limits.reported`'s `context`); `nil` for a driver that reports none.
+    public var contextWindow: ContextWindowReport?
     /// When the driver sent the event that closed the last turn as ended or failed (`AdapterEvent.sentAt`): anything
     /// it sent before that belongs to that turn, however late it reaches the app (see `isLate(_:)`).
     public var turnEndSentAt: Date?
@@ -144,7 +147,8 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
     /// Everything but `saying`, `turnCalls` and `agents`, which belong to the live process: a restart closes the
     /// open turn as `.exited` (`restoring`), so what it was writing and running is not worth a write per tool call.
     enum CodingKeys: String, CodingKey {
-        case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt, plan
+        case version, lastTool, pendingRequest, turnStartedAt, turnTools, turns, lastReply, transcriptPath, turnEndSentAt
+        case contextWindow, plan
     }
 
     /// The calls of the last turn that ended or failed, or of the one in progress: what "this turn" means to a reader.
@@ -268,7 +272,18 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         case .sessionStarted:
             // A new session of the driver (a relaunch, a resume): whatever the previous one ran is gone with it.
             next.agents = [:]
-        case .limitsReported, .planUpdated:
+        case .limitsReported:
+            if let json = event.payload[HookEvent.contextKey],
+               var report = ContextWindowReport.parse(json, reportedAt: at) {
+                // A session just resumed reports its model before any message, without a percentage: the
+                // conversation is the same one, so the last figure stands until the next answer moves it.
+                if report.usedPercentage == nil, let previous = contextWindow {
+                    report.usedPercentage = previous.usedPercentage
+                    report.windowSize = report.windowSize ?? previous.windowSize
+                }
+                next.contextWindow = report
+            }
+        case .planUpdated:
             break
         }
         return next
@@ -295,6 +310,7 @@ public struct ThreadActivity: Codable, Sendable, Equatable {
         next.transcriptPath = transcriptPath ?? saved.transcriptPath
         next.plan = plan ?? saved.plan
         next.turnEndSentAt = turnEndSentAt ?? saved.turnEndSentAt
+        next.contextWindow = contextWindow ?? saved.contextWindow
         return next
     }
 

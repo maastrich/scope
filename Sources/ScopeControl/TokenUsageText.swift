@@ -36,6 +36,19 @@ public enum TokenUsageText {
         return Int(value * multiplier)
     }
 
+    /// The caption under the Context card's model line: `184k in · 22k out · 61 % cached`. *In* is everything the
+    /// model read — uncached input, cache writes and cache reads — and *cached* the share of it that came from the
+    /// cache, which is what makes a long session affordable. `nil` for zero counts.
+    public static func contextCaption(_ counts: TokenCounts) -> String? {
+        guard !counts.isZero else { return nil }
+        let read = counts.input + counts.cacheCreation + counts.cacheRead
+        var parts = ["\(compact(read)) in", "\(compact(counts.output)) out"]
+        if read > 0 {
+            parts.append("\(Int((Double(counts.cacheRead) / Double(read) * 100).rounded())) % cached")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     /// `scope summary`'s note on what the token figures are.
     public static let summaryLimit = "Tokens are read from Claude Code transcripts (subagents included, cache reads included) for threads Scope ran; other drivers report none, and a thread is forgotten 90 days after its last call. A task's or thread's tokens are all told, not only those of the period."
 }
