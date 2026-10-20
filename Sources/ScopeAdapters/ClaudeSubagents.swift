@@ -73,6 +73,11 @@ public struct ClaudeSubagents: Sendable, Equatable {
             self.startedAt = startedAt
         }
 
+        /// Its state as a reader should see it: running, once the thread's process is gone, is `interrupted`.
+        public func state(alive: Bool) -> State {
+            state.isRunning && !alive ? .interrupted : state
+        }
+
         /// How long it ran: what Claude Code measured, else from its start to its end or to `now` while it runs.
         public func duration(now: Date) -> TimeInterval? {
             if let durationMs { return TimeInterval(durationMs) / 1000 }
