@@ -88,5 +88,26 @@ extension AppModel {
         }.value
         session.transcriptTail = tail
         session.applyTranscript(records)
+        await readSubagentMeta(session, sessionTranscript: path)
+    }
+
+    /// Looks a missing `meta.json` up this many times before giving up on it: written when the sub-agent spawns, so
+    /// one still absent after a few reads never will be.
+    static let subagentMetaAttempts = 5
+
+    /// Reads the `meta.json` of each sub-agent that has none yet, beside the session's transcript.
+    func readSubagentMeta(_ session: ThreadSession, sessionTranscript: String) async {
+        let ids = session.claude.subagents.agentsWithoutMeta.filter {
+            (session.subagentMetaMisses[$0] ?? 0) < Self.subagentMetaAttempts
+        }
+        guard !ids.isEmpty else { return }
+        let found = await Task.detached(priority: .utility) {
+            ids.map { id -> (String, ClaudeSubagentMeta?, String) in
+                let meta = ClaudeSubagentMeta.read(ClaudeSubagents.metaURL(agentID: id, sessionTranscript: sessionTranscript))
+                return (id, meta, ClaudeSubagents.transcriptURL(agentID: id, sessionTranscript: sessionTranscript).path)
+            }
+        }.value
+        for (id, meta, _) in found where meta == nil { session.subagentMetaMisses[id, default: 0] += 1 }
+        session.applySubagentMeta(found.compactMap { id, meta, transcript in meta.map { (id, $0, transcript) } })
     }
 }
