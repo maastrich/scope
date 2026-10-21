@@ -575,6 +575,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// localhost by default: the task's dev servers come to the pane, the rest of the web stays where the user is
     /// signed in.
     public var openWebLinks: WebLinkDestination
+    /// The island under the notch (`IslandSettings`): on in the installed app, off in a Debug build, by default.
+    public var island: IslandSettings
 
     /// Allowed values of `assistDailyCap`.
     public static let assistDailyCapRange = 1...500
@@ -640,7 +642,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         toggleWindowHotkey: KeyChord? = .optionShiftSpace,
         quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting,
         catchUpSchedules: Bool = true,
-        openWebLinks: WebLinkDestination = .localhost
+        openWebLinks: WebLinkDestination = .localhost,
+        island: IslandSettings = IslandSettings()
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -693,6 +696,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.quickPanelLanding = quickPanelLanding
         self.catchUpSchedules = catchUpSchedules
         self.openWebLinks = openWebLinks
+        self.island = island
     }
 
     public static let `default` = Preferences()
@@ -704,7 +708,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
-             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules, openWebLinks
+             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules, openWebLinks, island
     }
 
     public init(from decoder: any Decoder) throws {
@@ -789,6 +793,7 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.quickPanelLanding
         catchUpSchedules = (try? container.decodeIfPresent(Bool.self, forKey: .catchUpSchedules)) ?? defaults.catchUpSchedules
         openWebLinks = (try? container.decodeIfPresent(WebLinkDestination.self, forKey: .openWebLinks)) ?? defaults.openWebLinks
+        island = (try? container.decodeIfPresent(IslandSettings.self, forKey: .island)) ?? defaults.island
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.
