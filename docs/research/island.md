@@ -83,8 +83,9 @@ Observé en lecture seule : bundle (`Info.plist`, `Localizable.strings`, ressour
   empileraient leurs îlots au même endroit.
 - **Noir autour de l'encoche, design system en dessous.** La bande doit se fondre dans l'encoche matérielle ; la
   liste, les cartes et la pastille sans encoche suivent `Surface` / `Ink`, clair ou sombre.
-- **Focus.** `INFocusStatusCenter` (autorisation demandée au premier lancement de l'îlot). Sans autorisation, Scope
-  considère qu'il n'y a pas de Focus ; Réglages ▸ Island le dit.
+- **Focus.** `INFocusStatusCenter`, autorisation demandée la première fois que l'îlot s'affiche. Sans autorisation,
+  Scope considère qu'il n'y a pas de Focus, et Réglages ▸ Island le dit. **Non vérifié** : aucune demande n'apparaît
+  dans le journal TCC pour le build Debug signé ad hoc. L'API demande peut-être un droit qu'un tel build n'a pas.
 
 ## Coexistence avec Vibe Island
 
@@ -98,6 +99,7 @@ attente de Vibe Island n'a pas été observé. Tant que les deux tournent, mettr
 
 - Aucun écran à encoche sur la machine de test : le placement autour de l'encoche n'est couvert que par les tests
   (`IslandPlacementTests`).
+- Les captures datent d'avant un dernier réglage : une ligne de thread se tronque maintenant en fin, plus au milieu.
 - Survol et clic non pilotés (pas d'Accessibility) : les états ont été forcés par `$SCOPE_HOME/island-command`
   (Debug), qui appelle le même chemin que les boutons.
 - Hooks perdus : #101 a corrigé la perte au niveau de la socket, pas la réconciliation d'état. Un `Stop` perdu sans
