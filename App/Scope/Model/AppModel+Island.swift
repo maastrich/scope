@@ -55,7 +55,6 @@ extension AppModel {
     func startIsland() {
         guard !island.started else { return }
         island.started = true
-        island.quiet.start()
         trackIsland()
         // Durations tick in the views; this only catches a running thread going quiet and a window resetting.
         island.clock = Task { [weak self] in
@@ -144,6 +143,8 @@ extension AppModel {
             IslandController.shared.hide()
             return
         }
+        // Only once the island shows: asking for the Focus status is a system prompt nobody with it off should see.
+        island.quiet.start()
         IslandController.shared.show(model: self)
         if let alert = alerts.last { play(alert, sound: reading.settings.playsSound) }
     }
@@ -220,7 +221,11 @@ final class IslandQuiet {
     private(set) var current = Island.Quiet()
     private var observers: [NSObjectProtocol] = []
 
+    private var started = false
+
     func start() {
+        guard !started else { return }
+        started = true
         let distributed = DistributedNotificationCenter.default()
         observers.append(distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.current.screenLocked = true }
