@@ -318,7 +318,23 @@ you and on Ask otherwise (a setting pins one or the other). A click anywhere els
 what you are looking at. Both shortcuts need no permission: they are registered with the system, not read from
 other apps. macOS does not say when another app holds the same chord; if a press never reaches Scope, pick another
 one in Settings.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#closing">Closing a thread, without regret</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a></aside></div>
+
+<h2 id="island">The island under the notch</h2>
+<p>At the top of the screen, around the notch — or as a small pill on a screen without one — the island says what
+the Claude Code threads are doing: how many are working or waiting, a dot per thread in the sidebar's shapes, and a
+ring for the 5-hour limit. It shows only while a thread works, waits or finished unread. Rest the pointer on it (or
+click it, a setting) and it opens: the requests waiting for you first — the command, the question, the start of the
+plan — then the threads by task, each with what it is doing and for how long. A thread that says it is running but
+has not been heard from for ten minutes says so, rather than look busy.</p>
+<p>From there, <b>Allow</b> or <b>Deny</b> a permission, pick a question's option, or <b>Open</b> the thread in Scope.
+Allow is offered only when the island shows the whole command; a plan, a form or a multiple choice opens the thread.
+The answer is typed only if the terminal shows that very dialog, as from the request card. Nothing on the island
+stops, closes or archives anything.</p>
+<p>When a turn ends, fails, or a thread asks something, the island grows for five seconds to say so, with a system
+sound if you want one — never for the thread you are looking at in Scope, and never during a Focus or while the screen
+is locked. Settings › General › Island turns it off, picks the screen (main, the one with the pointer, or a named
+one), how it opens and which events it shows. It is on by default, and off in a Debug build.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#closing">Closing a thread, without regret</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a><a class="lvl2" href="#island">The island under the notch</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

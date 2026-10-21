@@ -583,6 +583,22 @@ you and on Ask otherwise (a setting pins one or the other). A click anywhere els
 what you are looking at. Both shortcuts need no permission: they are registered with the system, not read from
 other apps. macOS does not say when another app holds the same chord; if a press never reaches Scope, pick another
 one in Settings.</p>
+
+<h2 id="island">The island under the notch</h2>
+<p>At the top of the screen, around the notch — or as a small pill on a screen without one — the island says what
+the Claude Code threads are doing: how many are working or waiting, a dot per thread in the sidebar's shapes, and a
+ring for the 5-hour limit. It shows only while a thread works, waits or finished unread. Rest the pointer on it (or
+click it, a setting) and it opens: the requests waiting for you first — the command, the question, the start of the
+plan — then the threads by task, each with what it is doing and for how long. A thread that says it is running but
+has not been heard from for ten minutes says so, rather than look busy.</p>
+<p>From there, <b>Allow</b> or <b>Deny</b> a permission, pick a question's option, or <b>Open</b> the thread in Scope.
+Allow is offered only when the island shows the whole command; a plan, a form or a multiple choice opens the thread.
+The answer is typed only if the terminal shows that very dialog, as from the request card. Nothing on the island
+stops, closes or archives anything.</p>
+<p>When a turn ends, fails, or a thread asks something, the island grows for five seconds to say so, with a system
+sound if you want one — never for the thread you are looking at in Scope, and never during a Focus or while the screen
+is locked. Settings › General › Island turns it off, picks the screen (main, the one with the pointer, or a named
+one), how it opens and which events it shows. It is on by default, and off in a Debug build.</p>
 """
 
 TASKS = """
@@ -1760,7 +1776,8 @@ FIG_SETTINGS
   can still ask for its own shape — whether <kbd>⌥</kbd> types the character your layout puts there (the
   default, so a French keyboard still gets its braces) or acts as Meta, plus notification status and whether notifications quote the agent,
   and under <b>Anywhere</b> the two system-wide shortcuts (click the field, press the keys; <kbd>⌫</kbd> removes one) and
-  which tab the quick panel opens on.</li>
+  which tab the quick panel opens on, and under <b>Island</b> whether <a href="concepts.html#island">the island under
+  the notch</a> shows, on which screen, how it opens and what it reveals.</li>
   <li><b>Shell Environment</b> — how the login shell is probed, and the resulting <code>PATH</code>.</li>
   <li><b>Drivers</b> — every profile, the binary it resolves to, and <b>Reload</b>.</li>
   <li><b>Automation</b> — install the <code>scope</code> command line on your PATH, whether agents may drive
