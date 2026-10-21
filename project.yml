@@ -119,6 +119,8 @@ targets:
         NSPrincipalClass: NSApplication
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
+        # The island under the notch stays still during a Focus (IslandQuiet); asked once, when the island first shows.
+        NSFocusStatusUsageDescription: "The island under the notch stays still while a Focus is on."
         CFBundleDocumentTypes:
           - CFBundleTypeName: Folder
             CFBundleTypeRole: Viewer
