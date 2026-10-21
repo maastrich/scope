@@ -191,7 +191,7 @@ public enum SearchTool: Sendable, Equatable {
     }
 
     /// `.ripgrep` when `rg` is on `PATH` or at the usual Homebrew locations, else `.gitGrep`.
-    public static func locate(environment: [String: String] = ProcessInfo.processInfo.environment) -> SearchTool {
+    public static func locate(environment: [String: String] = SubprocessEnvironment.current) -> SearchTool {
         var candidates = (environment["PATH"] ?? "").split(separator: ":").map { "\($0)/rg" }
         candidates += ["/opt/homebrew/bin/rg", "/usr/local/bin/rg"]
         for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate) {

@@ -734,8 +734,10 @@ final class AppModel {
             switch resolved.source {
             case .interactiveLogin, .login:
                 shellStatus = .ready(resolved)
+                SubprocessEnvironment.install(SubprocessEnvironment.compose(resolved.variables, source: .probed))
             case .pathHelper, .processEnvironment:
                 shellStatus = .fallback(resolved)
+                SubprocessEnvironment.install(SubprocessEnvironment.compose(resolved.variables, source: .fallback))
             }
             if let warning = resolved.warning, !reportedShellWarning {
                 reportedShellWarning = true

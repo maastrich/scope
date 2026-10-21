@@ -111,7 +111,8 @@ final class ProcessSignaller: Sendable {
 /// Minimal async wrapper around `Foundation.Process`.
 ///
 /// - `executable` is exec'd by absolute path (no PATH search).
-/// - `environment` is merged over the current process environment (never replaces it).
+/// - `environment` is merged over `SubprocessEnvironment.current` — the login shell's environment once the app
+///   installed it, the process environment otherwise (never replaces it).
 /// - `stdin` is written on a background queue; without it the child reads `/dev/null`, so git can
 ///   never block on a TTY prompt.
 /// - Both pipes are drained with `readabilityHandler`s, which avoids the 64 KiB pipe-buffer deadlock
@@ -176,8 +177,8 @@ public enum Subprocess {
                 process.executableURL = URL(fileURLWithPath: executable)
                 process.arguments = arguments
                 process.currentDirectoryURL = currentDirectory
-                if let environment {
-                    process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+                if environment != nil || SubprocessEnvironment.isInstalled {
+                    process.environment = SubprocessEnvironment.current.merging(environment ?? [:]) { $1 }
                 }
 
                 let stdoutPipe = Pipe()

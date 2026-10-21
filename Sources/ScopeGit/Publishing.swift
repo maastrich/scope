@@ -76,8 +76,9 @@ public struct GhClient: Sendable {
         self.environment = environment
     }
 
-    /// Finds `gh` on `PATH`, then at `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`. `nil` when absent.
-    public static func locate(environment: [String: String] = ProcessInfo.processInfo.environment) -> GhClient? {
+    /// Finds `gh` on `PATH` — the login shell's once the app installed it (`SubprocessEnvironment`) — then at
+    /// `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`. `nil` when absent.
+    public static func locate(environment: [String: String] = SubprocessEnvironment.current) -> GhClient? {
         var candidates = (environment["PATH"] ?? "").split(separator: ":").map { "\($0)/gh" }
         candidates += ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]
         for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate) {
@@ -220,8 +221,9 @@ public struct GhClient: Sendable {
         }
     }
 
+    /// `gh` runs git itself (`pr checkout`, the push of `pr create`), so it needs the same PATH as Scope's git.
     private var mergedEnvironment: [String: String] {
-        ProcessInfo.processInfo.environment
+        SubprocessEnvironment.current
             .merging(["GH_PROMPT_DISABLED": "1", "GH_NO_UPDATE_NOTIFIER": "1"]) { $1 }
             .merging(environment) { $1 }
     }

@@ -39,6 +39,9 @@ struct SceneView: View {
                 if !model.undoNotices.isEmpty {
                     UndoToastStack()
                 }
+                if !model.problems.toasts.isEmpty {
+                    ProblemToastStack()
+                }
             }
             .padding(.horizontal, 12)
             .animation(.easeOut(duration: 0.15), value: model.messageUI.sent?.id)

@@ -76,14 +76,56 @@ public extension GitClient {
     /// - When it already exists (task reopened, sandbox recreated): `git worktree add <path> <branch>`.
     ///
     /// Leading directories of `path` are created by git. The folder must not exist or be empty.
+    ///
+    /// A failed add is undone, so the next attempt starts from the same place: git creates the branch before it
+    /// checks out, and a checkout that dies half-way (a missing `git-lfs`, a full disk) left the branch behind and
+    /// sent every retry down the existing-branch path. The folder goes when this call created it, git's record of
+    /// it is pruned, and a branch this call created goes too while it still points at the start point — it holds
+    /// no commit of its own. The original error is rethrown.
     func createWorktree(at path: URL, branch: String, from startPoint: String?) async throws {
         let target = path.filesystemPath
+        let folderBefore = FolderState(at: target)
         if await branchExists(branch) {
-            try await run(["worktree", "add", target, branch], timeout: .seconds(120))
+            do {
+                try await run(["worktree", "add", target, branch], timeout: .seconds(120))
+            } catch {
+                await undoFailedAdd(at: path, folderBefore: folderBefore, createdBranch: nil)
+                throw error
+            }
         } else {
             guard let startPoint else { throw WorktreeError.missingStartPoint(branch: branch) }
-            try await run(["worktree", "add", target, "-b", branch, startPoint], timeout: .seconds(120))
+            let startCommit = try? await output(["rev-parse", "--verify", "--quiet", "\(startPoint)^{commit}"], timeout: .seconds(10))
+            do {
+                try await run(["worktree", "add", target, "-b", branch, startPoint], timeout: .seconds(120))
+            } catch {
+                await undoFailedAdd(at: path, folderBefore: folderBefore, createdBranch: startCommit.map { (branch, $0) })
+                throw error
+            }
         }
+    }
+
+    /// The cleanup of `createWorktree`. Best effort: each step runs whatever the previous one did. The folder goes
+    /// before the prune and the prune before the branch — git refuses to delete a branch a worktree still holds.
+    /// A folder that held anything before the attempt is never touched: git refused it, nothing in it is ours.
+    private func undoFailedAdd(at path: URL, folderBefore: FolderState, createdBranch: (name: String, startCommit: String)?) async {
+        let target = path.filesystemPath
+        switch folderBefore {
+        case .absent:
+            try? FileManager.default.removeItem(at: path)
+        case .empty:
+            // git's own cleanup may have removed it: put back the empty folder the caller had.
+            for item in (try? FileManager.default.contentsOfDirectory(atPath: target)) ?? [] {
+                try? FileManager.default.removeItem(atPath: (target as NSString).appendingPathComponent(item))
+            }
+            try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+        case .occupied:
+            break
+        }
+        try? await prune()
+        guard let createdBranch else { return }
+        let tip = try? await output(["rev-parse", "--verify", "--quiet", "refs/heads/\(createdBranch.name)"], timeout: .seconds(10))
+        guard tip == createdBranch.startCommit else { return }
+        try? await deleteBranch(name: createdBranch.name, force: true)
     }
 
     /// Staged, unstaged, unmerged or untracked changes in the checkout at `path` (ignored files do not count).
@@ -139,5 +181,20 @@ public extension GitClient {
         let parts = text.split(whereSeparator: { $0 == "\t" || $0 == " " }).compactMap { Int($0) }
         guard parts.count == 2 else { return (0, 0) }
         return (parts[0], parts[1])
+    }
+}
+
+/// What was at a worktree's path before `createWorktree` ran, so a failed add removes only what it made.
+private enum FolderState {
+    case absent, empty, occupied
+
+    init(at path: String) {
+        if !FileManager.default.fileExists(atPath: path) {
+            self = .absent
+        } else if let items = try? FileManager.default.contentsOfDirectory(atPath: path), items.isEmpty {
+            self = .empty
+        } else {
+            self = .occupied
+        }
     }
 }
