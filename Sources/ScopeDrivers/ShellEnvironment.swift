@@ -34,9 +34,11 @@ public enum ShellEnvironment {
     /// The `PATH` assembled by `/usr/libexec/path_helper -s` from `/etc/paths` and `/etc/paths.d`
     /// (no user additions: no Homebrew, no `~/.cargo/bin`). Used as a fallback when the shell probe fails.
     public static func pathHelperPATH() async -> String? {
+        // The app's own environment, not the widened base: path_helper folds the current PATH into its answer.
         guard let result = try? await Subprocess.run(
             executable: "/usr/libexec/path_helper",
             arguments: ["-s"],
+            base: ProcessInfo.processInfo.environment,
             timeout: .seconds(5)
         ), result.succeeded else { return nil }
         // Output: PATH="/usr/local/bin:/usr/bin:..."; export PATH;
@@ -86,6 +88,10 @@ public enum ShellEnvironment {
                 executable: shell,
                 arguments: [flags, script],
                 environment: ["TERM": "dumb", "SCOPE_ENV_PROBE": "1"],
+                // From the app's own environment, never from `SubprocessEnvironment`: rc files that skip a folder
+                // already on PATH (rustup, uv, `fish_add_path`) would leave it where the widened base put it, and
+                // a re-probe would start from the previous probe's variables.
+                base: ProcessInfo.processInfo.environment,
                 timeout: timeout
             )
         } catch SubprocessError.timedOut(let after) {

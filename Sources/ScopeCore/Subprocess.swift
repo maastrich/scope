@@ -111,8 +111,8 @@ final class ProcessSignaller: Sendable {
 /// Minimal async wrapper around `Foundation.Process`.
 ///
 /// - `executable` is exec'd by absolute path (no PATH search).
-/// - `environment` is merged over `SubprocessEnvironment.current` — the login shell's environment once the app
-///   installed it, the process environment otherwise (never replaces it).
+/// - `environment` is merged over `base`, which defaults to `SubprocessEnvironment.current` — the login shell's
+///   environment once the app installed it, the process environment otherwise (never replaces it).
 /// - `stdin` is written on a background queue; without it the child reads `/dev/null`, so git can
 ///   never block on a TTY prompt.
 /// - Both pipes are drained with `readabilityHandler`s, which avoids the 64 KiB pipe-buffer deadlock
@@ -128,20 +128,21 @@ public enum Subprocess {
         arguments: [String],
         currentDirectory: URL? = nil,
         environment: [String: String]? = nil,
+        base: [String: String]? = nil,
         stdin: Data? = nil,
         timeout: Duration? = nil
     ) async throws -> ProcessResult {
         guard let timeout else {
             return try await launch(
                 executable: executable, arguments: arguments,
-                currentDirectory: currentDirectory, environment: environment, stdin: stdin
+                currentDirectory: currentDirectory, environment: environment, base: base, stdin: stdin
             )
         }
         return try await withThrowingTaskGroup(of: ProcessResult.self) { group in
             group.addTask {
                 try await launch(
                     executable: executable, arguments: arguments,
-                    currentDirectory: currentDirectory, environment: environment, stdin: stdin
+                    currentDirectory: currentDirectory, environment: environment, base: base, stdin: stdin
                 )
             }
             group.addTask {
@@ -163,6 +164,7 @@ public enum Subprocess {
         arguments: [String],
         currentDirectory: URL?,
         environment: [String: String]?,
+        base: [String: String]?,
         stdin: Data?
     ) async throws -> ProcessResult {
         let signaller = ProcessSignaller()
@@ -177,8 +179,8 @@ public enum Subprocess {
                 process.executableURL = URL(fileURLWithPath: executable)
                 process.arguments = arguments
                 process.currentDirectoryURL = currentDirectory
-                if environment != nil || SubprocessEnvironment.isInstalled {
-                    process.environment = SubprocessEnvironment.current.merging(environment ?? [:]) { $1 }
+                if environment != nil || base != nil || SubprocessEnvironment.isInstalled {
+                    process.environment = (base ?? SubprocessEnvironment.current).merging(environment ?? [:]) { $1 }
                 }
 
                 let stdoutPipe = Pipe()
