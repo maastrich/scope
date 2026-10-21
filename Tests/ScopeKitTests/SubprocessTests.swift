@@ -22,6 +22,14 @@ private func makeTempDirectory() throws -> URL {
         #expect(result.stderr.allSatisfy { $0 == UInt8(ascii: "b") })
     }
 
+    @Test func anExplicitBaseReplacesTheInheritedEnvironment() async throws {
+        // The shell probe starts from the app's own variables, never from the widened base everything else gets.
+        let result = try await Subprocess.run(executable: "/usr/bin/env", arguments: [], environment: ["B": "2"],
+                                              base: ["A": "1"], timeout: .seconds(10))
+        let lines = Set(result.stdoutText.split(separator: "\n").map(String.init))
+        #expect(lines == ["A=1", "B=2"])
+    }
+
     @Test func stdinIsDelivered() async throws {
         let payload = Data(String(repeating: "hello\n", count: 20_000).utf8)   // > 64 KiB
         let result = try await Subprocess.run(executable: "/bin/cat", arguments: [], stdin: payload, timeout: .seconds(20))

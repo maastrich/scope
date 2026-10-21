@@ -118,6 +118,15 @@ alone: no indexing of every worktree's <code>node_modules</code>, and no second 
 results.</p>
 <p>The branch starts from the repository's base — <code>origin/&lt;default&gt;</code> when it can be resolved,
 the local default branch otherwise.</p>
+<p>Git runs with the environment a thread gets: the <code>PATH</code> of your login shell, so the tools your git
+config calls — <code>git-lfs</code> for a repository with <code>filter.lfs.required</code>, a credential helper
+— are found even when Scope was opened from the Finder. Until the shell has answered, Homebrew's folders are
+added to the system <code>PATH</code>. The same goes for <code>gh</code>, the setup commands and every other
+helper Scope starts.</p>
+<p>A worktree that fails half-way is undone: the folder it created goes, git's record of it is pruned, and the
+branch goes too when this attempt created it and it holds no commit of its own. Retrying starts from the same
+place. The failure shows as a toast, with the cause in plain words when it is a missing tool — <i>git-lfs is
+installed but not on Scope's PATH</i>, or <i>git-lfs is not installed</i>.</p>
 
 <h2 id="branches">Several branches in one task</h2>
 <p>A task is one branch, but its work may not be: the next pull request of a stack, a docs change beside the

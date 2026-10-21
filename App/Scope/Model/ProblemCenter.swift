@@ -9,6 +9,9 @@ final class ProblemCenter {
     private(set) var problems: [Problem] = []
     /// Problems reported since the popover was last opened.
     private(set) var unreadCount = 0
+    /// Failures of something the user just asked for, shown as toasts over the scene until dismissed (newest last,
+    /// three at most): a badge alone left *Add repo* failing with nothing on screen.
+    private(set) var toasts: [Problem] = []
     /// Runs a problem's action button. Set by `AppModel`.
     @ObservationIgnored var onAction: (@MainActor (ProblemAction) -> Void)?
 
@@ -47,13 +50,24 @@ final class ProblemCenter {
         report(Problem(severity: .warning, title: title, detail: detail, scopeID: scope, actions: actions))
     }
 
-    /// A one-line convenience for errors.
-    func error(_ title: String, detail: String? = nil, scope: ScopeID? = nil, actions: [ProblemAction] = []) {
-        report(Problem(severity: .error, title: title, detail: detail, scopeID: scope, actions: actions))
+    /// A one-line convenience for errors. `toast` also puts it on screen, for a failure of an action the user started.
+    func error(_ title: String, detail: String? = nil, scope: ScopeID? = nil, actions: [ProblemAction] = [], toast: Bool = false) {
+        let problem = Problem(severity: .error, title: title, detail: detail, scopeID: scope, actions: actions)
+        report(problem)
+        if toast {
+            toasts.append(problem)
+            if toasts.count > 3 { toasts.removeFirst(toasts.count - 3) }
+        }
     }
 
     func dismiss(_ id: UUID) {
         problems.removeAll { $0.id == id }
+        dismissToast(id)
+    }
+
+    /// The toast goes; the problem stays in the popover.
+    func dismissToast(_ id: UUID) {
+        toasts.removeAll { $0.id == id }
     }
 
     /// Drops every problem attached to a thread (it was closed).

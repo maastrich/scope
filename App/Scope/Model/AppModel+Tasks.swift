@@ -391,7 +391,7 @@ extension AppModel {
             task.startWatching()
             startSetup(for: task, runCommands: true, only: [relativePath])
         } catch {
-            problems.error("Could not add \(relativePath) to \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not add \(relativePath) to \(task.name)", detail: String(describing: error), scope: task.scopeID, toast: true)
         }
     }
 
@@ -477,7 +477,7 @@ extension AppModel {
         let repo = repos.count > 1 ? repos[max(0, picker.indexOfSelectedItem)].repoRelativePath : nil
         Task {
             do { try await addBranch(branch, to: task.id, repo: repo) } catch {
-                problems.error("Could not add \(branch) to \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                problems.error("Could not add \(branch) to \(task.name)", detail: String(describing: error), scope: task.scopeID, toast: true)
             }
         }
     }

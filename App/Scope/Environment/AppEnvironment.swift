@@ -114,6 +114,9 @@ final class AppEnvironment {
         // rewrite its config and thread records and start its threads a second time.
         if UnixSocketServer.isListening(at: socketPath) { refuseSecondInstance(home: home, socketPath: socketPath) }
         dropInheritedThreadEnvironment()
+        // Until the login shell answers, git and the rest start from launchd's PATH widened with Homebrew's:
+        // `AppModel.startShellProbe` replaces it with what a thread gets.
+        SubprocessEnvironment.install(SubprocessEnvironment.compose(ProcessInfo.processInfo.environment, source: .fallback))
         do {
             try ScopeHome.ensureLayout(at: home)
         } catch {
