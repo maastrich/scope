@@ -243,6 +243,9 @@ extension AppModel {
             // The WebContent process lets go of the store a moment after the view is gone.
             for attempt in 0..<5 {
                 try? await Task.sleep(for: .seconds(attempt == 0 ? 1 : 3))
+                // WebKit sets up its main run loop with its first object; until then `allDataStoreIdentifiers`
+                // answers on a null run loop and crashes the app (an archive before any Browser pane was opened).
+                _ = WKWebsiteDataStore.default()
                 let known = await WKWebsiteDataStore.allDataStoreIdentifiers
                 guard known.contains(storeID) else { return }
                 do {
