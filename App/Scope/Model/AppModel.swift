@@ -48,6 +48,8 @@ final class AppModel {
     let browser = BrowserStore()
     /// Tokens Claude Code threads consumed (`AppModel+TokenUsage`).
     let tokenUsage = TokenUsageModel()
+    /// The island under the notch (`AppModel+Island`).
+    let island = IslandModel()
     /// What moved in a scope while the owner looked elsewhere (`AppModel+ReturnDigest`).
     let returnDigests = ReturnDigestModel()
     /// Messages waiting for a thread to finish its turn (`deliver`), per thread.
@@ -713,6 +715,7 @@ final class AppModel {
         isBootstrapped = true
         startReturnTracking()
         startWatchingState()
+        startIsland()
         Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
     }
 
