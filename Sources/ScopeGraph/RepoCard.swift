@@ -58,6 +58,15 @@ public struct RepoCard: Codable, Sendable, Equatable {
     /// The version of the level 1 prompt that wrote the card (`Level1Generator.promptVersion`); `nil` for a card
     /// no driver wrote, or one written before prompts were numbered.
     public var promptVersion: Int?
+    /// The repository's description on GitHub (`gh repo view --json description`). `""` once asked and found empty, so
+    /// the sheet does not ask again; `nil` when never asked. A fact about the repository, refreshed on edited cards too.
+    public var githubDescription: String?
+    /// The `description` of the manifest (`package.json`, `Cargo.toml`, `pyproject.toml`, `composer.json`).
+    public var manifestDescription: String?
+    /// The README's first prose sentence: headings, badges, lists, instructions and code skipped.
+    public var readmeSummary: String?
+    /// The domain the AI analysis gave (`RepoDomain` raw value); `nil` lets the sheet infer it from the tags.
+    public var domain: String?
 
     public init(
         name: String,
@@ -74,8 +83,16 @@ public struct RepoCard: Codable, Sendable, Equatable {
         lastActivity: Date? = nil,
         edited: Bool = false,
         generatedBy: GenerationLevel? = nil,
-        promptVersion: Int? = nil
+        promptVersion: Int? = nil,
+        githubDescription: String? = nil,
+        manifestDescription: String? = nil,
+        readmeSummary: String? = nil,
+        domain: String? = nil
     ) {
+        self.githubDescription = githubDescription
+        self.manifestDescription = manifestDescription
+        self.readmeSummary = readmeSummary
+        self.domain = domain
         self.teardown = teardown
         self.name = name
         self.remote = remote
@@ -99,6 +116,10 @@ public struct RepoCard: Codable, Sendable, Equatable {
         case lastActivity = "last_activity"
         case generatedBy = "generated_by"
         case promptVersion = "prompt_version"
+        case githubDescription = "github_description"
+        case manifestDescription = "manifest_description"
+        case readmeSummary = "readme_summary"
+        case domain
     }
 
     public init(from decoder: any Decoder) throws {
@@ -118,6 +139,10 @@ public struct RepoCard: Codable, Sendable, Equatable {
         edited = try c.decodeIfPresent(Bool.self, forKey: .edited) ?? false
         generatedBy = try c.decodeIfPresent(GenerationLevel.self, forKey: .generatedBy)
         promptVersion = try? c.decodeIfPresent(Int.self, forKey: .promptVersion)
+        githubDescription = try? c.decodeIfPresent(String.self, forKey: .githubDescription)
+        manifestDescription = try? c.decodeIfPresent(String.self, forKey: .manifestDescription)
+        readmeSummary = try? c.decodeIfPresent(String.self, forKey: .readmeSummary)
+        domain = try? c.decodeIfPresent(String.self, forKey: .domain)
     }
 
     /// Field-by-field merge of a freshly generated card over `self`: a generated value wins when
@@ -139,6 +164,10 @@ public struct RepoCard: Codable, Sendable, Equatable {
         merged.generatedBy = generated.generatedBy ?? generatedBy
         // Follows `generatedBy`: a quick pass over a driver's card makes it a quick-pass card again.
         merged.promptVersion = generated.generatedBy == nil ? promptVersion : generated.promptVersion
+        merged.githubDescription = generated.githubDescription ?? githubDescription
+        merged.manifestDescription = generated.manifestDescription ?? manifestDescription
+        merged.readmeSummary = generated.readmeSummary ?? readmeSummary
+        merged.domain = generated.domain ?? domain
         return merged
     }
 }
@@ -200,6 +229,17 @@ public struct ScopeGraph: Codable, Sendable, Equatable {
         }
         guard !existing.edited else { return }
         repos[key] = existing.merging(generated: card)
+    }
+
+    /// Refreshes what the files and GitHub say about a repo — its descriptions — whatever wrote the rest of the card:
+    /// they are facts, not content a person edits, so an edited card takes them too. A `nil` argument leaves the
+    /// stored value alone; an empty manifest or README value clears it (the file lost its description).
+    public mutating func applyFacts(_ key: String, manifestDescription: String?? = nil, readmeSummary: String?? = nil,
+                                    githubDescription: String? = nil) {
+        guard repos[key] != nil else { return }
+        if let manifestDescription { repos[key]?.manifestDescription = manifestDescription }
+        if let readmeSummary { repos[key]?.readmeSummary = readmeSummary }
+        if let githubDescription { repos[key]?.githubDescription = githubDescription }
     }
 
     /// Stores a user-edited card, flagged so generation leaves it alone.

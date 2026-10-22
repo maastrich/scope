@@ -74,6 +74,32 @@ public enum SetupLog {
         }
         return commands
     }
+
+    /// The lines of `log` that say a command was not run because the repository's files rule it out
+    /// (`TaskManager.runSetup`).
+    public static func skippedCommands(in log: String) -> [String] {
+        log.split(whereSeparator: \.isNewline).map(String.init).filter { line in
+            line.hasPrefix("[") && line.contains("] skipped `")
+        }
+    }
+
+    /// The files a setup did not copy, one line per reason. A repository that commits its skills as symlinks used to
+    /// get one line per skill — thirty lines of the same sentence above the command that actually failed.
+    public static func refusals(_ refusals: [SandboxFileCopy.Refusal], repo name: String) -> String {
+        var order: [String] = []
+        var paths: [String: [String]] = [:]
+        for refusal in refusals {
+            if paths[refusal.reason] == nil { order.append(refusal.reason) }
+            paths[refusal.reason, default: []].append(refusal.path)
+        }
+        return order.map { reason in
+            let list = paths[reason]!
+            guard list.count > 2 else {
+                return list.map { "[\(name)] did not copy \($0): \(reason)\n" }.joined()
+            }
+            return "[\(name)] did not copy \(list.count) paths (\(list.prefix(2).joined(separator: ", ")) and \(list.count - 2) more): \(reason)\n"
+        }.joined()
+    }
 }
 
 /// The setup and teardown commands of one repository of a task, and the files copied into its sandbox.

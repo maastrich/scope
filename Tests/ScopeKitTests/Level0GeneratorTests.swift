@@ -131,4 +131,73 @@ import ScopeGit
         #expect(card.defaultBranch == "main" && card.generatedBy == .level0)
         #expect(card.lastActivity != nil && abs(card.lastActivity!.timeIntervalSinceNow) < 600)
     }
+
+    /// The openings real READMEs had instead of a description (two real scopes, 2026-10-22).
+    @Test func readmeSummarySkipsInstructionsAndBoilerplate() {
+        let instructions = """
+        # Front
+
+        1. Create a personal access token with the read:packages scope.
+        2. Add it to your env.
+
+        The web app of the platform, as one pnpm monorepo. Each package deploys on its own.
+        """
+        #expect(Level0Generator.summary(ofReadme: instructions) == "The web app of the platform, as one pnpm monorepo.")
+        #expect(Level0Generator.summary(ofReadme: "# faker-json\n\nTo install dependencies:\n\n```bash\nbun install\n```\n") == nil)
+        #expect(Level0Generator.summary(ofReadme: "*Automatically synced with your v0.app deployments*\n\nA shelf of board games.\n")
+                == "A shelf of board games.")
+        #expect(Level0Generator.summary(ofReadme: "- item one\n- item two\n") == nil)
+        let alert = "# front\n\n> [!WARNING]\n> Never commit the .env file.\n\nThe web app.\n"
+        #expect(Level0Generator.summary(ofReadme: alert) == "The web app.")
+        #expect(Level0Generator.summary(ofReadme: "# x\n\nThis project was created using `bun init` in bun v1.1.\n\nFakes JSON.\n") == "Fakes JSON.")
+        #expect(Level0Generator.summary(ofReadme: "This repository will stay in sync with your deployed chats.\n") == nil)
+        let url = "This is the build image used on the CI to build the front monorepo: https://github.com/acme/front\n"
+        #expect(Level0Generator.summary(ofReadme: url) == "This is the build image used on the CI to build the front monorepo")
+        #expect(Level0Generator.summary(ofReadme: "[![CI](https://ci/b.svg)](https://ci)\n\nResolves every import. Then hashes.\n")
+                == "Resolves every import.")
+    }
+
+    @Test func manifestDescriptions() throws {
+        let cases: [([String: String], String?)] = [
+            (["package.json": #"{"name":"x","description":"A darts scoreboard."}"#], "A darts scoreboard."),
+            (["package.json": #"{"name":"x","description":"  "}"#], nil),
+            (["Cargo.toml": "[package]\nname = \"x\"\ndescription = \"Formats TypeScript errors.\"\n[dependencies]\ndescription = \"no\"\n"],
+             "Formats TypeScript errors."),
+            (["pyproject.toml": "[project]\nname = \"x\"\ndescription = 'Lambda helpers.'\n"], "Lambda helpers."),
+            (["pyproject.toml": "[tool.poetry]\ndescription = \"Poetry one.\"\n"], "Poetry one."),
+            (["composer.json": #"{"description":"The ad platform backend."}"#], "The ad platform backend."),
+        ]
+        for (files, expected) in cases {
+            let repo = try tempRepo(files)
+            defer { try? FileManager.default.removeItem(at: repo) }
+            #expect(Level0Generator.analyze(repo: repo).manifestDescription == expected, "\(files.keys.sorted())")
+        }
+    }
+
+    /// A pyproject.toml that only configures ruff used to yield `pip install -e .` (or a driver's `uv sync`), which
+    /// failed every task's setup. The Makefile's install target or the requirements files set the repo up instead.
+    @Test func pythonWithoutAnInstallableProject() throws {
+        let makefile = try tempRepo([
+            "pyproject.toml": "[tool.ruff]\nline-length = 88\n", "requirements.txt": "boto3\n",
+            "Makefile": "venv:\n\tuv venv\nlocal-install: venv\n\tuv pip install\nlocal-install-minimal: venv\n\tuv pip\ntest:\n\tpytest\nbootstrap:\n\t./scripts/codebuild/bootstrap.sh\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: makefile) }
+        let a = Level0Generator.analyze(repo: makefile)
+        #expect(a.stack == ["python", "make"])
+        #expect(a.setup == "make local-install" && a.test == "make test")
+
+        let requirements = try tempRepo(["pyproject.toml": "[tool.black]\n", "requirements_dev.txt": "pytest\n", "tests/test_x.py": ""])
+        defer { try? FileManager.default.removeItem(at: requirements) }
+        let b = Level0Generator.analyze(repo: requirements)
+        #expect(b.setup == "python3 -m venv .venv && .venv/bin/pip install -r requirements_dev.txt")
+        #expect(b.test == ".venv/bin/pytest")
+
+        // `uninstall` and `reinstall` end in "install" too, and the setup runs unattended.
+        #expect(Level0Generator.setupTarget(in: ["uninstall", "reinstall", "pip-install", "build"]) == "pip-install")
+        #expect(Level0Generator.setupTarget(in: ["uninstall", "build"]) == nil)
+
+        let plain = try tempRepo(["requirements.txt": "flask\n"])
+        defer { try? FileManager.default.removeItem(at: plain) }
+        #expect(Level0Generator.analyze(repo: plain).stack == ["python"])
+    }
 }
