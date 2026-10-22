@@ -32,22 +32,43 @@
 <p class="lede">One card per repository: what it is for, what it is built with, how to set it up and test it,
 and which repositories it talks to. It is what Scope hands to an agent when a task starts.</p>
 
-<figure class="shot"><img src="assets/img/graph-card.png" alt="A repository card: purpose, stack, entry points, relations." loading="lazy"><figcaption>A repository card: purpose, stack, entry points, relations.</figcaption></figure>
+<figure class="shot"><img src="assets/img/graph-card.png" alt="A repository card with its details open: commands in full, and the repositories it uses and is used by." loading="lazy"><figcaption>A repository card with its details open: commands in full, and the repositories it uses and is used by.</figcaption></figure>
 
 <h2 id="generation">Two levels of generation</h2>
 <table>
   <tr><th>Level</th><th>Source</th><th>Fills</th></tr>
   <tr><td><b>Level 0</b></td><td>README, manifests (<code>package.json</code>, <code>go.mod</code>, <code>Cargo.toml</code>…), git log</td><td>name, remote, default branch, stack, entry points, setup and test commands, last activity</td></tr>
-  <tr><td><b>Level 1</b></td><td>the default driver, run headless once per repository</td><td>the purpose sentence, the relations between repositories, tags</td></tr>
+  <tr><td><b>Level 1</b></td><td>the default driver, run headless once per repository</td><td>the purpose sentence, the domain, the relations between repositories, tags</td></tr>
 </table>
-<p><b>Analyze</b> in the panel header runs both; the split button runs level 0 alone, which needs no agent and
-no network. Results are cached per repository, keyed by HEAD plus the hashes of the README and manifests, so
+<p><b>Analyze</b> in the sheet's header runs level 0, which needs no agent and no network; its menu runs the
+default driver too. Results are cached per repository, keyed by HEAD plus the hashes of the README and manifests, so
 re-analysing an unchanged repository costs nothing.</p>
 
+<h2 id="views">Cards, list and graph</h2>
+<p>The sheet shows a scope three ways, picked in its header and remembered per scope:</p>
+<ul>
+  <li><b>Cards</b>, grouped by domain (front, back, libs, infra &amp; CI, data…; domains with a single repository share
+  a last group, and every group folds). A card says the name, <code>owner/repo</code>, two lines of description and
+  one row of tags — the stack and the tags merged, <code>+N</code> for the rest. <b>Details</b> unfolds the entry
+  points, the whole setup and test commands, ready to select, and which repositories it uses and is used by.
+  Hovering or focusing a card shows its actions; right-click gives the same ones.</li>
+  <li><b>List</b>, a dense table sorted by any column: name, domain, stack, last activity, branch, relations.</li>
+  <li><b>Graph</b>, the relations drawn in layers, dependents above what they depend on. Hover a repository to light
+  its neighbours, click it to read its card beside the drawing; pinch or <kbd>⌘</kbd><kbd>+</kbd> /
+  <kbd>⌘</kbd><kbd>−</kbd> / <kbd>⌘</kbd><kbd>0</kbd> to zoom, scroll or drag to move. Repositories with no relation
+  are listed apart, under the drawing.</li>
+</ul>
+<figure class="shot"><img src="assets/img/graph-panel.png" alt="The Graph view: dependents above their dependencies, the hovered repository&#x27;s links lit, its card beside the drawing." loading="lazy"><figcaption>The Graph view: dependents above their dependencies, the hovered repository's links lit, its card beside the drawing.</figcaption></figure>
+
+<h2 id="descriptions">Where a description comes from</h2>
+<p>The first that exists: what you wrote on the card, the repository's description on GitHub (read with
+<code>gh</code>, which keeps its own login), the manifest's <code>description</code>, the AI analysis's purpose, then
+the README's first sentence of prose — headings, badges, code, lists, notices and install instructions skipped.
+Opening the sheet refreshes these without an analysis; it writes only the graph file, never in the repositories.</p>
+
 <h2 id="editing">Editing a card</h2>
-<p><b>Edit</b> on any card opens the fields for hand-editing. An edited card is marked and generation never
-overwrites it again — the graph is a document you own, not a cache the app owns.</p>
-<figure class="shot"><img src="assets/img/graph-panel.png" alt="The graph of a scope; “edited” marks a card generation will not touch." loading="lazy"><figcaption>The graph of a scope; “edited” marks a card generation will not touch.</figcaption></figure>
+<p><b>Edit Card…</b> in a card's menu opens the fields for hand-editing. An edited card is marked and generation
+never overwrites it again — the graph is a document you own, not a cache the app owns.</p>
 <p>Cards are stored as one JSON file per scope in <code>~/.scope/graph/&lt;scope-slug&gt;.json</code>. Editing
 that file by hand works too; <b>Refresh Scope</b> (<kbd>⌘R</kbd>) picks it up.</p>
 
@@ -55,11 +76,14 @@ that file by hand works too; <b>Refresh Scope</b> (<kbd>⌘R</kbd>) picks it up.
 <p>When a task is created, the cards of the repositories it touches are projected into the task's
 <code>AGENTS.md</code>, under the goal. The agent starts knowing what each repository is for, how to install
 it and how to run its tests, instead of spending its first minutes rediscovering that.</p>
+<p>A setup command is checked against the repository's files before anything runs it: <code>uv sync</code> without a
+<code>[project]</code> table, <code>make install</code> without that target or <code>npm install</code> without a
+<code>package.json</code> is never proposed by the analysis, and a task's setup reports it instead of failing on it.</p>
 
 <h2 id="filter">Finding things</h2>
-<p>The filter field above the cards matches path and stack at once: type <code>go</code> to get the Go
-services, <code>api</code> to get everything whose path says so.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#generation">Two levels of generation</a><a class="lvl2" href="#editing">Editing a card</a><a class="lvl2" href="#projection">How agents see it</a><a class="lvl2" href="#filter">Finding things</a></aside></div>
+<p>The filter bar applies to the three views. Type to match names, paths, descriptions and tags; click a domain or a
+tag to keep only those. Domains add up (Front <i>or</i> Back), tags too, and a domain and a tag narrow each other.</p>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#generation">Two levels of generation</a><a class="lvl2" href="#views">Cards, list and graph</a><a class="lvl2" href="#descriptions">Where a description comes from</a><a class="lvl2" href="#editing">Editing a card</a><a class="lvl2" href="#projection">How agents see it</a><a class="lvl2" href="#filter">Finding things</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>
