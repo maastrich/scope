@@ -39,11 +39,13 @@ public enum Island {
         public var isForeground: Bool
         /// Moves with each turn (`ThreadSession.turnRevision`), so two turns ending alike are two reveals.
         public var turn: Int
+        /// The agent's todo list or plan, shown under its row in the open island.
+        public var plan: AgentPlan?
 
         public init(id: ThreadID, scopeID: ScopeID, scopeName: String, taskID: String? = nil, taskName: String? = nil,
                     title: String, state: ThreadState, activity: String? = nil, since: Date? = nil,
                     lastEventAt: Date? = nil, hasBackgroundWork: Bool = false, request: ClaudePendingRequest? = nil,
-                    isForeground: Bool = false, turn: Int = 0) {
+                    isForeground: Bool = false, turn: Int = 0, plan: AgentPlan? = nil) {
             self.id = id
             self.scopeID = scopeID
             self.scopeName = scopeName
@@ -58,6 +60,7 @@ public enum Island {
             self.request = request
             self.isForeground = isForeground
             self.turn = turn
+            self.plan = plan
         }
     }
 
@@ -110,6 +113,10 @@ public enum Island {
 
         /// Nothing worth a surface: the island hides.
         public var isEmpty: Bool { requests.isEmpty && groups.isEmpty }
+
+        /// Every thread the island shows — one dot each, drawn or counted in the `+N` — which is what its counter says:
+        /// a count of running threads beside dots that also stand for finished ones read as a stray digit.
+        public var shownCount: Int { dots.count + overflow }
 
         public static let empty = Snapshot(activeCount: 0, dots: [], overflow: 0, dominant: nil, requests: [], groups: [])
     }
@@ -240,6 +247,21 @@ extension Island {
         public var thread: ThreadID
         public var title: String
         public var line: String
+        /// The request revealed, for a question, a permission or a plan: the island stays widened on it until it is
+        /// answered.
+        public var requestID: String?
+
+        public init(key: String, kind: AlertKind, thread: ThreadID, title: String, line: String, requestID: String? = nil) {
+            self.key = key
+            self.kind = kind
+            self.thread = thread
+            self.title = title
+            self.line = line
+            self.requestID = requestID
+        }
+
+        /// An agent blocked on the user, as opposed to a turn that ended.
+        public var isRequest: Bool { kind != .finished && kind != .failed }
     }
 
     /// Why the island stays still right now, whatever happens: the user's Focus, a locked or sleeping screen. And
@@ -306,7 +328,8 @@ extension Island {
             guard !quiet.isQuiet, !thread.isForeground, wants(kind, settings),
                   quiet.allows(kind, settings.interruptions) else { continue }
             let line = thread.request.map(\.headline) ?? thread.activity ?? thread.state.label
-            alerts.append(Alert(key: key, kind: kind, thread: thread.id, title: thread.title, line: line))
+            alerts.append(Alert(key: key, kind: kind, thread: thread.id, title: thread.title, line: line,
+                                requestID: thread.state.needsAttention ? thread.request?.id : nil))
         }
         return alerts
     }
@@ -484,10 +507,10 @@ extension Island {
         CGRect(x: rect.minX, y: primaryHeight - rect.maxY, width: rect.width, height: rect.height)
     }
 
-    /// Height of the pill on a screen without a notch, when its menu bar hides.
+    /// The menu bar's height assumed on a screen without a notch when it hides; the capsule is a little shorter.
     public static let pillHeight: CGFloat = 26
 
-    /// The collapsed shape's band: the notch itself, or where a pill sits on a screen without one — the top of the
+    /// The collapsed shape's band: the notch itself, or where the capsule hangs on a screen without one — the top of the
     /// screen, centred, as high as the menu bar.
     public static func band(on screen: Screen) -> CGRect {
         if let notch = screen.notch { return notch }
@@ -503,5 +526,226 @@ extension Island {
         let width = min(size.width, screen.frame.width)
         let x = min(max(band.midX - width / 2, screen.frame.minX), screen.frame.maxX - width)
         return CGRect(x: x, y: screen.frame.maxY - size.height, width: width, height: size.height)
+    }
+}
+
+// MARK: How it looks
+
+extension Island {
+    /// How the island stands on screen.
+    public enum Presentation: Sendable, Equatable {
+        /// The capsule hanging from the top edge, or the two wings around a notch.
+        case collapsed
+        /// Open on the list, by the pointer or a click.
+        case expanded
+        /// Widened, unasked, on one reveal: a request until it is answered, a turn that ended for a few seconds.
+        case alert(Alert)
+    }
+
+    /// What `presentation` becomes once the threads read `snapshot`: a request's reveal folds back as soon as that
+    /// request is no longer waiting — answered from the island, from the terminal, anywhere. A turn's reveal ends on
+    /// its own timer, and the open island only when the user leaves it.
+    public static func settle(_ presentation: Presentation, snapshot: Snapshot) -> Presentation {
+        guard case .alert(let alert) = presentation, alert.isRequest else { return presentation }
+        let waiting = snapshot.requests.contains { row in
+            row.id == alert.thread && (alert.requestID == nil || row.thread.request?.id == alert.requestID)
+        }
+        return waiting ? presentation : .collapsed
+    }
+
+    /// What a reveal does to `presentation`: the island the user opened stays open, a request still waiting is not
+    /// pushed aside by a turn that ended, anything else widens on the new reveal.
+    public static func present(_ alert: Alert, over presentation: Presentation) -> Presentation {
+        switch presentation {
+        case .expanded: return .expanded
+        case .alert(let current) where current.isRequest && !alert.isRequest: return presentation
+        default: return .alert(alert)
+        }
+    }
+
+    /// What the user does to the island from where it stands.
+    public enum Gesture: Sendable, Equatable {
+        /// The pointer rested on it (the hover opening).
+        case pointerIn
+        /// The pointer left it (the hover opening).
+        case pointerOut
+        /// A click on the capsule or the wings.
+        case toggle
+        /// A click anywhere else while it is open.
+        case clickOutside
+    }
+
+    /// What a gesture makes of `presentation`. A request's reveal holds still under the pointer — its buttons must not
+    /// turn into the list on the way to Allow — and closing the list goes back to the request still waiting (`held`, the
+    /// last one revealed, kept only while `settle` would keep it), else to the collapsed island.
+    public static func respond(to gesture: Gesture, presentation: Presentation, held: Alert?,
+                               snapshot: Snapshot) -> Presentation {
+        let folded = held.map { settle(.alert($0), snapshot: snapshot) } ?? .collapsed
+        switch gesture {
+        case .pointerIn:
+            if case .alert(let alert) = presentation, alert.isRequest { return presentation }
+            return .expanded
+        case .pointerOut, .clickOutside:
+            return presentation == .expanded ? folded : presentation
+        case .toggle:
+            return presentation == .expanded ? folded : .expanded
+        }
+    }
+
+    /// The collapsed counter: `3 threads` on a capsule, the bare `3` in a wing beside a notch, where room is short and
+    /// the dots on the other side say what is counted. Counts what the dots stand for (`Snapshot.shownCount`).
+    public static func counter(_ snapshot: Snapshot, onNotch: Bool) -> String {
+        let count = snapshot.shownCount
+        if onNotch { return "\(count)" }
+        return count == 1 ? "1 thread" : "\(count) threads"
+    }
+
+    /// What VoiceOver reads for the collapsed island: the count, then how many in each state, then the 5-hour limit.
+    public static func accessibilitySummary(_ snapshot: Snapshot, fiveHour: Double?) -> String {
+        let states = (snapshot.requests + snapshot.groups.flatMap(\.rows)).map(\.thread.state)
+        var parts: [String] = []
+        let running = states.filter { $0 == .running }.count
+        let waiting = states.filter(\.needsAttention).count
+        let done = states.filter { $0 == .done }.count
+        let failed = states.filter { $0 == .failed }.count
+        if running > 0 { parts.append("\(running) running") }
+        if waiting > 0 { parts.append("\(waiting) waiting for you") }
+        if done > 0 { parts.append("\(done) finished") }
+        if failed > 0 { parts.append("\(failed) failed") }
+        var text = "Scope island, " + counter(snapshot, onNotch: false)
+        if !parts.isEmpty { text += ": " + parts.joined(separator: ", ") }
+        if let fiveHour { text += ". 5-hour limit \(RateLimitText.percent(fiveHour)) used" }
+        return text
+    }
+
+    /// The tone of a limit's ring or bar: light while there is room, orange from 80 %, red once used up — the levels
+    /// of `RateLimitLevel`, folded to what reads on black.
+    public enum LimitTone: Sendable, Equatable {
+        case normal
+        case high
+        case exhausted
+    }
+
+    public static func limitTone(_ percentage: Double) -> LimitTone {
+        switch RateLimitLevel(percentage: percentage) {
+        case .calm, .watch: .normal
+        case .tight: .high
+        case .exhausted: .exhausted
+        }
+    }
+
+    /// A request's buttons left to right: Open, then Deny and a question's options, Allow last — the one that lets the
+    /// agent act sits where the eye ends, never first under the pointer.
+    public static func buttons(_ actions: [Action]) -> [Action] {
+        func rank(_ action: Action) -> Int {
+            switch action {
+            case .open: 0
+            case .deny: 1
+            case .choose: 2
+            case .allow: 3
+            }
+        }
+        return actions.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+    }
+
+    /// Whether the command of `row` is drawn whole, wrapping as it must, rather than cut to a line: always when Allow
+    /// is on offer — allowing what was cut off is allowing what was not read.
+    public static func showsCommandWhole(_ row: Row) -> Bool { row.actions.contains(.allow) }
+
+    // MARK: Geometry
+
+    /// The collapsed capsule's height on a screen without a notch: 6 pt short of the menu bar (24 on a 30 pt bar), so
+    /// it hangs from the top edge instead of sitting on the bar like a second one, and never under 20 pt, which the
+    /// ring and the counter need. Around a notch, the notch's own height.
+    public static func collapsedHeight(on screen: Screen) -> CGFloat {
+        if let notch = screen.notch { return notch.height }
+        let bar = screen.menuBarHeight > 0 ? screen.menuBarHeight : pillHeight
+        return max(20, bar - 6)
+    }
+
+    /// Sizes the collapsed content is laid out with, shared by the view and `wingWidth`.
+    public enum Metrics {
+        public static let dot: CGFloat = 7
+        public static let dotSpacing: CGFloat = 4
+        public static let ring: CGFloat = 14
+        /// Between items: the dots, the counter, the ring.
+        public static let gap: CGFloat = 8
+        /// Each side of the capsule's content, and of a wing's.
+        public static let padding: CGFloat = 12
+        /// A monospaced digit at the counter's 12 pt semibold, and the `+` before an overflow, rounded up.
+        public static let digit: CGFloat = 7.5
+        public static let collapsedRadius: CGFloat = 14
+        public static let openRadius: CGFloat = 22
+        public static let openWidth: CGFloat = 440
+        public static let widenedWidth: CGFloat = 460
+    }
+
+    /// The width of the dots and their `+N`, as the collapsed content lays them out.
+    public static func dotsWidth(_ snapshot: Snapshot) -> CGFloat {
+        let count = CGFloat(snapshot.dots.count)
+        var width = count * Metrics.dot + max(0, count - 1) * Metrics.dotSpacing
+        if snapshot.overflow > 0 { width += Metrics.dotSpacing + CGFloat("+\(snapshot.overflow)".count) * Metrics.digit }
+        return width
+    }
+
+    /// The width of each wing around a notch: the wider of its two contents — the dots on the left, the counter and the
+    /// ring on the right — plus padding, the same both sides so the shape stays centred on the notch.
+    public static func wingWidth(_ snapshot: Snapshot, hasRing: Bool) -> CGFloat {
+        let left = dotsWidth(snapshot)
+        var right = CGFloat(counter(snapshot, onNotch: true).count) * Metrics.digit
+        if hasRing { right += Metrics.gap + Metrics.ring }
+        return (max(left, right) + 2 * Metrics.padding).rounded(.up)
+    }
+
+    /// The two wings beside `notch`, `width` each: nothing ever drawn under the notch itself, where the camera is.
+    public static func wings(around notch: CGRect, width: CGFloat) -> (left: CGRect, right: CGRect) {
+        (CGRect(x: notch.minX - width, y: notch.minY, width: width, height: notch.height),
+         CGRect(x: notch.maxX, y: notch.minY, width: width, height: notch.height))
+    }
+
+    // MARK: Colours
+
+    /// The island's state colours, as sRGB hex, for its black ground. Waiting — the one state that asks something —
+    /// differs in luminance from every other, so it stands out in greyscale and to a colour-blind eye; the others tell
+    /// apart by hue and by shape (`StateDot`: a diamond for failed). The running green is a shade darker than the
+    /// system's #30D158, which has the very luminance of the orange (0.47 against 0.46).
+    public enum Tint {
+        public static let running = 0x208F3E
+        public static let waiting = 0xFF9F0A
+        public static let done = 0x0A84FF
+        public static let failed = 0xFF453A
+        /// A limit's track, and the request card's buttons.
+        public static let track = 0x3A3A3C
+        /// The open list's text: primary, secondary, tertiary.
+        public static let primary = 0xF2F2F7
+        public static let secondary = 0xAEAEB2
+        public static let tertiary = 0x8E8E93
+        /// Under a request in the open list: orange, very dark.
+        public static let requestCard = 0x2C1E0A
+
+        public static func of(_ state: ThreadState) -> Int? {
+            switch state {
+            case .running: running
+            case .waiting: waiting
+            case .done: done
+            case .failed: failed
+            case .idle, .exited: nil
+            }
+        }
+
+        /// WCAG relative luminance of an sRGB hex colour.
+        public static func luminance(_ hex: Int) -> Double {
+            func channel(_ value: Int) -> Double {
+                let c = Double(value) / 255
+                return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel((hex >> 16) & 0xFF) + 0.7152 * channel((hex >> 8) & 0xFF) + 0.0722 * channel(hex & 0xFF)
+        }
+
+        /// WCAG contrast ratio between two colours, 1 to 21.
+        public static func contrast(_ lhs: Int, _ rhs: Int) -> Double {
+            let a = luminance(lhs), b = luminance(rhs)
+            return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+        }
     }
 }

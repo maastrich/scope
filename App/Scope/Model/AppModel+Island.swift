@@ -10,18 +10,16 @@ import ScopeCore
 @MainActor
 @Observable
 final class IslandModel {
-    /// How the island stands on screen.
-    enum Presentation: Equatable {
-        case collapsed
-        case expanded
-        /// A reveal, for a few seconds: the collapsed shape grows to say what happened.
-        case alert(Island.Alert)
-    }
+    typealias Presentation = Island.Presentation
 
     private(set) var snapshot: Island.Snapshot = .empty
     var presentation: Presentation = .collapsed
-    /// The five-hour window's share used, as Claude Code last reported it; `nil` when it has not, or it has reset.
-    private(set) var fiveHourPercentage: Double?
+    /// The last request revealed: closing the list goes back to it while it still waits (`Island.respond`).
+    @ObservationIgnored var heldRequest: Island.Alert?
+    /// The five-hour and weekly windows, as Claude Code last reported them; `nil` when it has not, or once reset.
+    private(set) var fiveHour: RateLimits.Window?
+    private(set) var sevenDay: RateLimits.Window?
+    var fiveHourPercentage: Double? { fiveHour?.usedPercentage }
     /// A one-line refusal after an answer that typed nothing, shown under the request until the next change.
     var refusal: (thread: ThreadID, text: String)?
     @ObservationIgnored fileprivate var inputs: [Island.ThreadInput] = []
@@ -31,9 +29,10 @@ final class IslandModel {
     @ObservationIgnored fileprivate var started = false
     @ObservationIgnored let quiet = IslandQuiet()
 
-    fileprivate func publish(_ snapshot: Island.Snapshot, fiveHour: Double?) {
+    fileprivate func publish(_ snapshot: Island.Snapshot, fiveHour: RateLimits.Window?, sevenDay: RateLimits.Window?) {
         if snapshot != self.snapshot { self.snapshot = snapshot }
-        if fiveHour != fiveHourPercentage { fiveHourPercentage = fiveHour }
+        if fiveHour != self.fiveHour { self.fiveHour = fiveHour }
+        if sevenDay != self.sevenDay { self.sevenDay = sevenDay }
     }
 
     var refusalText: String? { refusal?.text }
@@ -70,8 +69,9 @@ extension AppModel {
 
     #if DEBUG
     /// A throwaway instance driven from a terminal has no pointer on the island and no Accessibility to click it: it
-    /// writes one word to `$SCOPE_HOME/island-command` instead — `expanded`, `collapsed`, `allow`, `deny` (the first
-    /// request, through the same path as the buttons) — read twice a second, then removed.
+    /// writes one word to `$SCOPE_HOME/island-command` instead — `expanded`, `collapsed`, `widen` (the first request,
+    /// as its reveal would), `allow`, `deny` (the first request, through the same path as the buttons) — read twice a
+    /// second, then removed.
     private func startIslandDebugCommands() {
         let file = env.home.appendingPathComponent("island-command")
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -81,6 +81,13 @@ extension AppModel {
                 switch word.trimmingCharacters(in: .whitespacesAndNewlines) {
                 case "expanded": self.island.presentation = .expanded
                 case "collapsed": self.island.presentation = .collapsed
+                case "widen":
+                    guard let row = self.island.snapshot.requests.first else { return }
+                    let alert = Island.Alert(
+                        key: "debug", kind: row.thread.request?.kind == .plan ? .plan : .permission, thread: row.id,
+                        title: row.thread.title, line: row.line, requestID: row.thread.request?.id)
+                    self.island.heldRequest = alert
+                    self.island.presentation = .alert(alert)
                 case let answer where answer == "allow" || answer == "deny":
                     guard let row = self.island.snapshot.requests.first else { return }
                     self.answerFromIsland(row.id, action: answer == "allow" ? .allow : .deny)
@@ -111,7 +118,8 @@ extension AppModel {
 
     private struct IslandReading {
         var inputs: [Island.ThreadInput]
-        var fiveHour: Double?
+        var fiveHour: RateLimits.Window?
+        var sevenDay: RateLimits.Window?
         var settings: IslandSettings
         var enabled: Bool
         var now: Date
@@ -124,14 +132,18 @@ extension AppModel {
             guard session.deliversEvents, session.isAlive else { return nil }
             return islandInput(session, foreground: foreground, now: now)
         }
-        let fiveHour = tokenUsage.currentLimits(now: now)?.current(now: now).first { $0.id == "five_hour" }?.usedPercentage
-        return IslandReading(inputs: inputs, fiveHour: fiveHour, settings: config.preferences.island,
+        let windows = tokenUsage.currentLimits(now: now)?.current(now: now) ?? []
+        return IslandReading(inputs: inputs, fiveHour: windows.first { $0.id == "five_hour" },
+                             sevenDay: windows.first { $0.id == "seven_day" }, settings: config.preferences.island,
                              enabled: islandEnabled, now: now)
     }
 
     /// Publishes the snapshot and plays what changed since the last reading.
     private func applyIsland(_ reading: IslandReading) {
-        island.publish(Island.snapshot(reading.inputs, now: reading.now), fiveHour: reading.fiveHour)
+        let snapshot = Island.snapshot(reading.inputs, now: reading.now)
+        island.publish(snapshot, fiveHour: reading.fiveHour, sevenDay: reading.sevenDay)
+        let settled = Island.settle(island.presentation, snapshot: snapshot)
+        if settled != island.presentation { island.presentation = settled }
         island.quiet.refreshActivity()
         let alerts = Island.alerts(from: island.inputs, to: reading.inputs, settings: reading.settings,
                                    quiet: island.quiet.current, memory: &island.memory)
@@ -168,15 +180,20 @@ extension AppModel {
             taskID: task?.id.rawValue, taskName: task?.name, title: session.title, state: state,
             activity: state.isUnreadResult ? (session.activityHeadline?.reply ?? session.activityHeadline?.text)
                 : session.activityHeadline?.text, since: since, lastEventAt: heard, hasBackgroundWork: background,
-            request: request, isForeground: session.id == foreground, turn: session.turnRevision)
+            request: request, isForeground: session.id == foreground, turn: session.turnRevision,
+            plan: activity.plan)
     }
 
-    /// A reveal: the collapsed island grows for a moment, unless the user has it open already.
+    /// A reveal: the island widens on it, unless the user has it open already. A request stays until it is answered
+    /// (`Island.settle`), a turn that ended for a few seconds.
     private func play(_ alert: Island.Alert, sound: Bool) {
         if sound { IslandSound.play(alert.kind) }
-        guard island.presentation != .expanded else { return }
-        island.presentation = .alert(alert)
+        if alert.isRequest { island.heldRequest = alert }
+        let next = Island.present(alert, over: island.presentation)
+        guard next != island.presentation else { return }
+        island.presentation = next
         island.alertEnds?.cancel()
+        guard !alert.isRequest else { return }
         island.alertEnds = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.islandAlertDuration * Self.islandAlertStretch)
             guard !Task.isCancelled, let self, case .alert(let shown) = self.island.presentation, shown == alert else { return }
@@ -186,9 +203,18 @@ extension AppModel {
 
     // MARK: Gestures
 
+    /// A pointer or a click on the island, through `Island.respond`.
+    func islandGesture(_ gesture: Island.Gesture) {
+        let next = Island.respond(to: gesture, presentation: island.presentation, held: island.heldRequest,
+                                  snapshot: island.snapshot)
+        if next != island.presentation { island.presentation = next }
+    }
+
     /// A click on a row: Scope comes up on that thread, its terminal with the keyboard.
     func openFromIsland(_ thread: ThreadID) {
         Usage.click("island.open", label: "Island ▸ Open thread")
+        // Taken to the thread: its request is in front of the user now, the island need not come back to it.
+        if island.heldRequest?.thread == thread { island.heldRequest = nil }
         island.presentation = .collapsed
         reveal(thread: thread, showDelta: false)
         AppDelegate.refocusTerminal()

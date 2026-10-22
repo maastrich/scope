@@ -132,6 +132,141 @@ private func plan() -> ClaudePendingRequest {
     }
 }
 
+@Suite struct IslandLookTests {
+    @Test func theCounterCountsEveryDotDrawnOrInTheOverflow() {
+        // One running, three finished: four dots, so four threads — not the "1" of the running one alone.
+        let mixed = Island.snapshot([thread("aaaaaaaaaaa1", .running), thread("aaaaaaaaaaa2", .done),
+                                     thread("aaaaaaaaaaa3", .done), thread("aaaaaaaaaaa4", .failed)], now: t0)
+        #expect(mixed.shownCount == mixed.dots.count)
+        #expect(Island.counter(mixed, onNotch: false) == "4 threads")
+        #expect(Island.counter(mixed, onNotch: true) == "4")
+        let one = Island.snapshot([thread("aaaaaaaaaaa1", .running)], now: t0)
+        #expect(Island.counter(one, onNotch: false) == "1 thread")
+        let nine = Island.snapshot((1...9).map { thread("aaaaaaaaaab\($0)", .running) }, now: t0)
+        #expect(nine.dots.count == Island.dotLimit)
+        #expect(nine.overflow == 3)
+        #expect(Island.counter(nine, onNotch: false) == "9 threads")
+    }
+
+    @Test func voiceOverHearsTheCountEachStateAndTheLimit() {
+        let snapshot = Island.snapshot([thread("aaaaaaaaaaa1", .running), thread("aaaaaaaaaaa2", .done),
+                                        thread("aaaaaaaaaaa3", .waiting(reason: .permission), request: permission())], now: t0)
+        #expect(Island.accessibilitySummary(snapshot, fiveHour: 12.4)
+                == "Scope island, 3 threads: 1 running, 1 waiting for you, 1 finished. 5-hour limit 12% used")
+        #expect(Island.accessibilitySummary(snapshot, fiveHour: nil).hasSuffix("1 finished"))
+    }
+
+    @Test func theRingTurnsOrangeFromEightyPercentAndRedOnceUsedUp() {
+        #expect(Island.limitTone(0) == .normal)
+        #expect(Island.limitTone(79.9) == .normal)
+        #expect(Island.limitTone(80) == .high)
+        #expect(Island.limitTone(99) == .high)
+        #expect(Island.limitTone(100) == .exhausted)
+        #expect(Island.limitTone(130) == .exhausted)
+    }
+
+    @Test func allowComesLastAndOpenFirst() {
+        #expect(Island.buttons([.allow, .deny, .open]) == [.open, .deny, .allow])
+        #expect(Island.buttons([.choose(0, "Red"), .choose(1, "Blue"), .open]) == [.open, .choose(0, "Red"), .choose(1, "Blue")])
+        #expect(Island.buttons([.open]) == [.open])
+    }
+
+    @Test func aCommandOnOfferForAllowIsNeverCut() {
+        let short = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        #expect(Island.showsCommandWhole(short.requests[0]))
+        let long = permission(command: "rm -rf build && " + String(repeating: "x", count: 200))
+        let cut = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: long)], now: t0)
+        #expect(!Island.showsCommandWhole(cut.requests[0]))
+        #expect(!cut.requests[0].actions.contains(.allow))
+    }
+
+    private func reveal(_ kind: Island.AlertKind, request: String? = "p1") -> Island.Alert {
+        Island.Alert(key: "k", kind: kind, thread: ThreadID(rawValue: "aaaaaaaaaaa1")!, title: "thread 1", line: "",
+                     requestID: request)
+    }
+
+    @Test func aRequestStaysWidenedUntilItIsAnswered() {
+        let asking = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        let answered = Island.snapshot([thread("aaaaaaaaaaa1", .running)], now: t0)
+        let another = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission("p2"))], now: t0)
+        let widened = Island.Presentation.alert(reveal(.permission))
+        #expect(Island.settle(widened, snapshot: asking) == widened)
+        #expect(Island.settle(widened, snapshot: answered) == .collapsed)
+        #expect(Island.settle(widened, snapshot: another) == .collapsed)
+        #expect(Island.settle(widened, snapshot: .empty) == .collapsed)
+    }
+
+    @Test func aTurnsRevealAndTheOpenIslandAreLeftAlone() {
+        let answered = Island.snapshot([thread("aaaaaaaaaaa1", .done)], now: t0)
+        let finished = Island.Presentation.alert(reveal(.finished, request: nil))
+        #expect(Island.settle(finished, snapshot: answered) == finished)
+        #expect(Island.settle(.expanded, snapshot: .empty) == .expanded)
+        #expect(Island.settle(.collapsed, snapshot: answered) == .collapsed)
+    }
+
+    @Test func aRevealWidensTheCollapsedIslandButNeverClosesTheOpenOne() {
+        let alert = reveal(.permission)
+        #expect(Island.present(alert, over: .collapsed) == .alert(alert))
+        #expect(Island.present(alert, over: .alert(reveal(.finished, request: nil))) == .alert(alert))
+        #expect(Island.present(alert, over: .expanded) == .expanded)
+        let finished = reveal(.finished, request: nil)
+        #expect(Island.present(finished, over: .alert(alert)) == .alert(alert))
+    }
+
+    @Test func thePointerNeverTurnsAWaitingRequestIntoTheList() {
+        let asking = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        let request = reveal(.permission)
+        let widened = Island.Presentation.alert(request)
+        // On its way to Allow, the pointer leaves the buttons where they are.
+        #expect(Island.respond(to: .pointerIn, presentation: widened, held: request, snapshot: asking) == widened)
+        #expect(Island.respond(to: .pointerOut, presentation: widened, held: request, snapshot: asking) == widened)
+        // A turn's reveal and the collapsed island open on the pointer, as before.
+        let finished = Island.Presentation.alert(reveal(.finished, request: nil))
+        #expect(Island.respond(to: .pointerIn, presentation: finished, held: nil, snapshot: asking) == .expanded)
+        #expect(Island.respond(to: .pointerIn, presentation: .collapsed, held: nil, snapshot: asking) == .expanded)
+    }
+
+    @Test func closingTheListGoesBackToTheRequestStillWaitingElseCollapses() {
+        let asking = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        let answered = Island.snapshot([thread("aaaaaaaaaaa1", .running)], now: t0)
+        let request = reveal(.permission)
+        for gesture in [Island.Gesture.pointerOut, .clickOutside, .toggle] {
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: request, snapshot: asking) == .alert(request))
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: request, snapshot: answered) == .collapsed)
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: nil, snapshot: asking) == .collapsed)
+        }
+        #expect(Island.respond(to: .toggle, presentation: .collapsed, held: nil, snapshot: asking) == .expanded)
+        #expect(Island.respond(to: .clickOutside, presentation: .collapsed, held: request, snapshot: asking) == .collapsed)
+    }
+
+    @Test func aRevealedRequestCarriesItsID() {
+        var memory = Island.AlertMemory()
+        let before = [thread("aaaaaaaaaaa1", .running)]
+        let after = [thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())]
+        let alerts = Island.alerts(from: before, to: after, settings: IslandSettings(), quiet: .init(), memory: &memory)
+        #expect(alerts.first?.requestID == "p1")
+        #expect(alerts.first?.isRequest == true)
+    }
+
+    @Test func statesToTellApartDifferInLuminanceAndReadOnBlack() {
+        typealias Tint = Island.Tint
+        // The one state asking something stands apart from all the others…
+        for other in [Tint.running, Tint.done, Tint.failed] {
+            #expect(Tint.contrast(Tint.waiting, other) >= 1.5)
+        }
+        // …and green never meets red at the same grey, though the diamond also says failed.
+        #expect(Tint.contrast(Tint.running, Tint.failed) >= 1.2)
+        for tint in [Tint.running, Tint.waiting, Tint.done, Tint.failed] {
+            #expect(Tint.contrast(tint, 0x000000) >= 3, "a dot is a graphic: 3:1")
+        }
+        for text in [Tint.primary, Tint.secondary, Tint.tertiary] {
+            #expect(Tint.contrast(text, 0x000000) >= 4.5)
+            #expect(Tint.contrast(text, Tint.requestCard) >= 4.5)
+        }
+        #expect(Tint.of(.idle) == nil)
+    }
+}
+
 @Suite struct IslandAlertTests {
     private func alerts(_ before: [Island.ThreadInput], _ after: [Island.ThreadInput],
                         settings: IslandSettings = IslandSettings(), quiet: Island.Quiet = Island.Quiet(),
@@ -262,6 +397,40 @@ private func plan() -> ClaudePendingRequest {
         var hidden = external
         hidden.menuBarHeight = 0
         #expect(Island.band(on: hidden).height == Island.pillHeight)
+    }
+
+    @Test func theCapsuleHangsShorterThanTheMenuBarAndTheWingsAsHighAsTheNotch() {
+        #expect(Island.collapsedHeight(on: external) == 20)
+        var tall = external
+        tall.menuBarHeight = 30
+        #expect(Island.collapsedHeight(on: tall) == 24)
+        var hidden = external
+        hidden.menuBarHeight = 0
+        #expect(Island.collapsedHeight(on: hidden) == 20)
+        #expect(Island.collapsedHeight(on: notched) == 32)
+    }
+
+    @Test func theWingsFlankTheNotchWithoutReachingUnderIt() throws {
+        let notch = try #require(notched.notch)
+        let wings = Island.wings(around: notch, width: 70)
+        #expect(wings.left == CGRect(x: 596, y: 950, width: 70, height: 32))
+        #expect(wings.right == CGRect(x: 846, y: 950, width: 70, height: 32))
+        #expect(!wings.left.intersects(notch) && !wings.right.intersects(notch))
+        // Laid out as left wing, notch, right wing, the content is centred on the notch, so the panel's frame is too.
+        let frame = Island.frame(for: CGSize(width: 70 + notch.width + 70, height: 32), on: notched)
+        #expect(frame == wings.left.union(notch).union(wings.right))
+    }
+
+    @Test func bothWingsTakeTheWiderContentPlusPadding() {
+        let three = Island.snapshot([thread("aaaaaaaaaaa1", .running), thread("aaaaaaaaaaa2", .running),
+                                     thread("aaaaaaaaaaa3", .done)], now: t0)
+        // Three dots (7 + 4 + 7 + 4 + 7 = 29) against "3" and the ring (7.5 + 8 + 14 = 29.5).
+        #expect(Island.wingWidth(three, hasRing: true) == 54)
+        #expect(Island.wingWidth(three, hasRing: false) == 53)
+        let nine = Island.snapshot((1...9).map { thread("aaaaaaaaaab\($0)", .running) }, now: t0)
+        // Six dots and "+3": 6 × 7 + 5 × 4 + 4 + 2 × 7.5 = 81.
+        #expect(Island.dotsWidth(nine) == 81)
+        #expect(Island.wingWidth(nine, hasRing: true) == 105)
     }
 
     @Test func theOpenIslandStaysOnItsScreen() {

@@ -81,8 +81,16 @@ Observé en lecture seule : bundle (`Info.plist`, `Localizable.strings`, ressour
   « automatique ») : l'îlot ne paraît que s'il y a un thread qui travaille, attend ou a fini sans être lu, et occupe
   l'espace mort de l'encoche ; sans lui la fonction ne se découvre pas. Les builds Debug de plusieurs worktrees
   empileraient leurs îlots au même endroit.
-- **Noir autour de l'encoche, design system en dessous.** La bande doit se fondre dans l'encoche matérielle ; la
-  liste, les cartes et la pastille sans encoche suivent `Surface` / `Ink`, clair ou sombre.
+- **Toujours noir** (refonte d'octobre 2026, remplace « noir autour de l'encoche, design system en dessous »). La
+  pastille blanche posée sur une barre des menus colorée se lisait comme un bouton égaré, plus haute qu'elle-même
+  semblait devoir l'être, avec un « 1 » (les threads actifs) à côté de quatre points (tous les threads montrés) et
+  un anneau gris sur gris. Maintenant : une capsule noire qui pend du bord haut, 6 pt plus courte que la barre ; le
+  compteur compte exactement les points ; l'anneau a une piste #3A3A3C et un arc clair, orange dès 80 %. Autour d'une
+  encoche, deux ailes symétriques, rien sous l'encoche. Une demande élargit l'îlot jusqu'à la réponse (le
+  comportement de la maquette B) ; ouvert, une carte noire liste les demandes puis les threads par task, la todo list
+  du thread survolé et les limites 5 h / 7 j (la maquette A). Couleurs d'état sur noir : #FF9F0A, #0A84FF, #FF453A
+  et un vert #208F3E plutôt que #30D158, qui a la luminance de l'orange (0,47 contre 0,46) ; testé dans
+  `IslandLookTests`. Avec Allow à l'écran, la commande passe à la ligne au lieu d'être tronquée.
 - **Focus.** `INFocusStatusCenter`, autorisation demandée la première fois que l'îlot s'affiche. Sans autorisation,
   Scope considère qu'il n'y a pas de Focus, et Réglages ▸ Island le dit. **Non vérifié** : aucune demande n'apparaît
   dans le journal TCC pour le build Debug signé ad hoc. L'API demande peut-être un droit qu'un tel build n'a pas.
@@ -132,7 +140,9 @@ attente de Vibe Island n'a pas été observé. Tant que les deux tournent, mettr
 
 - Aucun écran à encoche sur la machine de test : le placement autour de l'encoche n'est couvert que par les tests
   (`IslandPlacementTests`).
-- Les captures datent d'avant un dernier réglage : une ligne de thread se tronque maintenant en fin, plus au milieu.
+- Les captures (`shots/`) sont prises de l'intérieur de l'app (`CGWindowListCreateImage` sur sa propre fenêtre et la
+  bande d'écran autour, sans Enregistrement d'écran), sur un écran LG sans encoche, avec de vrais threads Claude Code
+  d'une instance jetable. Le rendu autour d'une encoche n'est vérifié que par la géométrie (`IslandPlacementTests`).
 - Survol et clic non pilotés (pas d'Accessibility) : les états ont été forcés par `$SCOPE_HOME/island-command`
   (Debug), qui appelle le même chemin que les boutons.
 - Hooks perdus : #101 a corrigé la perte au niveau de la socket, pas la réconciliation d'état. Un `Stop` perdu sans

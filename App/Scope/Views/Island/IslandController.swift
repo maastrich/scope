@@ -3,14 +3,14 @@ import ScopeControl
 import ScopeCore
 import SwiftUI
 
-/// Where the island's shape stands on its screen, for the view: around a notch, or as a pill where there is none.
+/// Where the island's shape stands on its screen, for the view: around a notch, or as a capsule where there is none.
 @MainActor
 @Observable
 final class IslandLayout {
     /// The notch's width; 0 on a screen without one.
     var bandWidth: CGFloat = 0
-    /// The notch's height, or the menu bar's.
-    var bandHeight: CGFloat = Island.pillHeight
+    /// The collapsed height: the notch's, or a few points short of the menu bar (`Island.collapsedHeight`).
+    var bandHeight: CGFloat = 20
     var onNotch: Bool { bandWidth > 0 }
 }
 
@@ -165,8 +165,9 @@ final class IslandController: NSObject {
         }
         hiddenForFullScreen = false
         let band = Island.band(on: target)
+        let height = Island.collapsedHeight(on: target)
         if layout.bandWidth != band.width { layout.bandWidth = band.width }
-        if layout.bandHeight != band.height { layout.bandHeight = band.height }
+        if layout.bandHeight != height { layout.bandHeight = height }
         host.layoutSubtreeIfNeeded()
         let frame = Island.frame(for: host.fittingSize, on: target)
         // Growing at once and shrinking once the content has folded, so the window never cuts the animation short. Both
@@ -234,19 +235,14 @@ final class IslandController: NSObject {
         guard model.config.preferences.island.opening == .hover else { return }
         hoverTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: inside ? Self.hoverDelay : Self.leaveDelay)
-            guard !Task.isCancelled, let self, let model = self.model else { return }
-            if inside {
-                model.island.presentation = .expanded
-            } else if model.island.presentation == .expanded {
-                model.island.presentation = .collapsed
-            }
+            guard !Task.isCancelled, let model = self?.model else { return }
+            model.islandGesture(inside ? .pointerIn : .pointerOut)
         }
     }
 
     /// A click on the collapsed island, in either mode: the click mode's way in, and a shortcut past the hover delay.
     func toggle() {
-        guard let model else { return }
-        model.island.presentation = model.island.presentation == .expanded ? .collapsed : .expanded
+        model?.islandGesture(.toggle)
     }
 
     /// While open, a click anywhere else closes it. A global monitor sees clicks meant for other apps without taking
@@ -255,8 +251,7 @@ final class IslandController: NSObject {
         if expanded, outsideClicks == nil {
             outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let model = self?.model, model.island.presentation == .expanded else { return }
-                    model.island.presentation = .collapsed
+                    self?.model?.islandGesture(.clickOutside)
                 }
             }
         } else if !expanded {
