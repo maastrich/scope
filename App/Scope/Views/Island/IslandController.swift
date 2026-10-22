@@ -37,7 +37,6 @@ final class IslandController: NSObject {
     private var activationObserver: NSObjectProtocol?
     private var followTimer: Timer?
     private var tracking = false
-    private var hovering = false
 
     /// Puts the island up, or keeps it up, for what the model holds now.
     func show(model: AppModel) {
@@ -139,7 +138,8 @@ final class IslandController: NSObject {
         guard var target = Island.screen(all, settings: settings, pointer: NSEvent.mouseLocation,
                                          activeWindow: activeWindow) else { return }
         // Never pulled from under the user: while open or under the pointer it stays where it is.
-        if panel.isVisible, hovering || model.island.presentation == .expanded,
+        if panel.isVisible,
+           model.island.presentation == .expanded || NSMouseInRect(NSEvent.mouseLocation, panel.frame, false),
            let current = all.first(where: { $0.frame.contains(CGPoint(x: panel.frame.midX, y: panel.frame.maxY - 1)) }) {
             target = current
         }
@@ -205,7 +205,6 @@ final class IslandController: NSObject {
 
     private func hovered(_ inside: Bool) {
         guard let model else { return }
-        hovering = inside
         hoverTask?.cancel()
         guard model.config.preferences.island.opening == .hover else { return }
         hoverTask = Task { @MainActor [weak self] in
