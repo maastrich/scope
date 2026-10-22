@@ -461,6 +461,22 @@ extension Island {
         window.insetBy(dx: -1, dy: -1).contains(screen.frame)
     }
 
+    /// The document windows of `pid` — layer 0, visible — in a window list: an app in full screen often puts a toolbar
+    /// strip in front of the window that fills the screen, so full screen is read from all of them.
+    public static func documentWindows(of pid: Int32, in windows: [WindowInfo]) -> [CGRect] {
+        windows.filter { $0.pid == pid && $0.layer == 0 && $0.alpha > 0 }.map(\.bounds)
+    }
+
+    /// Whether the collapsed island steps aside on `screen`: the settings want it, an app in front fills that screen
+    /// (`frontWindows`, in AppKit coordinates), and nothing calls for the user — no request waiting, no request being
+    /// revealed, the island not open.
+    public static func hidesForFullScreen(settings: IslandSettings, frontWindows: [CGRect], on screen: Screen,
+                                          isOpen: Bool, hasRequests: Bool, revealing: AlertKind?) -> Bool {
+        guard settings.hidesInFullScreen, !isOpen, !hasRequests else { return false }
+        if let revealing, revealing != .finished, revealing != .failed { return false }
+        return frontWindows.contains { isFullScreen($0, on: screen) }
+    }
+
     /// A Quartz rectangle (origin at the top left of the primary screen, y down) in AppKit's global coordinates (origin
     /// at the bottom left of the primary screen, y up). `primaryHeight` is the height of the screen at the origin —
     /// `NSScreen.screens[0]`, not `NSScreen.main`, which is wherever the key window is.

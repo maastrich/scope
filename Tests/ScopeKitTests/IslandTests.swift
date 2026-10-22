@@ -345,6 +345,45 @@ private func plan() -> ClaudePendingRequest {
         #expect(!Island.isFullScreen(primary.frame, on: left))
     }
 
+    @Test func fullScreenIsReadFromEveryWindowOfTheAppBehindAToolbarStrip() {
+        // Seen live: an app in full screen on the right-hand screen lists a 52 pt strip first, then its window.
+        let leftScreen = Island.Screen(name: "LG (1)", frame: CGRect(x: 0, y: 0, width: 1920, height: 1080), isMain: true)
+        let rightScreen = Island.Screen(name: "LG (2)", frame: CGRect(x: 1920, y: 0, width: 1920, height: 1080))
+        let list = [
+            Island.WindowInfo(pid: 7, layer: 0, bounds: CGRect(x: 1920, y: 0, width: 1920, height: 52)),
+            Island.WindowInfo(pid: 7, layer: 0, bounds: CGRect(x: 1920, y: 0, width: 1920, height: 1080)),
+            Island.WindowInfo(pid: 7, layer: 25, bounds: CGRect(x: 0, y: 0, width: 1920, height: 1080)),
+            Island.WindowInfo(pid: 8, layer: 0, bounds: CGRect(x: 0, y: 0, width: 1920, height: 1080)),
+        ]
+        let windows = Island.documentWindows(of: 7, in: list).map { Island.appKitRect(fromQuartz: $0, primaryHeight: 1080) }
+        #expect(windows.count == 2)
+        let collapsed = { (screen: Island.Screen) in
+            Island.hidesForFullScreen(settings: IslandSettings(), frontWindows: windows, on: screen, isOpen: false,
+                                      hasRequests: false, revealing: nil)
+        }
+        #expect(collapsed(rightScreen))
+        #expect(!collapsed(leftScreen))
+    }
+
+    @Test func overFullScreenOnlyARequestOrTheOpenIslandShows() {
+        let windows = [primary.frame]
+        func hides(_ settings: IslandSettings = IslandSettings(), open: Bool = false, requests: Bool = false,
+                   revealing: Island.AlertKind? = nil) -> Bool {
+            Island.hidesForFullScreen(settings: settings, frontWindows: windows, on: primary, isOpen: open,
+                                      hasRequests: requests, revealing: revealing)
+        }
+        #expect(hides())
+        #expect(hides(revealing: .finished))
+        #expect(hides(revealing: .failed))
+        #expect(!hides(revealing: .permission))
+        #expect(!hides(revealing: .question))
+        #expect(!hides(requests: true))
+        #expect(!hides(open: true))
+        #expect(!hides(IslandSettings(hidesInFullScreen: false)))
+        #expect(!Island.hidesForFullScreen(settings: IslandSettings(), frontWindows: [], on: primary, isOpen: false,
+                                           hasRequests: false, revealing: nil))
+    }
+
     @Test func quartzRectsFlipAroundThePrimaryScreen() {
         // A window 100 pt below the top of the primary screen.
         #expect(Island.appKitRect(fromQuartz: CGRect(x: 10, y: 100, width: 800, height: 600), primaryHeight: 1440)
