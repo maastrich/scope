@@ -14,6 +14,8 @@ final class IslandModel {
 
     private(set) var snapshot: Island.Snapshot = .empty
     var presentation: Presentation = .collapsed
+    /// The last request revealed: closing the list goes back to it while it still waits (`Island.respond`).
+    @ObservationIgnored var heldRequest: Island.Alert?
     /// The five-hour and weekly windows, as Claude Code last reported them; `nil` when it has not, or once reset.
     private(set) var fiveHour: RateLimits.Window?
     private(set) var sevenDay: RateLimits.Window?
@@ -81,9 +83,11 @@ extension AppModel {
                 case "collapsed": self.island.presentation = .collapsed
                 case "widen":
                     guard let row = self.island.snapshot.requests.first else { return }
-                    self.island.presentation = .alert(Island.Alert(
+                    let alert = Island.Alert(
                         key: "debug", kind: row.thread.request?.kind == .plan ? .plan : .permission, thread: row.id,
-                        title: row.thread.title, line: row.line, requestID: row.thread.request?.id))
+                        title: row.thread.title, line: row.line, requestID: row.thread.request?.id)
+                    self.island.heldRequest = alert
+                    self.island.presentation = .alert(alert)
                 case let answer where answer == "allow" || answer == "deny":
                     guard let row = self.island.snapshot.requests.first else { return }
                     self.answerFromIsland(row.id, action: answer == "allow" ? .allow : .deny)
@@ -184,6 +188,7 @@ extension AppModel {
     /// (`Island.settle`), a turn that ended for a few seconds.
     private func play(_ alert: Island.Alert, sound: Bool) {
         if sound { IslandSound.play(alert.kind) }
+        if alert.isRequest { island.heldRequest = alert }
         let next = Island.present(alert, over: island.presentation)
         guard next != island.presentation else { return }
         island.presentation = next
@@ -198,9 +203,18 @@ extension AppModel {
 
     // MARK: Gestures
 
+    /// A pointer or a click on the island, through `Island.respond`.
+    func islandGesture(_ gesture: Island.Gesture) {
+        let next = Island.respond(to: gesture, presentation: island.presentation, held: island.heldRequest,
+                                  snapshot: island.snapshot)
+        if next != island.presentation { island.presentation = next }
+    }
+
     /// A click on a row: Scope comes up on that thread, its terminal with the keyboard.
     func openFromIsland(_ thread: ThreadID) {
         Usage.click("island.open", label: "Island ▸ Open thread")
+        // Taken to the thread: its request is in front of the user now, the island need not come back to it.
+        if island.heldRequest?.thread == thread { island.heldRequest = nil }
         island.presentation = .collapsed
         reveal(thread: thread, showDelta: false)
         AppDelegate.refocusTerminal()

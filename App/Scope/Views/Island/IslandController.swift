@@ -235,19 +235,14 @@ final class IslandController: NSObject {
         guard model.config.preferences.island.opening == .hover else { return }
         hoverTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: inside ? Self.hoverDelay : Self.leaveDelay)
-            guard !Task.isCancelled, let self, let model = self.model else { return }
-            if inside {
-                model.island.presentation = .expanded
-            } else if model.island.presentation == .expanded {
-                model.island.presentation = .collapsed
-            }
+            guard !Task.isCancelled, let model = self?.model else { return }
+            model.islandGesture(inside ? .pointerIn : .pointerOut)
         }
     }
 
     /// A click on the collapsed island, in either mode: the click mode's way in, and a shortcut past the hover delay.
     func toggle() {
-        guard let model else { return }
-        model.island.presentation = model.island.presentation == .expanded ? .collapsed : .expanded
+        model?.islandGesture(.toggle)
     }
 
     /// While open, a click anywhere else closes it. A global monitor sees clicks meant for other apps without taking
@@ -256,8 +251,7 @@ final class IslandController: NSObject {
         if expanded, outsideClicks == nil {
             outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let model = self?.model, model.island.presentation == .expanded else { return }
-                    model.island.presentation = .collapsed
+                    self?.model?.islandGesture(.clickOutside)
                 }
             }
         } else if !expanded {

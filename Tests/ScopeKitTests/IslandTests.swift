@@ -213,6 +213,32 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.present(finished, over: .alert(alert)) == .alert(alert))
     }
 
+    @Test func thePointerNeverTurnsAWaitingRequestIntoTheList() {
+        let asking = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        let request = reveal(.permission)
+        let widened = Island.Presentation.alert(request)
+        // On its way to Allow, the pointer leaves the buttons where they are.
+        #expect(Island.respond(to: .pointerIn, presentation: widened, held: request, snapshot: asking) == widened)
+        #expect(Island.respond(to: .pointerOut, presentation: widened, held: request, snapshot: asking) == widened)
+        // A turn's reveal and the collapsed island open on the pointer, as before.
+        let finished = Island.Presentation.alert(reveal(.finished, request: nil))
+        #expect(Island.respond(to: .pointerIn, presentation: finished, held: nil, snapshot: asking) == .expanded)
+        #expect(Island.respond(to: .pointerIn, presentation: .collapsed, held: nil, snapshot: asking) == .expanded)
+    }
+
+    @Test func closingTheListGoesBackToTheRequestStillWaitingElseCollapses() {
+        let asking = Island.snapshot([thread("aaaaaaaaaaa1", .waiting(reason: .permission), request: permission())], now: t0)
+        let answered = Island.snapshot([thread("aaaaaaaaaaa1", .running)], now: t0)
+        let request = reveal(.permission)
+        for gesture in [Island.Gesture.pointerOut, .clickOutside, .toggle] {
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: request, snapshot: asking) == .alert(request))
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: request, snapshot: answered) == .collapsed)
+            #expect(Island.respond(to: gesture, presentation: .expanded, held: nil, snapshot: asking) == .collapsed)
+        }
+        #expect(Island.respond(to: .toggle, presentation: .collapsed, held: nil, snapshot: asking) == .expanded)
+        #expect(Island.respond(to: .clickOutside, presentation: .collapsed, held: request, snapshot: asking) == .collapsed)
+    }
+
     @Test func aRevealedRequestCarriesItsID() {
         var memory = Island.AlertMemory()
         let before = [thread("aaaaaaaaaaa1", .running)]

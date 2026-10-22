@@ -563,6 +563,35 @@ extension Island {
         }
     }
 
+    /// What the user does to the island from where it stands.
+    public enum Gesture: Sendable, Equatable {
+        /// The pointer rested on it (the hover opening).
+        case pointerIn
+        /// The pointer left it (the hover opening).
+        case pointerOut
+        /// A click on the capsule or the wings.
+        case toggle
+        /// A click anywhere else while it is open.
+        case clickOutside
+    }
+
+    /// What a gesture makes of `presentation`. A request's reveal holds still under the pointer — its buttons must not
+    /// turn into the list on the way to Allow — and closing the list goes back to the request still waiting (`held`, the
+    /// last one revealed, kept only while `settle` would keep it), else to the collapsed island.
+    public static func respond(to gesture: Gesture, presentation: Presentation, held: Alert?,
+                               snapshot: Snapshot) -> Presentation {
+        let folded = held.map { settle(.alert($0), snapshot: snapshot) } ?? .collapsed
+        switch gesture {
+        case .pointerIn:
+            if case .alert(let alert) = presentation, alert.isRequest { return presentation }
+            return .expanded
+        case .pointerOut, .clickOutside:
+            return presentation == .expanded ? folded : presentation
+        case .toggle:
+            return presentation == .expanded ? folded : .expanded
+        }
+    }
+
     /// The collapsed counter: `3 threads` on a capsule, the bare `3` in a wing beside a notch, where room is short and
     /// the dots on the other side say what is counted. Counts what the dots stand for (`Snapshot.shownCount`).
     public static func counter(_ snapshot: Snapshot, onNotch: Bool) -> String {
@@ -676,9 +705,10 @@ extension Island {
 
     // MARK: Colours
 
-    /// The island's state colours, as sRGB hex, for its black ground. Every pair the eye must tell apart also differs
-    /// in luminance, so the dots still read in greyscale and to a colour-blind eye — beside their shapes (`StateDot`).
-    /// The running green is a shade darker than the system's (#30D158), which has the very luminance of the orange.
+    /// The island's state colours, as sRGB hex, for its black ground. Waiting — the one state that asks something —
+    /// differs in luminance from every other, so it stands out in greyscale and to a colour-blind eye; the others tell
+    /// apart by hue and by shape (`StateDot`: a diamond for failed). The running green is a shade darker than the
+    /// system's #30D158, which has the very luminance of the orange (0.47 against 0.46).
     public enum Tint {
         public static let running = 0x208F3E
         public static let waiting = 0xFF9F0A
