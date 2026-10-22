@@ -96,6 +96,36 @@ final class ScopeTerminalView: LocalProcessTerminalView {
         (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
     }
 
+    // MARK: Cursor accessories
+
+    /// Whether the program shows the terminal cursor (DECTCEM). SwiftTerm keeps its own flag internal.
+    private var cursorShown = true
+
+    /// macOS hangs its text-cursor accessories (a small grey diamond, the caps lock and input source badges) in a
+    /// window of their own at `firstRect(forCharacterRange:)`, which SwiftTerm answers with the caret's frame
+    /// even while the cursor is hidden. Claude Code hides it and draws its own, so the real one sits parked in
+    /// the middle of the output, and so did the diamond, over the text. No cursor on screen, no accessory.
+    @objc var preferredTextAccessoryPlacement: NSTextCursorAccessoryPlacement {
+        cursorShown ? .unspecified : .invisible
+    }
+
+    override func showCursor(source: Terminal) {
+        super.showCursor(source: source)
+        cursorVisibilityChanged(true)
+    }
+
+    override func hideCursor(source: Terminal) {
+        super.hideCursor(source: source)
+        cursorVisibilityChanged(false)
+    }
+
+    private func cursorVisibilityChanged(_ shown: Bool) {
+        guard shown != cursorShown else { return }
+        cursorShown = shown
+        // Makes the system ask for the placement again rather than keep the accessory where it was.
+        inputContext?.invalidateCharacterCoordinates()
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateScrollMarker()
