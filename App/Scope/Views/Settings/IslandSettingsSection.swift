@@ -24,6 +24,7 @@ struct IslandSettingsSection: View {
             }
             SettingsRow("Screen") {
                 ScopePicker("Screen", selection: screenChoice, title: screenTitle) {
+                    Text("Active window").tag("activeWindow")
                     Text("Main display").tag("main")
                     Text("The one with the pointer").tag("pointer")
                     ForEach(NSScreen.screens.map(\.localizedName), id: \.self) { name in
@@ -36,7 +37,7 @@ struct IslandSettingsSection: View {
             Toggle("Reveal a failed turn", isOn: island(\.alertsOnFailure)).toggleStyle(.scope)
             Toggle("Reveal a question, a permission or a plan", isOn: island(\.alertsOnRequest)).toggleStyle(.scope)
             Toggle("Play a sound with each reveal", isOn: island(\.playsSound)).toggleStyle(.scope)
-            Text("The island shows the Claude Code threads at work, a dot per thread and the 5-hour limit; open, it answers a permission or a question and opens a thread in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. On a screen without a notch it is a pill at the top. Off by default in a Debug build.")
+            Text("The island shows the Claude Code threads at work, a dot per thread and the 5-hour limit; open, it answers a permission or a question and opens a thread in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. It sits on the screen of the window you are working in, whatever the app, and moves when you switch, never while it is open. On a screen without a notch it is a pill at the top. Off by default in a Debug build.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -63,6 +64,7 @@ struct IslandSettingsSection: View {
             get: {
                 let island = model.config.preferences.island
                 switch island.placement {
+                case .activeWindow: return "activeWindow"
                 case .main: return "main"
                 case .pointer: return "pointer"
                 case .named: return "named:" + (island.screenName ?? "")
@@ -70,7 +72,8 @@ struct IslandSettingsSection: View {
             },
             set: { tag in
                 model.updatePreferences {
-                    if tag == "main" { $0.island.placement = .main }
+                    if tag == "activeWindow" { $0.island.placement = .activeWindow }
+                    else if tag == "main" { $0.island.placement = .main }
                     else if tag == "pointer" { $0.island.placement = .pointer }
                     else {
                         $0.island.placement = .named
@@ -84,6 +87,7 @@ struct IslandSettingsSection: View {
     private var screenTitle: String {
         let island = model.config.preferences.island
         switch island.placement {
+        case .activeWindow: return "Active window"
         case .main: return "Main display"
         case .pointer: return "The one with the pointer"
         case .named: return island.screenName ?? "Main display"

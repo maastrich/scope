@@ -34,7 +34,8 @@ final class IslandController: NSObject {
     private var shrinkTask: Task<Void, Never>?
     private var outsideClicks: Any?
     private var screenObserver: NSObjectProtocol?
-    private var pointerTimer: Timer?
+    private var activationObserver: NSObjectProtocol?
+    private var followTimer: Timer?
     private var tracking = false
 
     /// Puts the island up, or keeps it up, for what the model holds now.
@@ -52,8 +53,7 @@ final class IslandController: NSObject {
     func hide() {
         panel?.orderOut(nil)
         stopOutsideClicks()
-        pointerTimer?.invalidate()
-        pointerTimer = nil
+        updateFollowing(false)
     }
 
     private func makePanel(model: AppModel) -> IslandPanel {
@@ -82,6 +82,15 @@ final class IslandController: NSObject {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.place() }
+        }
+        // Posted on the workspace's own centre only.
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.model?.config.preferences.island.placement == .activeWindow else { return }
+                self.place()
+            }
         }
         return panel
     }
@@ -121,10 +130,19 @@ final class IslandController: NSObject {
         if snapshot.isEmpty && model.island.presentation != .expanded {
             if model.island.presentation != .collapsed { model.island.presentation = .collapsed }
             panel.orderOut(nil)
+            updateFollowing(false)
             return
         }
-        let all = screens()
-        guard let target = Island.screen(all.map(\.1), settings: settings, pointer: NSEvent.mouseLocation) else { return }
+        let all = screens().map(\.1)
+        let activeWindow = settings.placement == .activeWindow ? activeWindowFrame() : nil
+        guard var target = Island.screen(all, settings: settings, pointer: NSEvent.mouseLocation,
+                                         activeWindow: activeWindow) else { return }
+        // Never pulled from under the user: while open or under the pointer it stays where it is.
+        if panel.isVisible,
+           model.island.presentation == .expanded || NSMouseInRect(NSEvent.mouseLocation, panel.frame, false),
+           let current = all.first(where: { $0.frame.contains(CGPoint(x: panel.frame.midX, y: panel.frame.maxY - 1)) }) {
+            target = current
+        }
         let band = Island.band(on: target)
         if layout.bandWidth != band.width { layout.bandWidth = band.width }
         if layout.bandHeight != band.height { layout.bandHeight = band.height }
@@ -145,23 +163,42 @@ final class IslandController: NSObject {
         }
         if !panel.isVisible { panel.orderFrontRegardless() }
         updateOutsideClicks(expanded: model.island.presentation == .expanded)
-        updatePointerFollowing(settings.placement == .pointer)
+        updateFollowing(settings.placement == .pointer || settings.placement == .activeWindow)
     }
 
-    /// The screen under the pointer, followed while the pointer moves; a second is soon enough to change screens.
-    private func updatePointerFollowing(_ follows: Bool) {
-        if follows, pointerTimer == nil {
-            pointerTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+    /// The screen under the pointer, or the active window's as it is dragged to another screen within the same app,
+    /// followed while the island shows; a second is soon enough to change screens. A change of app comes at once,
+    /// through the activation notification.
+    private func updateFollowing(_ follows: Bool) {
+        if follows, followTimer == nil {
+            followTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let panel = self.panel, panel.isVisible,
-                          !NSMouseInRect(NSEvent.mouseLocation, panel.frame, false) else { return }
+                    guard let self, let panel = self.panel, panel.isVisible else { return }
                     self.place()
                 }
             }
+            followTimer?.tolerance = 0.3
         } else if !follows {
-            pointerTimer?.invalidate()
-            pointerTimer = nil
+            followTimer?.invalidate()
+            followTimer = nil
         }
+    }
+
+    /// The frontmost window of the active app, in AppKit's coordinates; `nil` when that app shows none. Scope's own
+    /// main window when Scope is in front. The window list's owner, layer and bounds need no permission — only the
+    /// titles take Screen Recording — and the island, a panel above layer 0, is never taken for the window.
+    private func activeWindowFrame() -> CGRect? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier,
+           let window = NSApp.mainWindow ?? NSApp.keyWindow, window.isVisible, !(window is IslandPanel) {
+            return window.frame
+        }
+        guard let primary = NSScreen.screens.first,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        let windows = list.compactMap(Island.WindowInfo.init)
+        guard let quartz = Island.frontWindow(of: app.processIdentifier, in: windows) else { return nil }
+        return Island.appKitRect(fromQuartz: quartz, primaryHeight: primary.frame.height)
     }
 
     // MARK: Opening

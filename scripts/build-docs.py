@@ -597,8 +597,13 @@ The answer is typed only if the terminal shows that very dialog, as from the req
 stops, closes or archives anything.</p>
 <p>When a turn ends, fails, or a thread asks something, the island grows for five seconds to say so, with a system
 sound if you want one — never for the thread you are looking at in Scope, and never during a Focus or while the screen
-is locked. Settings › General › Island turns it off, picks the screen (main, the one with the pointer, or a named
-one), how it opens and which events it shows. It is on by default, and off in a Debug build.</p>
+is locked.</p>
+<p>The island sits on the screen of the window you are working in — the frontmost window of the active app, whatever
+the app, on the screen that holds most of it — and moves there when you switch apps or drag the window to the other
+screen, never while it is open or under the pointer. With no window in front (Finder over the desktop), it goes to the
+screen with the pointer. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
+the one with the pointer, or a named one), how it opens and which events it shows. It is on by default, and off in a
+Debug build.</p>
 """
 
 TASKS = """

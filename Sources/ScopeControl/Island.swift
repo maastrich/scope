@@ -359,17 +359,87 @@ extension Island {
         }
     }
 
-    /// The screen the settings point at: the one named, the one under the pointer, else the main one.
-    public static func screen(_ screens: [Screen], settings: IslandSettings, pointer: CGPoint) -> Screen? {
+    /// The screen the settings point at: the one named, the one holding most of `activeWindow`, the one under the
+    /// pointer, else the main one. `activeWindow` is the frontmost window of the active app in AppKit coordinates,
+    /// `nil` when that app shows none (Finder over the desktop, an app without windows): the pointer's screen then.
+    public static func screen(_ screens: [Screen], settings: IslandSettings, pointer: CGPoint,
+                              activeWindow: CGRect? = nil) -> Screen? {
         switch settings.placement {
         case .named:
             if let name = settings.screenName, let named = screens.first(where: { $0.name == name }) { return named }
+        case .activeWindow:
+            if let window = activeWindow, let holding = screen(holdingMostOf: window, among: screens) { return holding }
+            if let under = screens.first(where: { $0.frame.contains(pointer) }) { return under }
         case .pointer:
             if let under = screens.first(where: { $0.frame.contains(pointer) }) { return under }
         case .main:
             break
         }
         return screens.first(where: \.isMain) ?? screens.first
+    }
+
+    /// The screen covering the largest area of `window`, the first one on a tie; `nil` when it lies off every screen.
+    public static func screen(holdingMostOf window: CGRect, among screens: [Screen]) -> Screen? {
+        var best: (screen: Screen, area: CGFloat)?
+        for screen in screens {
+            let area = overlap(window, screen.frame)
+            if area > 0, area > (best?.area ?? 0) { best = (screen, area) }
+        }
+        return best?.screen
+    }
+
+    /// The area two rectangles share, 0 when they do not meet.
+    public static func overlap(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
+        let shared = lhs.intersection(rhs)
+        return shared.isNull ? 0 : shared.width * shared.height
+    }
+
+    /// One entry of `CGWindowListCopyWindowInfo`, the fields that need no Screen Recording permission: the owner,
+    /// the layer, the opacity and the bounds — in Quartz coordinates, origin at the top left of the primary screen.
+    public struct WindowInfo: Sendable, Equatable {
+        public var pid: Int32
+        public var layer: Int
+        public var alpha: Double
+        public var bounds: CGRect
+
+        public init(pid: Int32, layer: Int, alpha: Double = 1, bounds: CGRect) {
+            self.pid = pid
+            self.layer = layer
+            self.alpha = alpha
+            self.bounds = bounds
+        }
+
+        /// Reads one dictionary of the list; `nil` when a field is missing.
+        public init?(_ entry: [String: Any]) {
+            guard let pid = (entry["kCGWindowOwnerPID"] as? NSNumber)?.int32Value,
+                  let layer = (entry["kCGWindowLayer"] as? NSNumber)?.intValue,
+                  let bounds = entry["kCGWindowBounds"] as? [String: Any],
+                  let x = (bounds["X"] as? NSNumber)?.doubleValue, let y = (bounds["Y"] as? NSNumber)?.doubleValue,
+                  let width = (bounds["Width"] as? NSNumber)?.doubleValue,
+                  let height = (bounds["Height"] as? NSNumber)?.doubleValue else { return nil }
+            self.init(pid: pid, layer: layer, alpha: (entry["kCGWindowAlpha"] as? NSNumber)?.doubleValue ?? 1,
+                      bounds: CGRect(x: x, y: y, width: width, height: height))
+        }
+    }
+
+    /// Below this size on either side a window is a helper (a 1 × 1 event sink, a status item's shadow), not one the
+    /// user looks at.
+    static let smallestWindowSide: CGFloat = 40
+
+    /// The frontmost real window of `pid` in a front-to-back window list, in Quartz coordinates: the first one of
+    /// layer 0 — the layer of document windows; panels, menus and the island sit above — that is visible and not tiny.
+    public static func frontWindow(of pid: Int32, in windows: [WindowInfo]) -> CGRect? {
+        windows.first {
+            $0.pid == pid && $0.layer == 0 && $0.alpha > 0
+                && $0.bounds.width >= smallestWindowSide && $0.bounds.height >= smallestWindowSide
+        }?.bounds
+    }
+
+    /// A Quartz rectangle (origin at the top left of the primary screen, y down) in AppKit's global coordinates (origin
+    /// at the bottom left of the primary screen, y up). `primaryHeight` is the height of the screen at the origin —
+    /// `NSScreen.screens[0]`, not `NSScreen.main`, which is wherever the key window is.
+    public static func appKitRect(fromQuartz rect: CGRect, primaryHeight: CGFloat) -> CGRect {
+        CGRect(x: rect.minX, y: primaryHeight - rect.maxY, width: rect.width, height: rect.height)
     }
 
     /// Height of the pill on a screen without a notch, when its menu bar hides.
