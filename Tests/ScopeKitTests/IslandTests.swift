@@ -245,13 +245,103 @@ private func plan() -> ClaudePendingRequest {
     @Test func theScreenIsTheNamedOneTheOneUnderThePointerElseTheMain() {
         let screens = [external, notched]
         let pointerOnExternal = CGPoint(x: 2000, y: 500)
-        #expect(Island.screen(screens, settings: IslandSettings(), pointer: pointerOnExternal)?.name == notched.name)
+        #expect(Island.screen(screens, settings: IslandSettings(placement: .main), pointer: pointerOnExternal)?.name == notched.name)
         #expect(Island.screen(screens, settings: IslandSettings(placement: .pointer), pointer: pointerOnExternal)?.name == external.name)
         #expect(Island.screen(screens, settings: IslandSettings(placement: .named, screenName: "LG Ultra HD"),
                               pointer: .zero)?.name == external.name)
         #expect(Island.screen(screens, settings: IslandSettings(placement: .named, screenName: "Gone"),
                               pointer: .zero)?.name == notched.name)
         #expect(Island.screen([], settings: IslandSettings(), pointer: .zero) == nil)
+    }
+
+    /// Two 4K screens side by side, the secondary to the left of the primary and higher: negative x, and its top above
+    /// the primary's in AppKit's coordinates.
+    private let primary = Island.Screen(name: "LG UltraFine", frame: CGRect(x: 0, y: 0, width: 2560, height: 1440),
+                                        menuBarHeight: 25, isMain: true)
+    private let left = Island.Screen(name: "LG UltraFine (2)", frame: CGRect(x: -2560, y: 200, width: 2560, height: 1440),
+                                     menuBarHeight: 25)
+
+    @Test func theActiveWindowIsTheDefault() {
+        #expect(IslandSettings().placement == .activeWindow)
+    }
+
+    @Test func theActiveWindowPicksTheScreenHoldingMostOfIt() {
+        let screens = [primary, left]
+        let settings = IslandSettings()
+        let pointerOnPrimary = CGPoint(x: 100, y: 100)
+        let onLeft = CGRect(x: -2000, y: 400, width: 800, height: 600)
+        #expect(Island.screen(screens, settings: settings, pointer: pointerOnPrimary, activeWindow: onLeft)?.name == left.name)
+        // Straddling: 300 pt on the left screen, 500 on the primary.
+        let straddling = CGRect(x: -300, y: 400, width: 800, height: 600)
+        #expect(Island.screen(screens, settings: settings, pointer: CGPoint(x: -100, y: 500), activeWindow: straddling)?.name
+                == primary.name)
+        let mostlyLeft = CGRect(x: -500, y: 400, width: 800, height: 600)
+        #expect(Island.screen(screens, settings: settings, pointer: pointerOnPrimary, activeWindow: mostlyLeft)?.name == left.name)
+    }
+
+    @Test func withoutAWindowTheActiveWindowFallsBackToThePointerThenTheMain() {
+        let screens = [left, primary]
+        let settings = IslandSettings()
+        #expect(Island.screen(screens, settings: settings, pointer: CGPoint(x: -1000, y: 800))?.name == left.name)
+        // A window off every screen counts as none.
+        let offScreen = CGRect(x: 9000, y: 9000, width: 800, height: 600)
+        #expect(Island.screen(screens, settings: settings, pointer: CGPoint(x: -1000, y: 800), activeWindow: offScreen)?.name
+                == left.name)
+        // Neither the window nor the pointer on a screen: the main one.
+        #expect(Island.screen(screens, settings: settings, pointer: CGPoint(x: 9000, y: 9000), activeWindow: offScreen)?.name
+                == primary.name)
+    }
+
+    @Test func otherPlacementsIgnoreTheActiveWindow() {
+        let onLeft = CGRect(x: -2000, y: 400, width: 800, height: 600)
+        #expect(Island.screen([primary, left], settings: IslandSettings(placement: .main), pointer: .zero,
+                              activeWindow: onLeft)?.name == primary.name)
+        #expect(Island.screen([primary, left], settings: IslandSettings(placement: .pointer), pointer: CGPoint(x: 10, y: 10),
+                              activeWindow: onLeft)?.name == primary.name)
+    }
+
+    @Test func overlapIsTheSharedArea() {
+        let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
+        #expect(Island.overlap(rect, CGRect(x: 50, y: 50, width: 100, height: 100)) == 2500)
+        #expect(Island.overlap(rect, CGRect(x: 100, y: 0, width: 100, height: 100)) == 0)
+        #expect(Island.overlap(rect, CGRect(x: 500, y: 500, width: 10, height: 10)) == 0)
+        #expect(Island.screen(holdingMostOf: CGRect(x: 9000, y: 0, width: 10, height: 10), among: [primary, left]) == nil)
+    }
+
+    @Test func quartzRectsFlipAroundThePrimaryScreen() {
+        // A window 100 pt below the top of the primary screen.
+        #expect(Island.appKitRect(fromQuartz: CGRect(x: 10, y: 100, width: 800, height: 600), primaryHeight: 1440)
+                == CGRect(x: 10, y: 740, width: 800, height: 600))
+        // On the left screen, whose top is 200 pt above the primary's: a negative Quartz y.
+        let quartz = CGRect(x: -2000, y: -150, width: 800, height: 600)
+        let appKit = Island.appKitRect(fromQuartz: quartz, primaryHeight: 1440)
+        #expect(appKit == CGRect(x: -2000, y: 990, width: 800, height: 600))
+        #expect(Island.screen(holdingMostOf: appKit, among: [primary, left])?.name == left.name)
+    }
+
+    @Test func theFrontWindowIsTheAppsFirstRealDocumentWindow() {
+        let windows = [
+            Island.WindowInfo(pid: 9, layer: 0, bounds: CGRect(x: 0, y: 0, width: 500, height: 500)),
+            Island.WindowInfo(pid: 42, layer: 25, bounds: CGRect(x: 1000, y: 0, width: 300, height: 32)),
+            Island.WindowInfo(pid: 42, layer: 0, bounds: CGRect(x: 0, y: 0, width: 1, height: 1)),
+            Island.WindowInfo(pid: 42, layer: 0, alpha: 0, bounds: CGRect(x: 0, y: 0, width: 600, height: 400)),
+            Island.WindowInfo(pid: 42, layer: 0, bounds: CGRect(x: -2000, y: -150, width: 800, height: 600)),
+            Island.WindowInfo(pid: 42, layer: 0, bounds: CGRect(x: 10, y: 100, width: 800, height: 600)),
+        ]
+        #expect(Island.frontWindow(of: 42, in: windows) == CGRect(x: -2000, y: -150, width: 800, height: 600))
+        #expect(Island.frontWindow(of: 7, in: windows) == nil)
+    }
+
+    @Test func aWindowListEntryReadsTheFieldsThatNeedNoPermission() {
+        let entry: [String: Any] = [
+            "kCGWindowOwnerPID": NSNumber(value: 42), "kCGWindowLayer": NSNumber(value: 0),
+            "kCGWindowAlpha": NSNumber(value: 1.0),
+            "kCGWindowBounds": ["X": NSNumber(value: -2000), "Y": NSNumber(value: -150), "Width": NSNumber(value: 800),
+                                "Height": NSNumber(value: 600)] as [String: Any],
+        ]
+        #expect(Island.WindowInfo(entry) == Island.WindowInfo(pid: 42, layer: 0,
+                                                             bounds: CGRect(x: -2000, y: -150, width: 800, height: 600)))
+        #expect(Island.WindowInfo(["kCGWindowOwnerPID": NSNumber(value: 42)]) == nil)
     }
 }
 
@@ -268,7 +358,7 @@ private func plan() -> ClaudePendingRequest {
         let island = try JSONDecoder().decode(Preferences.self, from: Data(json.utf8)).island
         #expect(!island.isEnabled(automatic: true))
         #expect(island.opening == .click)
-        #expect(island.placement == .main)
+        #expect(island.placement == .activeWindow)
         #expect(island.playsSound)
         #expect(island.alertsOnRequest)
     }
@@ -278,5 +368,24 @@ private func plan() -> ClaudePendingRequest {
                                     alertsOnFinish: false, alertsOnFailure: false, alertsOnRequest: true, playsSound: true)
         let data = try JSONEncoder().encode(Preferences(island: island))
         #expect(try JSONDecoder().decode(Preferences.self, from: data).island == island)
+    }
+
+    @Test func theMainScreenV030WroteByDefaultBecomesTheActiveWindow() throws {
+        let legacy = #"{"island":{"opening":"hover","placement":"main","playsSound":false}}"#
+        #expect(try JSONDecoder().decode(Preferences.self, from: Data(legacy.utf8)).island.placement == .activeWindow)
+        // A pointer or a named screen could only have been chosen: they stay.
+        let pointer = #"{"island":{"placement":"pointer"}}"#
+        #expect(try JSONDecoder().decode(Preferences.self, from: Data(pointer.utf8)).island.placement == .pointer)
+        let named = #"{"island":{"placement":"named","screenName":"LG"}}"#
+        #expect(try JSONDecoder().decode(Preferences.self, from: Data(named.utf8)).island.placement == .named)
+    }
+
+    @Test func theMainScreenChosenSinceStays() throws {
+        let data = try JSONEncoder().encode(Preferences(island: IslandSettings(placement: .main)))
+        let json = try #require(String(data: data, encoding: .utf8))
+        #expect(json.contains(#""placementRevision":2"#))
+        #expect(try JSONDecoder().decode(Preferences.self, from: data).island.placement == .main)
+        let stamped = #"{"island":{"placement":"main","placementRevision":2}}"#
+        #expect(try JSONDecoder().decode(Preferences.self, from: Data(stamped.utf8)).island.placement == .main)
     }
 }
