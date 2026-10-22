@@ -25,6 +25,17 @@ public struct IslandSettings: Codable, Sendable, Equatable {
         case named
     }
 
+    /// Which reveals may still play while the user is at the keyboard or the mouse. A reveal held back is not played
+    /// later: the thread's dot on the collapsed island already says it.
+    public enum Interruptions: String, Codable, Sendable, CaseIterable {
+        /// None: the island only grows when the user has been idle a moment.
+        case never
+        /// A question, a permission or a plan — an agent blocked on the user — but not a finished or failed turn.
+        case requests
+        /// Every reveal the settings below allow, as before.
+        case always
+    }
+
     /// `nil` — the default — is *automatic*: on in the installed app, off in a Debug build, so the copies a developer
     /// runs side by side do not stack islands at the same spot. The toggle in Settings writes `true` or `false`.
     public var enabled: Bool?
@@ -33,6 +44,11 @@ public struct IslandSettings: Codable, Sendable, Equatable {
     /// `NSScreen.localizedName` of the chosen screen when `placement` is `.named`: display ids change when a screen is
     /// plugged in again, its name does not.
     public var screenName: String?
+    /// Reveals while the user works elsewhere; `.requests` by default.
+    public var interruptions: Interruptions
+    /// Hides the collapsed island over an app in full screen on its screen, unless an agent is waiting on the user. On
+    /// by default.
+    public var hidesInFullScreen: Bool
     /// A brief reveal when a thread finishes its turn. On by default.
     public var alertsOnFinish: Bool
     /// … when a turn fails. On by default.
@@ -43,12 +59,14 @@ public struct IslandSettings: Codable, Sendable, Equatable {
     public var playsSound: Bool
 
     public init(enabled: Bool? = nil, opening: Opening = .hover, placement: Placement = .activeWindow, screenName: String? = nil,
-                alertsOnFinish: Bool = true, alertsOnFailure: Bool = true, alertsOnRequest: Bool = true,
+                interruptions: Interruptions = .requests, hidesInFullScreen: Bool = true, alertsOnFinish: Bool = true, alertsOnFailure: Bool = true, alertsOnRequest: Bool = true,
                 playsSound: Bool = false) {
         self.enabled = enabled
         self.opening = opening
         self.placement = placement
         self.screenName = screenName
+        self.interruptions = interruptions
+        self.hidesInFullScreen = hidesInFullScreen
         self.alertsOnFinish = alertsOnFinish
         self.alertsOnFailure = alertsOnFailure
         self.alertsOnRequest = alertsOnRequest
@@ -64,7 +82,7 @@ public struct IslandSettings: Codable, Sendable, Equatable {
     static let placementRevision = 2
 
     private enum CodingKeys: String, CodingKey {
-        case enabled, opening, placement, placementRevision, screenName, alertsOnFinish, alertsOnFailure, alertsOnRequest,
+        case enabled, opening, placement, placementRevision, screenName, interruptions, hidesInFullScreen, alertsOnFinish, alertsOnFailure, alertsOnRequest,
              playsSound
     }
 
@@ -77,6 +95,8 @@ public struct IslandSettings: Codable, Sendable, Equatable {
         let revision = (try? container.decodeIfPresent(Int.self, forKey: .placementRevision)) ?? 1
         if placement == .main && revision < Self.placementRevision { placement = defaults.placement }
         screenName = try? container.decodeIfPresent(String.self, forKey: .screenName)
+        interruptions = (try? container.decodeIfPresent(Interruptions.self, forKey: .interruptions)) ?? defaults.interruptions
+        hidesInFullScreen = (try? container.decodeIfPresent(Bool.self, forKey: .hidesInFullScreen)) ?? defaults.hidesInFullScreen
         alertsOnFinish = (try? container.decodeIfPresent(Bool.self, forKey: .alertsOnFinish)) ?? defaults.alertsOnFinish
         alertsOnFailure = (try? container.decodeIfPresent(Bool.self, forKey: .alertsOnFailure)) ?? defaults.alertsOnFailure
         alertsOnRequest = (try? container.decodeIfPresent(Bool.self, forKey: .alertsOnRequest)) ?? defaults.alertsOnRequest
@@ -90,6 +110,8 @@ public struct IslandSettings: Codable, Sendable, Equatable {
         try container.encode(placement, forKey: .placement)
         try container.encode(Self.placementRevision, forKey: .placementRevision)
         try container.encodeIfPresent(screenName, forKey: .screenName)
+        try container.encode(interruptions, forKey: .interruptions)
+        try container.encode(hidesInFullScreen, forKey: .hidesInFullScreen)
         try container.encode(alertsOnFinish, forKey: .alertsOnFinish)
         try container.encode(alertsOnFailure, forKey: .alertsOnFailure)
         try container.encode(alertsOnRequest, forKey: .alertsOnRequest)

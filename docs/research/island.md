@@ -87,6 +87,39 @@ Observé en lecture seule : bundle (`Info.plist`, `Localizable.strings`, ressour
   Scope considère qu'il n'y a pas de Focus, et Réglages ▸ Island le dit. **Non vérifié** : aucune demande n'apparaît
   dans le journal TCC pour le build Debug signé ad hoc. L'API demande peut-être un droit qu'un tel build n'a pas.
 
+## Les autres apps d'encoche (octobre 2026)
+
+Les onze apps de [la liste de Vibe Island](https://vibeisland.app/best-ai-agent-notch-apps/), lues dans leur code
+quand il est ouvert (Open Island, Ping Island, CodeIsland, Notchi, Claude Island/Vibe Notch, ClaudeNotch, Buddi),
+sinon sur leur site (Claude Pulse, Notchcode, NotchClaude), plus boring.notch et NotchNook pour la discrétion.
+
+| Ce qui les garde hors du chemin | Qui |
+|---|---|
+| Pas d'ouverture auto si l'utilisateur a touché clavier/souris dans les 30 s (indice et son quand même) | Ping Island |
+| Signal discret au lieu d'une carte : point, rebond, lueur ; ou jamais d'ouverture auto | CodeIsland (« glance dot »), Claude Pulse, Notchcode, Notchi |
+| Rien quand la session est déjà au premier plan | CodeIsland, Open Island, Claude Island, Buddi, Claude Pulse, Ping Island |
+| Masqué en plein écran, une zone de survol garde l'accès | CodeIsland, Ping Island, boring.notch |
+| Réglage par événement, un seul son pour une rafale d'approbations | CodeIsland |
+| Rappels pour une demande qui attend, désactivés par défaut | CodeIsland |
+| Raccourci global sans Accessibility (`RegisterEventHotKey`) ; Entrée/Échap globaux exigent Accessibility | Notchi, CodeIsland, Ping Island / ClaudeNotch, Claude Pulse |
+
+Aucune ne lit le Focus de macOS ni ne détecte le partage d'écran (code cherché). CodeIsland a ralenti son sondage de
+`CGWindowListCopyWindowInfo` à 5 s pour son impact énergie. Le multi-écran va de « l'écran principal » à « suit la
+fenêtre active » (CodeIsland) ou « tous les écrans à la fois » (ClaudeNotch).
+
+**Retenu dans Scope** :
+- **Au travail, seules les demandes interrompent.** Une entrée HID depuis moins de 30 s
+  (`CGEventSource.secondsSinceLastEventType`, aucune permission) retient la révélation d'un tour fini ou échoué ; une
+  question, une permission ou un plan révèlent toujours, puisqu'un agent est bloqué. Réglage *Interrupt while I work* :
+  *Never*, *Only when an agent is waiting* (défaut), *Always*. Retenue, pas différée : le point du thread sur l'îlot
+  replié a déjà changé, c'est le « glance dot » sans rien ajouter.
+- **Masqué au-dessus d'une app en plein écran** sur son écran (une fenêtre de layer 0 qui couvre tout l'écran, lue dans
+  la même liste que le placement) ; une demande en attente ou l'îlot ouvert passent quand même. Pas de zone de survol :
+  sortir du plein écran ou changer d'app le ramène. Réglage, activé par défaut.
+- **Sondage à 2 s** au lieu d'1 s ; l'activation d'une app reste immédiate.
+
+**Laissé pour plus tard** : rafales regroupées, rappels, raccourci global, sourdine par scope ou task.
+
 ## Coexistence avec Vibe Island
 
 Testé sur deux écrans LG sans encoche, Vibe Island lancée : sur le **même écran**, sa fenêtre (niveau 27) couvre

@@ -601,7 +601,11 @@ is locked.</p>
 <p>The island sits on the screen of the window you are working in — the frontmost window of the active app, whatever
 the app, on the screen that holds most of it — and moves there when you switch apps or drag the window to the other
 screen, never while it is open or under the pointer. With no window in front (Finder over the desktop), it goes to the
-screen with the pointer. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
+screen with the pointer.</p>
+<p>It stays out of your way while you work: as long as you are typing or moving the pointer, a finished or failed turn
+only changes its thread's dot; only an agent waiting on you — a question, a permission, a plan — makes it grow
+(<b>Interrupt while I work</b>: never, only when an agent is waiting, or always). Over an app in full screen it
+disappears unless an agent is waiting. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
 the one with the pointer, or a named one), how it opens and which events it shows. It is on by default, and off in a
 Debug build.</p>
 """

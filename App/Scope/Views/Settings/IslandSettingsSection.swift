@@ -33,11 +33,19 @@ struct IslandSettingsSection: View {
                 }
                 .usageID("island-screen", label: "Island screen")
             }
+            SettingsRow("Interrupt while I work") {
+                ScopePicker("Interrupt while I work", selection: island(\.interruptions),
+                            title: title(model.config.preferences.island.interruptions)) {
+                    ForEach(IslandSettings.Interruptions.allCases, id: \.self) { Text(title($0)).tag($0) }
+                }
+                .usageID("island-interruptions", label: "Island interrupts")
+            }
+            Toggle("Hide over full-screen apps", isOn: island(\.hidesInFullScreen)).toggleStyle(.scope)
             Toggle("Reveal a finished turn", isOn: island(\.alertsOnFinish)).toggleStyle(.scope)
             Toggle("Reveal a failed turn", isOn: island(\.alertsOnFailure)).toggleStyle(.scope)
             Toggle("Reveal a question, a permission or a plan", isOn: island(\.alertsOnRequest)).toggleStyle(.scope)
             Toggle("Play a sound with each reveal", isOn: island(\.playsSound)).toggleStyle(.scope)
-            Text("The island shows the Claude Code threads at work, a dot per thread and the 5-hour limit; open, it answers a permission or a question and opens a thread in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. It sits on the screen of the window you are working in, whatever the app, and moves when you switch, never while it is open. On a screen without a notch it is a pill at the top. Off by default in a Debug build.")
+            Text("The island shows the Claude Code threads at work, a dot per thread and the 5-hour limit; open, it answers a permission or a question and opens a thread in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. It sits on the screen of the window you are working in, whatever the app, and moves when you switch, never while it is open. While you type or move the pointer, only an agent waiting on you makes it grow (Interrupt while I work); a finished turn just changes its dot. Over a full-screen app it stays away unless an agent is waiting. On a screen without a notch it is a pill at the top. Off by default in a Debug build.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -56,6 +64,14 @@ struct IslandSettingsSection: View {
         switch opening {
         case .hover: "On hover"
         case .click: "On click"
+        }
+    }
+
+    private func title(_ interruptions: IslandSettings.Interruptions) -> String {
+        switch interruptions {
+        case .never: "Never"
+        case .requests: "Only when an agent is waiting"
+        case .always: "Always"
         }
     }
 

@@ -132,6 +132,7 @@ extension AppModel {
     /// Publishes the snapshot and plays what changed since the last reading.
     private func applyIsland(_ reading: IslandReading) {
         island.publish(Island.snapshot(reading.inputs, now: reading.now), fiveHour: reading.fiveHour)
+        island.quiet.refreshActivity()
         let alerts = Island.alerts(from: island.inputs, to: reading.inputs, settings: reading.settings,
                                    quiet: island.quiet.current, memory: &island.memory)
         island.inputs = reading.inputs
@@ -248,6 +249,14 @@ final class IslandQuiet {
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshFocus() }
         }
+    }
+
+    /// Whether a key, a click or the pointer moved lately, in any app. The HID system's idle time needs no permission —
+    /// unlike reading the events themselves.
+    func refreshActivity() {
+        let anyInput = CGEventType(rawValue: ~0)!
+        let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: anyInput)
+        current.userActive = idle < Island.Quiet.recentInput
     }
 
     /// `isFocused` is `nil` when Scope may not know; then it is taken as no Focus.
