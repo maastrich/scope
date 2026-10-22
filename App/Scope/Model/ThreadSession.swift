@@ -332,13 +332,20 @@ final class ThreadSession: Identifiable {
     // MARK: Input / output
 
     func send(_ text: String) {
-        terminalView.send(txt: text)
+        if let view = terminalView as? ScopeTerminalView {
+            view.write(text)
+        } else {
+            terminalView.send(txt: text)
+        }
     }
 
     /// Types `text` as one input — a paste when the program enabled bracketed paste, so a multiline message is not
     /// submitted at its first line break — then presses ↩ on its own once the program had time to read it
     /// (`ThreadDelivery.submitDelay`). Sent in one write, the ↩ lands in the same read as the text and a TUI such
     /// as Claude Code takes it for part of the paste: a newline in the prompt and nothing submitted.
+    ///
+    /// A draft the user left in Claude Code's field is stashed first and comes back once the message is submitted
+    /// (`ClaudeDraft`); their keys wait meanwhile, so nothing they type lands inside the message.
     ///
     /// Submissions go out one after the other: a second message typed before the first one's ↩ would join it.
     func submit(_ text: String) {
@@ -351,15 +358,90 @@ final class ThreadSession: Identifiable {
                 self.send("\r")
                 return
             }
-            let input = ThreadDelivery.input(text, bracketedPasteMode: self.terminalView.getTerminal().bracketedPasteMode)
-            self.send(input)
-            try? await Task.sleep(for: ThreadDelivery.submitDelay(forByteCount: input.utf8.count))
-            guard self.phase.isAlive else { return }
-            self.send("\r")
+            await self.submitKeepingDraft(text)
         }
     }
 
     @ObservationIgnored private var pendingSubmit: Task<Void, Never>?
+    /// The user pressed Ctrl+S since their last submit: Claude Code may hold a stash the hint row does not show.
+    @ObservationIgnored private var userStashed = false
+
+    private func submitKeepingDraft(_ text: String) async {
+        let clock = ContinuousClock()
+        let start = clock.now
+        var field = promptInput()
+        var plan = draftPlan(field, waited: .zero)
+        while plan == .wait {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard phase.isAlive else { return }
+            field = promptInput()
+            plan = draftPlan(field, waited: clock.now - start)
+        }
+        guard plan != .asIs, let draft = field, let view = terminalView as? ScopeTerminalView else {
+            await typeAndSubmit(text)
+            return
+        }
+        view.holdUserInput()
+        defer { view.releaseUserInput() }
+        if plan == .stash, draft.stashHeld || userStashed {
+            Log.threads.notice("thread \(self.id.rawValue, privacy: .public): the draft replaces an older stash")
+        }
+        send(plan == .stash ? ClaudeDraft.stash : ClaudeDraft.leaveShell)
+        if await !settle(ClaudeDraft.isCleared) {
+            Log.threads.warning("thread \(self.id.rawValue, privacy: .public): the field did not clear; message typed after the draft")
+        }
+        guard await typeAndSubmit(text) else { return }
+        switch plan {
+        case .stash:
+            if await settle({ ClaudeDraft.isRestored(draft, on: $0) }) { return }
+            // Claude Code puts a stash back on submit; one still waiting is brought back by hand.
+            if ClaudeDraft.needsUnstash(promptInput()) {
+                send(ClaudeDraft.stash)
+                _ = await settle { ClaudeDraft.isRestored(draft, on: $0) }
+            } else {
+                Log.threads.warning("thread \(self.id.rawValue, privacy: .public): the stashed draft did not show again")
+            }
+        case .leaveShell:
+            if await settle(ClaudeDraft.isCleared) { send(ClaudeDraft.enterShell) }
+        case .asIs, .wait:
+            break
+        }
+    }
+
+    private func draftPlan(_ field: ClaudePromptInput?, waited: Duration) -> ClaudeDraft.Plan {
+        ClaudeDraft.plan(claudeInput: profile.adapter?.kind == ClaudeHooksAdapter.kind, dialog: claude.pending.current != nil,
+                         field: field, userStashed: userStashed, waited: waited)
+    }
+
+    /// `false` when the process went away before ↩.
+    @discardableResult
+    private func typeAndSubmit(_ text: String) async -> Bool {
+        let input = ThreadDelivery.input(text, bracketedPasteMode: terminalView.getTerminal().bracketedPasteMode)
+        send(input)
+        try? await Task.sleep(for: ThreadDelivery.submitDelay(forByteCount: input.utf8.count))
+        guard phase.isAlive else { return false }
+        send("\r")
+        // Submitting puts any stash back into the field: none is left.
+        userStashed = false
+        return true
+    }
+
+    /// Reads Claude Code's field until `done` holds, at most `ClaudeDraft.settleTimeout`.
+    private func settle(_ done: (ClaudePromptInput?) -> Bool) async -> Bool {
+        let clock = ContinuousClock()
+        let start = clock.now
+        while clock.now - start < ClaudeDraft.settleTimeout {
+            try? await Task.sleep(for: ClaudeDraft.pollInterval)
+            guard phase.isAlive else { return false }
+            if done(promptInput()) { return true }
+        }
+        return false
+    }
+
+    /// Claude Code's input field as the screen shows it now (`ClaudePromptInput`).
+    func promptInput() -> ClaudePromptInput? {
+        ClaudePromptInput.read(TerminalBridge.screenRows(of: self))
+    }
 
     /// Feeds a divider line into the emulator (not to the child).
     func printNotice(_ text: String) {
@@ -634,7 +716,11 @@ final class ThreadSession: Identifiable {
                 setAdapterState(.running)
             }
         }
+        if bytes.elementsEqual(ClaudeDraft.stash.utf8), (terminalView as? ScopeTerminalView)?.isScopeWriting != true {
+            userStashed = true
+        }
         guard let signal = inputTracker.feed(bytes) else { return }
+        if case .submit = signal { userStashed = false }
         if signal != .submit(hadText: false) { lastUserInputAt = .now }
         if signal == .interrupt, adapterState == .running {
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
