@@ -3,14 +3,14 @@ import ScopeControl
 import ScopeCore
 import SwiftUI
 
-/// Where the island's shape stands on its screen, for the view: around a notch, or as a pill where there is none.
+/// Where the island's shape stands on its screen, for the view: around a notch, or as a capsule where there is none.
 @MainActor
 @Observable
 final class IslandLayout {
     /// The notch's width; 0 on a screen without one.
     var bandWidth: CGFloat = 0
-    /// The notch's height, or the menu bar's.
-    var bandHeight: CGFloat = Island.pillHeight
+    /// The collapsed height: the notch's, or a few points short of the menu bar (`Island.collapsedHeight`).
+    var bandHeight: CGFloat = Island.pillHeight - 4
     var onNotch: Bool { bandWidth > 0 }
 }
 
@@ -165,8 +165,9 @@ final class IslandController: NSObject {
         }
         hiddenForFullScreen = false
         let band = Island.band(on: target)
+        let height = Island.collapsedHeight(on: target)
         if layout.bandWidth != band.width { layout.bandWidth = band.width }
-        if layout.bandHeight != band.height { layout.bandHeight = band.height }
+        if layout.bandHeight != height { layout.bandHeight = height }
         host.layoutSubtreeIfNeeded()
         let frame = Island.frame(for: host.fittingSize, on: target)
         // Growing at once and shrinking once the content has folded, so the window never cuts the animation short. Both

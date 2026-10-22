@@ -553,9 +553,14 @@ extension Island {
         return waiting ? presentation : .collapsed
     }
 
-    /// What a reveal does to `presentation`: the island the user opened stays open, anything else widens on it.
+    /// What a reveal does to `presentation`: the island the user opened stays open, a request still waiting is not
+    /// pushed aside by a turn that ended, anything else widens on the new reveal.
     public static func present(_ alert: Alert, over presentation: Presentation) -> Presentation {
-        presentation == .expanded ? .expanded : .alert(alert)
+        switch presentation {
+        case .expanded: return .expanded
+        case .alert(let current) where current.isRequest && !alert.isRequest: return presentation
+        default: return .alert(alert)
+        }
     }
 
     /// The collapsed counter: `3 threads` on a capsule, the bare `3` in a wing beside a notch, where room is short and

@@ -209,6 +209,8 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.present(alert, over: .collapsed) == .alert(alert))
         #expect(Island.present(alert, over: .alert(reveal(.finished, request: nil))) == .alert(alert))
         #expect(Island.present(alert, over: .expanded) == .expanded)
+        let finished = reveal(.finished, request: nil)
+        #expect(Island.present(finished, over: .alert(alert)) == .alert(alert))
     }
 
     @Test func aRevealedRequestCarriesItsID() {
