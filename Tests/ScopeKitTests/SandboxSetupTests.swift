@@ -215,10 +215,18 @@ final class RecordingRunner: SandboxCommandRunner {
 
     // MARK: TaskManager
 
+    /// Sandboxes start from `origin`: a fixture commit has to be pushed to reach them.
+    private func pushed(_ checkout: URL, _ scope: TestScope) async throws {
+        try await scope.client(for: checkout).run(["push", "-q", "origin", "main"])
+    }
+
     @Test func setupCopiesThenRunsInEachSandboxWithItsVariables() async throws {
         let scope = try await TestScope.make()
         let api = try await scope.makeRepo("api")
         try await scope.makeRepo("web")
+        try scope.write(api, "package.json", "{}")
+        try await scope.commit(in: api, "manifest")
+        try await pushed(api, scope)
         try scope.write(api, ".env", "API_KEY=1")
         let manager = makeManager(scope)
         let task = try await manager.create(name: "Auth", branch: "feat/auth", in: scope.declaration, repos: ["api", "web"])
@@ -251,7 +259,10 @@ final class RecordingRunner: SandboxCommandRunner {
     @Test func aFailingSetupIsFailedWithItsOutputAndTheOthersStillRun() async throws {
         let scope = try await TestScope.make()
         try await scope.makeRepo("api")
-        try await scope.makeRepo("web")
+        let web = try await scope.makeRepo("web")
+        try scope.write(web, "Makefile", "all:\n\ttrue\n")
+        try await scope.commit(in: web, "makefile")
+        try await pushed(web, scope)
         let manager = makeManager(scope)
         let task = try await manager.create(name: "Auth", branch: "feat/auth", in: scope.declaration, repos: ["api", "web"])
         let runner = RecordingRunner { command in
@@ -263,6 +274,29 @@ final class RecordingRunner: SandboxCommandRunner {
         #expect(done.setupState == .failed)
         #expect(runner.recorded.map(\.command) == ["boom", "make"])
         #expect(done.setup?.log.contains("ERR! missing lockfile\n[api] failed: exit 2") == true)
+    }
+
+    /// `uv sync` in a repository whose pyproject.toml only configures ruff failed the setup of every task. A command
+    /// the files rule out is not run: the log says why and where to fix it, and the other repositories still run.
+    @Test func aCommandTheFilesRuleOutIsReportedNotRun() async throws {
+        let scope = try await TestScope.make()
+        let billing = try await scope.makeRepo("billing")
+        try scope.write(billing, "pyproject.toml", "[tool.ruff]\n")
+        try await scope.commit(in: billing, "ruff")
+        try await pushed(billing, scope)
+        let web = try await scope.makeRepo("web")
+        try scope.write(web, "package.json", "{}")
+        try await scope.commit(in: web, "manifest")
+        try await pushed(web, scope)
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "Invoices", branch: "feat/invoices", in: scope.declaration, repos: ["billing", "web"])
+        let runner = RecordingRunner()
+        let done = try await manager.runSetup(task.id, commands: ["billing": SandboxCommands(setup: "uv sync"), "web": SandboxCommands(setup: "pnpm install")],
+                                              runCommands: true, runner: runner)
+        #expect(runner.recorded.map(\.command) == ["pnpm install"])
+        #expect(done.setupState == .succeeded)
+        #expect(done.setup?.log.contains("[billing] skipped `uv sync`: pyproject.toml has no [project] table.") == true)
+        #expect(SetupLog.skippedCommands(in: done.setup?.log ?? "").count == 1)
     }
 
     @Test func untickedOrCommandlessSetupIsSkippedButStillCopies() async throws {

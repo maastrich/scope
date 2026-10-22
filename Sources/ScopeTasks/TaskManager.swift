@@ -438,10 +438,14 @@ public actor TaskManager {
                     try? await excludeFromGit(path, in: repo, task: record)
                 }
             }
-            for refusal in plan.refusals + copyFailures {
-                log += "[\(name)] did not copy \(refusal.path): \(refusal.reason)\n"
-            }
+            log += SetupLog.refusals(plan.refusals + copyFailures, repo: name)
             guard runCommands, let command = repoCommands.setup else { continue }
+            // A command the repository's files rule out is reported rather than run: its failure would only say the
+            // same thing later, buried in the tool's output, and mark the whole setup failed.
+            if let problem = SetupCommandCheck.problem(command, in: repo.sandboxURL) {
+                log += "[\(name)] skipped `\(command)`: \(problem). Fix the Setup field of the repository's graph card.\n"
+                continue
+            }
             ran = true
             let client = try? await baseClient(for: repo.repoRelativePath, task: record)
             let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,

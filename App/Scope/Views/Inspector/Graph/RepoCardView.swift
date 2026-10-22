@@ -1,235 +1,289 @@
 import SwiftUI
 import ScopeGraph
 
-/// One repository card (design §6): title row, purpose, stack chips, key/value rows, links row.
-/// Switches to `RepoCardEditor` while the card is being edited.
+/// One repository card: name, `owner/repo`, branch and age; two lines of description; one row of tags; a folded
+/// *Details* section with the commands and the relations. The actions (editor, base, Finder, edit) appear on hover
+/// or keyboard focus, and are the card's context menu and VoiceOver actions too — they used to be a bar repeated
+/// under every card. Switches to `RepoCardEditor` while the card is being edited.
 struct RepoCardView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let scope: ScopeState
     let entry: GraphCardEntry
+    /// The Graph view's side panel: details always open, no hover bar (the panel is the selection already).
+    var isPanel = false
+
+    @State private var hovering = false
+    @FocusState private var focused: Bool
 
     private var card: RepoCard { entry.card }
-    private var repo: RepoState? {
-        scope.repos.first { GraphModel.key(for: $0) == entry.key }
-    }
+    private var actions: RepoActions { RepoActions(model: model, scope: scope, entry: entry) }
+    private var showsDetails: Bool { isPanel || model.graph.expanded.contains(entry.key) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Group {
             if model.graph.editingKey == entry.key {
                 RepoCardEditor(entry: entry)
             } else {
-                titleRow
-                if let purpose = card.purpose, !purpose.isEmpty {
-                    Text(purpose)
-                        .font(.system(size: 12))
-                        .lineSpacing(3)
-                        .foregroundStyle(Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if !card.stack.isEmpty { chips(card.stack) }
-                keyValues
-                if !card.tags.isEmpty {
-                    HStack(spacing: 5) {
-                        ForEach(card.tags, id: \.self) { tag in
-                            Text("#\(tag)").font(.scopeCaption).foregroundStyle(Ink.secondary)
-                        }
-                    }
-                }
-                actions
+                content
             }
         }
         .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Surface.panel, in: RoundedRectangle(cornerRadius: 9))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Surface.panel, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .stroke(model.graph.highlightedKey == entry.key ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(isMarked ? Color.accentColor : Surface.stroke, lineWidth: isMarked ? 2 : 1)
         )
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .overlay(alignment: .topTrailing) {
+            if !isPanel, hovering || focused, model.graph.editingKey != entry.key {
+                hoverBar.padding(6).transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering || focused)
+        .onHover { hovering = $0 }
+        .focusable(!isPanel && model.graph.editingKey != entry.key)
+        .focused($focused)
+        .focusEffectDisabled()
+        // The keyboard path to what the hover bar offers: Tab to a card, ⌘E opens it, Space or ↩ unfolds it; the
+        // rest is in the context menu and the VoiceOver actions.
+        .onKeyPress(.space) { toggleDetails(); return .handled }
+        .onKeyPress(.return) { toggleDetails(); return .handled }
+        .onKeyPress(characters: ["e"], phases: .down) { press in
+            guard press.modifiers == .command else { return .ignored }
+            actions.openInEditor()
+            return .handled
+        }
+        .contextMenu { actions.menuItems() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityName)
+        .accessibilityAction(named: showsDetails ? "Hide details" : "Show details") { toggleDetails() }
+        .accessibilityAction(named: "Open in Editor") { actions.openInEditor() }
+        .accessibilityAction(named: "Show in Base") { actions.showBase() }
+        .accessibilityAction(named: "Reveal in Finder") { actions.reveal() }
+        .accessibilityAction(named: "Show in Graph") { actions.showInGraph() }
+        .accessibilityAction(named: "Edit Card") { actions.edit() }
     }
 
-    private var titleRow: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(card.name)
-                    .font(.scopeTitle)
-                    .lineLimit(1)
-                if let remote = card.remote, remote != card.name {
-                    Text(remote)
-                        .font(.scopeCaption)
-                        .foregroundStyle(Ink.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-            Spacer(minLength: 4)
-            if card.edited {
-                Text("edited")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color("WarningText"))
-                    .padding(.horizontal, 5)
-                    .frame(height: 16)
-                    .background(Color("WarningText").opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
-                    .help("Edited by hand: Analyze keeps this card")
-            }
-            if let branch = card.defaultBranch {
-                Text(branch)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(Ink.secondary)
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(Fill.quiet, in: RoundedRectangle(cornerRadius: 4))
-            }
-            if let date = card.lastActivity {
-                Text(date.formatted(.relative(presentation: .named)))
+    private var isMarked: Bool { focused || model.graph.highlightedKey == entry.key }
+
+    private var accessibilityName: String {
+        [card.name, entry.subtitle, entry.domain.title].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            header
+            description
+            if !entry.tags.isEmpty { TagRow(tags: entry.tags) }
+            detailsToggle
+            if showsDetails { details }
+        }
+    }
+
+    /// The name and `owner/repo` are never cut: the name wraps onto a second line, and `owner/repo` has a line of its
+    /// own under the row it used to share with the branch and the date (which squeezed it to `mobsucces…ccess-front`).
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            nameRow
+            if let subtitle = entry.subtitle {
+                Text(subtitle)
                     .font(.scopeCaption)
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
-                    .help("Last commit \(date.formatted(date: .abbreviated, time: .shortened))")
+                    .foregroundStyle(Ink.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } else if !isPanel {
+                // The line stays, empty, so a card without a remote lines up with its neighbours.
+                Text(" ").font(.scopeCaption).accessibilityHidden(true)
             }
         }
     }
 
-    private func chips(_ items: [String]) -> some View {
-        FlowLayout(spacing: 5) {
-            ForEach(items, id: \.self) { item in
-                let active = model.graph.filter.caseInsensitiveCompare(item) == .orderedSame
-                Button {
-                    model.graph.toggleFilter(item)
-                } label: {
-                    Text(item)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                        .padding(.horizontal, 6)
-                        .frame(height: 18)
-                        .background(active ? Fill.selectedTint : Fill.quiet,
-                                    in: RoundedRectangle(cornerRadius: 4))
+    private var nameRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(card.name)
+                .font(.scopeTitle)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 5) {
+                if card.edited {
+                    Text("edited")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color("WarningText"))
+                        .help("Edited by hand: Analyze keeps this card")
                 }
-                .buttonStyle(.plain)
-                .help(active ? "Clear the stack filter" : "Filter cards by \(item)")
+                if let branch = card.defaultBranch {
+                    Text(branch).font(.system(size: 10.5, design: .monospaced))
+                }
+                if card.defaultBranch != nil, card.lastActivity != nil { Text("·") }
+                if let date = card.lastActivity {
+                    Text(date.formatted(.relative(presentation: .named)))
+                        .help("Last commit \(date.formatted(date: .abbreviated, time: .shortened))")
+                }
+            }
+            .font(.scopeCaption)
+            .foregroundStyle(Ink.tertiary)
+            .lineLimit(1)
+            .fixedSize()
+        }
+    }
+
+    /// Always two lines tall, so the cards of a row line up whatever their text.
+    private var description: some View {
+        Group {
+            if let description = entry.description {
+                Text(description.text)
+                    .foregroundStyle(Ink.secondary)
+                    .help(description.text)
+            } else {
+                Text("No description")
+                    .foregroundStyle(Ink.tertiary)
+                    .italic()
             }
         }
+        .font(.system(size: 12))
+        .lineSpacing(2)
+        .lineLimit(isPanel ? 12 : 2, reservesSpace: !isPanel)
+        .fixedSize(horizontal: false, vertical: isPanel)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private var keyValues: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if !card.entrypoints.isEmpty {
-                kv("Entry", mono: card.entrypoints.joined(separator: "  "))
-            }
-            if let setup = card.setup, !setup.isEmpty { kv("Setup", mono: setup) }
-            if let test = card.test, !test.isEmpty { kv("Test", mono: test) }
-            if !card.related.isEmpty {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    label("Related")
-                    FlowLayout(spacing: 8) {
-                        ForEach(card.related, id: \.self) { relation in
-                            Button {
-                                model.graph.highlightedKey = relation.repo
-                            } label: {
-                                HStack(spacing: 3) {
-                                    Image(systemName: relation.kind == .dependsOn ? "arrow.right" : "arrow.left")
-                                        .font(.system(size: 9, weight: .semibold))
-                                    Text(model.graph.card(relation.repo)?.name ?? relation.repo)
-                                }
-                                .font(.system(size: 12))
-                            }
-                            .buttonStyle(.scopeLink)
-                            .help(relation.kind == .dependsOn ? "depends on \(relation.repo)" : "consumed by \(relation.repo)")
-                        }
-                    }
+    private var detailsToggle: some View {
+        if !isPanel {
+            Button(action: toggleDetails) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .rotationEffect(.degrees(showsDetails ? 90 : 0))
+                    Text("Details")
                 }
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(showsDetails ? "Hide details" : "Show details")
         }
     }
 
-    private func kv(_ key: String, mono value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            label(key)
-            Text(value)
-                .font(.scopeValue)
-                .textSelection(.enabled)
-                .lineLimit(2)
-                .truncationMode(.middle)
-        }
+    private func toggleDetails() {
+        if model.graph.expanded.remove(entry.key) == nil { model.graph.expanded.insert(entry.key) }
     }
 
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(.scopeCaption)
-            .foregroundStyle(Ink.secondary)
-            .frame(width: 52, alignment: .leading)
-    }
-
-    private var actions: some View {
-        // 4, not 12: each link carries 3 pt of its own on either side for the hover wash, and the four of
-        // them only just fit a 260 pt card.
-        HStack(spacing: 4) {
-            if let repo {
-                CheckoutPicker(scope: scope, repo: repo)
-                Button {
-                    model.showBase(repo: repo, in: scope)
-                } label: {
-                    Label("Base", systemImage: "square.stack.3d.up")
-                }
-                .buttonStyle(.scopeLink)
-                Button {
-                    Reveal.inFinder(repo.url)
-                } label: {
-                    Label("Reveal", systemImage: "folder")
-                }
-                .buttonStyle(.scopeLink)
-            } else {
-                Text("not in the scope any more")
-                    .font(.scopeCaption)
+    private var details: some View {
+        let relations = model.graph.relations(of: entry.key)
+        return VStack(alignment: .leading, spacing: 6) {
+            // The whole description, when two lines of a card cannot have held it (the panel shows it whole above).
+            if let description = entry.description, !isPanel, description.text.count > 130 {
+                Text(description.text)
+                    .font(.system(size: 12))
                     .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
-            Spacer(minLength: 0)
-            Button {
-                model.graph.editingKey = entry.key
-            } label: {
-                Label("Edit", systemImage: "pencil")
+            if let description = entry.description {
+                row("About") { Text(sourceCaption(description.source)).font(.scopeCaption).foregroundStyle(Ink.tertiary) }
             }
-            .buttonStyle(.scopeLink)
+            if !card.entrypoints.isEmpty { row("Entry") { mono(card.entrypoints.joined(separator: "\n")) } }
+            if let setup = card.setup, !setup.isEmpty { row("Setup") { mono(setup) } }
+            if let test = card.test, !test.isEmpty { row("Test") { mono(test) } }
+            if let teardown = card.teardown, !teardown.isEmpty { row("Teardown") { mono(teardown) } }
+            if !relations.out.isEmpty { row("Uses") { links(relations.out, systemImage: "arrow.right") } }
+            if !relations.in.isEmpty { row("Used by") { links(relations.in, systemImage: "arrow.left") } }
+            if card.entrypoints.isEmpty, card.setup == nil, card.test == nil, relations.out.isEmpty, relations.in.isEmpty {
+                Text("Nothing more known. Analyze with AI fills the commands and the relations.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+            }
+            if isPanel {
+                HStack(spacing: 4) {
+                    Button { actions.openInEditor() } label: { Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right") }
+                    Button { actions.showBase() } label: { Label("Base", systemImage: "square.stack.3d.up") }
+                    Button { actions.reveal() } label: { Label("Reveal", systemImage: "folder") }
+                    Spacer(minLength: 0)
+                    Button { actions.showCard() } label: { Label("Card", systemImage: "rectangle.grid.2x2") }
+                }
+                .buttonStyle(.scopeLink)
+                .font(.scopeCaption.weight(.medium))
+                .padding(.top, 2)
+            }
         }
-        // The caption role: `.controlSize(.small)` used to shrink these links to 11 pt, and at 12 the four of
-        // them no longer fit the narrowest card.
-        .font(.scopeCaption.weight(.medium))
-        .lineLimit(1)
         .padding(.top, 2)
     }
-}
 
-/// Wraps its children onto as many rows as needed (stack chips, related links).
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        layout(proposal: proposal, subviews: subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (index, origin) in layout(proposal: proposal, subviews: subviews).origins.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+    private func sourceCaption(_ source: RepoDescription.Source) -> String {
+        switch source {
+        case .edited: "written by hand"
+        case .github: "from GitHub"
+        case .manifest: "from the manifest"
+        case .ai: "from the AI analysis"
+        case .readme: "from the README"
         }
     }
 
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
-        let width = proposal.width ?? .infinity
-        var origins: [CGPoint] = []
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
+    private func row<Value: View>(_ label: String, @ViewBuilder value: () -> Value) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .font(.scopeCaption)
+                .foregroundStyle(Ink.tertiary)
+                .frame(width: 54, alignment: .leading)
+            value().frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The whole command, wrapped and selectable: a setup is copied more often than it is read.
+    private func mono(_ text: String) -> some View {
+        Text(text)
+            .font(.scopeValue)
+            .foregroundStyle(Ink.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+    }
+
+    private func links(_ keys: [String], systemImage: String) -> some View {
+        FlowLayout(spacing: 6) {
+            ForEach(keys, id: \.self) { key in
+                Button {
+                    model.graph.highlightedKey = key
+                    if isPanel { model.graph.selectedKey = key }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: systemImage).font(.system(size: 9, weight: .semibold))
+                        Text(model.graph.card(key)?.name ?? key)
+                    }
+                    .font(.system(size: 12))
+                }
+                .buttonStyle(.scopeLink)
             }
-            origins.append(CGPoint(x: x, y: y))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-            maxX = max(maxX, x - spacing)
         }
-        return (CGSize(width: maxX, height: y + rowHeight), origins)
+    }
+
+    /// The hover bar: three actions and a menu, over the card's corner.
+    private var hoverBar: some View {
+        HStack(spacing: 1) {
+            if let repo = actions.repo {
+                CheckoutPicker(scope: scope, repo: repo, iconOnly: true)
+                Button { actions.showBase() } label: { Image(systemName: "square.stack.3d.up") }
+                    .help("Show in Base")
+                    .accessibilityLabel("Show in Base")
+                Button { actions.reveal() } label: { Image(systemName: "folder") }
+                    .help("Reveal in Finder")
+                    .accessibilityLabel("Reveal in Finder")
+            }
+            ScopeIconMenu(systemImage: "ellipsis", title: "More") {
+                actions.menuItems()
+            }
+        }
+        .buttonStyle(IconButtonStyle(padding: 3))
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(Ink.secondary)
+        .padding(2)
+        .background(Surface.elevated, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Surface.stroke))
+        .shadow(color: .black.opacity(0.08), radius: 4, y: 1)
     }
 }

@@ -1,0 +1,71 @@
+<!-- title: Graph · Cards, grouped by domain -->
+<!-- size: 1040x780 -->
+<div class="sheet">
+<div class="sheet-chrome"><span class="t">Graph</span><span class="s">@acme</span><span class="btn">Close</span></div>
+<div class="gh">
+  <div class="gh-top">
+    <div class="who"><div class="l1"><b>@acme</b> <span class="ink2">· 14 repos · 13 remotes</span></div><div class="t-cap">Analyzed 2 minutes ago</div></div>
+    <div class="sp"></div>
+    <div class="tabs"><span class="tb on">{i:cards}Cards</span><span class="tb">{i:list}List</span><span class="tb">{i:graph}Graph</span></div>
+    <div class="split"><span class="btn">{i:sparkle} Analyze</span><span class="btn" style="padding:3px 5px">{i:chev-d}</span></div>
+  </div>
+  <div class="fbar">
+    <div class="ffield">{i:filter}<span>Filter by name, description or tag</span></div>
+    <div class="fchips"><span class="lab">Domain</span><span class="fchip">Front<span class="n">3</span></span><span class="fchip">Back<span class="n">3</span></span><span class="fchip">Libs<span class="n">3</span></span><span class="fchip">Infra & CI<span class="n">2</span></span><span class="fchip">Data<span class="n">2</span></span><span class="fchip">Docs<span class="n">1</span></span><span class="lab">Stack</span><span class="fchip">typescript<span class="n">7</span></span><span class="fchip">react<span class="n">4</span></span><span class="fchip">go<span class="n">2</span></span><span class="fchip">More {i:chev-d}</span></div>
+  </div>
+  <div class="gh-rule"></div>
+</div>
+<div class="body"><div class="groups">
+  <div class="grp-h">{i:chev-d} Front <span class="n">3</span></div>
+  <div class="grid">
+    <div class="rc focus">
+  <div class="hd"><div class="nm"><div class="n">web</div><div class="r">acme/web</div></div>
+  <div class="meta"><span class="br">main</span>·<span>2 h</span></div></div>
+  <div class="ds">Customer-facing storefront in Next.js: catalogue, cart and checkout pages, rendered at the edge.</div>
+  <div class="tags"><span class="tag">next</span><span class="tag">react</span><span class="tag">typescript</span><span class="tag">tailwind</span><span class="tag">vercel</span><span class="tag more">+4</span></div>
+  <span class="det-t">{i:chev-r} Details</span><div class="acts"><span class="ib h">{i:code}</span><span class="ib">{i:stack}</span><span class="ib">{i:folder}</span><span class="ib">{i:dots}</span></div>
+</div>
+    <div class="rc ">
+  <div class="hd"><div class="nm"><div class="n">admin-console</div><div class="r">acme/admin-console</div></div>
+  <div class="meta"><span class="br">main</span>·<span>yesterday</span></div></div>
+  <div class="ds">Back-office for support and ops teams to manage orders, refunds and customer accounts.</div>
+  <div class="tags"><span class="tag">react</span><span class="tag">vite</span><span class="tag">typescript</span><span class="tag">tanstack-query</span></div>
+  <span class="det-t">{i:chev-r} Details</span>
+</div>
+    <div class="rc ">
+  <div class="hd"><div class="nm"><div class="n">marketing-site-and-landing-pages</div><div class="r">acme/marketing-site</div></div>
+  <div class="meta"><span class="br">main</span>·<span>3 days</span></div></div>
+  <div class="ds">Static marketing site and campaign landing pages, built with Astro and published on every merge.</div>
+  <div class="tags"><span class="tag">astro</span><span class="tag">markdown</span><span class="tag">css</span></div>
+  <span class="det-t">{i:chev-r} Details</span>
+</div>
+  </div>
+  <div class="grp-h" style="margin-top:6px">{i:chev-d} Back <span class="n">3</span></div>
+  <div class="grid">
+    <div class="rc ">
+  <div class="hd"><div class="nm"><div class="n">api</div><div class="r">acme/api</div></div>
+  <div class="meta"><span class="br">main</span>·<span>4 h</span></div></div>
+  <div class="ds">GraphQL gateway in front of every service; owns auth checks, rate limits and the public schema.</div>
+  <div class="tags"><span class="tag">node</span><span class="tag">fastify</span><span class="tag">graphql</span><span class="tag">postgres</span><span class="tag">docker</span></div>
+  <span class="det-t">{i:chev-d} Details</span><div class="det"><span class="k">Entry</span><span class="v">src/server.ts</span><span class="k">Setup</span><span class="v">pnpm install && docker compose up -d postgres redis</span><span class="k">Test</span><span class="v">pnpm test --filter api</span><span class="k">Related</span><span class="v rel"><span>{i:arrow-r}auth</span><span>{i:arrow-r}billing</span><span>{i:arrow-l}web</span><span>{i:arrow-l}admin-console</span></span></div>
+</div>
+    <div class="rc ">
+  <div class="hd"><div class="nm"><div class="n">auth</div><div class="r">acme/auth</div></div>
+  <div class="meta"><span class="br">main</span>·<span>last week</span></div></div>
+  <div class="ds">Issues and verifies session tokens; OAuth with Google and GitHub, SAML for enterprise tenants.</div>
+  <div class="tags"><span class="tag">go</span><span class="tag">oauth</span><span class="tag">saml</span><span class="tag">redis</span></div>
+  <span class="det-t">{i:chev-r} Details</span>
+</div>
+    <div class="rc ">
+  <div class="hd"><div class="nm"><div class="n">billing</div><div class="r">acme/billing</div></div>
+  <div class="meta"><span class="br">main</span>·<span>2 weeks</span></div></div>
+  <div class="ds">Stripe billing worker: subscriptions, invoices and the dunning emails, driven by order events.</div>
+  <div class="tags"><span class="tag">python</span><span class="tag">stripe</span><span class="tag">celery</span><span class="tag">postgres</span><span class="tag">docker</span><span class="tag more">+3</span></div>
+  <span class="det-t">{i:chev-r} Details</span>
+</div>
+  </div>
+  <div class="grp-h" style="margin-top:6px">{i:chev-r} Libs <span class="n">3</span></div>
+  <div class="grp-h">{i:chev-r} Infra &amp; CI <span class="n">2</span></div>
+</div>
+<div class="popover" style="left:228px; top:212px"><div class="tags"><span class="tag">playwright</span><span class="tag">storybook</span><span class="tag">eslint</span><span class="tag">pnpm</span></div></div>
+</div></div>

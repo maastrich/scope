@@ -213,6 +213,11 @@ final class AppEnvironment {
 
     /// A generator over the current git registry; `level1` is the driver-backed pass (`nil` = level 0 only).
     func makeGraphGenerator(level1: Level1Generator?) -> GraphGenerator {
-        GraphGenerator(store: graphStore, registry: git, level1: level1)
+        // `gh` keeps its own auth; without it, or offline, a card simply has no GitHub description.
+        var describer: GitHubDescriber?
+        if let gh = GhClient.locate() {
+            describer = { ownerRepo in try? await gh.repoDescription(ownerRepo) }
+        }
+        return GraphGenerator(store: graphStore, registry: git, level1: level1, describer: describer)
     }
 }

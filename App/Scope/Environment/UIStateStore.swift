@@ -39,6 +39,8 @@ struct UIState: Codable, Sendable, Equatable {
     /// Driver last opened in each scope, keyed by scope id: ⌘T reaches for it before the preference, so a
     /// scope you drive with Claude Code keeps giving you Claude Code.
     var lastDrivers: [ScopeID: String] = [:]
+    /// The Graph sheet's view and folded groups in each scope.
+    var graphPlaces: [ScopeID: GraphPlace] = [:]
 
     static let empty = UIState()
     static let defaultInspectorWidth = ColumnLayout.defaultInspectorWidth
@@ -46,7 +48,7 @@ struct UIState: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case selectedItem, selectedThread, currentScope, reposShown, looseThreadsCollapsed
-        case inspectorVisible, inspectorWeights, viewerShare, inspectorWidth, lastDrivers, basePins, places, sidebarWidth
+        case inspectorVisible, inspectorWeights, viewerShare, inspectorWidth, lastDrivers, basePins, places, sidebarWidth, graphPlaces
     }
 
     init() {}
@@ -67,6 +69,7 @@ struct UIState: Codable, Sendable, Equatable {
         basePins = (try? container.decodeIfPresent([String: String].self, forKey: .basePins)) ?? [:]
         places = (try? container.decodeIfPresent([ScopeID: ScopePlace].self, forKey: .places)) ?? [:]
         sidebarWidth = (try? container.decodeIfPresent(Double.self, forKey: .sidebarWidth)) ?? UIState.defaultSidebarWidth
+        graphPlaces = (try? container.decodeIfPresent([ScopeID: GraphPlace].self, forKey: .graphPlaces)) ?? [:]
     }
 }
 

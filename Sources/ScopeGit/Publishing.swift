@@ -195,6 +195,16 @@ public struct GhClient: Sendable {
                                      rebase: allowed.rebaseMergeAllowed ?? false)
     }
 
+    /// The description of `repo` (`owner/name`) on GitHub, `""` when it has none (`gh repo view --json description`).
+    /// Run from the home folder: the repository is named, so no checkout is needed.
+    public func repoDescription(_ repo: String) async throws -> String {
+        struct Answer: Decodable { var description: String? }
+        let answer = try await runJSON(["repo", "view", repo, "--json", "description"], in: FileManager.default.homeDirectoryForCurrentUser) {
+            try JSONDecoder().decode(Answer.self, from: $0)
+        }
+        return answer.description ?? ""
+    }
+
     /// `gh pr merge <n> --<method>`. Branches are left alone: deleting one is the task's close, which knows the
     /// branch it created rather than guessing.
     public func prMerge(number: Int, method: MergeMethod, in checkout: URL, repo: String? = nil) async throws {

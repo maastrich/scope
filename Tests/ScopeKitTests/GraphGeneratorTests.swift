@@ -136,4 +136,64 @@ import ScopeTasks
         #expect(after.repos["web"]?.purpose == "Mine." && good.calls.withLock { $0 } == calls)
         #expect(after.contextSummaries() == [RepoContextSummary(path: "web", purpose: "Mine.", stack: ["rust"], setup: "cargo build", test: "cargo test")])
     }
+
+    /// The facts the sheet shows — descriptions from the manifest, the README and GitHub — reach every card, the ones
+    /// a cached analysis skips and the ones a person edited included; a stored command the files rule out is replaced.
+    @Test func factsRefreshWithoutRegenerating() async throws {
+        let (scope, local) = try await fixture()
+        var repos = local
+        try scope.write(repos[0].url, "package.json", #"{"name":"api","description":"The API.","scripts":{"test":"jest"}}"#)
+        try await scope.commit(in: repos[0].url, "describe")
+        let asked = Mutex<[String]>([])
+        let answers = ["acme/api": "Serves the mobile app.", "acme/web": ""]
+        let describer: GitHubDescriber = { ownerRepo in
+            asked.withLock { $0.append(ownerRepo) }
+            return answers[ownerRepo]
+        }
+        let store = GraphStore(home: scope.home)
+        let generator = GraphGenerator(store: store, registry: scope.registry, concurrency: 2, describer: describer)
+        let first = try await generator.generate(scope: scope.declaration, repos: repos)
+        #expect(first.repos["api"]?.manifestDescription == "The API." && first.repos["api"]?.readmeSummary == "The backend.")
+        #expect(asked.withLock { $0 }.isEmpty)   // local remotes: nothing to ask GitHub
+        repos[0].githubRepo = "acme/api"
+        repos[1].githubRepo = "acme/web"
+
+        // A graph written before the facts: GitHub remotes, a driver's bad command, a card edited by hand.
+        try await store.update(slug: "acme") { graph in
+            graph.repos["api"]?.remote = "acme/api"
+            graph.repos["api"]?.setup = "uv sync"
+            graph.repos["api"]?.manifestDescription = nil
+            graph.repos["web"]?.remote = "https://github.com/acme/web.git"
+            graph.repos["web"]?.edited = true
+            graph.repos["web"]?.setup = "make setup"
+        }
+        let refreshed = try #require(try await generator.refreshFacts(slug: "acme", repos: repos))
+        #expect(Set(asked.withLock { $0 }) == ["acme/api", "acme/web"])
+        #expect(refreshed.repos["api"]?.githubDescription == "Serves the mobile app." && refreshed.repos["web"]?.githubDescription == "")
+        #expect(refreshed.repos["api"]?.manifestDescription == "The API.")
+        #expect(refreshed.repos["api"]?.setup == "npm install")
+        #expect(refreshed.repos["web"]?.setup == "make setup")   // edited: the person's command stays
+        #expect(await store.load(slug: "acme").graph == refreshed)
+
+        // Asked once: "" means GitHub has no description, not "ask again".
+        #expect(try await generator.refreshFacts(slug: "acme", repos: repos) == nil)
+        #expect(asked.withLock { $0 }.count == 2)
+
+        // A cached analysis still refreshes the facts it can read from the files.
+        try await store.update(slug: "acme") { $0.repos["api"]?.readmeSummary = nil }
+        let skipped = try await generator.generate(scope: scope.declaration, repos: repos)
+        #expect(skipped.repos["api"]?.readmeSummary == "The backend.")
+    }
+
+    @Test func anUnansweredDescriptionIsAskedAgain() async throws {
+        let (scope, local) = try await fixture()
+        let repos = [GraphRepoInput(key: "api", url: local[0].url, githubRepo: "acme/api"), local[1]]
+        let store = GraphStore(home: scope.home)
+        let calls = Mutex(0)
+        let generator = GraphGenerator(store: store, registry: scope.registry, describer: { _ in calls.withLock { $0 += 1 }; return nil })
+        try await generator.generate(scope: scope.declaration, repos: repos)
+        #expect(try await generator.refreshFacts(slug: "acme", repos: repos) == nil)
+        #expect(try await generator.refreshFacts(slug: "acme", repos: repos) == nil)
+        #expect(calls.withLock { $0 } == 3)   // the analysis, then each refresh: an unanswered question is not cached
+    }
 }

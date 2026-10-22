@@ -7,17 +7,28 @@ struct CheckoutPicker: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
     let repo: RepoState
+    /// The glyph alone, for a card's hover bar; the link with its label otherwise.
+    var iconOnly = false
 
     var body: some View {
         let sandboxes = model.sandboxes(of: repo, in: scope)
         Group {
             if sandboxes.isEmpty {
-                Button {
-                    model.openInEditorOrCopy(path: repo.url.path)
-                } label: {
-                    Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                if iconOnly {
+                    Button {
+                        model.openInEditorOrCopy(path: repo.url.path)
+                    } label: {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    }
+                    .accessibilityLabel("Open in Editor")
+                } else {
+                    Button {
+                        model.openInEditorOrCopy(path: repo.url.path)
+                    } label: {
+                        Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    .buttonStyle(.scopeLink)
                 }
-                .buttonStyle(.scopeLink)
             } else {
                 ScopeMenu {
                     Button {
@@ -35,13 +46,18 @@ struct CheckoutPicker: View {
                     }
                 } label: { hovering in
                     ScopeLinkLabel(hovering: hovering) {
-                        Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                        if iconOnly {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        } else {
+                            Label("Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                        }
                     }
                 }
+                .accessibilityLabel("Open in Editor")
                 .fixedSize()
             }
         }
-        .help("⌥-click copies the path")
+        .help("Open in Editor · ⌥-click copies the path")
     }
 
     private func state(_ task: TaskState, _ repo: TaskRepo) -> String {

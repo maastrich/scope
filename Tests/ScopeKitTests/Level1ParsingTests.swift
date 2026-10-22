@@ -88,4 +88,34 @@ import ScopeDrivers
             try await bare.generate(repo: repo, scopeRoot: repo, seed: seed, otherRepos: [])
         }
     }
+
+    @Test func domainIsKeptOnlyWhenItIsOne() throws {
+        let card = try Level1Generator.parse(output: #"{"purpose":"Serves the API.","domain":"Backend"}"#, seed: seed, otherRepos: [])
+        #expect(card.domain == "backend" && card.promptVersion == Level1Generator.promptVersion)
+        let unknown = try Level1Generator.parse(output: #"{"purpose":"Serves the API.","domain":"marketing"}"#, seed: seed, otherRepos: [])
+        #expect(unknown.domain == nil)
+        #expect(Level1Generator.prompt(seed: seed, otherRepos: []).contains("\"domain\": \"one of: frontend, backend"))
+    }
+
+    /// The driver answered `uv sync` for a repository whose pyproject.toml only configures ruff: the quick analysis's
+    /// command, checked against the files, is kept instead.
+    @Test func aCommandTheFilesRuleOutFallsBackToTheSeed() async throws {
+        struct Canned: HeadlessRunner {
+            let out: String
+            func run(argv: [String], cwd: URL, timeout: Duration) async throws -> ProcessResult {
+                ProcessResult(exitCode: 0, terminationReason: .exit, stdout: Data(out.utf8), stderr: Data())
+            }
+        }
+        let repo = FileManager.default.temporaryDirectory.appending(path: "scope-l1-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "[tool.ruff]\n".write(to: repo.appending(path: "pyproject.toml"), atomically: true, encoding: .utf8)
+        try "local-install:\n\tuv pip install\ntest:\n\tpytest\n".write(to: repo.appending(path: "Makefile"), atomically: true, encoding: .utf8)
+        let python = RepoCard(name: "billing", stack: ["python"], setup: "make local-install", test: "make test", generatedBy: .level0)
+        let profile = try DriverRegistry.bundledProfiles().first { $0.id == "claude-code" }!
+        let generator = Level1Generator(profile: profile, runner: Canned(out: #"{"purpose":"Serves billing.","setup":"uv sync","test":"make test"}"#),
+                                        home: repo)
+        let card = try await generator.generate(repo: repo, scopeRoot: repo, seed: python, otherRepos: [])
+        #expect(card.setup == "make local-install" && card.test == "make test")
+    }
 }

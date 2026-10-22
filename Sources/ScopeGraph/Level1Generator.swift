@@ -1,6 +1,7 @@
 import Foundation
 import ScopeCore
 import ScopeDrivers
+import ScopeTasks
 
 /// Why a level-1 run produced no card.
 public enum Level1Error: Error, Sendable, Equatable, CustomStringConvertible {
@@ -82,15 +83,20 @@ public struct Level1Generator: Sendable {
             let text = result.stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
             throw Level1Error.driverFailed(message: text.isEmpty ? "exit \(result.exitCode)" : text)
         }
-        return try Self.parse(output: result.stdoutText, seed: seed, otherRepos: otherRepos)
+        var card = try Self.parse(output: result.stdoutText, seed: seed, otherRepos: otherRepos)
+        // A driver guesses commands as readily as it reads them: one the repository's files rule out (`uv sync` with
+        // no [project] table) falls back to what the quick analysis found, which was checked the same way.
+        if let setup = card.setup, SetupCommandCheck.problem(setup, in: repo) != nil { card.setup = seed.setup }
+        if let test = card.test, SetupCommandCheck.problem(test, in: repo) != nil { card.test = seed.test }
+        return card
     }
 
     // MARK: - Prompt
 
     /// Bumped whenever the prompt asks for something else: a card an older prompt wrote is then redone by the
     /// next analysis with AI, instead of keeping an answer to a question no longer asked. 2: the purpose as one
-    /// skill-like sentence.
-    public static let promptVersion = 2
+    /// skill-like sentence. 3: the domain, which groups the Graph sheet.
+    public static let promptVersion = 3
 
     /// The JSON schema the driver must follow, as shown in the prompt.
     public static let schema = """
@@ -101,7 +107,8 @@ public struct Level1Generator: Sendable {
       "related": [{"kind": "depends_on" | "consumed_by", "repo": "string: one of the other repositories"}],
       "setup": "string or null: command to run after a fresh checkout",
       "test": "string or null: command that runs the tests",
-      "tags": ["string: short lowercase keywords"]
+      "tags": ["string: short lowercase keywords"],
+      "domain": "one of: \(RepoDomain.allCases.map(\.rawValue).joined(separator: ", "))"
     }
     """
 
@@ -129,6 +136,9 @@ public struct Level1Generator: Sendable {
         - "related" may only reference these other repositories of the same workspace: \(others). \
         Use an empty array when unsure.
         - "setup" and "test" are shell commands run from the repository root; use null when unknown.
+        - "domain" is the part of a system the repository is: frontend (a web app or site), backend (an API, a \
+        service, a worker), library (a package others import), infra (deployment, CI, cloud), data (pipelines, \
+        analytics), mobile, docs (documentation, design system), tooling (a CLI, a template, a bot), or other.
         - Keep every array short (at most 10 items).
 
         Facts already known (refine or correct them). The "purpose" below is only the first paragraph of \
@@ -160,6 +170,7 @@ public struct Level1Generator: Sendable {
             guard let kind = Relation.Kind(rawValue: raw.kind), allowed.contains(raw.repo) else { return nil }
             return Relation(kind: kind, repo: raw.repo)
         }
+        if let domain = payload.domain?.lowercased(), RepoDomain(rawValue: domain) != nil { card.domain = domain }
         card.generatedBy = .level1
         card.promptVersion = promptVersion
         return card
@@ -212,6 +223,7 @@ struct Level1Payload: Codable {
     var setup: String?
     var test: String?
     var tags: [String]?
+    var domain: String?
 
     init(seed: RepoCard) {
         purpose = seed.purpose
@@ -221,5 +233,6 @@ struct Level1Payload: Codable {
         setup = seed.setup
         test = seed.test
         tags = seed.tags
+        domain = seed.domain
     }
 }

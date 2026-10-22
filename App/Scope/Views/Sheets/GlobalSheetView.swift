@@ -53,7 +53,7 @@ struct GlobalSheetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: width, height: sheet == .compareAttempts ? 780 : 620)
+        .frame(width: width, height: sheet == .compareAttempts || sheet == .graph ? 780 : 620)
     }
 
     private var title: String {
@@ -68,7 +68,7 @@ struct GlobalSheetView: View {
     private var width: CGFloat {
         switch sheet {
         case .pullRequests: 780
-        case .graph: 900
+        case .graph: 1040
         case .inbox: 720
         case .compareAttempts: 1040
         }
