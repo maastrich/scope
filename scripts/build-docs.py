@@ -1362,6 +1362,15 @@ claude-opus-5-5</code>, <code>/clear</code>, <code>/compact</code> — which a s
 text is typed verbatim, with no line saying who sent it, and submitted. From your terminal it reaches any thread;
 an agent may command only the threads it opened and theirs, unless <b>Settings ▸ Automation ▸ Driver commands</b>
 opens every thread.</p>
+<p>Whatever Scope types into a Claude Code thread — <code>thread send</code>, a message from another thread, the
+nudge after a restart, a notification reply, the palette, a schedule — leaves the prompt you were writing alone.
+Scope reads the input field first; when it holds a draft, it stashes it with Claude Code's own <kbd>Ctrl</kbd>+<kbd>S</kbd>,
+submits the message, and Claude Code puts the draft back (<i>Draft restored</i>) with its line breaks, pasted blocks
+and cursor, whether the agent was idle or the message was queued behind a running turn. An empty field, a permission
+or a menu on screen, or a driver other than Claude Code gets the message as before. Keys you press during the second
+or so it takes wait and follow in order. Claude Code keeps one stash: with <code>› stashed</code> already showing and
+a new draft in the field, the message waits up to 20 seconds for the field to clear, then the new draft takes the
+stash.</p>
 <p><code>scope task new --issue 123</code> (<code>issue</code> over MCP) works on a GitHub issue: its title, body
 and labels open the brief, the task records it, and the context file asks for <code>Closes #123</code> in the pull
 request. <code>@task:&lt;slug&gt;</code> and <code>@thread:&lt;id&gt;</code> in any prompt or message are replaced by

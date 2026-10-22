@@ -33,8 +33,38 @@ final class ScopeTerminalView: LocalProcessTerminalView {
     }
 
     override func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        if heldInput != nil, !isScopeWriting {
+            heldInput?.append(contentsOf: data)
+            return
+        }
         onUserInput?(data)
         super.send(source: source, data: data)
+    }
+
+    // MARK: Scope's own typing
+
+    /// `true` while Scope writes to the child itself (`write(_:)`): those bytes are not the user's keys.
+    private(set) var isScopeWriting = false
+    /// The user's keys, set aside while Scope types a message around their draft (`ThreadSession.submit`).
+    private var heldInput: [UInt8]?
+
+    /// Types `text` for Scope. It still goes through `send(source:data:)`, so the thread's input tracking sees it.
+    func write(_ text: String) {
+        isScopeWriting = true
+        defer { isScopeWriting = false }
+        send(txt: text)
+    }
+
+    /// From now on, the user's keys wait until `releaseUserInput` instead of landing in the middle of Scope's typing.
+    func holdUserInput() {
+        if heldInput == nil { heldInput = [] }
+    }
+
+    /// Sends the keys held since `holdUserInput`, in order.
+    func releaseUserInput() {
+        guard let held = heldInput else { return }
+        heldInput = nil
+        if !held.isEmpty { send(source: self, data: held[...]) }
     }
 
     /// A file the agent printed opens in Scope's viewer, at the task's version of it; a web link, or a path that
