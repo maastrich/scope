@@ -367,6 +367,11 @@ final class ThreadSession: Identifiable {
     @ObservationIgnored private var userStashed = false
 
     private func submitKeepingDraft(_ text: String) async {
+        // Only Claude Code has a field to read; anything else gets the message as it always has.
+        guard profile.adapter?.kind == ClaudeHooksAdapter.kind else {
+            await typeAndSubmit(text)
+            return
+        }
         let clock = ContinuousClock()
         let start = clock.now
         var field = promptInput()
@@ -409,8 +414,8 @@ final class ThreadSession: Identifiable {
     }
 
     private func draftPlan(_ field: ClaudePromptInput?, waited: Duration) -> ClaudeDraft.Plan {
-        ClaudeDraft.plan(claudeInput: profile.adapter?.kind == ClaudeHooksAdapter.kind, dialog: claude.pending.current != nil,
-                         field: field, userStashed: userStashed, waited: waited)
+        ClaudeDraft.plan(claudeInput: true, dialog: claude.pending.current != nil, field: field, userStashed: userStashed,
+                         waited: waited)
     }
 
     /// `false` when the process went away before ↩.
