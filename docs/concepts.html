@@ -336,7 +336,11 @@ is locked.</p>
 <p>The island sits on the screen of the window you are working in — the frontmost window of the active app, whatever
 the app, on the screen that holds most of it — and moves there when you switch apps or drag the window to the other
 screen, never while it is open or under the pointer. With no window in front (Finder over the desktop), it goes to the
-screen with the pointer. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
+screen with the pointer.</p>
+<p>It stays out of your way while you work: as long as you are typing or moving the pointer, a finished or failed turn
+only changes its thread's dot; only an agent waiting on you — a question, a permission, a plan — makes it grow
+(<b>Interrupt while I work</b>: never, only when an agent is waiting, or always). Over an app in full screen it
+disappears unless an agent is waiting. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
 the one with the pointer, or a named one), how it opens and which events it shows. It is on by default, and off in a
 Debug build.</p>
 </main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#scope">Scope</a><a class="lvl2" href="#repository">Repository</a><a class="lvl2" href="#thread">Thread</a><a class="lvl3" href="#closing">Closing a thread, without regret</a><a class="lvl3" href="#residents">Orchestrator and terminal</a><a class="lvl3" href="#topics">Topics</a><a class="lvl3" href="#attempts">Several attempts at one brief</a><a class="lvl3" href="#delegation">Tasks started from a task</a><a class="lvl3" href="#activity">What each agent is doing</a><a class="lvl2" href="#states">States</a><a class="lvl2" href="#driver">Driver</a><a class="lvl2" href="#task">Task</a><a class="lvl2" href="#inspector">The inspector</a><a class="lvl2" href="#global-views">Inbox, Pull Requests and Graph</a><a class="lvl2" href="#inbox">Inbox</a><a class="lvl2" href="#quick-panel">The quick panel, from anywhere</a><a class="lvl2" href="#island">The island under the notch</a></aside></div>
