@@ -11,6 +11,20 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.30.0](https://github.com/maastrich/scope/releases/tag/v0.30.0) - 2026-10-22
+
+### Added
+
+- **island:** an island under the notch with the threads' activity, answers and reveals ([#110](https://github.com/maastrich/scope/pull/110)) by @maastrich
+- **graph:** cards, list and graph views of a scope's repos, and setup commands checked against the repo ([#112](https://github.com/maastrich/scope/pull/112)) by @maastrich
+
+### Fixed
+
+- **threads:** keep the user's half-typed prompt out of messages Scope types into Claude Code ([#111](https://github.com/maastrich/scope/pull/111)) by @maastrich
+- **terminal:** hide macOS cursor accessories while the terminal cursor is hidden ([#113](https://github.com/maastrich/scope/pull/113)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.29.2...v0.30.0
+
 ## [0.29.2](https://github.com/maastrich/scope/releases/tag/v0.29.2) - 2026-10-21
 
 ### Fixed
