@@ -10,7 +10,7 @@ final class IslandLayout {
     /// The notch's width; 0 on a screen without one.
     var bandWidth: CGFloat = 0
     /// The collapsed height: the notch's, or a few points short of the menu bar (`Island.collapsedHeight`).
-    var bandHeight: CGFloat = Island.pillHeight - 4
+    var bandHeight: CGFloat = 20
     var onNotch: Bool { bandWidth > 0 }
 }
 

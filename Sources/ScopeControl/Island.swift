@@ -507,10 +507,10 @@ extension Island {
         CGRect(x: rect.minX, y: primaryHeight - rect.maxY, width: rect.width, height: rect.height)
     }
 
-    /// Height of the pill on a screen without a notch, when its menu bar hides.
+    /// The menu bar's height assumed on a screen without a notch when it hides; the capsule is a little shorter.
     public static let pillHeight: CGFloat = 26
 
-    /// The collapsed shape's band: the notch itself, or where a pill sits on a screen without one — the top of the
+    /// The collapsed shape's band: the notch itself, or where the capsule hangs on a screen without one — the top of the
     /// screen, centred, as high as the menu bar.
     public static func band(on screen: Screen) -> CGRect {
         if let notch = screen.notch { return notch }
@@ -625,12 +625,13 @@ extension Island {
 
     // MARK: Geometry
 
-    /// The collapsed capsule's height on a screen without a notch: a few points short of the menu bar, so it hangs from
-    /// the top edge instead of sitting on the bar like a second one. Around a notch, the notch's own height.
+    /// The collapsed capsule's height on a screen without a notch: 6 pt short of the menu bar (24 on a 30 pt bar), so
+    /// it hangs from the top edge instead of sitting on the bar like a second one, and never under 20 pt, which the
+    /// ring and the counter need. Around a notch, the notch's own height.
     public static func collapsedHeight(on screen: Screen) -> CGFloat {
         if let notch = screen.notch { return notch.height }
         let bar = screen.menuBarHeight > 0 ? screen.menuBarHeight : pillHeight
-        return max(18, bar - 4)
+        return max(20, bar - 6)
     }
 
     /// Sizes the collapsed content is laid out with, shared by the view and `wingWidth`.

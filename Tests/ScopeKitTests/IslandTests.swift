@@ -374,10 +374,13 @@ private func plan() -> ClaudePendingRequest {
     }
 
     @Test func theCapsuleHangsShorterThanTheMenuBarAndTheWingsAsHighAsTheNotch() {
-        #expect(Island.collapsedHeight(on: external) == 21)
+        #expect(Island.collapsedHeight(on: external) == 20)
+        var tall = external
+        tall.menuBarHeight = 30
+        #expect(Island.collapsedHeight(on: tall) == 24)
         var hidden = external
         hidden.menuBarHeight = 0
-        #expect(Island.collapsedHeight(on: hidden) == Island.pillHeight - 4)
+        #expect(Island.collapsedHeight(on: hidden) == 20)
         #expect(Island.collapsedHeight(on: notched) == 32)
     }
 
