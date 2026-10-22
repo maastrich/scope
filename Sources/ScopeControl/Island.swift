@@ -242,17 +242,35 @@ extension Island {
         public var line: String
     }
 
-    /// Why the island stays still right now, whatever happens: the user's Focus, a locked or sleeping screen.
+    /// Why the island stays still right now, whatever happens: the user's Focus, a locked or sleeping screen. And
+    /// whether the user is at work, which holds back the reveals `IslandSettings.interruptions` leaves out.
     public struct Quiet: Sendable, Equatable {
         public var focus: Bool
         public var screenLocked: Bool
+        /// A key, a click or the pointer moved within `recentInput`.
+        public var userActive: Bool
 
-        public init(focus: Bool = false, screenLocked: Bool = false) {
+        public init(focus: Bool = false, screenLocked: Bool = false, userActive: Bool = false) {
             self.focus = focus
             self.screenLocked = screenLocked
+            self.userActive = userActive
         }
 
         public var isQuiet: Bool { focus || screenLocked }
+
+        /// How recent the last input must be for the user to count as at work: long enough to cover a pause to read,
+        /// short enough that a reveal is not lost on someone who stepped back to wait.
+        public static let recentInput: TimeInterval = 30
+
+        /// Whether a reveal of `kind` may interrupt now.
+        public func allows(_ kind: AlertKind, _ interruptions: IslandSettings.Interruptions) -> Bool {
+            guard userActive else { return true }
+            switch interruptions {
+            case .never: return false
+            case .requests: return kind != .finished && kind != .failed
+            case .always: return true
+            }
+        }
     }
 
     /// The keys already revealed, oldest first, bounded: a request that comes back after a blip (`waiting` → `running`
@@ -274,7 +292,8 @@ extension Island {
 
     /// The reveals between two readings of the threads. A thread only reveals what changed since `previous`: the first
     /// reading after launch, or a thread just restored, reveals nothing. A reveal skipped — the thread is in front, the
-    /// Mac is quiet, the settings leave that kind out — is still remembered, so it does not burst out later when the
+    /// Mac is quiet, the user is at work and may not be interrupted for it, the settings leave that kind out — is still
+    /// remembered, so it does not burst out later when the
     /// Focus ends or the user looks elsewhere.
     public static func alerts(from previous: [ThreadInput], to current: [ThreadInput], settings: IslandSettings,
                               quiet: Quiet, memory: inout AlertMemory) -> [Alert] {
@@ -284,7 +303,8 @@ extension Island {
             guard let old = before[thread.id], let (kind, key) = change(from: old, to: thread),
                   !memory.contains(key) else { continue }
             memory.insert(key)
-            guard !quiet.isQuiet, !thread.isForeground, wants(kind, settings) else { continue }
+            guard !quiet.isQuiet, !thread.isForeground, wants(kind, settings),
+                  quiet.allows(kind, settings.interruptions) else { continue }
             let line = thread.request.map(\.headline) ?? thread.activity ?? thread.state.label
             alerts.append(Alert(key: key, kind: kind, thread: thread.id, title: thread.title, line: line))
         }
@@ -433,6 +453,12 @@ extension Island {
             $0.pid == pid && $0.layer == 0 && $0.alpha > 0
                 && $0.bounds.width >= smallestWindowSide && $0.bounds.height >= smallestWindowSide
         }?.bounds
+    }
+
+    /// Whether `window` fills `screen` whole — an app in full screen, menu bar and Dock gone. A window merely zoomed
+    /// stops under the menu bar, so it does not count.
+    public static func isFullScreen(_ window: CGRect, on screen: Screen) -> Bool {
+        window.insetBy(dx: -1, dy: -1).contains(screen.frame)
     }
 
     /// A Quartz rectangle (origin at the top left of the primary screen, y down) in AppKit's global coordinates (origin

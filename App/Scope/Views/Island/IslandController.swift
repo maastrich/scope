@@ -37,6 +37,8 @@ final class IslandController: NSObject {
     private var activationObserver: NSObjectProtocol?
     private var followTimer: Timer?
     private var tracking = false
+    /// Put away over a full-screen app, and looked at again by the follow timer until that app leaves full screen.
+    private var hiddenForFullScreen = false
 
     /// Puts the island up, or keeps it up, for what the model holds now.
     func show(model: AppModel) {
@@ -52,6 +54,7 @@ final class IslandController: NSObject {
 
     func hide() {
         panel?.orderOut(nil)
+        hiddenForFullScreen = false
         stopOutsideClicks()
         updateFollowing(false)
     }
@@ -88,7 +91,8 @@ final class IslandController: NSObject {
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.model?.config.preferences.island.placement == .activeWindow else { return }
+                guard let self, let island = self.model?.config.preferences.island,
+                      island.placement == .activeWindow || island.hidesInFullScreen else { return }
                 self.place()
             }
         }
@@ -130,11 +134,13 @@ final class IslandController: NSObject {
         if snapshot.isEmpty && model.island.presentation != .expanded {
             if model.island.presentation != .collapsed { model.island.presentation = .collapsed }
             panel.orderOut(nil)
+            hiddenForFullScreen = false
             updateFollowing(false)
             return
         }
         let all = screens().map(\.1)
-        let activeWindow = settings.placement == .activeWindow ? activeWindowFrame() : nil
+        let front = settings.placement == .activeWindow || settings.hidesInFullScreen ? activeWindowFrame() : nil
+        let activeWindow = settings.placement == .activeWindow ? front : nil
         guard var target = Island.screen(all, settings: settings, pointer: NSEvent.mouseLocation,
                                          activeWindow: activeWindow) else { return }
         // Never pulled from under the user: while open or under the pointer it stays where it is.
@@ -143,6 +149,19 @@ final class IslandController: NSObject {
            let current = all.first(where: { $0.frame.contains(CGPoint(x: panel.frame.midX, y: panel.frame.maxY - 1)) }) {
             target = current
         }
+        // Over a video, a talk or an editor in full screen the island is in the way: only an agent waiting on the user,
+        // or the island the user opened, still shows there.
+        let following = settings.placement == .pointer || settings.placement == .activeWindow || settings.hidesInFullScreen
+        let presentation = model.island.presentation
+        if settings.hidesInFullScreen, presentation != .expanded, snapshot.requests.isEmpty, !Self.isRequest(presentation),
+           let front, Island.isFullScreen(front, on: target) {
+            panel.orderOut(nil)
+            hiddenForFullScreen = true
+            stopOutsideClicks()
+            updateFollowing(following)
+            return
+        }
+        hiddenForFullScreen = false
         let band = Island.band(on: target)
         if layout.bandWidth != band.width { layout.bandWidth = band.width }
         if layout.bandHeight != band.height { layout.bandHeight = band.height }
@@ -163,21 +182,27 @@ final class IslandController: NSObject {
         }
         if !panel.isVisible { panel.orderFrontRegardless() }
         updateOutsideClicks(expanded: model.island.presentation == .expanded)
-        updateFollowing(settings.placement == .pointer || settings.placement == .activeWindow)
+        updateFollowing(following)
+    }
+
+    private static func isRequest(_ presentation: IslandModel.Presentation) -> Bool {
+        guard case .alert(let alert) = presentation else { return false }
+        return alert.kind != .finished && alert.kind != .failed
     }
 
     /// The screen under the pointer, or the active window's as it is dragged to another screen within the same app,
-    /// followed while the island shows; a second is soon enough to change screens. A change of app comes at once,
-    /// through the activation notification.
+    /// and whether an app went in or out of full screen, followed while the island shows or is put away for full
+    /// screen. Two seconds is soon enough to change screens and cheap on energy (the window list is not free); a change
+    /// of app comes at once, through the activation notification.
     private func updateFollowing(_ follows: Bool) {
         if follows, followTimer == nil {
-            followTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            followTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let panel = self.panel, panel.isVisible else { return }
+                    guard let self, let panel = self.panel, panel.isVisible || self.hiddenForFullScreen else { return }
                     self.place()
                 }
             }
-            followTimer?.tolerance = 0.3
+            followTimer?.tolerance = 0.5
         } else if !follows {
             followTimer?.invalidate()
             followTimer = nil

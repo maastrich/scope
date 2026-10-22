@@ -195,6 +195,35 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.Quiet(screenLocked: true).isQuiet)
     }
 
+    @Test func atWorkOnlyARequestInterruptsByDefault() {
+        let before = (1...3).map { thread("aaaaaaaaaaa\($0)", .running) }
+        let after = [
+            thread("aaaaaaaaaaa1", .done, turn: 1),
+            thread("aaaaaaaaaaa2", .waiting(reason: .permission), request: permission()),
+            thread("aaaaaaaaaaa3", .failed, turn: 1),
+        ]
+        let atWork = Island.Quiet(userActive: true)
+        var memory = Island.AlertMemory()
+        #expect(alerts(before, after, quiet: atWork, memory: &memory).map(\.kind) == [.permission])
+        // Held back, not deferred: the turn that ended does not reveal once the user stops typing.
+        #expect(alerts(before, after, memory: &memory).isEmpty)
+
+        var never = Island.AlertMemory()
+        #expect(alerts(before, after, settings: IslandSettings(interruptions: .never), quiet: atWork, memory: &never).isEmpty)
+        var always = Island.AlertMemory()
+        #expect(alerts(before, after, settings: IslandSettings(interruptions: .always), quiet: atWork, memory: &always)
+                    .map(\.kind) == [.finished, .permission, .failed])
+        // Away from the keyboard, every setting reveals everything.
+        var away = Island.AlertMemory()
+        #expect(alerts(before, after, settings: IslandSettings(interruptions: .never), memory: &away).count == 3)
+    }
+
+    @Test func whatCountsAsARequest() {
+        let atWork = Island.Quiet(userActive: true)
+        #expect(Island.AlertKind.allCases.filter { atWork.allows($0, .requests) } == [.question, .permission, .plan])
+        #expect(!atWork.isQuiet)
+    }
+
     @Test func aWaitWithoutItsRequestStillRevealsOnce() {
         var memory = Island.AlertMemory()
         let waiting = thread("aaaaaaaaaaa1", .waiting(reason: .input), at: 2)
@@ -308,6 +337,14 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.screen(holdingMostOf: CGRect(x: 9000, y: 0, width: 10, height: 10), among: [primary, left]) == nil)
     }
 
+    @Test func fullScreenIsAWindowCoveringTheWholeScreen() {
+        #expect(Island.isFullScreen(primary.frame, on: primary))
+        #expect(Island.isFullScreen(CGRect(x: 0, y: 0, width: 2560.5, height: 1440), on: primary))
+        // Zoomed: stops under the menu bar.
+        #expect(!Island.isFullScreen(CGRect(x: 0, y: 0, width: 2560, height: 1415), on: primary))
+        #expect(!Island.isFullScreen(primary.frame, on: left))
+    }
+
     @Test func quartzRectsFlipAroundThePrimaryScreen() {
         // A window 100 pt below the top of the primary screen.
         #expect(Island.appKitRect(fromQuartz: CGRect(x: 10, y: 100, width: 800, height: 600), primaryHeight: 1440)
@@ -378,6 +415,18 @@ private func plan() -> ClaudePendingRequest {
         #expect(try JSONDecoder().decode(Preferences.self, from: Data(pointer.utf8)).island.placement == .pointer)
         let named = #"{"island":{"placement":"named","screenName":"LG"}}"#
         #expect(try JSONDecoder().decode(Preferences.self, from: Data(named.utf8)).island.placement == .named)
+    }
+
+    @Test func interruptionsAndFullScreenDefaultToTheQuietSide() throws {
+        let island = try JSONDecoder().decode(Preferences.self, from: Data(#"{"island":{}}"#.utf8)).island
+        #expect(island.interruptions == .requests)
+        #expect(island.hidesInFullScreen)
+        let json = #"{"island":{"interruptions":"always","hidesInFullScreen":false}}"#
+        let chosen = try JSONDecoder().decode(Preferences.self, from: Data(json.utf8)).island
+        #expect(chosen.interruptions == .always)
+        #expect(!chosen.hidesInFullScreen)
+        let data = try JSONEncoder().encode(Preferences(island: chosen))
+        #expect(try JSONDecoder().decode(Preferences.self, from: data).island == chosen)
     }
 
     @Test func theMainScreenChosenSinceStays() throws {
