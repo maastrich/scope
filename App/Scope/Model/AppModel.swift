@@ -137,6 +137,10 @@ final class AppModel {
 
     /// Driver last opened per scope (restored from the UI state): what ⌘T reaches for first.
     var lastDriverByScope: [ScopeID: String] = [:]
+    /// The Graph sheet's view and folded groups, per scope (`UIState.graphPlaces`).
+    var graphPlaces: [ScopeID: GraphPlace] = [:] {
+        didSet { if !isRestoringUIState, graphPlaces != oldValue { persistUIState() } }
+    }
 
     /// Drives the scene. Kept in sync with `selection`.
     var selectedThreadID: ThreadID? {
@@ -776,6 +780,7 @@ final class AppModel {
         inspectorWidth = ColumnLayout.clampInspectorWidth(state.inspectorWidth)
         sidebarWidth = ColumnLayout.clampSidebarWidth(state.sidebarWidth)
         lastDriverByScope = state.lastDrivers
+        graphPlaces = state.graphPlaces
         switch state.selectedItem {
         case .scope(let id) where scope(id) != nil:
             selection = state.selectedItem
@@ -826,6 +831,7 @@ final class AppModel {
         state.inspectorWidth = inspectorWidth
         state.sidebarWidth = sidebarWidth
         state.lastDrivers = lastDriverByScope
+        state.graphPlaces = graphPlaces
         env.uiState.save(state)
     }
 

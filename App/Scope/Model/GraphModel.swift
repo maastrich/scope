@@ -5,11 +5,46 @@ import ScopeGraph
 import ScopeGit
 import ScopeTasks
 
-/// One card of the Graph inspector, in display order.
+/// One repo of the Graph sheet, with what every view shows of it worked out once.
 struct GraphCardEntry: Identifiable, Equatable {
     let key: String
     var card: RepoCard
+    /// Stack and tags, merged and deduplicated.
+    let tags: [DisplayTag]
+    let domain: RepoDomain
+    let description: RepoDescription?
+    /// `owner/repo`, or the path in the scope; `nil` when it would repeat the name.
+    let subtitle: String?
     var id: String { key }
+
+    init(key: String, card: RepoCard) {
+        self.key = key
+        self.card = card
+        tags = TagMerge.merge(card)
+        domain = RepoDomain.of(card, key: key)
+        description = RepoDescription.choose(for: card)
+        subtitle = RepoIdentity.subtitle(remote: card.remote, key: key, name: card.name)
+    }
+}
+
+/// The three ways the sheet shows a scope's repos.
+enum GraphMode: String, Codable, CaseIterable, Sendable {
+    case cards, list, graph
+
+    var title: String {
+        switch self {
+        case .cards: "Cards"
+        case .list: "List"
+        case .graph: "Graph"
+        }
+    }
+}
+
+/// What the sheet remembers per scope: the view, and the domain groups folded in the Cards view.
+struct GraphPlace: Codable, Sendable, Equatable {
+    var mode: GraphMode = .cards
+    /// `DomainGroup.id`s.
+    var collapsed: Set<String> = []
 }
 
 /// Progress of the running analysis, as shown in the inspector header.
@@ -25,36 +60,78 @@ struct GraphRunProgress: Equatable {
     }
 }
 
-/// State of the Graph inspector (spec §4.6): the cards of the current scope, the running analysis and
-/// the manual edits. Generation runs inside the `GraphGenerator` actor, off the main actor; results
-/// and failures come back here (failures also go to the `ProblemCenter`).
+/// State of the Graph sheet (spec §4.6): the cards of the current scope, the filter its three views share, the
+/// running analysis and the manual edits. Generation runs inside the `GraphGenerator` actor, off the main actor;
+/// results and failures come back here (failures also go to the `ProblemCenter`).
 @MainActor
 @Observable
 final class GraphModel {
     private(set) var scopeID: ScopeID?
-    private(set) var graph: ScopeGraph?
+    private(set) var graph: ScopeGraph? {
+        didSet { rebuild() }
+    }
     private(set) var isLoading = false
     private(set) var progress: GraphRunProgress?
     /// Key of the card being edited inline (`nil` = none).
     var editingKey: String?
-    /// Key the card list should scroll to (set by a related link).
+    /// Key the views should bring into view and mark (a related link, the sidebar's "See Graph", a list row).
     var highlightedKey: String?
-    /// Header filter: a case-insensitive substring over card key, name and stack; empty shows every card.
-    var filter = ""
+    /// The repo whose card the Graph view shows beside the drawing, and the List view's selected row.
+    var selectedKey: String?
+    /// Cards whose Details section is open.
+    var expanded: Set<String> = []
+    /// The filter the three views share.
+    var filter = GraphFilter()
+
+    /// Every card, sorted by key (`"."` first).
+    private(set) var cards: [GraphCardEntry] = []
+    /// Every link between two repos of the graph, whatever the filter: the drawing stays put while filtering.
+    private(set) var edges: [GraphEdge] = []
+    private(set) var layout = GraphLayout(slots: [:], isolated: [], columns: 0, rows: 0)
 
     /// `cards` narrowed by `filter`.
     var filteredCards: [GraphCardEntry] {
-        let needle = filter.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return cards }
-        return cards.filter { entry in
-            entry.key.lowercased().contains(needle) || entry.card.name.lowercased().contains(needle)
-                || entry.card.stack.contains { $0.lowercased().contains(needle) }
+        guard !filter.isEmpty else { return cards }
+        return cards.filter(matches)
+    }
+
+    func matches(_ entry: GraphCardEntry) -> Bool {
+        filter.matches(key: entry.key, card: entry.card, tags: entry.tags, domain: entry.domain, description: entry.description?.text)
+    }
+
+    /// The groups of the Cards view, made from every card so a group does not change name while filtering, then
+    /// narrowed to the filtered cards (an emptied group is dropped).
+    var groups: [(group: DomainGroup, entries: [GraphCardEntry])] {
+        let filtered = filteredCards
+        let byKey = Dictionary(uniqueKeysWithValues: filtered.map { ($0.key, $0) })
+        return RepoDomain.groups(cards.map { ($0.key, $0.domain) }).compactMap { group in
+            let entries = group.keys.compactMap { byKey[$0] }
+            return entries.isEmpty ? nil : (group, entries)
         }
     }
 
-    /// A stack chip click: filters on `item`, or clears the filter when it is already the filter.
-    func toggleFilter(_ item: String) {
-        filter = filter.caseInsensitiveCompare(item) == .orderedSame ? "" : item
+    /// The group a card is shown in.
+    func group(of key: String) -> DomainGroup? {
+        RepoDomain.groups(cards.map { ($0.key, $0.domain) }).first { $0.keys.contains(key) }
+    }
+
+    func entry(_ key: String) -> GraphCardEntry? { cards.first { $0.key == key } }
+
+    /// Links into and out of `key`: (depends on, used by).
+    func relations(of key: String) -> (out: [String], in: [String]) {
+        (edges.filter { $0.from == key }.map(\.to), edges.filter { $0.to == key }.map(\.from))
+    }
+
+    private func rebuild() {
+        guard let graph else {
+            cards = []
+            edges = []
+            layout = GraphLayout(slots: [:], isolated: [], columns: 0, rows: 0)
+            return
+        }
+        cards = graph.repos.keys.sorted().map { GraphCardEntry(key: $0, card: graph.repos[$0]!) }
+        edges = GraphEdge.build(graph.repos)
+        layout = GraphLayout.layered(keys: graph.repos.keys.sorted(), edges: edges)
     }
 
     @ObservationIgnored private let env: AppEnvironment
@@ -68,26 +145,35 @@ final class GraphModel {
 
     var isGenerating: Bool { progress != nil }
 
-    /// Cards sorted by key (`"."` first).
-    var cards: [GraphCardEntry] {
-        guard let graph else { return [] }
-        return graph.repos.keys.sorted().map { GraphCardEntry(key: $0, card: graph.repos[$0]!) }
-    }
-
     func card(_ key: String) -> RepoCard? { graph?.repos[key] }
 
     /// Graph key of a sidebar repo (`""` → `"."`).
     static func key(for repo: RepoState) -> String { TaskRepo.normalize(repo.id) }
 
+    /// What the generator needs of each repo of `scope`, GitHub's `owner/repo` included when origin is on GitHub.
+    static func inputs(of scope: ScopeState) -> [GraphRepoInput] {
+        scope.repos.map { repo in
+            // The facts may not be loaded yet when the sheet opens: the checkout's own config says the same.
+            let remote = repo.facts?.remote
+                ?? GitConfigReader.originURL(gitDirectory: repo.url.appending(path: ".git")).flatMap(RemoteInfo.init(remote:))
+            let github = remote.flatMap { $0.host?.contains("github") == true ? $0.fullName : nil }
+            return GraphRepoInput(key: key(for: repo), url: repo.url, name: repo.shortName, githubRepo: github)
+        }
+    }
+
     // MARK: Loading
 
-    /// Loads the stored graph of `scope`. A store problem is reported once per load.
+    /// Loads the stored graph of `scope`. A store problem is reported once per load. Then, off the main actor, the
+    /// facts a graph written by an older build lacks — the descriptions — are filled in: only the graph file is
+    /// written, never the repos.
     func load(scope: ScopeState) async {
         guard scopeID != scope.id || graph == nil else { return }
+        // `highlightedKey` survives: the sidebar's "See Graph" sets it before the sheet loads.
         scopeID = scope.id
         editingKey = nil
-        highlightedKey = nil
-        filter = ""
+        selectedKey = nil
+        expanded = []
+        filter = GraphFilter()
         isLoading = true
         let slug = scope.declaration.slug
         let (loaded, problem) = await env.graphStore.load(slug: slug)
@@ -98,6 +184,12 @@ final class GraphModel {
             problems.warn("Graph of \(scope.name) could not be loaded", detail: problem.message, scope: scope.id,
                           actions: [.reveal(problem.backup?.path ?? problem.file.path)])
         }
+        guard loaded?.repos.isEmpty == false, problem == nil else { return }
+        let inputs = Self.inputs(of: scope)
+        let generator = env.makeGraphGenerator(level1: nil)
+        if let refreshed = try? await generator.refreshFacts(slug: slug, repos: inputs), scopeID == scope.id, runningScope == nil {
+            graph = refreshed
+        }
     }
 
     // MARK: Generation
@@ -107,7 +199,7 @@ final class GraphModel {
     @discardableResult
     func analyze(scope: ScopeState, level1: Level1Generator?, force: Bool) async -> ScopeGraph? {
         guard runningScope == nil else { return nil }
-        let inputs = scope.repos.map { GraphRepoInput(key: Self.key(for: $0), url: $0.url, name: $0.shortName) }
+        let inputs = Self.inputs(of: scope)
         guard !inputs.isEmpty else {
             problems.warn("Nothing to analyze in \(scope.name)", detail: "The scope has no repository.", scope: scope.id)
             return nil

@@ -559,6 +559,13 @@ extension AppModel {
             }
             // A setup is what fills a sandbox (`node_modules`): the size shown is stale until measured again.
             refreshDiskUsage(of: task)
+            // A command the repository's files ruled out was not run: the setup did not fail, but a sandbox got nothing.
+            let skipped = SetupLog.skippedCommands(in: record.setup?.log ?? "")
+            if record.setupState != .failed, !skipped.isEmpty {
+                problems.warn("Part of the setup of \(task.name) did not run", detail: skipped.joined(separator: "\n"),
+                              scope: task.scopeID,
+                              actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue))])
+            }
             guard record.setupState == .failed else { return }
             problems.error("The setup of \(task.name) failed", detail: SetupLog.tail(record.setup?.log ?? "", lines: 60),
                            scope: task.scopeID,
