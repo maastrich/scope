@@ -11,6 +11,16 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.31.0](https://github.com/maastrich/scope/releases/tag/v0.31.0) - 2026-10-23
+
+### Added
+
+- **island:** follow the screen of the active window ([#114](https://github.com/maastrich/scope/pull/114)) by @maastrich
+- **island:** stay out of the way while you work or watch something in full screen ([#115](https://github.com/maastrich/scope/pull/115)) by @maastrich
+- **island:** an always-black island — a hanging capsule, requests that widen until answered, a clearer open list ([#116](https://github.com/maastrich/scope/pull/116)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.30.0...v0.31.0
+
 ## [0.30.0](https://github.com/maastrich/scope/releases/tag/v0.30.0) - 2026-10-22
 
 ### Added
