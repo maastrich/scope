@@ -19,5 +19,5 @@ done
 # `log` is shadowed in some shells: call the binary.
 /usr/bin/log show --info --debug --style ndjson --predicate 'subsystem == "dev.scope.app"' --last "${DAYS}d" > "$SNAP/scope-log.ndjson"
 # Everything the Scope process emitted, Apple frameworks included: the only record of app sessions (pids).
-/usr/bin/log show --style ndjson --predicate 'process == "Scope"' --last "${DAYS}d" > "$SNAP/process-log.ndjson"
+/usr/bin/log show --info --debug --style ndjson --predicate 'process == "Scope"' --last "${DAYS}d" > "$SNAP/process-log.ndjson"
 echo "$SNAP"

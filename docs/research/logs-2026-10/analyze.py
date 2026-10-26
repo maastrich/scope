@@ -3,13 +3,12 @@
     python3 -I analyze.py SNAP [section ...]
 
 Sections: unified, sessions, crashes, tasks, threads, usage, agents (all by default).
-Reads SNAP only and prints aggregates: ids are hashed, no names, titles, prompts, paths or terminal text.
+Reads SNAP only and prints aggregates: no task or repo names, titles, prompts, paths or terminal text.
 Every timestamp is normalized to UTC before it is compared.
 """
 import collections
 import datetime as dt
 import glob
-import hashlib
 import json
 import os
 import re
@@ -17,10 +16,6 @@ import statistics
 import sys
 
 UTC = dt.timezone.utc
-
-
-def anon(value):
-    return hashlib.sha1(str(value).encode()).hexdigest()[:6]
 
 
 def iso(text):
@@ -82,6 +77,14 @@ def shape(message):
     return message[:110]
 
 
+def redact(message):
+    """Scope's own lines name tasks, repositories and prompts: keep the shape of the sentence only."""
+    message = re.sub(r"^(thread \S+ started pid \S+):.*", r"\1: <command>", message, flags=re.S)
+    message = re.sub(r"The setup of .+? failed:.*", "The setup of <task> failed: <log tail>", message, flags=re.S)
+    message = re.sub(r"\[[^\]]+\]", "[<repo>]", message)
+    return shape(message)
+
+
 # MARK: unified log
 
 def unified(snap):
@@ -90,7 +93,7 @@ def unified(snap):
     if rows:
         stamps = [logtime(e["timestamp"]) for e in rows]
         print(f"{len(rows)} entries, {min(stamps):%Y-%m-%d %H:%M}Z → {max(stamps):%Y-%m-%d %H:%M}Z\n")
-    by = collections.Counter((e.get("category"), e.get("messageType"), shape(e.get("eventMessage", ""))) for e in rows)
+    by = collections.Counter((e.get("category"), e.get("messageType"), redact(e.get("eventMessage", ""))) for e in rows)
     table([(n, c, t, m.replace("|", "/")) for (c, t, m), n in by.most_common()], ["n", "category", "level", "message"])
 
     print("## Everything the Scope process logged (Apple frameworks)\n")
@@ -108,6 +111,28 @@ def unified(snap):
     table([(n, f"{100 * n / total:.1f} %", s, c, t) for (s, c, t), n in counts.most_common(15)],
           ["n", "share", "subsystem", "category", "level"])
 
+    print("### What the store kept, per level and day (local dates): the older the day, the thinner\n")
+    per_day = collections.Counter()
+    shapes = collections.Counter()
+    cursor_hours = collections.Counter()
+    for e in ndjson(f"{snap}/process-log.ndjson"):
+        if "timestamp" not in e:
+            continue
+        per_day[(str(e.get("messageType")), e["timestamp"][5:10])] += 1
+        subsystem = e.get("subsystem") or ""
+        if subsystem in ("com.apple.TextInputUI", "com.apple.donotdisturb", "com.apple.GenerativeModels", "com.apple.network"):
+            shapes[(subsystem, e.get("messageType"), shape(e.get("eventMessage", ""))[:90])] += 1
+        if e.get("category") == "CursorUI":
+            cursor_hours[logtime(e["timestamp"]).strftime("%m-%d %H:00Z")] += 1
+    days = sorted({d for _, d in per_day})
+    table([(level, *(per_day[(level, d)] for d in days)) for level in ("Default", "Info", "Debug", "Error", "Fault")],
+          ["level", *days])
+    print("### Apple framework lines the Scope process causes most\n")
+    table([(n, s, t, m.replace("|", "/")) for (s, t, m), n in shapes.most_common(14)], ["n", "subsystem", "level", "message"])
+    if cursor_hours:
+        hour, n = cursor_hours.most_common(1)[0]
+        print(f"CursorUI peak: {n} lines in the hour of {hour}\n")
+
 
 # MARK: app sessions
 
@@ -118,21 +143,32 @@ def sessions(snap):
         if "timestamp" not in e or "processID" not in e:
             continue
         stamp = logtime(e["timestamp"])
-        span = spans.setdefault(e["processID"], [stamp, stamp, 0])
+        span = spans.setdefault(e["processID"], [stamp, stamp, 0, os.path.basename(e.get("processImagePath", "")),
+                                                 "/Applications/" in e.get("processImagePath", "")])
         span[0] = min(span[0], stamp)
         span[1] = max(span[1], stamp)
         span[2] += 1
     ordered = sorted(spans.items(), key=lambda kv: kv[1][0])
-    crashes = sorted(t for t, *_ in crash_list(snap) if _[0] == "Scope")
+    # A crash belongs to the last session that started before it: the process may stay silent for minutes first.
+    crashed = {}
+    for stamp in sorted(t for t, name, *_ in crash_list(snap) if name == "Scope"):
+        before = [pid for pid, span in ordered if span[0] <= stamp]
+        if before:
+            crashed[before[-1]] = stamp
     rows = []
     previous_end = None
-    for pid, (start, end, n) in ordered:
+    for pid, (start, end, n, image, installed) in ordered:
         gap = (start - previous_end).total_seconds() if previous_end else None
-        crashed = [c for c in crashes if start <= c <= end + dt.timedelta(seconds=90)]
-        rows.append((pid, f"{start:%m-%d %H:%M:%S}", f"{end:%m-%d %H:%M:%S}", secs((end - start).total_seconds()),
-                     secs(gap), "crash" if crashed else ""))
-        previous_end = end
-    table(rows, ["pid", "first line (UTC)", "last line (UTC)", "lifetime", "gap since previous", "ended by"])
+        ended = ""
+        if pid in crashed:
+            ended = f"crash {secs((crashed[pid] - end).total_seconds())} after its last line"
+        elif previous_end and start < previous_end:
+            ended = "second instance"
+        rows.append((pid, image + ("" if installed else " (not /Applications)"), f"{start:%m-%d %H:%M:%S}",
+                     f"{end:%m-%d %H:%M:%S}", secs((end - start).total_seconds()), secs(gap) if gap and gap > 0 else "-", ended))
+        if not previous_end or end > previous_end:
+            previous_end = end
+    table(rows, ["pid", "binary", "first line (UTC)", "last line (UTC)", "lifetime", "gap since previous", "note"])
 
 
 # MARK: crashes
@@ -174,8 +210,16 @@ def crashes(snap):
     for path in sorted(glob.glob(f"{snap}/crash/*.diag")):
         text = open(path, errors="replace").read()
         field = lambda key: (re.search(rf"^{key}:\s+(.*)$", text, re.M) or [None, "-"])[1]
-        rows.append((field("Date/Time"), field("Version"), field("Event"), field("CPU") if "cpu" in field("Event") else field("Writes")))
-    table(rows, ["when (local)", "version", "event", "detail"])
+        # The heaviest stack: Scope's own frames are stripped (`??? (Scope + offset)`), the system frames under them
+        # still say what the work was.
+        heaviest = text.split("Heaviest stack for the target process:", 1)[-1].split("Powerstats", 1)[0]
+        frames = [re.sub(r"\s*\[0x[0-9a-f]+\]|\s*\+ \d+ \(.*?\)", "", line).strip()
+                  for line in heaviest.splitlines() if line.strip() and "???" not in line]
+        frames = [f.split(None, 1)[-1][:60] for f in frames if not f.split(None, 1)[-1].startswith(("start", "completeTask"))]
+        rows.append((field("Date/Time")[:16], field("Version").split()[0], field("Event"),
+                     (field("CPU") if "cpu" in field("Event") else field("Writes"))[:60],
+                     " → ".join(frames[-3:]).replace("|", "/")))
+    table(rows, ["when (local)", "version", "event", "detail", "deepest system frames of the heaviest stack"])
 
 
 # MARK: tasks
@@ -296,6 +340,9 @@ def threads(snap):
     rows = [(name, len(v), secs(pct(v, .5)), secs(pct(v, .9)), secs(max(v)))
             for name, v in sorted(durations.items(), key=lambda kv: -len(kv[1]))[:20]]
     table(rows, ["tool", "calls", "p50", "p90", "max"])
+    waits = durations.get("mcp:scope_thread_wait", [])
+    at_cap = sum(1 for v in waits if 119 <= v <= 121)
+    print(f"scope_thread_wait calls ending at 120 s (± 1 s), a caller's timeout rather than a thread done: {at_cap} / {len(waits)}\n")
     outcomes = collections.Counter()
     gaps = collections.Counter()
     for path in glob.glob(f"{snap}/threads/*.activity.json"):
