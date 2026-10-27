@@ -24,6 +24,46 @@ public protocol ControlService: AnyObject {
     /// Runs the call. Only reached once the policy allowed it (or the user did).
     func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
                  progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError>
+
+    /// Called once per request the dispatch answered, refused ones included, with how it ended and how long it took.
+    func finished(_ request: ControlRequest, from origin: ControlOrigin, outcome: ControlOutcome, seconds: TimeInterval)
+}
+
+extension ControlService {
+    public func finished(_ request: ControlRequest, from origin: ControlOrigin, outcome: ControlOutcome, seconds: TimeInterval) {}
+}
+
+/// How a control request ended, in words the event journal keeps: never the message, which names tasks and threads.
+public struct ControlOutcome: Sendable, Equatable {
+    public enum Status: String, Sendable {
+        case ok, refused, error
+    }
+
+    public var status: Status
+    /// The refusal rule (`ControlError.Rule`) or the error code; `nil` when it went through.
+    public var cause: String?
+
+    public init(status: Status, cause: String? = nil) {
+        self.status = status
+        self.cause = cause
+    }
+
+    public static let ok = ControlOutcome(status: .ok)
+
+    public init(_ result: Result<ControlResultPayload, ControlError>) {
+        switch result {
+        case .success: self = .ok
+        case .failure(let error): self.init(error)
+        }
+    }
+
+    public init(_ error: ControlError) {
+        if error.code == .denied {
+            self.init(status: .refused, cause: (error.rule ?? .other).rawValue)
+        } else {
+            self.init(status: .error, cause: error.code.rawValue)
+        }
+    }
 }
 
 /// Holds the service between the socket server (built first, in the composition root) and the app model
@@ -45,6 +85,17 @@ public enum ControlDispatch {
     public static func run(_ request: ControlRequest, service: any ControlService,
                            progress: @escaping @Sendable (String) -> Void) async -> ControlResponse {
         let origin = service.origin(for: request.caller)
+        let started = ContinuousClock.now
+        let response = await dispatch(request, service: service, origin: origin, progress: progress)
+        let outcome = response.error.map(ControlOutcome.init) ?? .ok
+        let (whole, attoseconds) = (ContinuousClock.now - started).components
+        service.finished(request, from: origin, outcome: outcome, seconds: TimeInterval(whole) + TimeInterval(attoseconds) / 1e18)
+        return response
+    }
+
+    @MainActor
+    private static func dispatch(_ request: ControlRequest, service: any ControlService, origin: ControlOrigin,
+                                 progress: @escaping @Sendable (String) -> Void) async -> ControlResponse {
         let policy = AutomationPolicy(settings: service.automation)
         let load = { service.agentLoad + service.reservations.pending }
         switch policy.decide(request.call, from: origin, load: load()) {
@@ -59,7 +110,7 @@ public enum ControlDispatch {
                 return .failure(id: request.id, .denied(
                     "the user did not approve this request to \(subject)",
                     detail: "Refused, left unanswered past the approval timeout, or turned away because several "
-                        + "questions were already waiting. Do not ask again right away."))
+                        + "questions were already waiting. Do not ask again right away.", rule: .notApproved))
             }
             // Other requests may have been carried out while the user read the question.
             if let refusal = policy.budgetRefusal(request.call, from: origin, load: load()) {

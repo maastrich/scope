@@ -83,14 +83,17 @@ public final class HookSocketServer: Sendable {
             hookEvent = try HookEvent.decode(data)
         } catch {
             Log.hooks.warning("dropping undecodable hook message: \(error.localizedDescription, privacy: .public)")
+            Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.undecodable.rawValue))
             return nil
         }
         guard let event = AdapterEvent(hookEvent, receivedAt: receivedAt) else {
             Log.hooks.warning("dropping hook event with malformed thread id \(hookEvent.thread, privacy: .public)")
+            Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.malformedThread.rawValue))
             return nil
         }
         guard isKnownThread(event.threadID) else {
             Log.hooks.warning("dropping hook event for unknown thread \(event.threadID.rawValue, privacy: .public)")
+            Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.unknownThread.rawValue))
             return nil
         }
         Log.hooks.debug("\(event.kind.rawValue, privacy: .public) for thread \(event.threadID.rawValue, privacy: .public)")

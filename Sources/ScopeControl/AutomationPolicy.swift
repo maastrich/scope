@@ -158,7 +158,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             // The caller asked for N: the number tells it what N would go through, or what to archive first.
             return .denied(refusal, detail: "Ask for fewer attempts, or archive the tasks you created that are done "
                            + "(`scope task archive <slug>`, their branches are kept), or have the user raise "
-                           + "Settings ▸ Automation ▸ Open tasks (now \(settings.maxAgentTasks)).")
+                           + "Settings ▸ Automation ▸ Open tasks (now \(settings.maxAgentTasks)).", rule: .attempts)
         }
         if cost.tasks > 0, load.tasks + cost.tasks > settings.maxAgentTasks {
             return .denied(
@@ -166,7 +166,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                 detail: "Archive the tasks you created that are done (`scope task archive <slug>`, their branches are "
                     + "kept) and ask "
                     + "again, or have the user raise Settings ▸ Automation ▸ Open tasks "
-                    + "(`scope config set automation.maxAgentTasks <n>` from their own terminal, now \(settings.maxAgentTasks))."
+                    + "(`scope config set automation.maxAgentTasks <n>` from their own terminal, now \(settings.maxAgentTasks)).",
+                rule: .budgetTasks
             )
         }
         if cost.threads > 0, load.threads + cost.threads > settings.maxAgentThreads {
@@ -174,7 +175,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                 "agents already keep \(load.threads) threads running, the most Scope allows them",
                 detail: "Wait for the threads you opened (`scope thread wait`) and close those that are done "
                     + "(`scope thread close <id>`), or have the user raise Settings ▸ Automation ▸ Running threads "
-                    + "(`scope config set automation.maxAgentThreads <n>` from their own terminal, now \(settings.maxAgentThreads))."
+                    + "(`scope config set automation.maxAgentThreads <n>` from their own terminal, now \(settings.maxAgentThreads)).",
+                rule: .budgetThreads
             )
         }
         return nil
@@ -192,7 +194,8 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .strangerThread(let raw):
             return .refuse(.denied(
                 "SCOPE_THREAD does not name a thread this Scope knows",
-                detail: "Got “\(raw)”. Only a thread Scope is running may drive it; unset SCOPE_THREAD to ask as yourself."
+                detail: "Got “\(raw)”. Only a thread Scope is running may drive it; unset SCOPE_THREAD to ask as yourself.",
+                rule: .strangerThread
             ))
 
         case .thread, .externalAgent:
@@ -202,7 +205,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                 return .refuse(.denied(
                     "only the user may change Scope's settings",
                     detail: "Ask the user to run `scope config set …` in a terminal of their own (not a Scope thread), "
-                        + "or to change it in Settings ▸ Automation."
+                        + "or to change it in Settings ▸ Automation.",
+                    rule: .userOnly
                 ))
             }
             if call.method == .taskTry {
@@ -210,12 +214,14 @@ public struct AutomationPolicy: Sendable, Equatable {
                 return .refuse(.denied(
                     "only the user may try a task in their checkout",
                     detail: "Trying a task's branch in the base checkout is the user's own move: ask them to run "
-                        + "`scope task try <task>` in a terminal of their own, or to use Try in my checkout in Scope."
+                        + "`scope task try <task>` in a terminal of their own, or to use Try in my checkout in Scope.",
+                    rule: .userOnly
                 ))
             }
             guard settings.agentsMayDrive else {
                 return .refuse(.denied("agents may not drive Scope",
-                                       detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json."))
+                                       detail: "Settings ▸ Automation, or preferences.automation.agentsMayDrive in config.json.",
+                                       rule: .agentsOff))
             }
             let approval: AutomationSettings.Approval
             switch call.method {
@@ -226,9 +232,9 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // that the caller works in that mission or in one of its tasks.
                 return .allow
             case .configSet:
-                return .refuse(.denied("only the user may change Scope's settings"))
+                return .refuse(.denied("only the user may change Scope's settings", rule: .userOnly))
             case .taskTry:
-                return .refuse(.denied("only the user may try a task in their checkout"))
+                return .refuse(.denied("only the user may try a task in their checkout", rule: .userOnly))
             case .taskTopic:
                 // A label: nothing opened, nothing removed, undone by the same call. Gating it behind the task
                 // approval would ask the user about the sidebar's grouping.
@@ -275,7 +281,8 @@ public struct AutomationPolicy: Sendable, Equatable {
                     return .refuse(.denied(
                         "\(AutomationPolicy.describe(origin, depth: depth)) may not open another",
                         detail: "The chain would reach depth \(childDepth), past the limit of \(limit) the user set in "
-                            + "Settings ▸ Automation ▸ Depth (preferences.automation.depthLimit)."
+                            + "Settings ▸ Automation ▸ Depth (preferences.automation.depthLimit).",
+                        rule: .depth
                     ))
                 }
                 if let refusal = budgetRefusal(call, from: origin, load: load) { return .refuse(refusal) }
@@ -285,7 +292,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             case .allow: .allow
             case .ask: .ask(subject: AutomationPolicy.subject(of: call))
             case .deny: .refuse(.denied("\(call.method.rawValue) is turned off for agents",
-                                        detail: "Settings ▸ Automation."))
+                                        detail: "Settings ▸ Automation.", rule: .methodOff))
             }
         }
     }
@@ -303,7 +310,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .user:
             return nil
         case .strangerThread(let raw):
-            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.", rule: .strangerThread)
         case .thread(let own, _):
             if let id, id == own {
                 return .badRequest("a thread may not act on itself",
@@ -313,7 +320,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             guard target.lineage.contains(own.rawValue) else {
                 return .denied("an agent may only act on the threads it opened and the ones those opened",
                                detail: "Ask the user, or use `scope list threads` to find the ones you opened. "
-                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.")
+                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.", rule: .reach)
             }
             return nil
         case .externalAgent:
@@ -323,7 +330,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             guard openedOutside else {
                 return .denied("an agent outside Scope may only act on threads agents outside Scope opened",
                                detail: "The threads you or a Scope thread opened are not yours to stop, close or type into. "
-                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.")
+                                   + "Settings ▸ Automation ▸ Talking to threads opens every thread.", rule: .reach)
             }
             return nil
         }
@@ -336,16 +343,17 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .user:
             return nil
         case .strangerThread(let raw):
-            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.", rule: .strangerThread)
         case .thread(let own, _):
             guard taskThreads.contains(own) else {
                 return .denied("an agent may only restore a checkpoint of its own task",
-                               detail: "The task \(taskID) is not the one your thread runs in. Ask the user, or its own thread.")
+                               detail: "The task \(taskID) is not the one your thread runs in. Ask the user, or its own thread.",
+                               rule: .checkpoint)
             }
             return nil
         case .externalAgent:
             return .denied("an agent outside Scope may not restore a checkpoint",
-                           detail: "Restoring rewrites a sandbox's files; only the user or the task's own thread may.")
+                           detail: "Restoring rewrites a sandbox's files; only the user or the task's own thread may.", rule: .checkpoint)
         }
     }
 
@@ -357,16 +365,17 @@ public struct AutomationPolicy: Sendable, Equatable {
         case .user:
             return nil
         case .strangerThread(let raw):
-            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.")
+            return .denied("SCOPE_THREAD does not name a thread this Scope knows", detail: "Got “\(raw)”.", rule: .strangerThread)
         case .thread(let own, _):
             guard taskThreads.contains(own) else {
                 return .denied("an agent may only drive the browser of its own task",
-                               detail: "The task \(taskID) is not the one your thread runs in. Open a thread in it, or ask its own thread.")
+                               detail: "The task \(taskID) is not the one your thread runs in. Open a thread in it, or ask its own thread.",
+                               rule: .browser)
             }
             return nil
         case .externalAgent:
             return .denied("an agent outside Scope has no task browser",
-                           detail: "The browser belongs to a task and its threads; run from a thread of that task.")
+                           detail: "The browser belongs to a task and its threads; run from a thread of that task.", rule: .browser)
         }
     }
 

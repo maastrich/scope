@@ -98,8 +98,8 @@ public struct GhClient: Sendable {
 
     /// URL of the pull request of the current branch, `nil` when there is none.
     public func prView(in checkout: URL) async throws -> URL? {
-        let result = try await Subprocess.run(
-            executable: executable, arguments: ["pr", "view", "--json", "url", "--jq", ".url"],
+        let result = try await gh(
+            arguments: ["pr", "view", "--json", "url", "--jq", ".url"],
             currentDirectory: checkout, environment: mergedEnvironment, timeout: .seconds(60)
         )
         guard result.succeeded else {
@@ -114,8 +114,8 @@ public struct GhClient: Sendable {
 
     /// `gh auth status`: throws `GhError.notAuthenticated` when no account is logged in.
     public func checkAuth() async throws {
-        let result = try await Subprocess.run(
-            executable: executable, arguments: ["auth", "status"],
+        let result = try await gh(
+            arguments: ["auth", "status"],
             environment: mergedEnvironment, timeout: .seconds(30)
         )
         guard result.succeeded else {
@@ -215,8 +215,8 @@ public struct GhClient: Sendable {
 
     private func runJSON<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
         let command = "gh " + arguments.prefix(2).joined(separator: " ")
-        let result = try await Subprocess.run(
-            executable: executable, arguments: arguments, currentDirectory: checkout,
+        let result = try await gh(
+            arguments: arguments, currentDirectory: checkout,
             environment: mergedEnvironment, timeout: .seconds(60)
         )
         guard result.succeeded else {
@@ -231,6 +231,26 @@ public struct GhClient: Sendable {
         }
     }
 
+    /// Every `gh` invocation, timed into the event journal under its first two words (`pr.list`): never the rest,
+    /// which carries branches, repositories and bodies.
+    private func gh(arguments: [String], currentDirectory: URL? = nil, environment: [String: String],
+                    timeout: Duration) async throws -> ProcessResult {
+        let name = arguments.prefix(2).joined(separator: ".")
+        return try await Journal.timed {
+            try await Subprocess.run(executable: executable, arguments: arguments, currentDirectory: currentDirectory,
+                                     environment: environment, timeout: timeout)
+        } record: { result, seconds in
+            let outcome = switch result {
+            case .success(let process) where process.succeeded: "ok"
+            case .success(let process):
+                ProblemCause.classify(process.stderrText) == .auth ? "auth" : "failed"
+            case .failure(SubprocessError.timedOut): "timeout"
+            case .failure: "failed"
+            }
+            return JournalEvent(kind: .gh, name: name, outcome: outcome, seconds: seconds)
+        }
+    }
+
     /// `gh` runs git itself (`pr checkout`, the push of `pr create`), so it needs the same PATH as Scope's git.
     private var mergedEnvironment: [String: String] {
         SubprocessEnvironment.current
@@ -239,8 +259,8 @@ public struct GhClient: Sendable {
     }
 
     private func run(_ arguments: [String], in checkout: URL, timeout: Duration) async throws -> String {
-        let result = try await Subprocess.run(
-            executable: executable, arguments: arguments, currentDirectory: checkout,
+        let result = try await gh(
+            arguments: arguments, currentDirectory: checkout,
             environment: mergedEnvironment, timeout: timeout
         )
         guard result.succeeded else {
