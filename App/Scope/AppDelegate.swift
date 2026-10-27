@@ -149,7 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     : "")
             alert.addButton(withTitle: "Quit")
             alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                // An install-now the user called off: the next quit is a plain one.
+                AppServices.stopReason = .quit
+                return .terminateCancel
+            }
         }
         Task {
             await model.terminateNow()

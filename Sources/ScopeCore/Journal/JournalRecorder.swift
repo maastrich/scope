@@ -34,6 +34,7 @@ public actor JournalRecorder {
     private enum Command: Sendable {
         case event(JournalEvent)
         case flush(CheckedContinuation<Void, Never>?)
+        case housekeeping(Date)
     }
 
     public nonisolated let log: JournalLog
@@ -103,7 +104,8 @@ public actor JournalRecorder {
         session = JournalSession(version: version, startedAt: started)
         session?.write(log.sessionURL)
         sessionWrittenAt = started
-        housekeeping(at: started)
+        // Queued, not run here: the launch is waiting for the answer.
+        continuation.yield(.housekeeping(started))
         return previous
     }
 
@@ -137,6 +139,8 @@ public actor JournalRecorder {
             kept[event.kind, default: 0] += 1
             buffer.append(event)
             if buffer.count >= limits.batchSize { write() }
+        case .housekeeping(let date):
+            housekeeping(at: date)
         case .flush(let waiter):
             let current = now()
             rollOver(to: JournalEvent.day(of: current), at: current)

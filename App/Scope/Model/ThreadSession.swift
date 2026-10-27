@@ -646,7 +646,7 @@ final class ThreadSession: Identifiable {
 
     /// Why the next turn closed as interrupted, when the session knows: set just before the `setActivity` that closes it.
     @ObservationIgnored private var closeCause: String?
-    /// Set by the quit before it hangs the thread up: a turn the exit cuts short was cut by Scope going down.
+    /// Set by the quit before it hangs the thread up: the turn the exit cuts short is journaled by the quit.
     @ObservationIgnored var stoppingForQuit = false
 
     /// Replaces the activity; `onActivityChanged` only when what is saved moved. `journal: false` for an activity
@@ -685,12 +685,15 @@ final class ThreadSession: Identifiable {
                 let typed = lastUserInputAt.map { $0 >= (turn.startedAt ?? .distantFuture) } ?? false
                 cause = closeCause ?? (typed ? "typed" : "unknown")
             case .exited:
-                cause = stoppingForQuit ? "restart" : "exit"
+                // Cut by the quit: `terminateNow` journaled it as `restart` already.
+                guard !stoppingForQuit else { continue }
+                cause = "exit"
             default:
                 continue
             }
+            // How long it ran before it was cut: an interrupted turn is closed at its start, its own duration is 0.
             Journal.record(JournalEvent(kind: .turnInterrupted, cause: cause, task: record.taskID, thread: id.rawValue,
-                                        seconds: turn.duration))
+                                        seconds: turn.startedAt.map { max(0, Date.now.timeIntervalSince($0)) }))
         }
     }
 

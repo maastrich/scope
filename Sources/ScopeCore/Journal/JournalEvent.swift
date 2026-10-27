@@ -23,8 +23,9 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// A turn closed without its `Stop` hook: Scope saw an answer after the turn and settled it to done. `cause`
         /// says who noticed (`island`, `control`, `schedule`). This is the lost-hook signal.
         case turnSettled = "turn.settled"
-        /// A turn that did not end on its own. `cause` `esc`, `sent` (a message typed in mid-turn), `exit` (the
-        /// process went away), `restart` (Scope quit with it open) or `unknown`.
+        /// A turn that did not end on its own. `cause` `esc`, `sent` (Scope typed a message in mid-turn), `typed` (the
+        /// user submitted a prompt of their own), `exit` (the process went away), `restart` (Scope quit with it open),
+        /// `crash` (Scope died with it open) or `unknown`.
         case turnInterrupted = "turn.interrupted"
         /// A permission `claude agents` had confirmed early was decided by another hook.
         case permissionDecidedElsewhere = "permission.decided-elsewhere"
@@ -40,7 +41,8 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         case taskClose = "task.close"
         /// One garbage-collection pass. `count` what it removed or stopped.
         case taskGC = "task.gc"
-        /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `failed` / `auth` / `timeout`.
+        /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `none` (no pull request) / `failed` /
+        /// `auth` / `timeout`.
         case gh
         /// Events of `name`'s kind dropped past the daily cap; `count` how many.
         case journalDropped = "journal.dropped"

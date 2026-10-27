@@ -1649,6 +1649,11 @@ final class AppModel {
             // A turn in progress is cut short here: the relaunch asks the agent to go on (`InterruptedTurn`).
             session.markInterruptedTurn()
             session.stoppingForQuit = true
+            // Journaled here, once: the exit that follows is not, and the next launch knows the quit stamp.
+            if session.activity.inTurn {
+                Journal.record(JournalEvent(kind: .turnInterrupted, cause: "restart", task: session.record.taskID,
+                                            thread: session.id.rawValue))
+            }
             await env.threadRecords.save(session.record)
         }
         for session in threads where session.isAlive {
@@ -1660,13 +1665,14 @@ final class AppModel {
         await env.config.flush()
         Usage.closeAll()
         await env.usage.flush()
-        await journalStop(hungUp: threads.filter(\.stoppingForQuit).count)
         env.hooks?.stop()
         // Give the children a moment to hang up before the PTY masters close with the process.
         let deadline = ContinuousClock.now + .milliseconds(600)
         while runningThreadCount > 0, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(50))
         }
+        // Last: whatever the hang-ups above journaled is written before the marker closes.
+        await journalStop(hungUp: threads.filter(\.stoppingForQuit).count)
     }
 }
 

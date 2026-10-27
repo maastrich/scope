@@ -226,7 +226,7 @@ import Testing
 
     /// A busy day, scaled from the week analysed in `docs/research/logs-2026-10.md` (≈130 tasks, 550 turns and 650
     /// control calls in 7 days; the busiest day had 2.75× the mean of control calls), plus the background `gh`
-    /// refresh: 10 open tasks polled every 5 min for 12 h. Keeps the size decision honest: see `rawRetentionDays`.
+    /// refresh: 20 open sandboxes (13 tasks on 2026-10-27) polled every 5 min for 12 h. Keeps the size decision honest: see `rawRetentionDays`.
     static func busyDay(_ start: Date) -> [JournalEvent] {
         var events: [JournalEvent] = []
         func at(_ i: Int, _ n: Int) -> Date { start.addingTimeInterval(Double(i) * 43_200 / Double(max(n, 1))) }
@@ -242,7 +242,7 @@ import Testing
             for i in 0..<51 { events.append(JournalEvent(at: at(i, 51), kind: kind, outcome: "ok", scope: "maastrich", task: task, seconds: 42.5, count: 1)) }
         }
         for i in 0..<24 { events.append(JournalEvent(at: at(i, 24), kind: .taskGC, outcome: "ok", seconds: 3.2, count: 0)) }
-        for i in 0..<1_440 { events.append(JournalEvent(at: at(i, 1_440), kind: .gh, name: "pr.list", outcome: "ok", seconds: 0.834)) }
+        for i in 0..<2_880 { events.append(JournalEvent(at: at(i, 2_880), kind: .gh, name: "pr.list", outcome: "ok", seconds: 0.834)) }
         for i in 0..<40 { events.append(JournalEvent(at: at(i, 40), kind: .turnInterrupted, cause: "sent", task: task, thread: thread)) }
         for i in 0..<20 { events.append(JournalEvent(at: at(i, 20), kind: .turnSettled, cause: "island", thread: thread)) }
         for i in 0..<10 { events.append(JournalEvent(at: at(i, 10), kind: .turnResume, thread: thread)) }
@@ -253,6 +253,28 @@ import Testing
         }
         for i in 0..<100 { events.append(JournalEvent(at: at(i, 100), kind: .hookDropped, cause: "unknown-thread")) }
         return events
+    }
+
+    @Test func aMonthOfBusyDaysIsCondensedOnceAndQuickly() async throws {
+        let folder = Self.folder()
+        let log = JournalLog(directory: folder)
+        let start = Self.date("2026-10-01T00:00:00Z")
+        var data = Data()
+        for day in 0..<30 {
+            for event in Self.busyDay(start.addingTimeInterval(Double(day) * 86_400 + 25_200)) {
+                data.append(try event.line())
+                data.append(UInt8(ascii: "\n"))
+            }
+        }
+        try data.write(to: log.fileURL(for: start))
+        let now = Self.date("2026-10-31T09:00:00Z")
+        let clock = ContinuousClock()
+        let first = clock.measure { log.summarizePastDays(now: now) }
+        let again = clock.measure { log.summarizePastDays(now: now) }
+        let prune = clock.measure { log.prune(before: now.addingTimeInterval(-30 * 86_400)) }
+        print("journal housekeeping over 30 busy days (\(data.count / 1024) KB): first \(first), again \(again), prune \(prune)")
+        #expect(log.readSummaries().count == 30)
+        #expect(again < first)
     }
 
     @Test func aBusyDayStaysSmall() throws {

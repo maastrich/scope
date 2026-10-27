@@ -242,6 +242,8 @@ public struct GhClient: Sendable {
         } record: { result, seconds in
             let outcome = switch result {
             case .success(let process) where process.succeeded: "ok"
+            // `gh pr view` on a branch without one: an answer, not a failure.
+            case .success(let process) where process.stderrText.lowercased().contains("no pull requests found"): "none"
             case .success(let process):
                 ProblemCause.classify(process.stderrText) == .auth ? "auth" : "failed"
             case .failure(SubprocessError.timedOut): "timeout"

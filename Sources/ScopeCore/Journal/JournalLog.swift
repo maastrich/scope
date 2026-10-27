@@ -78,6 +78,9 @@ public struct JournalLog: Sendable {
             if end <= cutoff {
                 try? fileManager.removeItem(at: url)
             } else if start < cutoff, let data = try? Data(contentsOf: url) {
+                // Already trimmed: nothing before the cutoff, nothing to rewrite.
+                if let first = data.split(separator: UInt8(ascii: "\n"), maxSplits: 1).first.flatMap(JournalEvent.decode(line:)),
+                   first.at >= cutoff { continue }
                 let lines = data.split(separator: UInt8(ascii: "\n"))
                 let kept = lines.filter { JournalEvent.decode(line: $0).map { $0.at >= cutoff } ?? false }
                 guard kept.count < lines.count else { continue }
@@ -101,8 +104,12 @@ public struct JournalLog: Sendable {
     @discardableResult
     public func summarizePastDays(now: Date = .now, fileManager: FileManager = .default) -> [String] {
         let today = JournalEvent.day(of: now)
-        let done = Set(readSummaries().map(\.day))
-        guard let first = firstEventDate(fileManager: fileManager),
+        let summaries = readSummaries()
+        let done = Set(summaries.map(\.day))
+        // Only what came after the last summary is read again: thirty busy days are 60 000 lines.
+        let after = summaries.map(\.day).max().flatMap { try? Date("\($0)T00:00:00Z", strategy: .iso8601) }
+            .flatMap { Self.utc.date(byAdding: .day, value: 1, to: $0) }
+        guard let first = [firstEventDate(fileManager: fileManager), after].compactMap({ $0 }).max(),
               let start = Self.utc.dateInterval(of: .day, for: first)?.start,
               let end = Self.utc.dateInterval(of: .day, for: now)?.start, start < end else { return [] }
         var byDay: [String: [JournalEvent]] = [:]
