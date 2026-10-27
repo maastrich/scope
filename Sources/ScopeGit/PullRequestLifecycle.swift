@@ -58,6 +58,27 @@ public struct ActionsJob: Sendable, Equatable, Hashable {
     }
 }
 
+extension ActionsJob {
+    /// `url` carrying `pr=<number>`, as github.com links a job from a pull request's checks — the job page then
+    /// shows the pull request it ran for. Only a job of the pull request's own repository on its own host (which
+    /// covers GitHub Enterprise) is tagged; a run without a job, a link already tagged, a job of another
+    /// repository and a third-party status come back unchanged. Other parameters and the fragment are kept.
+    public static func pullRequestLink(_ url: URL, number: Int, pullRequestURL: URL) -> URL {
+        guard let host = url.host?.lowercased(), host == pullRequestURL.host?.lowercased(),
+              let repository = PullRequest.repository(fromURL: pullRequestURL)?.lowercased() else { return url }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count == 7, "\(parts[0])/\(parts[1])".lowercased() == repository,
+              parts[2] == "actions", parts[3] == "runs", Int(parts[4]) != nil,
+              ["job", "jobs"].contains(parts[5]), Int(parts[6]) != nil,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              !(components.queryItems ?? []).contains(where: { $0.name == "pr" }) else { return url }
+        // Appended to the encoded query as is: reassigning `queryItems` would re-encode the parameters already there.
+        let query = components.percentEncodedQuery ?? ""
+        components.percentEncodedQuery = query.isEmpty ? "pr=\(number)" : "\(query)&pr=\(number)"
+        return components.url ?? url
+    }
+}
+
 /// How `gh pr merge` merges.
 public enum MergeMethod: String, Sendable, Equatable, CaseIterable {
     case merge, squash, rebase

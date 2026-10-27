@@ -25,6 +25,38 @@ import Testing
         #expect(pr.checkRuns[2].detailsURL == nil)
         // A third-party status has no Actions log.
         #expect(pr.checkRuns[3].actionsJob == nil)
+        // Jobs open in the pull request's context, as github.com links them; the third-party status is left alone.
+        #expect(pr.checkRuns[0].detailsURL?.absoluteString == "https://github.com/acme/api/actions/runs/1234/job/5678?pr=42")
+        #expect(pr.checkRuns[3].detailsURL?.absoluteString == "https://circleci.com/gh/acme/api/9")
+    }
+
+    @Test func onlyJobsOfThePullRequestsRepositoryAreTaggedWithIt() {
+        func link(_ text: String, pr: String = "https://github.com/acme/api/pull/42") -> String {
+            ActionsJob.pullRequestLink(URL(string: text)!, number: 42, pullRequestURL: URL(string: pr)!).absoluteString
+        }
+        let job = "https://github.com/acme/api/actions/runs/1234/job/5678"
+        #expect(link(job) == "\(job)?pr=42")
+        #expect(link("https://github.com/acme/api/actions/runs/1234/jobs/5678") == "https://github.com/acme/api/actions/runs/1234/jobs/5678?pr=42")
+        // Already tagged, by this pull request or another: untouched.
+        #expect(link("\(job)?pr=42") == "\(job)?pr=42")
+        #expect(link("\(job)?check_suite_focus=true&pr=7") == "\(job)?check_suite_focus=true&pr=7")
+        // A parameter merely ending in `pr` is not one.
+        #expect(link("\(job)?expr=1") == "\(job)?expr=1&pr=42")
+        // Other parameters and the fragment are kept, encoded as they were.
+        #expect(link("\(job)?check_suite_focus=true#step:4:12") == "\(job)?check_suite_focus=true&pr=42#step:4:12")
+        #expect(link("\(job)#step:4:12") == "\(job)?pr=42#step:4:12")
+        #expect(link("\(job)?q=a%20b") == "\(job)?q=a%20b&pr=42")
+        // A run without a job, a job of another repository, anything off GitHub: untouched.
+        #expect(link("https://github.com/acme/api/actions/runs/1234") == "https://github.com/acme/api/actions/runs/1234")
+        #expect(link("https://github.com/acme/web/actions/runs/1234/job/5678") == "https://github.com/acme/web/actions/runs/1234/job/5678")
+        #expect(link("https://circleci.com/acme/api/actions/runs/1234/job/5678") == "https://circleci.com/acme/api/actions/runs/1234/job/5678")
+        #expect(link("https://github.com/acme/api/runs/5678") == "https://github.com/acme/api/runs/5678")
+        // The repository is compared as GitHub does, without case.
+        #expect(link("https://github.com/Acme/API/actions/runs/1234/job/5678") == "https://github.com/Acme/API/actions/runs/1234/job/5678?pr=42")
+        // GitHub Enterprise: the pull request's own host, never github.com in its place.
+        let enterprise = "https://git.corp.example/acme/api/pull/42"
+        #expect(link("https://git.corp.example/acme/api/actions/runs/1/job/2", pr: enterprise) == "https://git.corp.example/acme/api/actions/runs/1/job/2?pr=42")
+        #expect(link(job, pr: enterprise) == job)
     }
 
     @Test func actionsIDsComeOnlyFromActionsURLs() {
