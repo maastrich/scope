@@ -156,7 +156,7 @@ import Testing
         for seconds in [1.0, 2, 3, 4, 10] {
             recorder.record(JournalEvent(at: clock.now, kind: .taskSetup, outcome: "ok", seconds: seconds))
         }
-        recorder.record(JournalEvent(at: clock.now, kind: .problem, name: "AppModel+Tasks.swift:performSetup(_:runCommands:only:)",
+        recorder.record(JournalEvent(at: clock.now, kind: .problem, name: "appmodel+tasks:performsetup",
                                      title: "The setup of {} failed", cause: "auth", severity: "error"))
         recorder.record(JournalEvent(at: clock.now, kind: .control, name: "task.new", outcome: "refused", cause: "budget-tasks", seconds: 0.002))
         clock.now = Self.date("2026-10-28T09:00:00Z")
@@ -210,6 +210,18 @@ import Testing
         #expect(closed.length == 3600)
     }
 
+    @Test func aCrashReportSinceTheSessionBeganTellsACrashFromAKill() throws {
+        let folder = Self.folder()
+        let started = Date.now.addingTimeInterval(-3600)
+        #expect(!SessionEnd.crashReported(process: "Scope", since: started, folder: folder))
+        FileManager.default.createFile(atPath: folder.appending(path: "Scope Debug-2026-10-27-101500.ips").path, contents: Data())
+        FileManager.default.createFile(atPath: folder.appending(path: "scope-2026-10-27-093000.ips").path, contents: Data())
+        #expect(!SessionEnd.crashReported(process: "Scope", since: started, folder: folder))
+        FileManager.default.createFile(atPath: folder.appending(path: "Scope-2026-10-27-101500.ips").path, contents: Data())
+        #expect(SessionEnd.crashReported(process: "Scope", since: started, folder: folder))
+        #expect(!SessionEnd.crashReported(process: "Scope", since: .now.addingTimeInterval(60), folder: folder))
+    }
+
     // MARK: Size
 
     /// A busy day, scaled from the week analysed in `docs/research/logs-2026-10.md` (≈130 tasks, 550 turns and 650
@@ -235,7 +247,7 @@ import Testing
         for i in 0..<20 { events.append(JournalEvent(at: at(i, 20), kind: .turnSettled, cause: "island", thread: thread)) }
         for i in 0..<10 { events.append(JournalEvent(at: at(i, 10), kind: .turnResume, thread: thread)) }
         for i in 0..<60 {
-            events.append(JournalEvent(at: at(i, 60), kind: .problem, name: "AppModel+Tasks.swift:performSetup(_:runCommands:only:)",
+            events.append(JournalEvent(at: at(i, 60), kind: .problem, name: "appmodel+tasks:performsetup",
                                        title: "The setup of {} failed", outcome: "toast", cause: "auth", severity: "error",
                                        scope: "maastrich", task: task))
         }

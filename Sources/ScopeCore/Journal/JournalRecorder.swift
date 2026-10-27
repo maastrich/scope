@@ -21,7 +21,7 @@ public actor JournalRecorder {
         public var heartbeat: TimeInterval
 
         public init(flushInterval: Duration = .seconds(10), batchSize: Int = 200, maxFileBytes: Int = 32 << 20,
-                    dailyKindCap: Int = 5_000, rawRetentionDays: Int = 30, heartbeat: TimeInterval = 300) {
+                    dailyKindCap: Int = 5_000, rawRetentionDays: Int = 30, heartbeat: TimeInterval = 60) {
             self.flushInterval = flushInterval
             self.batchSize = batchSize
             self.maxFileBytes = maxFileBytes

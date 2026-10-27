@@ -51,7 +51,7 @@ public struct UsageEvent: Codable, Sendable, Equatable {
     public var scope: String?
     /// A short qualifier from a closed set (`cli`, `mcp`, `banner`) — never free text.
     public var context: String?
-    /// Seconds a `view` stayed on screen.
+    /// Seconds a `view` stayed on screen; for a `control` request, how long the app took to answer it.
     public var duration: Double?
 
     public init(at: Date = .now, kind: Kind, id: String, source: Source, scope: String? = nil,

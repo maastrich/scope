@@ -31,7 +31,7 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// A hook message dropped on arrival. `cause` (`HookDropCause`).
         case hookDropped = "hook.dropped"
         /// A CLI or MCP request. `name` the method, `outcome` `ok` / `refused` / `error`, `cause` the refusal rule or
-        /// the error code, `source` `agent` / `user`, `client` `cli` / `mcp` / `other`, `seconds` how long it took.
+        /// the error code, `source` `agent` / `user` / `stranger`, `client` `cli` / `mcp` / `other`, `seconds` how long it took.
         case control
         /// Task operations: `outcome` `ok` / `failed` / `cancelled`, `seconds`, `count` repositories or items.
         case taskCreate = "task.create"
@@ -143,8 +143,23 @@ public enum SessionEnd: String, Codable, Sendable, CaseIterable {
     case clean
     /// Quit to install an update (Sparkle's install-now).
     case update
-    /// The marker was never closed: a crash, a Force Quit, `kill -9` or a power loss — the app cannot tell which.
+    /// The marker was never closed and macOS wrote a crash report for the app since that session began.
+    case crashed
+    /// The marker was never closed, and no crash report: a Force Quit, `kill -9`, a hang or a power loss.
     case unclean
+
+    /// Whether `~/Library/Logs/DiagnosticReports` holds a report for `process` written since `since`.
+    public static func crashReported(process: String, since: Date, folder: URL? = nil,
+                                     fileManager: FileManager = .default) -> Bool {
+        let folder = folder ?? fileManager.homeDirectoryForCurrentUser.appending(path: "Library/Logs/DiagnosticReports")
+        let urls = (try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return urls.contains { url in
+            // `Scope-2026-10-27-101500.ips`, `Scope Debug-…`: the process name, then the date.
+            guard url.pathExtension == "ips", url.lastPathComponent.hasPrefix(process + "-") else { return false }
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            return (modified ?? .distantPast) >= since
+        }
+    }
 }
 
 /// Why the app is stopping.
