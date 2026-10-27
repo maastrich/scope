@@ -12,6 +12,8 @@ cp -p "$HOME_DIR/history.jsonl" "$HOME_DIR/assist.json" "$SNAP/" 2>/dev/null || 
 cp -p "$HOME_DIR"/usage/usage-*.jsonl "$HOME_DIR/usage/registry.json" "$SNAP/"
 cp -p "$HOME_DIR"/tasks/*.json "$SNAP/tasks/"
 cp -p "$HOME_DIR"/threads/*.json "$SNAP/threads/"
+# The event journal (journal.py): ids, slugs, causes and durations only, but copied with the rest for one snapshot.
+[ -d "$HOME_DIR/logs" ] && cp -Rp "$HOME_DIR/logs" "$SNAP/logs"
 for d in "$HOME/Library/Logs/DiagnosticReports" "$HOME/Library/Logs/DiagnosticReports/Retired" /Library/Logs/DiagnosticReports; do
     find "$d" -maxdepth 1 \( -iname 'scope*.ips' -o -iname 'scope*.diag' -o -iname 'pnpm-*.ips' \) -exec cp -p {} "$SNAP/crash/" \; 2>/dev/null || true
 done
