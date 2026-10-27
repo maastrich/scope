@@ -119,9 +119,35 @@ final class ScopeTerminalView: LocalProcessTerminalView {
         cursorVisibilityChanged(false)
     }
 
+    /// The visibility the system was last told about through `invalidateCharacterCoordinates`; `nil` once a change
+    /// went unreported while unfocused, since the system then asked on its own and may hold either.
+    private var reportedCursorShown: Bool? = true
+    /// Bumped by every change, so only the last one of a burst reports.
+    private var cursorChanges = 0
+
+    /// A TUI hides and shows the cursor around every redraw, twenty or more times a second, and each
+    /// `invalidateCharacterCoordinates` costs a `CursorUI scheduleUpdateCursorLocation` line in the unified log: the
+    /// app wrote 180 000 of them a day. So the change is reported once it has stayed put for 0.15 s, only when the settled value
+    /// differs from what the system last heard, and only while this view holds the keyboard — an unfocused terminal
+    /// has no accessory to move, and the input context asks for the placement again when the focus comes back.
     private func cursorVisibilityChanged(_ shown: Bool) {
         guard shown != cursorShown else { return }
         cursorShown = shown
+        cursorChanges &+= 1
+        let change = cursorChanges
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, change == cursorChanges else { return }
+            reportCursorVisibilityIfNeeded()
+        }
+    }
+
+    private func reportCursorVisibilityIfNeeded() {
+        guard cursorShown != reportedCursorShown else { return }
+        guard let window, window.isKeyWindow, window.firstResponder === self else {
+            reportedCursorShown = nil
+            return
+        }
+        reportedCursorShown = cursorShown
         // Makes the system ask for the placement again rather than keep the accessory where it was.
         inputContext?.invalidateCharacterCoordinates()
     }
