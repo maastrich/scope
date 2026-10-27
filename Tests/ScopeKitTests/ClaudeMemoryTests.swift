@@ -31,6 +31,13 @@ struct ClaudeMemoryTests {
                 + "-very-long-mjvq3")
     }
 
+    @Test func pathsResolveLikeRealpath() {
+        // Claude Code names `/tmp/x` after `/private/tmp/x`, existing or not.
+        #expect(ClaudeMemory.canonicalPath("/tmp/no-such-folder-\(UUID().uuidString)/a").hasPrefix("/private/tmp/no-such-folder-"))
+        #expect(ClaudeMemory.canonicalPath("/tmp") == "/private/tmp")
+        #expect(ClaudeMemory.canonicalPath("/work/acme/") == "/work/acme")
+    }
+
     @Test func aSandboxThreadUsesItsRepositoryAndTheRootUsesTheScope() {
         let front = ClaudeMemory.placement(cwd: "/sandboxes/acme/fix/front/src", task: Self.multi, locator: Self.locator)
         #expect(front.owner == .repository("front"))

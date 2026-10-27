@@ -41,12 +41,23 @@ public enum ClaudeMemory {
         return hash
     }
 
-    /// The folder Claude Code would name for `path`: symbolic links resolved (`/tmp` is `/private/tmp` to it).
+    /// The folder Claude Code would name for `path`: `realpath`, symbolic links resolved (`/tmp` is `/private/tmp`
+    /// to it; Foundation's `resolvingSymlinksInPath` strips `/private` back off). A path that no longer exists — an
+    /// archived task's root — keeps its missing tail under its deepest existing ancestor, resolved.
     public static func canonicalPath(_ path: String) -> String {
-        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path(percentEncoded: false)
-        var trimmed = resolved
-        while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed.removeLast() }
-        return trimmed
+        var head = URL(fileURLWithPath: path).standardizedFileURL.path(percentEncoded: false)
+        while head.count > 1, head.hasSuffix("/") { head.removeLast() }
+        var tail: [String] = []
+        while true {
+            if let resolved = realpath(head, nil) {
+                defer { free(resolved) }
+                let base = String(cString: resolved)
+                return tail.isEmpty ? base : (base == "/" ? "" : base) + "/" + tail.reversed().joined(separator: "/")
+            }
+            guard head != "/", !head.isEmpty else { return path }
+            tail.append((head as NSString).lastPathComponent)
+            head = (head as NSString).deletingLastPathComponent
+        }
     }
 
     /// The Claude Code configuration folder a thread uses, and whether Scope may choose its memory folder.
