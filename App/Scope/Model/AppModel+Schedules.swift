@@ -119,7 +119,7 @@ extension AppModel {
         let deadline = since.addingTimeInterval(AppModel.scheduleReplyTimeout)
         while Date.now < deadline, !isTerminating {
             guard let session = session(id) else { return run }
-            session.settleOutlivedTurn()
+            session.settleOutlivedTurn(noticedBy: "schedule")
             if ThreadWait.isSettled(session.waitSnapshot, now: .now, waitingSince: since) { break }
             try? await Task.sleep(for: .seconds(2))
         }

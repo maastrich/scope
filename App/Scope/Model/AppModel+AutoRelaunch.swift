@@ -33,10 +33,12 @@ extension AppModel {
             }
         }
         reportSkippedRelaunches(plan, orphans: orphans)
+        let notRun = !config.preferences.autoRelaunchThreads ? "off" : skippedOnce ? "shift" : nil
+        Journal.record(JournalEvent(kind: .threadsRelaunch, cause: notRun, count: plan.launches.count))
         holdResidentsSkippedAtLaunch(plan.skipped.filter { $0.skip == .skippedOnce }.map(\.id))
 
         guard !plan.launches.isEmpty else { return }
-        Log.app.info("auto-relaunching \(plan.launches.count) threads")
+        Log.app.notice("auto-relaunching \(plan.launches.count) threads")
         Task { [weak self] in
             for (index, id) in plan.launches.enumerated() {
                 if index > 0 { try? await Task.sleep(for: AutoRelaunchPlan.stagger) }

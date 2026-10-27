@@ -123,7 +123,9 @@ final class UpdaterController {
     /// Installs the staged update now: Scope quits (the usual "threads are running" confirmation applies),
     /// Sparkle swaps the bundle and relaunches it. Nothing happens without a staged update.
     func installAndRelaunch() {
-        immediateInstall?()
+        guard let immediateInstall else { return }
+        AppServices.stopReason = .update
+        immediateInstall()
     }
 
     func dismissBand() { bandDismissed = true }

@@ -111,7 +111,7 @@ extension AppModel {
 
     func refreshIsland() {
         // A turn whose end the hooks lost but the agent's last answer settled is over (`ThreadWait`).
-        threads.forEach { $0.settleOutlivedTurn() }
+        threads.forEach { $0.settleOutlivedTurn(noticedBy: "island") }
         island.quiet.refreshFocus()
         applyIsland(readIsland())
     }

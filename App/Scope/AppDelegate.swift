@@ -9,6 +9,8 @@ enum AppServices {
     /// ⇧ held while the app opened: skip the auto-relaunch of threads this once (the macOS gesture for "open without
     /// restoring"). Read as early as AppKit allows; `bootstrap` looks again in case the key went down a moment late.
     static var shiftHeldAtLaunch = false
+    /// Why the coming quit happens, for the event journal: Sparkle's install-now and a shutdown say so first.
+    static var stopReason: StopReason = .quit
 }
 
 /// Finder / Dock / Services entry points and the quit sequence.
@@ -42,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         UNUserNotificationCenter.current().delegate = self
         TerminalKeyBindings.install()
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { AppServices.stopReason = .powerOff }
+        }
         AppServices.model?.startGlobalHotkeys()
         #if DEBUG
         // `SCOPE_QUICK_PANEL=ask|inbox` opens the quick panel shortly after launch: a throwaway instance driven from a

@@ -280,7 +280,7 @@ final class DeltaModel {
         NSWorkspace.shared.open(url)
     }
 
-    private func act(_ failureTitle: String, _ work: @escaping @Sendable (GitClientRegistry) async throws -> Void) async {
+    private func act(_ failureTitle: ProblemTitle, _ work: @escaping @Sendable (GitClientRegistry) async throws -> Void) async {
         isActing = true
         defer { isActing = false }
         let git = env.git

@@ -14,13 +14,18 @@ extension AppModel {
             Task { await store.save(activity, for: id) }
         }
         if let previous {
-            session.setActivity(session.activity.restoring(previous))
+            session.setActivity(session.activity.restoring(previous), journal: false)
             return
         }
         let id = session.id
         Task { [weak session] in
             guard let saved = await store.load(id), let session else { return }
-            session.setActivity(session.activity.restoring(saved))
+            // A turn still open in what was saved was cut by Scope going down: the restart interrupted it.
+            if saved.inTurn {
+                Journal.record(JournalEvent(kind: .turnInterrupted, cause: "restart", task: session.record.taskID,
+                                            thread: id.rawValue))
+            }
+            session.setActivity(session.activity.restoring(saved), journal: false)
         }
     }
 

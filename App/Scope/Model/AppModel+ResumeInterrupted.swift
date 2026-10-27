@@ -17,6 +17,8 @@ extension AppModel {
                                         relaunched: session.isAlive || isLaunchingThread(session))
         session.consumeInterruptedTurn()
         if let skip {
+            Journal.record(JournalEvent(kind: .turnResume, outcome: "skipped", cause: String(describing: skip).lowercased(),
+                                        task: session.record.taskID, thread: session.id.rawValue))
             Log.app.info("thread \(session.id.rawValue, privacy: .public): interrupted turn not resumed (\(String(describing: skip), privacy: .public))")
             return
         }
@@ -29,15 +31,21 @@ extension AppModel {
             let startedAt = Date.now
             var pasteSince: ContinuousClock.Instant?
             defer { self?.session(id)?.setResumingAfterRestart(false) }
+            // `seconds`: how long the prompt took to come back, or the wait given up on.
+            @MainActor func journal(_ outcome: String) {
+                let (whole, atto) = (clock.now - start).components
+                Journal.record(JournalEvent(kind: .turnResume, outcome: outcome, task: self?.session(id)?.record.taskID,
+                                            thread: id.rawValue, seconds: Double(whole) + Double(atto) / 1e18))
+            }
             while clock.now - start < InterruptedTurn.promptTimeout {
                 try? await Task.sleep(for: .milliseconds(150))
                 guard let self, let session = self.session(id) else { return }
                 if case .failed = session.phase { return }
                 if case .exited = session.phase { return }
                 // The user got there first — in the terminal, or through a message that already opened a turn.
-                if let typed = session.lastUserInputAt, typed >= startedAt { return }
-                if let prompted = session.lastPromptAt, prompted >= startedAt { return }
-                if session.isWorking { return }
+                if let typed = session.lastUserInputAt, typed >= startedAt { return journal("user") }
+                if let prompted = session.lastPromptAt, prompted >= startedAt { return journal("user") }
+                if session.isWorking { return journal("user") }
                 // The user path types blind once `UserMessage.startupTimeout` is over rather than lose the user's
                 // words; this message is Scope's own, so it waits for the prompt and is dropped otherwise — typed
                 // into a driver still starting, it would be lost anyway.
@@ -48,11 +56,12 @@ extension AppModel {
                 if InterruptedTurn.isPromptReady(bracketedPaste: pasteOn, pasteOnFor: pasteSince.map { clock.now - $0 } ?? .zero,
                                                  sessionStarted: started) {
                     session.submit(text)
-                    Log.app.info("thread \(id.rawValue, privacy: .public): asked to go on after the restart")
-                    return
+                    Log.app.notice("thread \(id.rawValue, privacy: .public): asked to go on after the restart")
+                    return journal("asked")
                 }
             }
             Log.app.notice("thread \(id.rawValue, privacy: .public): prompt not back in time, not asked to go on")
+            journal("timeout")
         }
     }
 
