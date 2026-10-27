@@ -191,6 +191,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
                     workflow: check.workflowName.flatMap { $0.isEmpty ? nil : $0 },
                     state: Self.state(of: check),
                     detailsURL: (check.detailsUrl ?? check.targetUrl).flatMap { $0.isEmpty ? nil : URL(string: $0) }
+                        .map { ActionsJob.pullRequestLink($0, number: dto.number, pullRequestURL: dto.url) }
                 )
             },
             state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open,
