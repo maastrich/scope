@@ -603,6 +603,9 @@ final class AppModel {
         startBadgeTracking()
         guard !isBootstrapped else { return }
         let skipAutoRelaunch = AppServices.shiftHeldAtLaunch || NSEvent.modifierFlags.contains(.shift)
+        // First, so the session marker is open before anything can go wrong; read back by `journalStart`.
+        let previousSession = await env.journal.beginSession(version: env.appVersion)
+        problems.scopeSlug = { [weak self] id in self?.scope(id)?.declaration.slug }
         startActivationTracking()
         let refreshed = SkillInstaller(userHome: FileManager.default.homeDirectoryForCurrentUser,
                                        debug: BuildFlavor.isDebug).refreshOutdated()
@@ -648,7 +651,7 @@ final class AppModel {
         case .success(let installation):
             env.useGit(at: installation.path)
         case .failure(let error):
-            problems.error(error.title, detail: error.detail)
+            problems.error(ProblemTitle(verbatim: error.title), detail: error.detail)
         }
 
         drivers = await driverTask.value
@@ -720,7 +723,9 @@ final class AppModel {
         startReturnTracking()
         startWatchingState()
         startIsland()
-        Log.app.info("bootstrapped: \(self.scopes.count) scopes, \(self.threads.count) threads")
+        journalStart(previous: previousSession, threads: threads.count, skippedRelaunch: skipAutoRelaunch)
+        // Written now, not at the next tick: a launch that dies in its first seconds is exactly the one to see.
+        Task { [env] in await env.journal.flush() }
     }
 
     private static func locateGit() async -> Result<GitInstallation, GitLocatorError> {
@@ -1643,6 +1648,12 @@ final class AppModel {
         for session in threads where session.isAlive {
             // A turn in progress is cut short here: the relaunch asks the agent to go on (`InterruptedTurn`).
             session.markInterruptedTurn()
+            session.stoppingForQuit = true
+            // Journaled here, once: the exit that follows is not, and the next launch knows the quit stamp.
+            if session.activity.inTurn {
+                Journal.record(JournalEvent(kind: .turnInterrupted, cause: "restart", task: session.record.taskID,
+                                            thread: session.id.rawValue))
+            }
             await env.threadRecords.save(session.record)
         }
         for session in threads where session.isAlive {
@@ -1660,6 +1671,8 @@ final class AppModel {
         while runningThreadCount > 0, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(50))
         }
+        // Last: whatever the hang-ups above journaled is written before the marker closes.
+        await journalStop(hungUp: threads.filter(\.stoppingForQuit).count)
     }
 }
 
@@ -1682,5 +1695,31 @@ struct ScopeTiles {
         let ids = order.split(ring.map { (id: $0.scope.id, activity: $0.activity) }, visible: visible)
         let byID = Dictionary(uniqueKeysWithValues: ring.map { ($0.scope.id, $0.scope) })
         return (ids.shown.compactMap { byID[$0] }, ids.hidden.compactMap { byID[$0] })
+    }
+}
+
+// MARK: Lifecycle in the event journal
+
+extension AppModel {
+    /// `app.start`, with how the previous session ended. Also a `notice` in the unified log, which keeps it on disk.
+    fileprivate func journalStart(previous: JournalSession?, threads: Int, skippedRelaunch: Bool) {
+        var end = previous?.end ?? .first
+        if end == .unclean, let previous,
+           SessionEnd.crashReported(process: ProcessInfo.processInfo.processName, since: previous.startedAt) {
+            end = .crashed
+        }
+        Journal.record(JournalEvent(kind: .appStart, outcome: end.rawValue, cause: skippedRelaunch ? "shift" : nil,
+                                    version: env.appVersion, previous: previous?.version, seconds: previous?.length,
+                                    count: threads))
+        Log.app.notice("started \(self.env.appVersion, privacy: .public) (\(BuildFlavor.displayName, privacy: .public)): \(self.scopes.count) scopes, \(threads) threads; previous session \(end.rawValue, privacy: .public)\(previous.map { " (\($0.version), \(Int($0.length)) s)" } ?? "", privacy: .public)")
+    }
+
+    /// `app.stop`, then the session marker is closed: the next launch reads it as a clean quit, or an update.
+    fileprivate func journalStop(hungUp: Int) async {
+        let reason = AppServices.stopReason
+        let length = await env.journal.sessionLength()
+        Journal.record(JournalEvent(kind: .appStop, cause: reason.rawValue, version: env.appVersion, seconds: length, count: hungUp))
+        Log.app.notice("stopping (\(reason.rawValue, privacy: .public)) after \(Int(length)) s, \(hungUp) threads hung up")
+        await env.journal.endSession(reason: reason)
     }
 }

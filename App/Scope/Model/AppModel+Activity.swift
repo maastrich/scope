@@ -14,13 +14,20 @@ extension AppModel {
             Task { await store.save(activity, for: id) }
         }
         if let previous {
-            session.setActivity(session.activity.restoring(previous))
+            session.setActivity(session.activity.restoring(previous), journal: false)
             return
         }
         let id = session.id
+        // Read now: the auto-relaunch consumes the quit's stamp, maybe before the saved activity is read back.
+        let stampedByQuit = session.record.interruptedTurn != nil
         Task { [weak session] in
             guard let saved = await store.load(id), let session else { return }
-            session.setActivity(session.activity.restoring(saved))
+            // Still open in what was saved, and no quit stamped it: the app died mid-turn (a quit journals its own).
+            if saved.inTurn, !stampedByQuit {
+                Journal.record(JournalEvent(kind: .turnInterrupted, cause: "crash", task: session.record.taskID,
+                                            thread: id.rawValue))
+            }
+            session.setActivity(session.activity.restoring(saved), journal: false)
         }
     }
 

@@ -56,6 +56,8 @@ final class AppEnvironment {
     /// `<home>/usage`: the local log of what is used in the app (`Usage`). Off until the model has read the preference,
     /// so nothing is written for a user who turned it off.
     let usage: UsageRecorder
+    /// `<home>/logs`: the event journal (`JournalRecorder`), always on — it holds how the app behaved, nothing personal.
+    let journal: JournalRecorder
     /// Problems met while building the environment, reported once the `ProblemCenter` exists.
     let startupProblems: [Problem]
 
@@ -95,6 +97,7 @@ final class AppEnvironment {
         self.controls = controls
         self.uiState = uiState
         self.usage = UsageRecorder(log: UsageLog(home: home), enabled: false)
+        self.journal = Journal.current ?? JournalRecorder(log: JournalLog(home: home))
         self.startupProblems = startupProblems
     }
 
@@ -128,6 +131,8 @@ final class AppEnvironment {
             ))
         }
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
+        // Before the socket starts: a hook dropped in the first second is journaled too.
+        Journal.install(JournalRecorder(log: JournalLog(home: home)))
 
         let knownThreads = KnownThreads()
         let sink = HookSink()

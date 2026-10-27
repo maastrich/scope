@@ -485,9 +485,11 @@ final class ThreadSession: Identifiable {
 
     /// `running`, yet the agent answered after anything that started a turn (`ThreadWait.hasOutlivedItsTurn`): the
     /// turn is over, whatever put the state back. Settled to `done` so the sidebar and `scope list` agree with the wait.
-    func settleOutlivedTurn() {
+    /// `noticedBy` says which path caught it, for the event journal: each settle is a `Stop` hook that never came.
+    func settleOutlivedTurn(noticedBy: String) {
         guard phase.isAlive, adapterState == .running, ThreadWait.hasOutlivedItsTurn(waitSnapshot) else { return }
         Log.threads.notice("thread \(self.id.rawValue, privacy: .public) still read running after its last answer; now done")
+        Journal.record(JournalEvent(kind: .turnSettled, cause: noticedBy, task: record.taskID, thread: id.rawValue))
         setAdapterState(.done)
     }
 
@@ -517,6 +519,8 @@ final class ThreadSession: Identifiable {
         if event.kind == .turnStarted, !late { lastTurnStartedAt = event.receivedAt }
         if event.kind == .sessionStarted { lastSessionStartedAt = event.receivedAt }
         if let reply = AgentReply.from(event) { lastReply = reply }
+        // A new prompt while a turn is open closes it as interrupted: one Scope typed is a message sent mid-turn.
+        if promptPending { closeCause = "sent" }
         setActivity(activity.apply(event, promptPending: promptPending))
         // The last background sub-agent reported between turns: the driver is about to open a turn on its result.
         // Expected like a prompt, so a wait does not slip through the gap — but not a prompt: the last answer stays
@@ -625,6 +629,7 @@ final class ThreadSession: Identifiable {
     /// The session no longer waits on the permission `claude agents` had confirmed early: another hook decided it.
     /// Its tool runs (or was refused) and no hook says so before it ends.
     func decidedElsewhere(_ id: String) {
+        Journal.record(JournalEvent(kind: .permissionDecidedElsewhere, task: record.taskID, thread: self.id.rawValue))
         confirmedEarly = nil
         updateClaude { $0.pending.remove(id: id) }
         if adapterState == .waiting(reason: .permission), claude.pending.waitReason == nil { setAdapterState(.running) }
@@ -639,10 +644,18 @@ final class ThreadSession: Identifiable {
         updateClaude { $0.pending.remove(id: id) }
     }
 
-    /// Replaces the activity; `onActivityChanged` only when what is saved moved.
-    func setActivity(_ next: ThreadActivity) {
+    /// Why the next turn closed as interrupted, when the session knows: set just before the `setActivity` that closes it.
+    @ObservationIgnored private var closeCause: String?
+    /// Set by the quit before it hangs the thread up: the turn the exit cuts short is journaled by the quit.
+    @ObservationIgnored var stoppingForQuit = false
+
+    /// Replaces the activity; `onActivityChanged` only when what is saved moved. `journal: false` for an activity
+    /// read back after a restart, whose turns were journaled when they closed (or by `AppModel.wireActivity`).
+    func setActivity(_ next: ThreadActivity, journal: Bool = true) {
         let previous = activity
         activity = next
+        if journal { journalClosedTurns(from: previous, to: next) }
+        closeCause = nil
         refreshActivityHeadline()
         let planMoved = next.plan != previous.plan
         if next.turns != previous.turns || next.inTurn != previous.inTurn || planMoved { turnRevision &+= 1 }
@@ -656,6 +669,31 @@ final class ThreadSession: Identifiable {
         if next.turns != previous.turns || next.lastReply != previous.lastReply
             || next.transcriptPath != previous.transcriptPath || next.inTurn != previous.inTurn || contextMoved || planMoved {
             onActivityChanged?(self)
+        }
+    }
+
+    /// Turns that ended without finishing — interrupted, or cut by the process going away — go to the event journal
+    /// with their cause. The others are counted by `history.jsonl` and the usage log already.
+    private func journalClosedTurns(from previous: ThreadActivity, to next: ThreadActivity) {
+        guard next.turns.last != previous.turns.last else { return }
+        let since = previous.turns.last?.endedAt ?? .distantPast
+        for turn in next.turns where turn.endedAt > since {
+            let cause: String
+            switch turn.outcome {
+            case .interrupted:
+                // Not Scope's message nor Esc: the user typed a prompt of their own, or nothing said why.
+                let typed = lastUserInputAt.map { $0 >= (turn.startedAt ?? .distantFuture) } ?? false
+                cause = closeCause ?? (typed ? "typed" : "unknown")
+            case .exited:
+                // Cut by the quit: `terminateNow` journaled it as `restart` already.
+                guard !stoppingForQuit else { continue }
+                cause = "exit"
+            default:
+                continue
+            }
+            // How long it ran before it was cut: an interrupted turn is closed at its start, its own duration is 0.
+            Journal.record(JournalEvent(kind: .turnInterrupted, cause: cause, task: record.taskID, thread: id.rawValue,
+                                        seconds: turn.startedAt.map { max(0, Date.now.timeIntervalSince($0)) }))
         }
     }
 
@@ -728,6 +766,7 @@ final class ThreadSession: Identifiable {
         if case .submit = signal { userStashed = false }
         if signal != .submit(hadText: false) { lastUserInputAt = .now }
         if signal == .interrupt, adapterState == .running {
+            closeCause = "esc"
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
         }
         guard var next = ThreadStateMachine.next(adapterState ?? .initial, onUserInput: signal,

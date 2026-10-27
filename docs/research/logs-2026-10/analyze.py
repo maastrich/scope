@@ -4,6 +4,7 @@
 
 Sections: unified, sessions, crashes, tasks, threads, usage, agents (all by default).
 Reads SNAP only and prints aggregates: no task or repo names, titles, prompts, paths or terminal text.
+The event journal (SNAP/logs, written by the app once it has one) has its own reader beside this one: journal.py SNAP/logs.
 Every timestamp is normalized to UTC before it is compared.
 """
 import collections

@@ -155,6 +155,7 @@ public final class UnixSocketServer: Sendable {
             if let data { buffer.append(data) }
             if buffer.count > maxMessageBytes {
                 Log.hooks.warning("dropping oversized socket message (\(buffer.count) bytes)")
+                Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.oversized.rawValue))
                 connection.cancel()
                 return
             }
@@ -164,6 +165,7 @@ public final class UnixSocketServer: Sendable {
                     // One request per connection: the responder owns the connection from here.
                     guard version == SocketFrame.version else {
                         Log.hooks.warning("dropping control frame of unknown framing version \(version)")
+                        Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.badFrame.rawValue))
                         connection.cancel()
                         return
                     }
@@ -171,6 +173,7 @@ public final class UnixSocketServer: Sendable {
                     return
                 case .malformed(let reason):
                     Log.hooks.warning("dropping malformed control frame: \(reason, privacy: .public)")
+                    Journal.record(JournalEvent(kind: .hookDropped, cause: HookDropCause.badFrame.rawValue))
                     connection.cancel()
                     return
                 case .incomplete, .hookMessage:

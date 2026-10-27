@@ -256,6 +256,7 @@ extension AppModel {
         // The brief opens on the issue: the thread reads it first, and the record keeps it that way.
         let prompt = issue.map { IssueBrief.prefixed(prompt, with: $0) } ?? prompt
         let record: TaskRecord
+        let creating = ContinuousClock.now
         do {
             record = try await env.tasks.create(
                 name: proposal.title, branch: proposal.branch, slug: proposal.slug, initialPrompt: prompt,
@@ -267,9 +268,11 @@ extension AppModel {
                 issue: issue.map(LinkedIssue.init), attempt: attempt, mission: mission
             )
         } catch {
+            journalTask(.taskCreate, outcome: "failed", scope: scopeID, since: creating, cause: ProblemCause.classify(String(describing: error)))
             problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
             throw error
         }
+        journalTask(.taskCreate, outcome: "ok", task: record.id, scope: scopeID, since: creating, count: record.repos.count)
         let state = TaskState(record: record, git: env.git)
         tasks.append(state)
         state.startWatching()
@@ -548,6 +551,7 @@ extension AppModel {
         let commands = await sandboxCommands(for: task.record)
         task.setupCommands = Self.uniqueSetupCommands(commands, record: task.record)
         let runner = await commandRunner()
+        let started = ContinuousClock.now
         do {
             let record = try await env.tasks.runSetup(task.id, commands: commands, runCommands: runCommands,
                                                       runner: runner, only: only) { [weak self] record in
@@ -566,14 +570,22 @@ extension AppModel {
                               scope: task.scopeID,
                               actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue))])
             }
-            guard record.setupState == .failed else { return }
+            let failed = record.setupState == .failed
+            journalTask(.taskSetup, outcome: failed ? "failed" : runCommands ? "ok" : "copied", task: task.id, scope: task.scopeID,
+                        since: started, cause: failed ? ProblemCause.classify(record.setup?.log) : nil, count: record.repos.count)
+            guard failed else { return }
             problems.error("The setup of \(task.name) failed", detail: SetupLog.tail(record.setup?.log ?? "", lines: 60),
                            scope: task.scopeID,
                            actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue)),
                                      .reveal(record.threadCwd.path, title: "Reveal Sandbox")])
         } catch {
             // Closed or archived mid-setup: nothing left to report on.
-            guard !Task.isCancelled, self.task(task.id) != nil else { return }
+            guard !Task.isCancelled, self.task(task.id) != nil else {
+                journalTask(.taskSetup, outcome: "cancelled", task: task.id, scope: task.scopeID, since: started)
+                return
+            }
+            journalTask(.taskSetup, outcome: "failed", task: task.id, scope: task.scopeID, since: started,
+                        cause: ProblemCause.classify(String(describing: error)))
             problems.error("Could not run the setup of \(task.name)", detail: String(describing: error), scope: task.scopeID)
         }
     }
@@ -682,6 +694,21 @@ extension AppModel {
     @discardableResult
     private func dismantle(_ task: TaskState, _ mode: DismantleMode, notice: String? = nil,
                            by requester: CloseRequester? = nil) async throws -> DismantleOutcome {
+        let started = ContinuousClock.now
+        let kind: JournalEvent.Kind = mode.isClose ? .taskClose : .taskArchive
+        do {
+            let outcome = try await takeApart(task, mode, notice: notice, by: requester)
+            journalTask(kind, outcome: "ok", task: task.id, scope: task.scopeID, since: started, count: task.record.repos.count)
+            return outcome
+        } catch {
+            journalTask(kind, outcome: "failed", task: task.id, scope: task.scopeID, since: started,
+                        cause: ProblemCause.classify(String(describing: error)))
+            throw error
+        }
+    }
+
+    private func takeApart(_ task: TaskState, _ mode: DismantleMode, notice: String?,
+                           by requester: CloseRequester?) async throws -> DismantleOutcome {
         task.isDismantling = true
         if selection == .task(task.id) || currentTask?.id == task.id { selection = .scope(task.scopeID) }
         // A base still on the task's branch goes back first: the branch may be about to be deleted.
@@ -773,8 +800,12 @@ extension AppModel {
                     : URL(fileURLWithPath: scope.declaration.path, isDirectory: true).appending(path: repo.id, directoryHint: .isDirectory)
             }
         }
+        let started = ContinuousClock.now
         let report = await env.tasks.collectGarbage(extraBases: bases, dryRun: dryRun)
         guard !dryRun else { return report }
+        journalTask(.taskGC, outcome: report.survivors.isEmpty ? "ok" : "failed", since: started,
+                    count: report.removedFolders.count + report.stoppedProcesses.count + report.prunedWorktrees.count
+                        + report.deletedRefs.count)
         if resumingPending {
             for id in report.pendingTasks { await retryCleanup(id) }
         }
@@ -898,5 +929,18 @@ private final class SettleRace {
         guard !done else { return }
         done = true
         continuation.resume()
+    }
+}
+
+// MARK: Task operations in the event journal
+
+extension AppModel {
+    /// One task operation, timed from `since`: the task by id, its scope by slug, a failure by its classified cause.
+    func journalTask(_ kind: JournalEvent.Kind, outcome: String, task: TaskID? = nil, scope: ScopeID? = nil,
+                     since: ContinuousClock.Instant, cause: ProblemCause? = nil, count: Int? = nil) {
+        let (whole, atto) = (ContinuousClock.now - since).components
+        Journal.record(JournalEvent(kind: kind, outcome: outcome, cause: cause?.rawValue,
+                                    scope: scope.flatMap { self.scope($0)?.declaration.slug }, task: task?.rawValue,
+                                    seconds: Double(whole) + Double(atto) / 1e18, count: count))
     }
 }

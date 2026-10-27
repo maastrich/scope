@@ -145,20 +145,55 @@ public struct ControlError: Codable, Sendable, Equatable, Error {
         }
     }
 
+    /// Which rule refused a `denied` request, for the app's event journal: the message names tasks and threads, the
+    /// rule does not. Stays in the app; never sent on the wire.
+    public enum Rule: String, Sendable, CaseIterable {
+        /// `SCOPE_THREAD` names no thread this Scope knows.
+        case strangerThread = "stranger-thread"
+        /// Only the user may do this (settings, try in checkout).
+        case userOnly = "user-only"
+        /// Settings ▸ Automation: agents may not drive Scope.
+        case agentsOff = "agents-off"
+        case depth
+        case budgetTasks = "budget-tasks"
+        case budgetThreads = "budget-threads"
+        case attempts
+        /// The method's approval is set to deny.
+        case methodOff = "method-off"
+        /// The approval sheet was refused, timed out or turned away.
+        case notApproved = "not-approved"
+        /// The thread is out of the agent's reach (`mayTouch`).
+        case reach
+        case checkpoint
+        case browser
+        case other
+    }
+
     public var code: Code
     public var message: String
     /// Longer text: the git error, the list of scopes to choose from, …
     public var detail: String?
+    public var rule: Rule?
 
-    public init(_ code: Code, _ message: String, detail: String? = nil) {
+    private enum CodingKeys: String, CodingKey { case code, message, detail }
+
+    /// What a client sees: the rule is the app's own bookkeeping.
+    public static func == (lhs: ControlError, rhs: ControlError) -> Bool {
+        lhs.code == rhs.code && lhs.message == rhs.message && lhs.detail == rhs.detail
+    }
+
+    public init(_ code: Code, _ message: String, detail: String? = nil, rule: Rule? = nil) {
         self.code = code
         self.message = message
         self.detail = detail
+        self.rule = rule
     }
 
     public static func badRequest(_ message: String, detail: String? = nil) -> ControlError { .init(.badRequest, message, detail: detail) }
     public static func notFound(_ message: String, detail: String? = nil) -> ControlError { .init(.notFound, message, detail: detail) }
-    public static func denied(_ message: String, detail: String? = nil) -> ControlError { .init(.denied, message, detail: detail) }
+    public static func denied(_ message: String, detail: String? = nil, rule: Rule = .other) -> ControlError {
+        .init(.denied, message, detail: detail, rule: rule)
+    }
     public static func failed(_ message: String, detail: String? = nil) -> ControlError { .init(.failed, message, detail: detail) }
 }
 

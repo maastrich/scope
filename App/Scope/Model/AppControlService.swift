@@ -84,7 +84,6 @@ final class AppControlService: ControlService {
 
     func perform(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller,
                  progress: @escaping @Sendable (String) -> Void) async -> Result<ControlResultPayload, ControlError> {
-        noteControlCall(call, from: origin, caller: caller)
         switch call {
         case .ping:
             return .success(.ping(PingResult(app: BuildFlavor.displayName, version: model.env.appVersion,
@@ -534,7 +533,7 @@ final class AppControlService: ControlService {
         let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "thread.wait")
         defer { ProcessInfo.processInfo.endActivity(activity) }
         func look() -> [Bool] {
-            sessions.forEach { $0.settleOutlivedTurn() }
+            sessions.forEach { $0.settleOutlivedTurn(noticedBy: "control") }
             return sessions.map { ThreadWait.isSettled($0.waitSnapshot, now: .now, waitingSince: started) }
         }
         var settled = look()
@@ -996,11 +995,16 @@ final class AppControlService: ControlService {
                                          limits: model.tokenUsage.limitsSummary())))
     }
 
-    /// One line in the usage log per call carried out: the method, who asked (an agent or the user's own terminal) and
-    /// through which façade. Never the arguments.
-    private func noteControlCall(_ call: ControlCall, from origin: ControlOrigin, caller: ControlCaller) {
-        let client = caller.client.hasPrefix(ControlClientName.mcp) ? "mcp" : caller.client.hasPrefix(ControlClientName.cli) ? "cli" : "other"
-        Usage.record(.control, "control.\(call.method.rawValue)", source: origin.isAgent ? .agent : .user, context: client)
+    /// Once the request is answered, refused ones included: one line in the usage log (the method, who asked, through
+    /// which façade, how long it took) and one in the event journal, which adds how it ended. Never the arguments.
+    func finished(_ request: ControlRequest, from origin: ControlOrigin, outcome: ControlOutcome, seconds: TimeInterval) {
+        let client = request.caller.client.hasPrefix(ControlClientName.mcp) ? "mcp"
+            : request.caller.client.hasPrefix(ControlClientName.cli) ? "cli" : "other"
+        let source = if case .strangerThread = origin { "stranger" } else { origin.isAgent ? "agent" : "user" }
+        Usage.record(.control, "control.\(request.method.rawValue)", source: origin.isAgent ? .agent : .user, context: client,
+                     duration: seconds)
+        Journal.record(JournalEvent(kind: .control, name: request.method.rawValue, outcome: outcome.status.rawValue,
+                                    cause: outcome.cause, source: source, client: client, seconds: seconds))
     }
 
     /// Live records and the history of closed ones, handed to `ActivitySummary`. Only reads: a pull request whose state

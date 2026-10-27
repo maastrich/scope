@@ -19,6 +19,8 @@ import Testing
         var workTime: Duration = .zero
         /// What agents hold while the work is being done, seen from inside `perform`.
         var heldDuringWork: [AutomationLoad] = []
+        /// What `finished` was told, one per answered request.
+        var outcomes: [(method: String, outcome: ControlOutcome, seconds: TimeInterval)] = []
 
         init(automation: AutomationSettings = AutomationSettings(), resolved: ControlOrigin = .user,
              approval: Bool = true,
@@ -43,6 +45,10 @@ import Testing
             heldDuringWork.append(reservations.pending)
             if workTime > .zero { try? await Task.sleep(for: workTime) }
             return answer
+        }
+
+        func finished(_ request: ControlRequest, from origin: ControlOrigin, outcome: ControlOutcome, seconds: TimeInterval) {
+            outcomes.append((request.method.rawValue, outcome, seconds))
         }
     }
 
@@ -179,5 +185,48 @@ import Testing
         private var lines: [String] = []
         func append(_ line: String) { lock.lock(); lines.append(line); lock.unlock() }
         var all: [String] { lock.lock(); defer { lock.unlock() }; return lines }
+    }
+
+    // MARK: Outcomes, for the event journal
+
+    @Test func everyAnsweredRequestReportsHowItEndedAndHowLong() async throws {
+        let service = ServiceDouble()
+        service.workTime = .milliseconds(20)
+        _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.ping)), service: service, progress: { _ in })
+        #expect(service.outcomes.count == 1)
+        #expect(service.outcomes.first?.method == "ping")
+        #expect(service.outcomes.first?.outcome == .ok)
+        #expect((service.outcomes.first?.seconds ?? 0) >= 0.02)
+    }
+
+    @Test func aPolicyRefusalIsReportedWithItsRuleThoughTheAppNeverRanIt() async throws {
+        let service = ServiceDouble(resolved: .strangerThread("deadbeef0000"))
+        _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.threadNew(ThreadNewParams(scope: "acme")))),
+                                      service: service, progress: { _ in })
+        #expect(service.performed.isEmpty)
+        #expect(service.outcomes.map(\.outcome) == [ControlOutcome(status: .refused, cause: "stranger-thread")])
+    }
+
+    @Test func aDeclinedApprovalIsReportedAsNotApproved() async throws {
+        var settings = AutomationSettings()
+        settings.threads = .ask
+        let service = ServiceDouble(automation: settings, resolved: .thread(ThreadID(rawValue: "aaaaaaaaaaaa")!, depth: 0),
+                                    approval: false)
+        _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.threadNew(ThreadNewParams(scope: "acme")))),
+                                      service: service, progress: { _ in })
+        #expect(service.outcomes.map(\.outcome) == [ControlOutcome(status: .refused, cause: "not-approved")])
+    }
+
+    @Test func anAppFailureIsReportedByItsCodeNotItsMessage() async throws {
+        let service = ServiceDouble(answer: .failure(.notFound("no task “secret-plan” in /Users/me/work")))
+        _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.ping)), service: service, progress: { _ in })
+        #expect(service.outcomes.map(\.outcome) == [ControlOutcome(status: .error, cause: "not_found")])
+    }
+
+    @Test func theRefusalRuleNeverTravelsOnTheWire() throws {
+        let error = ControlError.denied("agents may not drive Scope", rule: .agentsOff)
+        let json = String(decoding: try JSONEncoder().encode(error), as: UTF8.self)
+        #expect(!json.contains("rule"))
+        #expect(!json.contains("agents-off"))
     }
 }
