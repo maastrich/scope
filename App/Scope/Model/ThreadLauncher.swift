@@ -25,15 +25,18 @@ struct ThreadLauncher {
     /// `initialPrompt` fills `{prompt}` so the profile's `prompt` argv is appended (fresh launch only).
     /// `claudeUsesTerminalPalette` is the preference: on, Claude Code gets the terminal's theme in its settings file.
     /// `readLimits` is the meter's: on, the same file relays Claude Code's status line so the limits reach the app.
+    /// `sharedClaudeMemory` is the preference: on, a task's thread keeps its auto memory with its repository or scope
+    /// (`ClaudeMemory`).
     func plan(record: ThreadRecord, profile: DriverProfile, scope: ScopeDeclaration, task: TaskRecord? = nil, mode: LaunchMode,
               initialPrompt: String? = nil, claudeUsesTerminalPalette: Bool = true,
-              readLimits: Bool = true) async throws(LaunchError) -> LaunchPlan {
+              readLimits: Bool = true, sharedClaudeMemory: Bool = true) async throws(LaunchError) -> LaunchPlan {
         let shell = await env.shell.environment()
+        let memory = sharedClaudeMemory ? task.flatMap { Self.memorySettings(cwd: record.cwd, task: $0, environment: shell.variables) } : nil
         let scopeHook = scopeHookPath(searchPATH: shell.path)
         let theme: TerminalTheme = TerminalAppearance.palette().isDark ? .dark : .light
         let adapterArguments = try AdapterInstaller.prepare(
             profile: profile, threadID: record.id, home: env.home, scopeHookPath: scopeHook,
-            theme: claudeUsesTerminalPalette ? theme : nil, statusline: readLimits)
+            theme: claudeUsesTerminalPalette ? theme : nil, statusline: readLimits, memory: memory)
         let values = PlaceholderValues(
             threadID: record.id.rawValue,
             resumeID: record.resumeID,
@@ -76,5 +79,13 @@ struct ThreadLauncher {
             }
         }
         return plan
+    }
+
+    /// Where a thread of `task` started at `cwd` keeps its auto memory, and what else it may read; `nil` when the
+    /// user's own Claude Code settings already decide (`ClaudeMemory.Locator.resolve`).
+    nonisolated static func memorySettings(cwd: String, task: TaskRecord, environment: [String: String]) -> ThreadMemorySettings? {
+        guard let locator = ClaudeMemory.Locator.resolve(environment: environment, userHome: NSHomeDirectory()) else { return nil }
+        let own = ClaudeMemory.placement(cwd: cwd, task: task, locator: locator)
+        return ClaudeMemory.settings(own: own, companions: ClaudeMemory.companions(of: own, task: task, locator: locator))
     }
 }

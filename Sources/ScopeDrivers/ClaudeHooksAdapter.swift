@@ -95,7 +95,11 @@ public enum ClaudeHooksAdapter {
     /// thread wants Claude Code on the terminal's palette: `dark-ansi` / `light-ansi` colour with the 16 ANSI
     /// colours alone, which the app sets to match its appearance. It rides in this file because `--settings`
     /// is given once per launch; a second flag would drop the hooks.
-    public static func settings(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true) -> [String: Any] {
+    ///
+    /// `memory` sets the auto memory folder (`autoMemoryDirectory`) and grants the task's other memory folders for
+    /// reading (`permissions.additionalDirectories`), see `ClaudeMemory` in ScopeTasks.
+    public static func settings(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true,
+                                memory: ThreadMemorySettings? = nil) -> [String: Any] {
         var hooks: [String: Any] = [:]
         for entry in entries {
             var group: [String: Any] = [
@@ -110,6 +114,10 @@ public enum ClaudeHooksAdapter {
         }
         var document: [String: Any] = ["hooks": hooks]
         if let theme { document["theme"] = "\(theme.rawValue)-ansi" }
+        if let memory {
+            document["autoMemoryDirectory"] = memory.directory
+            if !memory.readable.isEmpty { document["permissions"] = ["additionalDirectories": memory.readable] }
+        }
         if statusline {
             document["statusLine"] = [
                 "type": "command",
@@ -123,8 +131,10 @@ public enum ClaudeHooksAdapter {
     public static let statuslineArguments = [HookCommandEvent.statuslineWord, "--stdin"]
 
     /// The settings document serialized (sorted keys, pretty-printed).
-    public static func settingsData(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true) throws -> Data {
-        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline),
+    public static func settingsData(scopeHookPath: String, theme: TerminalTheme? = nil, statusline: Bool = true,
+                                    memory: ThreadMemorySettings? = nil) throws -> Data {
+        try JSONSerialization.data(withJSONObject: settings(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline,
+                                                            memory: memory),
                                    options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
     }
 
@@ -148,11 +158,12 @@ public enum ClaudeHooksAdapter {
     /// `claude` argv: `["--settings", <path>]`. Idempotent; rewriting keeps the file in step with the
     /// current `scope-hook` path after an app update.
     public static func install(home: URL, threadID: ThreadID, scopeHookPath: String, theme: TerminalTheme? = nil,
-                               statusline: Bool = true) throws(LaunchError) -> [String] {
+                               statusline: Bool = true, memory: ThreadMemorySettings? = nil) throws(LaunchError) -> [String] {
         let url = settingsURL(home: home, threadID: threadID)
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try settingsData(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline).write(to: url, options: .atomic)
+            try settingsData(scopeHookPath: scopeHookPath, theme: theme, statusline: statusline, memory: memory)
+                .write(to: url, options: .atomic)
         } catch {
             throw .adapterSetupFailed("Could not write \(url.path): \(error.localizedDescription)")
         }
@@ -173,12 +184,14 @@ public enum ClaudeHooksAdapter {
 public enum AdapterInstaller {
     /// `theme` is the terminal palette Claude Code should draw with, `nil` to leave its own theme alone; `statusline`
     /// whether the limits meter is on, which is what installs the status-line relay.
+    /// `memory` is where a Claude Code thread keeps its auto memory, `nil` to leave Claude Code's own choice.
     public static func prepare(profile: DriverProfile, threadID: ThreadID, home: URL, scopeHookPath: String,
-                               theme: TerminalTheme? = nil, statusline: Bool = true) throws(LaunchError) -> [String] {
+                               theme: TerminalTheme? = nil, statusline: Bool = true,
+                               memory: ThreadMemorySettings? = nil) throws(LaunchError) -> [String] {
         switch profile.adapter?.kind {
         case ClaudeHooksAdapter.kind?:
             return try ClaudeHooksAdapter.install(home: home, threadID: threadID, scopeHookPath: scopeHookPath, theme: theme,
-                                                  statusline: statusline)
+                                                  statusline: statusline, memory: memory)
         default:
             return []
         }
@@ -204,5 +217,19 @@ public enum AdapterInstaller {
         if profile.adapter?.kind == ClaudeHooksAdapter.kind {
             ClaudeHooksAdapter.uninstall(home: home, threadID: threadID)
         }
+    }
+}
+
+/// What a Claude Code thread's settings file says about memory: the auto memory folder, and the other folders the
+/// thread may read without a prompt.
+public struct ThreadMemorySettings: Sendable, Equatable {
+    /// `autoMemoryDirectory`
+    public var directory: String
+    /// `permissions.additionalDirectories`
+    public var readable: [String]
+
+    public init(directory: String, readable: [String]) {
+        self.directory = directory
+        self.readable = readable
     }
 }

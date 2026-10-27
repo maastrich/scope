@@ -472,6 +472,11 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// match the palette at launch) instead of its own true-colour theme, so its output follows the app's
     /// appearance. On by default. Off leaves Claude Code's own theme setting alone.
     public var claudeUsesTerminalPalette: Bool
+    /// A task's Claude Code threads keep their auto memory with their repository — the memory of its base
+    /// checkout — and a thread at the root of a task of several repositories with the scope (`ClaudeMemory`), so
+    /// what an agent learns outlives the task. On by default. Off leaves the folder to Claude Code, which gives a
+    /// task root a memory of its own.
+    public var claudeSharedMemory: Bool
     /// Exited threads close themselves (record deleted) when their 10 s exit toast goes. Off by default:
     /// the tab stays greyed until the user closes it.
     public var autoCloseExitedThreads: Bool
@@ -605,6 +610,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         terminalCursorStyle: TerminalCursorStyle = .steadyUnderline,
         terminalOptionAsMeta: Bool = false,
         claudeUsesTerminalPalette: Bool = true,
+        claudeSharedMemory: Bool = true,
         autoCloseExitedThreads: Bool = false,
         autoRelaunchThreads: Bool = true,
         resumeInterruptedTurns: Bool = true,
@@ -657,6 +663,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.terminalCursorStyle = terminalCursorStyle
         self.terminalOptionAsMeta = terminalOptionAsMeta
         self.claudeUsesTerminalPalette = claudeUsesTerminalPalette
+        self.claudeSharedMemory = claudeSharedMemory
         self.autoCloseExitedThreads = autoCloseExitedThreads
         self.autoRelaunchThreads = autoRelaunchThreads
         self.resumeInterruptedTurns = resumeInterruptedTurns
@@ -703,7 +710,7 @@ public struct Preferences: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case defaultDriverID, branchPrefix, editor, shellProbe, confirmCloseRunningThread, confirmQuitWithRunningThreads, showMenuBarExtra,
-             terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, autoCloseExitedThreads,
+             terminalFontSize, terminalAppearance, terminalCursorStyle, terminalOptionAsMeta, claudeUsesTerminalPalette, claudeSharedMemory, autoCloseExitedThreads,
              attentionCounter, agentOpenedFocus, sidebarRows, sidebarArrangement, finishedThreadLine, scopeTileOrder, swipeBetweenScopes, chromeTheme, showShortcutHints, showGitActions,
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
@@ -733,6 +740,8 @@ public struct Preferences: Codable, Sendable, Equatable {
             ?? defaults.terminalOptionAsMeta
         claudeUsesTerminalPalette = try container.decodeIfPresent(Bool.self, forKey: .claudeUsesTerminalPalette)
             ?? defaults.claudeUsesTerminalPalette
+        claudeSharedMemory = try container.decodeIfPresent(Bool.self, forKey: .claudeSharedMemory)
+            ?? defaults.claudeSharedMemory
         autoCloseExitedThreads = try container.decodeIfPresent(Bool.self, forKey: .autoCloseExitedThreads)
             ?? defaults.autoCloseExitedThreads
         autoRelaunchThreads = try container.decodeIfPresent(Bool.self, forKey: .autoRelaunchThreads)

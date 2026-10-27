@@ -27,6 +27,9 @@ public actor TaskManager {
     /// Record files `loadAll` could not read; the garbage collection removes no folder while there are any.
     private var loadProblems = 0
     private var dismantling: [TaskID: (token: UUID, mode: DismantleMode, run: Task<DismantleOutcome, any Error>)] = [:]
+    /// Where Claude Code keeps the task threads' auto memory, for the context file's `## Memory` section; `nil` leaves
+    /// the section out (memory sharing off, or the user chose a folder of their own).
+    private var claudeMemory: ClaudeMemory.Locator?
     /// Read by the app after a create / addRepo / regenerate so the user hears about it once.
 
     /// - Parameter ports: where `SCOPE_PORT` blocks come from (`PortAllocator.range(debugBuild:)` in the app).
@@ -43,6 +46,10 @@ public actor TaskManager {
         self.checkpoints = TaskCheckpoints(home: home, registry: registry)
     }
 
+    /// Sets `claudeMemory`; context files written from now on follow it.
+    public func setClaudeMemory(_ locator: ClaudeMemory.Locator?) {
+        claudeMemory = locator
+    }
 
     // MARK: - Records
 
@@ -1253,8 +1260,11 @@ public actor TaskManager {
     private func writeProjection(_ record: TaskRecord, scopeContext: String?, scopeRepos: [String],
                                  repoSummaries: [RepoContextSummary], contextFiles: [String]) async throws {
         let others = scopeRepos.map(TaskRepo.normalize).filter { $0 != "." }
+        let memory = claudeMemory.map { locator in
+            ClaudeMemory.contextSection(task: record, locator: locator) { try? String(contentsOf: $0, encoding: .utf8) }
+        } ?? []
         let markdown = TaskProjection.agentsMarkdown(task: record, otherRepos: others, scopeName: record.scopeName, scopeContext: scopeContext,
-                                                     repoSummaries: repoSummaries)
+                                                     repoSummaries: repoSummaries, memorySection: memory)
         let names = Self.contextFileNames(contextFiles)
         // Where the threads start, and every secondary worktree: a thread opened on one of the task's other
         // branches starts there, and must find the same context.

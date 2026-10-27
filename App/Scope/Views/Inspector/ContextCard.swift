@@ -94,6 +94,7 @@ private struct GivenToAgentRows: View {
     let task: TaskState
     @State private var files: [TaskContextFiles.Entry] = []
     @State private var skills: [String] = []
+    @State private var memories: [MemoryFolder] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -129,6 +130,9 @@ private struct GivenToAgentRows: View {
                 .padding(.bottom, 4)
                 .accessibilityLabel("Skills: \(skills.joined(separator: ", "))")
             }
+            ForEach(memories) { memory in
+                MemoryRow(memory: memory)
+            }
         }
         .onAppear(perform: reload)
         .onChange(of: task.id) { reload() }
@@ -138,6 +142,67 @@ private struct GivenToAgentRows: View {
     private func reload() {
         files = model.contextFiles(of: task)
         skills = model.skills(of: task)
+        let record = task.record
+        Task {
+            let placements = await model.claudeMemoryPlacements(of: record)
+            memories = placements.enumerated().map { index, placement in
+                MemoryFolder(placement: placement, isOwn: index == 0,
+                             notes: (try? FileManager.default.contentsOfDirectory(atPath: placement.directory.path(percentEncoded: false)))?
+                                .filter { $0.hasSuffix(".md") && $0 != "MEMORY.md" }.count ?? 0)
+            }
+        }
+    }
+}
+
+/// A Claude Code memory folder of the task (`ClaudeMemory`): the one its threads write to first, then the ones
+/// they may read.
+private struct MemoryFolder: Identifiable {
+    let placement: ClaudeMemory.Placement
+    let isOwn: Bool
+    let notes: Int
+    var id: String { placement.directory.path }
+}
+
+/// `Memory front · threads write here    12 notes`; a click shows the folder in the Finder.
+private struct MemoryRow: View {
+    let memory: MemoryFolder
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            let url = memory.placement.directory
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+        } label: {
+            HStack(spacing: 8) {
+                CardRowGlyph("brain")
+                Text("Memory \(memory.placement.label)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(memory.isOwn ? "· threads write here" : "· readable")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(memory.notes == 1 ? "1 note" : "\(memory.notes) notes")
+                    .font(.scopeValue)
+                    .foregroundStyle(Ink.tertiary)
+                    .fixedSize()
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 4)
+            .background(hovering ? Fill.hover : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, -4)
+        .onHover { hovering = $0 }
+        .cursor(.pointingHand)
+        .help("Claude Code auto memory: \(memory.placement.directory.path(percentEncoded: false)) — show it in the Finder")
+        .accessibilityLabel("Memory \(memory.placement.label), \(memory.isOwn ? "threads write here" : "readable"), \(memory.notes) notes")
+        .usageID("inspector.context.memory", label: "Show a Claude memory folder")
     }
 }
 

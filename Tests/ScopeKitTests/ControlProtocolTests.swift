@@ -168,6 +168,7 @@ import Testing
             .taskShow(TaskShowParams(task: "rework-auth")),
             .taskNew(TaskNewParams(prompt: "study it", deliverable: "docs/study.md")),
             .gc(GCParams(dryRun: true)),
+            .memory(MemoryParams(apply: true, claudeDir: "/tmp/claude")),
         ]
         for call in calls {
             let request = ControlRequest(id: "abcd", caller: Self.caller, call: call)

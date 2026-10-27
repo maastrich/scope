@@ -114,6 +114,12 @@ private struct GeneralSettingsView: View {
                     .font(.scopeCaption)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Claude Code memory follows the repository", isOn: preference(\.claudeSharedMemory))
+                    .toggleStyle(.scope)
+                Text("A task's Claude Code threads keep their auto memory with the repository they work in, and at the root of a task of several repositories with the scope, so what they learn outlives the task. `scope memory` gathers what earlier tasks left behind. Applies to threads launched from now on.")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 SettingsRow("Cursor") {
                     ScopePicker("Cursor", selection: preference(\.terminalCursorStyle),
                                 title: model.config.preferences.terminalCursorStyle.title) {

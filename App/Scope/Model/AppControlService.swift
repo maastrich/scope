@@ -206,6 +206,9 @@ final class AppControlService: ControlService {
                 return .failure(.failed("the cleanup did not run"))
             }
             return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
+        case .memory(let params):
+            let report = await model.recoverClaudeMemory(apply: params.apply, claudeDir: params.claudeDir)
+            return .success(.action(ActionResult(message: report), .memory))
         case .scheduleList(let params):
             return listSchedules(params, from: origin, caller: caller)
         case .scheduleRun(let params):

@@ -70,6 +70,7 @@ scope browser compare [/route]      <span class="c"># the route on the base bran
 scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
 scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
+scope memory [--apply]              <span class="c"># stray Claude Code memories, and where they belong; --apply copies them</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>

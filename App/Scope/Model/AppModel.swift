@@ -666,6 +666,7 @@ final class AppModel {
         tidyScopeLogos(sweeping: configProblem == nil)
 
         let taskProblems = await env.tasks.loadAll()
+        syncClaudeMemory()
         if !taskProblems.isEmpty {
             problems.warn("\(taskProblems.count) task \(taskProblems.count == 1 ? "record" : "records") could not be loaded",
                           detail: taskProblems.map { "\($0.file.lastPathComponent): \($0.message)" }.joined(separator: "\n"),
@@ -907,6 +908,7 @@ final class AppModel {
             reprobeShell()
         }
         if config.preferences.assist != before.assist { refreshAssistModels() }
+        if config.preferences.claudeSharedMemory != before.claudeSharedMemory { syncClaudeMemory() }
     }
 
     func reprobeShell() {
@@ -1268,7 +1270,8 @@ final class AppModel {
                                                scope: scope.declaration, task: task(of: session)?.record, mode: mode,
                                                initialPrompt: initialPrompt,
                                                claudeUsesTerminalPalette: config.preferences.claudeUsesTerminalPalette,
-                                               readLimits: config.preferences.showTokenMeter)
+                                               readLimits: config.preferences.showTokenMeter,
+                                               sharedClaudeMemory: config.preferences.claudeSharedMemory)
             session.launch(plan)
         } catch {
             session.fail(error)

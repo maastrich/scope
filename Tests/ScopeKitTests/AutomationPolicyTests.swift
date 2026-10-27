@@ -409,6 +409,11 @@ import Testing
         }
         // A preview only reads.
         #expect(ask.decide(.gc(GCParams(dryRun: true)), from: Self.external) == .allow)
+        // The memory report reads; copying writes into the user's Claude Code memories.
+        #expect(ask.decide(.memory(MemoryParams()), from: Self.external) == .allow)
+        guard case .ask = ask.decide(.memory(MemoryParams(apply: true)), from: Self.external) else {
+            Issue.record("copying memories from an agent asks the user"); return
+        }
     }
 
     @Test func agentsTurnedOffCannotActEither() {
