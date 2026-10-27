@@ -11,6 +11,22 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.32.0](https://github.com/maastrich/scope/releases/tag/v0.32.0) - 2026-10-27
+
+### Added
+
+- a persisted event journal, and no more CursorUI flood in the unified log ([#119](https://github.com/maastrich/scope/pull/119)) by @maastrich
+
+### Fixed
+
+- **pr-panel:** open CI jobs in the context of their pull request ([#118](https://github.com/maastrich/scope/pull/118)) by @maastrich
+
+### Documentation
+
+- **research:** what a week of Scope's logs says, and what to fix first ([#117](https://github.com/maastrich/scope/pull/117)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.31.0...v0.32.0
+
 ## [0.31.0](https://github.com/maastrich/scope/releases/tag/v0.31.0) - 2026-10-23
 
 ### Added
