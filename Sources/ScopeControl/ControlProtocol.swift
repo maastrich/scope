@@ -66,6 +66,9 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskRestoreCheckpoint = "task.restore-checkpoint"
     /// One pass of the cleanup Scope runs on its own (`TaskManager.collectGarbage`).
     case gc
+    /// Claude Code memories left behind by tasks and other clones, copied into their repository's or scope's
+    /// (`ClaudeMemoryRecovery`). A report by default.
+    case memory
     /// The last lines of a thread's terminal, scrollback included — or the agent's last answer.
     case threadRead = "thread.read"
     /// Blocks until threads finish their turn (or need someone), then says how each one stands.
@@ -106,7 +109,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
         case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList,
              .taskBranchList: false
         case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
-             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
+             .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
              .taskBranchAdd, .taskBranchRemove, .browser: true
         }
     }
@@ -255,6 +258,7 @@ public enum ControlCall: Sendable, Equatable {
     case taskCheckpoints(TaskCheckpointsParams)
     case taskRestoreCheckpoint(TaskRestoreCheckpointParams)
     case gc(GCParams)
+    case memory(MemoryParams)
     case threadRead(ThreadReadParams)
     case threadWait(ThreadWaitParams)
     case summary(SummaryParams)
@@ -290,6 +294,7 @@ public enum ControlCall: Sendable, Equatable {
         case .taskCheckpoints: .taskCheckpoints
         case .taskRestoreCheckpoint: .taskRestoreCheckpoint
         case .gc: .gc
+        case .memory: .memory
         case .threadRead: .threadRead
         case .threadWait: .threadWait
         case .summary: .summary
@@ -323,7 +328,7 @@ public enum ControlCall: Sendable, Equatable {
         case .threadStop, .threadClose, .taskTopic, .milestoneAdd: .seconds(30)
         // Typing takes a moment; with `wait`, the thread's whole turn follows.
         case .threadSend(let params): .seconds(30 + (params.waitParams.map { $0.effectiveTimeout + 15 } ?? 0))
-        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .scheduleRun,
+        case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .scheduleRun,
              .taskBranchAdd, .taskBranchRemove: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
@@ -785,6 +790,25 @@ public struct TaskTopicParams: Codable, Sendable, Equatable {
 }
 
 /// `scope gc` — what Scope cleans on its own, now.
+public struct MemoryParams: Codable, Sendable, Equatable {
+    /// Copy for real; without it the call only reports.
+    public var apply: Bool
+    /// The Claude Code configuration folder to work on instead of the thread environment's (`CLAUDE_CONFIG_DIR`,
+    /// else `~/.claude`).
+    public var claudeDir: String?
+
+    public init(apply: Bool = false, claudeDir: String? = nil) {
+        self.apply = apply
+        self.claudeDir = claudeDir
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        apply = try container.decodeIfPresent(Bool.self, forKey: .apply) ?? false
+        claudeDir = try container.decodeIfPresent(String.self, forKey: .claudeDir)
+    }
+}
+
 public struct GCParams: Codable, Sendable, Equatable {
     /// Say what would go, touch nothing.
     public var dryRun: Bool

@@ -117,6 +117,10 @@ public enum ScopeCLI {
                                           next fire, last run
       scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope memory                        list the Claude Code memories tasks and other clones left behind, and
+                                          what copying them into their repository's or scope's would do; --apply
+                                          copies (never deletes nor overwrites), --claude-dir <path> works on
+                                          another Claude Code configuration folder
       scope release [X.Y.Z]               cut a release of a repository: Scope clones its default branch under its
                                           own home and runs scripts/release.sh there (else tags and pushes), with
                                           your git identity, outside any sandbox; refused unless CI on the head
@@ -236,6 +240,17 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.gc(parameters), shared)
+        case "memory":
+            var parameters = MemoryParams()
+            let shared = try options(&rest, command: "memory", specific: { flag, value in
+                switch flag {
+                case "--apply": parameters.apply = true
+                case "--claude-dir": parameters.claudeDir = try value()
+                default: return false
+                }
+                return true
+            })
+            return .call(.memory(parameters), shared)
         case "release":
             var words: [String] = []
             var parameters = ReleaseParams()

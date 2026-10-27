@@ -850,6 +850,33 @@ So Scope hands it each sandbox with <code>--add-dir</code> (the profile's <code>
 <code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> so each repository's <code>CLAUDE.md</code> is read
 from the start rather than only when the agent opens a file there. A thread already running when you add a
 repository sees it the next time it is relaunched or resumed.</p>
+<h3 id="memory">Claude Code memory, per repository</h3>
+<p>Claude Code keeps its <a href="https://code.claude.com/docs/en/memory">auto memory</a> in
+<code>~/.claude/projects/&lt;project&gt;/memory/</code>, the project being the git repository's main checkout — so
+every worktree of a repository shares it — or the working directory outside a repository. A thread in a sandbox
+already lands on its repository's memory; a thread at the root of a task of several repositories did not: the
+task root is no repository, so it got a memory of its own, unread once the task was archived.</p>
+<p>Scope now picks the folder for every Claude Code thread of a task, with <code>autoMemoryDirectory</code> in the
+thread's own <code>--settings</code> file:</p>
+<ul>
+<li>a thread inside a sandbox (a second branch's included) uses the memory of the repository's base checkout — the
+one a session started in your checkout uses;</li>
+<li>a thread anywhere else in the task — the root of a task of several repositories — uses the scope's, the memory
+a thread at the scope root has always had, for what holds across repositories.</li>
+</ul>
+<p>The task's other memories are readable without a prompt (<code>permissions.additionalDirectories</code>), and
+the context file gains a <b>Memory</b> section naming them, with the scope's index quoted, so a rule you taught at
+the scope level reaches a repository's thread. The inspector's Context card lists them, with their note counts.
+Scope leaves the folder alone when you chose one yourself (<code>autoMemoryDirectory</code> in your settings,
+<code>CLAUDE_CODE_PROJECT_DIR_NAME</code>) or turned auto memory off; <b>Settings ▸ General ▸ Terminal ▸ Claude Code memory
+follows the repository</b> turns the whole thing off.</p>
+<p>Memories left behind by earlier tasks, and by other clones of a scope's repository, are gathered with
+<code>scope memory</code>. It reports by default: each stray folder, where it would go, and what happens to each
+file. <code>scope memory --apply</code> copies. Nothing is deleted or overwritten: a file identical to one already
+there, or with the same <code>name</code>, is left out (a same-name file with other text is listed so you can
+compare); a file whose name is taken by another memory is a conflict, listed and not copied. The index
+(<code>MEMORY.md</code>) gains a line per copied file, and the report warns when it grows past the 200 lines or
+25 kB Claude Code loads.</p>
 
 <h2 id="missions">Missions</h2>
 <p>A <b>mission</b> is a task whose prompt is a goal too big for one task: <code>scope task new --mission</code>,
@@ -1324,6 +1351,7 @@ scope browser compare [/route]      <span class="c"># the route on the base bran
 scope task milestone add|done [&lt;id|slug&gt;] … <span class="c"># a mission's milestones (--validate, --child); see <a href="tasks.html#missions">missions</a></span>
 scope schedule list|run [&lt;name&gt;]      <span class="c"># the scheduled prompts: next fire and last run; or fire one now</span>
 scope gc [--dry-run]                <span class="c"># run the automatic cleanup now; --dry-run also weighs the sandboxes</span>
+scope memory [--apply]              <span class="c"># stray Claude Code memories, and where they belong; --apply copies them</span>
 scope release [X.Y.Z]               <span class="c"># cut a release from a clone of main in Scope's home (--repo, --dry-run, --force)</span>
 scope config get|set &lt;key&gt; [value] <span class="c"># agents' budgets, applied live; your terminal only</span>
 scope summary [period]              <span class="c"># what was done over a period, scope by scope (--scope, --task)</span>

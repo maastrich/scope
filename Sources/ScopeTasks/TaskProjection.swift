@@ -36,9 +36,10 @@ public enum TaskProjection {
     ///   - scopeName: display name of the scope.
     ///   - scopeContext: what the owner wrote about the scope (`ScopeDeclaration.context`), quoted as it is.
     ///   - repoSummaries: graph cards (purpose / stack / setup / test), keyed by relative path; missing entries fall back to names only.
+    ///   - memorySection: the `## Memory` lines (`ClaudeMemory.contextSection`), empty to leave it out.
     public static func agentsMarkdown(
         task: TaskRecord, otherRepos: [String], scopeName: String, scopeContext: String? = nil,
-        repoSummaries: [RepoContextSummary] = []
+        repoSummaries: [RepoContextSummary] = [], memorySection: [String] = []
     ) -> String {
         let summaries = Dictionary(repoSummaries.map { (TaskRepo.normalize($0.path), $0) }, uniquingKeysWith: { first, _ in first })
         var lines: [String] = [generatedMarker, "# Task: \(task.name)", ""]
@@ -106,6 +107,7 @@ public enum TaskProjection {
             }
             lines.append("")
         }
+        lines += memorySection
         lines.append("## Rules")
         lines.append("")
         lines.append("- Work only inside the sandboxes listed above.")
