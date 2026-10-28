@@ -193,7 +193,7 @@ card say <i>behind main by 4 · conflicts in 2 files</i>; <code>scope list tasks
 per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
 <ul>
   <li><b>Ask the agent</b> (default): when the branch conflicts with main, or GitHub reports the pull request as
-  conflicting, the task's thread — the first live Claude Code or Codex thread, or a new one when none runs — is
+  conflicting, the task's thread — the first live Claude Code or Codex thread; you are notified when none runs — is
   told the conflicting files and asked to merge <code>origin/main</code> in, keep both sides, regenerate, re-run the
   suites it touched one at a time, push without forcing and reply when mergeable. Once per move of main: no repeat
   until main moves again. A branch behind without conflicts is left to the agent — unless main touched files the task

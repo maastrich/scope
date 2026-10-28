@@ -108,8 +108,8 @@ extension AppModel {
     /// Tells the task's thread that main moved — conflicts (`ActingTrigger.conflicts`), or main touching the task's
     /// files before it conflicts (`.baseMoved`) — through the acting triggers' gate: once per head of main, never
     /// mid-turn or while the user types, under the trigger's hourly cap. A held message is not remembered against the
-    /// head, so the next pass asks again. With no agent in the task, one is started with the message as its first
-    /// prompt. The message merges main in rather than rebasing: a thread's permissions refuse force pushes.
+    /// head, so the next pass asks again. With no agent in the task, the user is notified instead. The message merges
+    /// main in rather than rebasing: a thread's permissions refuse force pushes.
     private func askAgentToFollowMain(_ task: TaskState, lag: TaskLag, preventive: Bool = false,
                                       rebaseStopped: Bool = false) async -> String {
         let open = pullRequestStates(for: task).compactMap(\.live).filter { $0.state == .open }
@@ -140,24 +140,14 @@ extension AppModel {
                 return "\(trigger.title) reached its hourly cap on \(displayTitle(for: thread)); the user is told"
             }
         }
-        // A preventive update is not worth an agent of its own.
+        // No agent left in the task to ask: the user is told, once per head of main. A preventive update is not
+        // worth even that.
         guard !preventive else { return "nothing to do for \(task.record.slug): no agent thread to ask" }
         await noteFollowedMain(task, head: lag.upstreamHead)
-        // No agent in the task: one is started with the message as its first prompt, with the default driver, as
-        // long as it reports its turns (a shell cannot be asked anything).
-        let driver = [defaultProfile].compactMap { $0 }.first(where: AdapterInstaller.deliversEvents)
-            ?? drivers.profiles.first(where: AdapterInstaller.deliversEvents)
-        guard let driver else {
-            problems.warn("No agent to ask about \(task.name)'s branch", detail: "main moved; no Claude Code or Codex profile is installed.",
-                          scope: task.scopeID)
-            return "no agent profile to ask for \(task.record.slug)"
-        }
-        let origin = ThreadOrigin(author: .control, client: "scope")
-        guard let session = await newThread(in: task.scopeID, driverID: driver.id, taskID: task.id, initialPrompt: text, origin: origin) else {
-            return "could not open a thread in \(task.record.slug)"
-        }
-        journalTrigger(trigger, session: session, outcome: "sent", cause: "new-thread")
-        return "opened \(displayTitle(for: session)) in \(task.record.slug) and asked it to bring \(lag.upstream) into \(task.branch)"
+        let paths = lag.conflictedPaths
+        notifyNoThread(trigger, task: task, key: "conflict@\(lag.upstreamHead)",
+                       notice: "\(task.branch) conflicts with \(lag.upstream)" + (paths.isEmpty ? "" : " in " + paths.prefix(3).joined(separator: ", ")))
+        return "no agent thread in \(task.record.slug) to ask about the conflicts; the user is told"
     }
 
     /// `git rebase origin/<default>` in each sandbox that is behind, then a push with lease when the branch is

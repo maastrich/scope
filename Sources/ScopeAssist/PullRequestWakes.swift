@@ -25,9 +25,12 @@ public enum ReviewWake {
         public var line: Int?
         /// The review thread it belongs to is resolved, or its last word is the viewer's: handled.
         public var handled: Bool
+        /// GitHub's `authorAssociation`; `nil` when unknown.
+        public var association: String?
 
         public init(id: String, kind: Kind, author: String, body: String, at: Date, url: URL? = nil, state: String? = nil,
-                    path: String? = nil, line: Int? = nil, handled: Bool = false) {
+                    path: String? = nil, line: Int? = nil, handled: Bool = false, association: String? = nil) {
+            self.association = association
             self.id = id
             self.kind = kind
             self.author = author
@@ -56,6 +59,14 @@ public enum ReviewWake {
     /// GitHub's Copilot reviewer, whatever its login looks like on this host.
     public static func isCopilot(_ login: String) -> Bool { login.lowercased().contains("copilot") }
 
+    /// Who may ask an autonomous agent to change code: the repository's owner, members and collaborators, and Copilot.
+    /// Anyone can comment on a public repository's pull request; a stranger's words never reach the thread.
+    public static let trustedAssociations: Set<String> = ["OWNER", "MEMBER", "COLLABORATOR"]
+
+    public static func isTrusted(_ item: Item) -> Bool {
+        isCopilot(item.author) || item.association.map { trustedAssociations.contains($0.uppercased()) } ?? false
+    }
+
     /// Bots that post previews, coverage and the like: nothing to address. Copilot is the exception.
     public static func isIgnoredBot(_ login: String) -> Bool {
         let lower = login.lowercased()
@@ -67,7 +78,7 @@ public enum ReviewWake {
     /// — are ignored; a line comment by the viewer is a request about the code and counts. An approval without words
     /// and Copilot's overview (`Copilot reviewed N out of M files…`) ask for nothing.
     public static func matters(_ item: Item, viewer: String?) -> Bool {
-        guard !item.handled, !isIgnoredBot(item.author) else { return false }
+        guard !item.handled, !isIgnoredBot(item.author), isTrusted(item) else { return false }
         let text = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
         let byViewer = viewer.map { $0.caseInsensitiveCompare(item.author) == .orderedSame } ?? false
         switch item.kind {

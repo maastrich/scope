@@ -89,7 +89,7 @@ extension AppModel {
         let items = activity.items.map { item in
             ReviewWake.Item(id: item.id, kind: ReviewWake.Kind(rawValue: item.kind.rawValue) ?? .conversation, author: item.author,
                             body: item.body, at: item.at, url: item.url, state: item.state, path: item.path, line: item.line,
-                            handled: item.handled)
+                            handled: item.handled, association: item.association)
         }
         let fresh = items.contains { $0.at > handled && ReviewWake.matters($0, viewer: activity.viewer) }
         guard let batch = ReviewWake.batch(items, viewer: activity.viewer, handledThrough: handled, now: now) else {

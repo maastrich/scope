@@ -107,9 +107,9 @@ extension AppModel {
             guard event.payload[HookEvent.toolKey].map(\.isEmpty) ?? true else { return }
             engine.relaunches[id] = nil
             session.setActingNote(nil)
-            // Scope's message opened this turn only if it went out moments ago and the user typed nothing since.
+            // Scope's message opened this turn only if it went out moments ago and no person typed since.
             if let opened = engine.openedBy[id], Date.now.timeIntervalSince(opened.at) > 30
-                || (session.lastUserInputAt.map { $0 > opened.at } ?? false) {
+                || (session.lastHumanInputAt.map { $0 > opened.at } ?? false) {
                 engine.openedBy[id] = nil
             }
         case .turnEnded:
@@ -259,12 +259,20 @@ extension AppModel {
 
     /// The assistant read the running turn as stuck: after `stuckGrace`, unless the user said "Not stuck" or the turn
     /// moved on, it is interrupted and asked to change approach.
-    func noteStuck(_ session: ThreadSession, reason: String) {
-        guard preference(.stuck).enabled, let started = session.activity.turnStartedAt else { return }
+    /// `true` when the turn will be interrupted after the grace; `false` when the trigger is off, or this is the turn
+    /// Scope's own message opened — it got its one relaunch, and the user is told as before.
+    @discardableResult
+    func noteStuck(_ session: ThreadSession, reason: String) -> Bool {
+        guard preference(.stuck).enabled, let started = session.activity.turnStartedAt else { return false }
+        if acting.openedBy[session.id]?.trigger == .stuck {
+            journalTrigger(.stuck, session: session, outcome: "skipped", cause: "own-turn")
+            return false
+        }
         let key = "turn@\(Int(started.timeIntervalSince1970))"
-        guard acting.stuck[session.id]?.key != key else { return }
+        guard acting.stuck[session.id]?.key != key else { return true }
         acting.stuck[session.id] = .init(key: key, reason: reason, since: .now)
         journalTrigger(.stuck, session: session, outcome: "waiting", cause: "grace")
+        return true
     }
 
     func cancelStuck(_ id: ThreadID) {
@@ -324,7 +332,7 @@ extension AppModel {
         return ActingTriggers.ThreadFacts(
             id: session.id, alive: session.isAlive, canRestart: restartUnavailable(session) == nil,
             inTurn: session.isAlive && (session.activity.inTurn || session.isWorking || spokenFor),
-            waitingForUser: session.isAlive && waiting, lastUserInputAt: session.lastUserInputAt,
+            waitingForUser: session.isAlive && waiting, lastUserInputAt: session.lastHumanInputAt,
             turnOpenedBy: acting.openedBy[session.id]?.trigger)
     }
 
@@ -404,7 +412,7 @@ extension AppModel {
         post(trigger, about: session, body: body)
     }
 
-    private func notifyNoThread(_ trigger: ActingTrigger, task: TaskState, key: String, notice: String) {
+    func notifyNoThread(_ trigger: ActingTrigger, task: TaskState, key: String, notice: String) {
         // Keyed on the task: there is no thread to hang it on.
         let subject = "task:\(task.id.rawValue)"
         guard !acting.ledger.hasNotified(trigger, about: subject, key: key) else { return }

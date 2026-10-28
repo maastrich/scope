@@ -26,6 +26,7 @@ import ScopeCore
         ("server_error", "API Error: The response stalled before a response was produced. Try again.", "stalled"),
         ("server_error", "API Error: Connection lost mid-response. The response above may be incomplete.", "lost"),
         ("server_error", "API Error: Your computer went to sleep before a response was produced. Try again.", "asleep"),
+        ("server_error", "API Error: Your computer went to sleep mid-response. The response above may be incomplete.", "asleep"),
         ("server_error", "API Error: Part of the response never arrived. The response above may be incomplete.", "dropped"),
     ])
     func connectionErrorsAreNetwork(_ code: String, _ message: String, _ cause: String) {

@@ -20,9 +20,12 @@ public struct PullRequestReviewActivity: Sendable, Equatable {
         /// A line comment whose thread is resolved, or answered by the viewer since, or that is itself the viewer's
         /// reply in a thread someone else opened.
         public var handled: Bool
+        /// GitHub's `authorAssociation`: `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `NONE`, …
+        public var association: String?
 
         public init(id: String, kind: Kind, author: String, body: String, at: Date, url: URL? = nil, state: String? = nil,
-                    path: String? = nil, line: Int? = nil, handled: Bool = false) {
+                    path: String? = nil, line: Int? = nil, handled: Bool = false, association: String? = nil) {
+            self.association = association
             self.id = id
             self.kind = kind
             self.author = author
@@ -49,10 +52,10 @@ public struct PullRequestReviewActivity: Sendable, Equatable {
       viewer { login }
       repository(owner: $owner, name: $name) {
         pullRequest(number: $number) {
-          reviews(last: 30) { nodes { id author { login } body state submittedAt url } }
-          comments(last: 30) { nodes { id author { login } body createdAt url } }
+          reviews(last: 30) { nodes { id author { login } authorAssociation body state submittedAt url } }
+          comments(last: 30) { nodes { id author { login } authorAssociation body createdAt url } }
           reviewThreads(last: 50) {
-            nodes { isResolved comments(first: 20) { nodes { id author { login } body createdAt url path line originalLine } } }
+            nodes { isResolved comments(first: 20) { nodes { id author { login } authorAssociation body createdAt url path line originalLine } } }
           }
         }
       }
@@ -61,9 +64,9 @@ public struct PullRequestReviewActivity: Sendable, Equatable {
 
     private struct Response: Decodable {
         struct Login: Decodable { var login: String? }
-        struct Review: Decodable { var id: String; var author: Login?; var body: String?; var state: String?; var submittedAt: Date?; var url: URL? }
+        struct Review: Decodable { var id: String; var author: Login?; var authorAssociation: String?; var body: String?; var state: String?; var submittedAt: Date?; var url: URL? }
         struct Comment: Decodable {
-            var id: String; var author: Login?; var body: String?; var createdAt: Date?; var url: URL?
+            var id: String; var author: Login?; var authorAssociation: String?; var body: String?; var createdAt: Date?; var url: URL?
             var path: String?; var line: Int?; var originalLine: Int?
         }
         struct Nodes<T: Decodable>: Decodable { var nodes: [T]? }
@@ -88,12 +91,12 @@ public struct PullRequestReviewActivity: Sendable, Equatable {
         for review in pr?.reviews?.nodes ?? [] {
             guard let at = review.submittedAt else { continue }
             items.append(Item(id: review.id, kind: .review, author: review.author?.login ?? "ghost", body: review.body ?? "",
-                              at: at, url: review.url, state: review.state))
+                              at: at, url: review.url, state: review.state, association: review.authorAssociation))
         }
         for comment in pr?.comments?.nodes ?? [] {
             guard let at = comment.createdAt else { continue }
             items.append(Item(id: comment.id, kind: .conversation, author: comment.author?.login ?? "ghost",
-                              body: comment.body ?? "", at: at, url: comment.url))
+                              body: comment.body ?? "", at: at, url: comment.url, association: comment.authorAssociation))
         }
         for thread in pr?.reviewThreads?.nodes ?? [] {
             let comments = thread.comments?.nodes ?? []
@@ -105,7 +108,8 @@ public struct PullRequestReviewActivity: Sendable, Equatable {
                     || (index > 0 && isViewer(comment.author?.login))
                 items.append(Item(id: comment.id, kind: .inline, author: comment.author?.login ?? "ghost",
                                   body: comment.body ?? "", at: at, url: comment.url, path: comment.path,
-                                  line: comment.line ?? comment.originalLine, handled: handled))
+                                  line: comment.line ?? comment.originalLine, handled: handled,
+                                  association: comment.authorAssociation))
             }
         }
         return PullRequestReviewActivity(viewer: viewer, items: items)

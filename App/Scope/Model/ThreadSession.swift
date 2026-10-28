@@ -117,6 +117,9 @@ final class ThreadSession: Identifiable {
     /// (`TerminalInputSignal`; raw bytes would count the terminal's own replies to the driver's queries). What
     /// the restart message yields to: a user already talking to the thread does not want Scope's prompt under theirs.
     @ObservationIgnored private(set) var lastUserInputAt: Date?
+    /// The same, for keys a person typed: what Scope itself writes into the terminal (a message, an Esc) also passes
+    /// through `handleUserInput`, and must not read as the user at the keyboard (`AppModel+ActingTriggers`).
+    @ObservationIgnored private(set) var lastHumanInputAt: Date?
     /// When the driver last said a session of it started (`sessionStarted`): its prompt is up from there on.
     @ObservationIgnored private(set) var lastSessionStartedAt: Date?
 
@@ -816,7 +819,10 @@ final class ThreadSession: Identifiable {
         }
         guard let signal = inputTracker.feed(bytes) else { return }
         if case .submit = signal { userStashed = false }
-        if signal != .submit(hadText: false) { lastUserInputAt = .now }
+        if signal != .submit(hadText: false) {
+            lastUserInputAt = .now
+            if (terminalView as? ScopeTerminalView)?.isScopeWriting != true { lastHumanInputAt = .now }
+        }
         if signal == .interrupt, adapterState == .running {
             closeCause = "esc"
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))

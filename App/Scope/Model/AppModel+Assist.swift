@@ -278,8 +278,11 @@ extension AppModel {
         Usage.record(.assist, "assist.digest.\(digest.stuck ? "stuck" : "working")", source: .app, context: answeredBy.rawValue)
         // With the stuck trigger on, Scope relaunches it first and only tells the user past the cap.
         if note.isStuck, !wasStuck {
-            if preference(.stuck).enabled { noteStuck(session, reason: note.stuckReason ?? "") }
-            else { notifyStuck(session, reason: note.stuckReason ?? "") }
+            // With the stuck trigger on, the notification says the turn is about to be interrupted: its Not stuck
+            // is the user's last word before that.
+            let relaunches = noteStuck(session, reason: note.stuckReason ?? "")
+            notifyStuck(session, reason: note.stuckReason ?? "",
+                        subtitle: relaunches ? "seems stuck — Scope interrupts it in a minute unless you say Not stuck" : "seems stuck")
         }
     }
 
@@ -386,10 +389,10 @@ extension AppModel {
         Usage.record(.assist, "assist.archive.dismissed", source: .user)
     }
 
-    private func notifyStuck(_ session: ThreadSession, reason: String) {
+    func notifyStuck(_ session: ThreadSession, reason: String, subtitle: String = "seems stuck") {
         guard !NSApplication.shared.isActive, let scope = scope(session.record.scopeID) else { return }
         let parts = [session.profile.name, scope.name] + (task(of: session).map { [$0.name] } ?? [])
-        let content = ThreadNotificationContent(title: parts.joined(separator: " · "), subtitle: "seems stuck",
+        let content = ThreadNotificationContent(title: parts.joined(separator: " · "), subtitle: subtitle,
                                                 body: reason.isEmpty ? "The agent looks like it is going in circles." : reason)
         notifier.post(content, threadID: session.id)
     }
