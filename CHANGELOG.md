@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.33.0](https://github.com/maastrich/scope/releases/tag/v0.33.0) - 2026-10-28
+
+### Added
+
+- task threads keep Claude Code memory with their repository, and scope memory gathers what tasks left behind ([#120](https://github.com/maastrich/scope/pull/120)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.32.0...v0.33.0
+
 ## [0.32.0](https://github.com/maastrich/scope/releases/tag/v0.32.0) - 2026-10-27
 
 ### Added
