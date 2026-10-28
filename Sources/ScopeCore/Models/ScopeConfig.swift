@@ -582,6 +582,8 @@ public struct Preferences: Codable, Sendable, Equatable {
     public var openWebLinks: WebLinkDestination
     /// The island under the notch (`IslandSettings`): on in the installed app, off in a Debug build, by default.
     public var island: IslandSettings
+    /// The triggers that act on threads (`ActingTrigger`): each on or off, with its hourly cap per thread.
+    public var actingTriggers: ActingTriggerPreferences
 
     /// Allowed values of `assistDailyCap`.
     public static let assistDailyCapRange = 1...500
@@ -649,7 +651,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         quickPanelLanding: QuickPanel.Landing = .inboxWhenWaiting,
         catchUpSchedules: Bool = true,
         openWebLinks: WebLinkDestination = .localhost,
-        island: IslandSettings = IslandSettings()
+        island: IslandSettings = IslandSettings(),
+        actingTriggers: ActingTriggerPreferences = ActingTriggerPreferences()
     ) {
         self.defaultDriverID = defaultDriverID
         self.branchPrefix = branchPrefix
@@ -704,6 +707,7 @@ public struct Preferences: Codable, Sendable, Equatable {
         self.catchUpSchedules = catchUpSchedules
         self.openWebLinks = openWebLinks
         self.island = island
+        self.actingTriggers = actingTriggers
     }
 
     public static let `default` = Preferences()
@@ -715,7 +719,7 @@ public struct Preferences: Codable, Sendable, Equatable {
              automation, autoRelaunchThreads, resumeInterruptedTurns, cleanUpAutomatically, orchestratorDriverID, driverModels, notificationsQuoteAgent, recordUsage, archiveMergedTasks, dormantAfterDays,
              followMain, allowTryInCheckout, showTokenMeter, tokenBudgetPer5h, showAPICost, showReturnDigest, returnDigestAwayMinutes,
              assist, assistDailyCap, assistQuietsInformational, assistPicksTopic, assistSuggestsArchive,
-             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules, openWebLinks, island
+             quickPanelHotkey, toggleWindowHotkey, quickPanelLanding, catchUpSchedules, openWebLinks, island, actingTriggers
     }
 
     public init(from decoder: any Decoder) throws {
@@ -803,6 +807,8 @@ public struct Preferences: Codable, Sendable, Equatable {
         catchUpSchedules = (try? container.decodeIfPresent(Bool.self, forKey: .catchUpSchedules)) ?? defaults.catchUpSchedules
         openWebLinks = (try? container.decodeIfPresent(WebLinkDestination.self, forKey: .openWebLinks)) ?? defaults.openWebLinks
         island = (try? container.decodeIfPresent(IslandSettings.self, forKey: .island)) ?? defaults.island
+        actingTriggers = (try? container.decodeIfPresent(ActingTriggerPreferences.self, forKey: .actingTriggers))
+            ?? defaults.actingTriggers
     }
 
     /// The automation rules in force: what `config.json` says, or the defaults.

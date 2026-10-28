@@ -166,6 +166,8 @@ def recoveries(journal):
     for kind in ("turn.interrupted", "turn.settled"):
         print(f"{kind} by cause: " + ", ".join(f"{k} {n}" for k, n in counted(journal, kind, "cause").most_common()) + "\n")
     print("turn.resume: " + ", ".join(f"{k} {n}" for k, n in counted(journal, "turn.resume", "outcome").most_common()) + "\n")
+    triggers = collections.Counter((e.get("name"), e.get("outcome")) for e in journal.of("trigger"))
+    print("trigger: " + ", ".join(f"{name} {outcome} {n}" for (name, outcome), n in triggers.most_common()) + "\n")
     elsewhere = len(journal.of("permission.decided-elsewhere")) + sum(
         s.get("kinds", {}).get("permission.decided-elsewhere", 0) for s in journal.summaries)
     relaunched = sum(e.get("count") or 0 for e in journal.of("threads.relaunch"))
