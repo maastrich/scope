@@ -335,9 +335,10 @@ final class ThreadSession: Identifiable {
     /// closed now with its own cause — the exit that follows would journal it as `exit`. `true` when one was open.
     func interruptForRestart() -> Bool {
         guard phase.isAlive, ThreadRestart.interruptsTurn(inTurn: activity.inTurn, working: isWorking) else { return false }
-        send("\u{1b}")
+        // Closed before the Esc goes out: the Esc reaches `handleUserInput`, which would close it as `esc`.
         closeCause = "session-restart"
         setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        send("\u{1b}")
         return true
     }
 

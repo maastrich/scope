@@ -1472,9 +1472,15 @@ extension AppControlService {
     /// is answered first and restarted once its turn is over (`scheduleSelfRestart`).
     private func restart(_ params: ThreadRestartParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
         let session: ThreadSession
-        switch target(params.thread, from: origin) {
-        case .failure(let error): return .failure(error)
-        case .success(let found): session = found
+        // An agent may restart its own thread — what `mayTouch` refuses is typing into one's own terminal, and the
+        // orchestrator that just added an MCP server is the case this is for.
+        if case .thread(let own, _) = origin, ThreadID(rawValue: params.thread) == own, let found = model.session(own) {
+            session = found
+        } else {
+            switch target(params.thread, from: origin) {
+            case .failure(let error): return .failure(error)
+            case .success(let found): session = found
+            }
         }
         let id = session.id
         if let unavailable = ThreadRestart.unavailable(profile: session.profile, resumeID: session.record.resumeID) {

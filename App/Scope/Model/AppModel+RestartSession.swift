@@ -135,7 +135,10 @@ extension AppModel {
             var pasteSince: ContinuousClock.Instant?
             while clock.now - start < InterruptedTurn.promptTimeout {
                 try? await Task.sleep(for: .milliseconds(150))
-                guard let self, let session = self.session(id), session.isAlive else { return }
+                guard let self, let session = self.session(id) else { return }
+                // A tab not on screen starts on its first layout, or after `layoutFallbackDelay`.
+                if case .launching = session.phase { continue }
+                guard session.isAlive else { return }
                 if let typed = session.lastUserInputAt, typed >= startedAt { return }
                 let pasteOn = session.terminalView.getTerminal().bracketedPasteMode
                 if pasteOn, pasteSince == nil { pasteSince = clock.now }
