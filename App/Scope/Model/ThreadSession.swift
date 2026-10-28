@@ -72,6 +72,9 @@ final class ThreadSession: Identifiable {
     private(set) var activityHeadline: ThreadActivityHeadline?
     /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
     private(set) var assistNote: AssistNote?
+    /// What an acting trigger is doing about this thread, between turns: `Waiting for the network to resume it`,
+    /// `Resumed by Scope — connection back`. The light trace of `AppModel+ActingTriggers`; a new turn clears it.
+    private(set) var actingNote: String?
     /// Bumped when a turn opens or closes, or the agent's plan moves: what the task timeline and the Plan card redraw
     /// on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
@@ -748,7 +751,26 @@ final class ThreadSession: Identifiable {
                 next = ThreadActivityHeadline(text: activity, detail: next?.detail)
             }
         }
+        if displayState != .running, let note = actingNote {
+            next = ThreadActivityHeadline(text: note, detail: next?.text)
+        }
         if activityHeadline != next { activityHeadline = next }
+    }
+
+    func setActingNote(_ note: String?) {
+        guard note != actingNote else { return }
+        actingNote = note
+        refreshActivityHeadline()
+    }
+
+    /// A trigger interrupts a turn going in circles the way Esc does, journaled with its own cause. `true` when a
+    /// turn was open.
+    func interruptForTrigger() -> Bool {
+        guard phase.isAlive, activity.inTurn || isWorking else { return false }
+        closeCause = "stuck"
+        setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        send("\u{1b}")
+        return true
     }
 
     /// Replaces the assistant's note; the caption follows.

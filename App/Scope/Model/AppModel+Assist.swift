@@ -59,7 +59,7 @@ struct AssistNote: Equatable, Sendable {
 
 /// The assistant (spec §4.10): runs the jobs `AssistTriggers` asks for, on the on-device model first and the driver's
 /// light model second, and turns their labels into a sidebar caption, a mark, a quieter notification, an archive
-/// hint and a topic. It never acts: every output is a label the user reads.
+/// hint and a topic. It never acts on its own: a stuck verdict is handed to the stuck trigger (`AppModel+ActingTriggers`).
 extension AppModel {
     var assist: AssistEngine { AssistEngine.shared }
 
@@ -276,7 +276,11 @@ extension AppModel {
         let note = AssistNote(activity: digest.caption, stuckReason: digest.stuckReason, at: .now, tier: answeredBy)
         session.setAssistNote(note)
         Usage.record(.assist, "assist.digest.\(digest.stuck ? "stuck" : "working")", source: .app, context: answeredBy.rawValue)
-        if note.isStuck, !wasStuck { notifyStuck(session, reason: note.stuckReason ?? "") }
+        // With the stuck trigger on, Scope relaunches it first and only tells the user past the cap.
+        if note.isStuck, !wasStuck {
+            if preference(.stuck).enabled { noteStuck(session, reason: note.stuckReason ?? "") }
+            else { notifyStuck(session, reason: note.stuckReason ?? "") }
+        }
     }
 
     private func runArchiveHint(_ job: AssistJob, model: any AssistModel, tier: AssistTier) async {
@@ -348,6 +352,7 @@ extension AppModel {
     func markNotStuck(_ id: ThreadID) {
         guard let session = session(id), let note = session.assistNote, note.isStuck else { return }
         session.setAssistNote(AssistNote(activity: note.activity, stuckReason: nil, at: note.at, tier: note.tier))
+        cancelStuck(id)
         Usage.record(.assist, "assist.digest.stuck", source: .user, context: "false-positive")
         clearNotifications(for: id)
         if let store = assist.store {

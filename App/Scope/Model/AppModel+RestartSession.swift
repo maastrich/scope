@@ -13,6 +13,8 @@ extension AppModel {
         case agent
         /// The agent restarted its own thread: answered first, restarted once its turn is over.
         case ownThread = "self"
+        /// An acting trigger relaunched it (`AppModel+ActingTriggers`).
+        case trigger
     }
 
     enum RestartOutcome: Equatable {

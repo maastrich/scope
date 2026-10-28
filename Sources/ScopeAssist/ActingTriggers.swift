@@ -217,11 +217,20 @@ public struct ActingLedger: Codable, Sendable, Equatable {
 
     /// Whether the user was already told about `key` for this trigger and thread since `since`.
     public func hasNotified(_ trigger: ActingTrigger, on thread: ThreadID, key: String, since: Date = .distantPast) -> Bool {
-        notices.contains { $0.trigger == trigger && $0.thread == thread.rawValue && $0.key == key && $0.at >= since }
+        hasNotified(trigger, about: thread.rawValue, key: key, since: since)
+    }
+
+    /// `subject` is a thread id, or `task:<id>` for a task with no thread to tell.
+    public func hasNotified(_ trigger: ActingTrigger, about subject: String, key: String, since: Date = .distantPast) -> Bool {
+        notices.contains { $0.trigger == trigger && $0.thread == subject && $0.key == key && $0.at >= since }
     }
 
     public mutating func recordNotice(_ trigger: ActingTrigger, on thread: ThreadID, key: String, at: Date) {
-        notices.append(Entry(trigger: trigger, thread: thread.rawValue, key: key, at: at))
+        recordNotice(trigger, about: thread.rawValue, key: key, at: at)
+    }
+
+    public mutating func recordNotice(_ trigger: ActingTrigger, about subject: String, key: String, at: Date) {
+        notices.append(Entry(trigger: trigger, thread: subject, key: key, at: at))
         prune(now: at)
     }
 

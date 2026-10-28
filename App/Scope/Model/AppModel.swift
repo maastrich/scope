@@ -639,6 +639,7 @@ final class AppModel {
         config = loadedConfig
         startUsage()
         startAssist()
+        startActingTriggers()
         switch configProblem {
         case .corrupt(let backup, let underlying):
             problems.error("config.json was unreadable and has been moved aside",
@@ -1398,6 +1399,7 @@ final class AppModel {
         problems.dismissAll(thread: id)
         await forgetActivity(id)
         forgetAssist(id)
+        forgetActing(id)
     }
 
     private func forget(id: ThreadID, scopeID: ScopeID, profile: DriverProfile) async {
@@ -1408,6 +1410,7 @@ final class AppModel {
         await env.threadRecords.delete(id)
         await forgetActivity(id)
         forgetAssist(id)
+        forgetActing(id)
     }
 
     private func confirmClose(_ session: ThreadSession, risks: [CloseGuard.Risk]) async -> Bool {
@@ -1589,6 +1592,7 @@ final class AppModel {
         guard let session = session(event.threadID), session.isAlive else { return }
         // A late event changed nothing: no "needs your permission" for a thread whose turn is over.
         if session.apply(event) {
+            actingSaw(event, session: session)
             assistThenNotify(event, session: session)
             if event.kind == .turnEnded || event.kind == .turnFailed { scheduleCheckpoint(after: session) }
             refreshReading(for: session, turnEnded: event.kind == .turnEnded || event.kind == .turnFailed)
