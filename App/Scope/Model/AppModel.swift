@@ -266,6 +266,11 @@ final class AppModel {
     @ObservationIgnored var residentQuickExits: [ThreadID: Int] = [:]
     /// Threads the user or an agent asked to stop: their exit is not a crash, and a resident one stays stopped.
     @ObservationIgnored var stopRequests: Set<ThreadID> = []
+    /// Threads whose session is being restarted (`restartSession`): their exit is the first half of it — no toast, no
+    /// auto-close, no resident hold. Observed: the menu disables Restart Session meanwhile.
+    var restartingThreads: Set<ThreadID> = []
+    /// An agent's restart of its own thread, waiting for its turn to end (`scheduleSelfRestart`).
+    @ObservationIgnored var pendingSelfRestarts: [ThreadID: Task<Void, Never>] = [:]
 
     init(env: AppEnvironment) {
         self.env = env
@@ -1301,6 +1306,7 @@ final class AppModel {
         guard let session = session(id) else { return }
         if session.isAlive { stopRequests.insert(id) }
         residentRestarts.removeValue(forKey: id)?.cancel()
+        pendingSelfRestarts.removeValue(forKey: id)?.cancel()
         session.stop()
     }
 
@@ -1317,6 +1323,7 @@ final class AppModel {
             return false
         }
         residentRestarts.removeValue(forKey: id)?.cancel()
+        pendingSelfRestarts.removeValue(forKey: id)?.cancel()
         residentHolds[id] = nil
         residentQuickExits[id] = nil
         if session.isAlive {
@@ -1440,7 +1447,7 @@ final class AppModel {
         }
         notifier.clear(threadID: session.id)
         let requested = stopRequests.remove(session.id) != nil
-        guard !isTerminating, !closingThreads.contains(session.id),
+        guard !isTerminating, !closingThreads.contains(session.id), !restartingThreads.contains(session.id),
               threads.contains(where: { $0.id == session.id }) else { return }
         // Never a toast or an auto-close: Scope starts it again, or says in its banner why not.
         if session.record.resident != nil {

@@ -239,7 +239,7 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // A label: nothing opened, nothing removed, undone by the same call. Gating it behind the task
                 // approval would ask the user about the sidebar's grouping.
                 return .allow
-            case .threadStop, .threadClose, .threadSend, .threadRead, .threadWait:
+            case .threadStop, .threadRestart, .threadClose, .threadSend, .threadRead, .threadWait:
                 // No ceiling to check — nothing new is opened — and which thread is the question: `mayTouch`
                 // answers it against the target, once the app has found it.
                 return .allow
@@ -422,6 +422,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             "release " + (params.repo.map { "\($0) " } ?? "") + (params.version.map { "v\($0)" } ?? "the next version")
                 + (params.scope.map { " in \($0)" } ?? "") + (params.force ? ", CI unchecked" : "")
         case .threadStop(let params): "stop the thread \(params.thread)"
+        case .threadRestart(let params): "restart the session of the thread \(params.thread)"
         case .threadClose(let params): "close the thread \(params.thread)"
         case .threadSend(let params): (params.command ? "run a driver command in the thread " : "type into the thread ") + params.thread
         case .threadRead(let params): "read the thread \(params.thread)"

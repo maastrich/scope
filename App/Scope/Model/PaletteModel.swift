@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ScopeCore
+import ScopeDrivers
 
 /// One row of the command palette. `run` performs it; `path` is what ⌥↩ copies (editor, thread and file rows).
 struct PaletteItem: Identifiable {
@@ -137,6 +138,12 @@ enum PaletteModel {
                 items.append(PaletteItem(id: "close-thread", section: .actions, icon: "xmark.circle", label: "Close Thread",
                                          hint: thread.title, shortcut: "⌘W") {
                     Task { _ = await model.close(thread.id, force: false) }
+                })
+            }
+            if thread.isAlive, ThreadRestart.isClaude(thread.profile), model.restartUnavailable(thread) == nil {
+                items.append(PaletteItem(id: "restart-session", section: .actions, icon: "arrow.triangle.2.circlepath",
+                                         label: "Restart Session", hint: thread.title) {
+                    Task { await model.restartSessionAsked(thread.id) }
                 })
             }
             if thread.isAlive {

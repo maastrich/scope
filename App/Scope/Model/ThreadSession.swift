@@ -329,6 +329,36 @@ final class ThreadSession: Identifiable {
         }
     }
 
+    // MARK: Restart Session
+
+    /// Restart Session is about to hang the process up: a turn in progress is interrupted the way Esc does it, and
+    /// closed now with its own cause — the exit that follows would journal it as `exit`. `true` when one was open.
+    func interruptForRestart() -> Bool {
+        guard phase.isAlive, ThreadRestart.interruptsTurn(inTurn: activity.inTurn, working: isWorking) else { return false }
+        // Closed before the Esc goes out: the Esc reaches `handleUserInput`, which would close it as `esc`.
+        closeCause = "session-restart"
+        setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        send("\u{1b}")
+        return true
+    }
+
+    /// What the user left in Claude Code's field, to type back into the new process. Never read off a dialog.
+    func draftForRestart() -> ClaudeDraft.Retype? {
+        guard phase.isAlive, profile.adapter?.kind == ClaudeHooksAdapter.kind, claude.pending.current == nil else { return nil }
+        return ClaudeDraft.retype(TerminalBridge.screenRows(of: self), columns: terminalView.getTerminal().cols)
+    }
+
+    /// Types a draft back into the field, without ↩: `!` first for shell mode, then the text as one paste.
+    func retype(_ draft: ClaudeDraft.Retype) async {
+        guard phase.isAlive else { return }
+        if draft.mode == .shell {
+            send(ClaudeDraft.enterShell)
+            try? await Task.sleep(for: ClaudeDraft.pollInterval * 4)
+        }
+        guard !draft.text.isEmpty, phase.isAlive else { return }
+        send(ThreadDelivery.input(draft.text, bracketedPasteMode: terminalView.getTerminal().bracketedPasteMode))
+    }
+
     // MARK: Input / output
 
     func send(_ text: String) {

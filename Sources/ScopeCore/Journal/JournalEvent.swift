@@ -20,11 +20,16 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         case threadsRelaunch = "threads.relaunch"
         /// A relaunched agent was asked to go on with the turn the restart cut short.
         case turnResume = "turn.resume"
+        /// Restart Session on a Claude Code thread: its process killed, the same conversation resumed. `outcome`
+        /// `ok` / `failed` / `cancelled` / `unavailable`, `cause` why when not `ok`, `source` `user` / `agent` /
+        /// `self` (the agent restarted its own thread), `seconds` from the request to the new process.
+        case threadRestart = "thread.restart"
         /// A turn closed without its `Stop` hook: Scope saw an answer after the turn and settled it to done. `cause`
         /// says who noticed (`island`, `control`, `schedule`). This is the lost-hook signal.
         case turnSettled = "turn.settled"
         /// A turn that did not end on its own. `cause` `esc`, `sent` (Scope typed a message in mid-turn), `typed` (the
         /// user submitted a prompt of their own), `exit` (the process went away), `restart` (Scope quit with it open),
+        /// `session-restart` (Restart Session cut it),
         /// `crash` (Scope died with it open) or `unknown`.
         case turnInterrupted = "turn.interrupted"
         /// A permission `claude agents` had confirmed early was decided by another hook.

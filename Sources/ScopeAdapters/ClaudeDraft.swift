@@ -78,6 +78,11 @@ public struct ClaudePromptInput: Sendable, Equatable {
 
     /// The field on `rows`, the bottom of the screen; `nil` when the screen shows none.
     public static func read(_ rows: [ScreenRow]) -> ClaudePromptInput? {
+        field(rows).map { ClaudePromptInput(mode: $0.mode, text: $0.text, stashHeld: $0.stashHeld) }
+    }
+
+    /// The field's rows as drawn, the glyph and the indent taken off, trailing blanks dropped.
+    static func field(_ rows: [ScreenRow]) -> (mode: Mode, lines: [String], text: String, stashHeld: Bool)? {
         guard let bottom = rows.lastIndex(where: isRule), bottom > 0 else { return nil }
         let lowest = max(0, bottom - maxRows)
         guard let top = rows[lowest..<bottom].lastIndex(where: isRule), top + 1 < bottom else { return nil }
@@ -96,9 +101,10 @@ public struct ClaudePromptInput: Sendable, Equatable {
             guard typed.prefix(2).allSatisfy({ $0 == " " || $0 == "\u{a0}" }) else { return nil }
             lines.append(String(typed.dropFirst(2)))
         }
-        let text = lines.map { trimTrailing($0) }.joined(separator: "\n").trimmingCharacters(in: .newlines)
+        let trimmed = lines.map { trimTrailing($0) }
+        let text = trimmed.joined(separator: "\n").trimmingCharacters(in: .newlines)
         let hint = rows[lowest..<top].suffix(2).contains { $0.text.contains(stashHint) }
-        return ClaudePromptInput(mode: mode, text: text, stashHeld: hint)
+        return (mode, trimmed, text, hint)
     }
 
     /// A row drawn as a rule: starts with `─` and is mostly `─` (a label such as `History 3/7` may sit in it).
@@ -177,4 +183,59 @@ public enum ClaudeDraft {
         guard let field else { return false }
         return field.isEmpty && field.stashHeld
     }
+}
+
+// MARK: Retyping a draft
+
+extension ClaudeDraft {
+    /// A draft read off the screen to be typed back into a new Claude Code process (Restart Session): the stash dies
+    /// with the process, so the text is all there is.
+    public struct Retype: Sendable, Equatable {
+        public var mode: ClaudePromptInput.Mode
+        public var text: String
+        /// `[Pasted text #N …]` and `[Image #N]` left out: they name content only the old process held, and typed
+        /// back they would be literal text.
+        public var droppedAttachments: Int
+
+        public init(mode: ClaudePromptInput.Mode, text: String, droppedAttachments: Int = 0) {
+            self.mode = mode
+            self.text = text
+            self.droppedAttachments = droppedAttachments
+        }
+    }
+
+    /// The draft on `rows`, a screen `columns` wide, as it was typed: Claude Code wraps a long line itself, with
+    /// real line breaks the terminal cannot tell from the user's, so a row is joined to the next when the next one's
+    /// first word could not have fitted on it — Claude Code breaks at words. `nil` with nothing worth typing back.
+    public static func retype(_ rows: [ScreenRow], columns: Int) -> Retype? {
+        guard let field = ClaudePromptInput.field(rows) else { return nil }
+        // The glyph and the space before the text, then a margin Claude Code keeps on the right.
+        let width = columns - 2 - wrapSlack
+        var text = ""
+        for (index, line) in field.lines.enumerated() {
+            text += line
+            guard index + 1 < field.lines.count else { break }
+            let next = field.lines[index + 1]
+            let firstWord = next.prefix { $0 != " " }
+            let wrapped = !line.isEmpty && !firstWord.isEmpty && line.count + 1 + firstWord.count > width
+            text += wrapped ? " " : "\n"
+        }
+        var dropped = 0
+        for pattern in attachmentPatterns {
+            let matches = text.matches(of: pattern).count
+            guard matches > 0 else { continue }
+            dropped += matches
+            text = text.replacing(pattern, with: "")
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || field.mode == .shell || dropped > 0 else { return nil }
+        return Retype(mode: field.mode, text: text, droppedAttachments: dropped)
+    }
+
+    /// Columns Claude Code leaves free at the right of its field before it wraps.
+    static let wrapSlack = 2
+    nonisolated(unsafe) static let attachmentPatterns: [Regex<Substring>] = [
+        /\[Pasted text #\d+[^\]]*\]/,
+        /\[Image #\d+[^\]]*\]/,
+    ]
 }

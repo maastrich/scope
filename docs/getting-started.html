@@ -91,6 +91,11 @@ same directory otherwise. The thread the window opens on goes first; the others 
 Scope Opens</b> in one thread's menu. A thread whose task was closed or whose folder is gone stays stopped, and
 its banner says why. <b>Relaunch</b> brings any stopped thread back; <b>Start Fresh</b> opens a new session
 instead.</p>
+<p><b>Restart Session</b>, in a running Claude Code thread's menu and in the palette, hangs its <code>claude</code>
+up and starts a new one on the same conversation (<code>--resume</code>), in the same folder, on the same model,
+with the same settings: what loads MCP servers, settings or skills added since it started, or a new Claude Code
+version, without losing the context. Mid-turn it asks first, since the turn is cut short; what was typed in the
+input comes back once the new prompt is up. It is greyed out until Claude Code has reported its session.</p>
 <p>An agent that was in the middle of a turn when Scope went down does not sit at its prompt afterwards: once
 it is back and ready, Scope tells it — in a message signed as Scope's own — when it was interrupted and asks it
 to continue from where the worktree stands, check <code>git status</code> and <code>git log</code>, re-read its

@@ -336,6 +336,13 @@ public enum MCPBridge {
             readOnly: false
         ),
         MCPTool(
+            name: "scope_thread_restart",
+            title: "Restart a Claude Code thread's session",
+            description: "Kills a Claude Code thread's process and starts a new one on the same conversation (claude --resume), same folder, model and settings: what loads MCP servers, settings or skills added since it started, or a new Claude Code version. Refused while the thread is in the middle of a turn unless force is true, which cuts the turn short. Your own thread (SCOPE_THREAD) restarts once your turn ends: end your turn right after this call, and Scope tells the new session to carry on. Another agent's thread is its work: restart it only when asked to.",
+            schema: #"{"type":"object","properties":{"thread":{"type":"string","description":"Thread id."},"force":{"type":"boolean","description":"Restart even mid-turn, cutting the turn short (default false)."}},"required":["thread"],"additionalProperties":false}"#,
+            readOnly: false
+        ),
+        MCPTool(
             name: "scope_thread_close",
             title: "Close a thread",
             description: "Hangs up a thread and removes it from Scope. Refused for a scope's orchestrator and terminal, which Scope keeps; stop those instead. Another agent's thread is its work: close it only when asked to.",
@@ -777,6 +784,8 @@ public enum MCPBridge {
                 return .success(.threadWait(try decoder.decode(ThreadWaitParams.self, from: arguments)))
             case "scope_thread_stop":
                 return .success(.threadStop(try decoder.decode(ThreadTargetParams.self, from: arguments)))
+            case "scope_thread_restart":
+                return .success(.threadRestart(try decoder.decode(ThreadRestartParams.self, from: arguments)))
             case "scope_thread_close":
                 return .success(.threadClose(try decoder.decode(ThreadTargetParams.self, from: arguments)))
             case "scope_task_close":
@@ -886,6 +895,7 @@ public enum MCPBridge {
             "scope_thread_wait": ["thread": .wrap("threads"), "id": .wrap("threads"), "ids": .rename("threads"),
                                   "thread_id": .wrap("threads"), "thread_ids": .rename("threads")],
             "scope_thread_stop": threadID,
+            "scope_thread_restart": threadID,
             "scope_thread_close": threadID,
             "scope_thread_new": ["message": .rename("prompt"), "text": .rename("prompt")],
             "scope_task_new": [

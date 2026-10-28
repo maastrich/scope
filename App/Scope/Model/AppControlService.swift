@@ -102,6 +102,8 @@ final class AppControlService: ControlService {
                 return .success(.action(ActionResult(message: "stopped \(session.id.rawValue) — \(session.title)",
                                                      thread: session.id.rawValue), .threadStop))
             }
+        case .threadRestart(let params):
+            return await restart(params, from: origin)
         case .threadClose(let params):
             switch target(params.thread, from: origin) {
             case .failure(let error): return .failure(error)
@@ -1466,6 +1468,48 @@ private extension Result where Failure == ControlError {
 extension AppControlService {
     /// Who the undo toast says did it: the thread by its title, an external client by its name, or the user.
     @MainActor
+    /// Restart Session for the CLI and MCP. Mid-turn needs `force`: nobody is there to confirm. The caller's own thread
+    /// is answered first and restarted once its turn is over (`scheduleSelfRestart`).
+    private func restart(_ params: ThreadRestartParams, from origin: ControlOrigin) async -> Result<ControlResultPayload, ControlError> {
+        let session: ThreadSession
+        // An agent may restart its own thread — what `mayTouch` refuses is typing into one's own terminal, and the
+        // orchestrator that just added an MCP server is the case this is for.
+        if case .thread(let own, _) = origin, ThreadID(rawValue: params.thread) == own, let found = model.session(own) {
+            session = found
+        } else {
+            switch target(params.thread, from: origin) {
+            case .failure(let error): return .failure(error)
+            case .success(let found): session = found
+            }
+        }
+        let id = session.id
+        if let unavailable = ThreadRestart.unavailable(profile: session.profile, resumeID: session.record.resumeID) {
+            return .failure(.failed("thread \(id.rawValue) cannot restart its session: \(unavailable.reason)",
+                                    detail: unavailable == .noSession ? "Claude Code reports its session once it starts; try again in a moment." : nil))
+        }
+        let own: Bool = if case .thread(let caller, _) = origin { caller == id } else { false }
+        let interrupts = session.isAlive && ThreadRestart.interruptsTurn(inTurn: session.activity.inTurn, working: session.isWorking)
+        switch ThreadRestart.request(ownThread: own, force: params.force, interruptsTurn: interrupts) {
+        case .afterOwnTurn:
+            model.scheduleSelfRestart(id)
+            return .success(.action(ActionResult(message: "restarting \(id.rawValue) once this turn ends — end your turn now; "
+                                                 + "Scope tells the new session to carry on", thread: id.rawValue), .threadRestart))
+        case .refuseMidTurn:
+            return .failure(.failed("thread \(id.rawValue) is in the middle of a turn",
+                                    detail: "Restarting cuts it short. Wait for it (`scope thread wait \(id.rawValue)`), or pass --force (force: true)."))
+        case .restart:
+            break
+        }
+        let source: AppModel.RestartSource = if case .user = origin { .user } else { .agent }
+        switch await model.restartSession(id, source: source) {
+        case .restarted:
+            return .success(.action(ActionResult(message: "restarted the session of \(id.rawValue) — \(session.title)",
+                                                 thread: id.rawValue), .threadRestart))
+        case .failed(let reason):
+            return .failure(.failed("thread \(id.rawValue) was not restarted: \(reason)"))
+        }
+    }
+
     func requester(_ origin: ControlOrigin) -> CloseRequester {
         switch origin {
         case .user: .user

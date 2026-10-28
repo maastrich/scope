@@ -46,6 +46,8 @@ public enum ScopeCLI {
       scope list [scopes|threads|tasks]   what Scope is holding right now, each task with its pull request
       scope thread new [options]          open a thread and print its id
       scope thread stop <id>              stop the thread's process (the row stays)
+      scope thread restart <id> [--force] restart a Claude Code thread's session, same conversation
+                                          (loads new MCP servers, settings, skills; --force mid-turn)
       scope thread close <id>             hang it up and remove it
       scope thread send <id> <text>       type <text> into it and press ↩ (--no-enter to leave it on the line);
                                           from a thread, the message says which thread sent it; --wait then
@@ -403,6 +405,16 @@ public enum ScopeCLI {
                 guard words.count == 1 else { throw UsageError(message: "thread \(sub!) takes one thread id", usage: usage) }
                 let target = ThreadTargetParams(thread: words[0])
                 return .call(sub == "stop" ? .threadStop(target) : .threadClose(target), shared)
+            case "restart":
+                var words: [String] = []
+                var force = false
+                let shared = try options(&rest, command: "thread restart", positional: { words.append($0) }, specific: { flag, _ in
+                    guard flag == "--force" else { return false }
+                    force = true
+                    return true
+                })
+                guard words.count == 1 else { throw UsageError(message: "thread restart takes one thread id", usage: usage) }
+                return .call(.threadRestart(ThreadRestartParams(thread: words[0], force: force)), shared)
             case "send":
                 var words: [String] = []
                 var submit = true

@@ -45,6 +45,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case list
     case threadNew = "thread.new"
     case threadStop = "thread.stop"
+    /// Restart a Claude Code thread's session: its process killed, the same conversation resumed in a new one.
+    case threadRestart = "thread.restart"
     case threadClose = "thread.close"
     case threadSend = "thread.send"
     case taskNew = "task.new"
@@ -108,7 +110,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
         switch self {
         case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList,
              .taskBranchList: false
-        case .threadNew, .threadStop, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
+        case .threadNew, .threadStop, .threadRestart, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
              .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
              .taskBranchAdd, .taskBranchRemove, .browser: true
         }
@@ -246,6 +248,7 @@ public enum ControlCall: Sendable, Equatable {
     case list(ListParams)
     case threadNew(ThreadNewParams)
     case threadStop(ThreadTargetParams)
+    case threadRestart(ThreadRestartParams)
     case threadClose(ThreadTargetParams)
     case threadSend(ThreadSendParams)
     case taskNew(TaskNewParams)
@@ -282,6 +285,7 @@ public enum ControlCall: Sendable, Equatable {
         case .list: .list
         case .threadNew: .threadNew
         case .threadStop: .threadStop
+        case .threadRestart: .threadRestart
         case .threadClose: .threadClose
         case .threadSend: .threadSend
         case .taskNew: .taskNew
@@ -326,6 +330,8 @@ public enum ControlCall: Sendable, Equatable {
              .taskBranchList: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .taskTopic, .milestoneAdd: .seconds(30)
+        // The kill, then a new process; for the caller's own thread, only the answer that it is scheduled.
+        case .threadRestart: .seconds(45)
         // Typing takes a moment; with `wait`, the thread's whole turn follows.
         case .threadSend(let params): .seconds(30 + (params.waitParams.map { $0.effectiveTimeout + 15 } ?? 0))
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .scheduleRun,
@@ -416,6 +422,25 @@ public struct ThreadTargetParams: Codable, Sendable, Equatable {
 
     public init(thread: String) {
         self.thread = thread
+    }
+}
+
+/// `scope thread restart <id> [--force]` — a Claude Code thread's session restarted, the conversation kept.
+public struct ThreadRestartParams: Codable, Sendable, Equatable {
+    public var thread: String
+    /// Restart even in the middle of a turn, which is cut short. Without it such a thread is refused: an agent cannot
+    /// be asked, and the user's own terminal says it in the flag. Not needed for the caller's own thread.
+    public var force: Bool
+
+    public init(thread: String, force: Bool = false) {
+        self.thread = thread
+        self.force = force
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        thread = try container.decode(String.self, forKey: .thread)
+        force = try container.decodeIfPresent(Bool.self, forKey: .force) ?? false
     }
 }
 
