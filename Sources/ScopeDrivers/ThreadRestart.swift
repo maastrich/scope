@@ -55,6 +55,23 @@ public enum ThreadRestart {
         inTurn || working
     }
 
+    /// What a request from the CLI or MCP leads to, once the thread may restart at all.
+    public enum Request: Sendable, Equatable {
+        /// Now.
+        case restart
+        /// The caller's own thread: answered first, restarted once its turn is over.
+        case afterOwnTurn
+        /// A turn would be cut short and nobody said `force`.
+        case refuseMidTurn
+    }
+
+    /// `ownThread`: the caller is the thread's agent; `interruptsTurn`: what `interruptsTurn(inTurn:working:)` says.
+    public static func request(ownThread: Bool, force: Bool, interruptsTurn: Bool) -> Request {
+        if ownThread { return .afterOwnTurn }
+        if interruptsTurn, !force { return .refuseMidTurn }
+        return .restart
+    }
+
     /// How long Claude Code is given to stop its turn after Esc before the process is hung up.
     public static let interruptGrace: Duration = .milliseconds(600)
     /// SIGHUP, then SIGKILL after this if the same pid is still there.

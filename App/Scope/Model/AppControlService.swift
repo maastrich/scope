@@ -1487,15 +1487,18 @@ extension AppControlService {
             return .failure(.failed("thread \(id.rawValue) cannot restart its session: \(unavailable.reason)",
                                     detail: unavailable == .noSession ? "Claude Code reports its session once it starts; try again in a moment." : nil))
         }
-        if case .thread(let caller, _) = origin, caller == id {
+        let own: Bool = if case .thread(let caller, _) = origin { caller == id } else { false }
+        let interrupts = session.isAlive && ThreadRestart.interruptsTurn(inTurn: session.activity.inTurn, working: session.isWorking)
+        switch ThreadRestart.request(ownThread: own, force: params.force, interruptsTurn: interrupts) {
+        case .afterOwnTurn:
             model.scheduleSelfRestart(id)
             return .success(.action(ActionResult(message: "restarting \(id.rawValue) once this turn ends — end your turn now; "
                                                  + "Scope tells the new session to carry on", thread: id.rawValue), .threadRestart))
-        }
-        if session.isAlive, !params.force,
-           ThreadRestart.interruptsTurn(inTurn: session.activity.inTurn, working: session.isWorking) {
+        case .refuseMidTurn:
             return .failure(.failed("thread \(id.rawValue) is in the middle of a turn",
                                     detail: "Restarting cuts it short. Wait for it (`scope thread wait \(id.rawValue)`), or pass --force (force: true)."))
+        case .restart:
+            break
         }
         let source: AppModel.RestartSource = if case .user = origin { .user } else { .agent }
         switch await model.restartSession(id, source: source) {

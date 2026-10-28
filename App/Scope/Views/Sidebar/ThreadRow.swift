@@ -232,7 +232,6 @@ struct ThreadMenuItems: View {
                 Task { await model.restartSessionAsked(session.id) }
             }
             .disabled(unavailable != nil)
-            .usageID("sidebar.thread.restart-session", label: "Restart session")
         }
         Button("Stop") {
             model.stop(session.id)

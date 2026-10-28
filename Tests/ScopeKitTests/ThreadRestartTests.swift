@@ -72,6 +72,15 @@ import ScopeControl
         #expect(!ThreadRestart.interruptsTurn(inTurn: false, working: false))
     }
 
+    @Test func midTurnAnAgentNeedsForceButNotForItsOwnThread() {
+        #expect(ThreadRestart.request(ownThread: false, force: false, interruptsTurn: true) == .refuseMidTurn)
+        #expect(ThreadRestart.request(ownThread: false, force: true, interruptsTurn: true) == .restart)
+        #expect(ThreadRestart.request(ownThread: false, force: false, interruptsTurn: false) == .restart)
+        // Its own turn is the one asking: it ends first, then the restart.
+        #expect(ThreadRestart.request(ownThread: true, force: false, interruptsTurn: true) == .afterOwnTurn)
+        #expect(ThreadRestart.request(ownThread: true, force: true, interruptsTurn: false) == .afterOwnTurn)
+    }
+
     @Test func theSelfRestartNoteIsNotTheAppRestartOne() {
         #expect(!ThreadRestart.selfRestartNote.contains("Scope restarted"))
     }
