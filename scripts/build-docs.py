@@ -268,6 +268,11 @@ same directory otherwise. The thread the window opens on goes first; the others 
 Scope Opens</b> in one thread's menu. A thread whose task was closed or whose folder is gone stays stopped, and
 its banner says why. <b>Relaunch</b> brings any stopped thread back; <b>Start Fresh</b> opens a new session
 instead.</p>
+<p><b>Restart Session</b>, in a running Claude Code thread's menu and in the palette, hangs its <code>claude</code>
+up and starts a new one on the same conversation (<code>--resume</code>), in the same folder, on the same model,
+with the same settings: what loads MCP servers, settings or skills added since it started, or a new Claude Code
+version, without losing the context. Mid-turn it asks first, since the turn is cut short; what was typed in the
+input comes back once the new prompt is up. It is greyed out until Claude Code has reported its session.</p>
 <p>An agent that was in the middle of a turn when Scope went down does not sit at its prompt afterwards: once
 it is back and ready, Scope tells it — in a message signed as Scope's own — when it was interrupted and asks it
 to continue from where the worktree stands, check <code>git status</code> and <code>git log</code>, re-read its
@@ -1329,6 +1334,7 @@ scope thread send &lt;id&gt; &lt;text&gt;       <span class="c"># type into it a
 scope thread read &lt;id&gt;              <span class="c"># the last lines of its terminal (-n, --cursor), or --reply</span>
 scope thread wait &lt;id&gt;...           <span class="c"># until they finish their turn; prints each last reply (--any)</span>
 scope thread stop &lt;id&gt;              <span class="c"># stop its process; the row stays</span>
+scope thread restart &lt;id&gt;           <span class="c"># a Claude Code thread on a new process, same conversation (--force mid-turn)</span>
 scope thread close &lt;id&gt;             <span class="c"># hang it up and remove it</span>
 scope task new &lt;prompt&gt; [options]   <span class="c"># branch + worktrees + first thread (--pr, --issue, --topic, --deliverable, --attempts)</span>
 scope task show &lt;id|slug&gt;           <span class="c"># its brief, and what was kept at archive: last answers, REPORT.md</span>
@@ -1516,7 +1522,7 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 
 <h2 id="mcp">The MCP server</h2>
 <p><code>scope mcp</code> speaks MCP on stdio with the same commands as tools — <code>scope_list</code>,
-<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>,
+<code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>, <code>scope_thread_restart</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
 <code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_branch_add</code>,
 <code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,

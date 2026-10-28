@@ -40,6 +40,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .list(let params): try encoder.encode(wire(params))
         case .threadNew(let params): try encoder.encode(wire(params))
         case .threadStop(let params), .threadClose(let params): try encoder.encode(wire(params))
+        case .threadRestart(let params): try encoder.encode(wire(params))
         case .threadSend(let params): try encoder.encode(wire(params))
         case .taskNew(let params): try encoder.encode(wire(params))
         case .taskClose(let params): try encoder.encode(wire(params))
@@ -103,6 +104,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskNew: .taskNew(try decoder.decode(Params<TaskNewParams>.self, from: data).params
                 ?? { throw ControlError.badRequest("task.new needs a prompt") }())
             case .threadStop: .threadStop(try required(ThreadTargetParams.self))
+            case .threadRestart: .threadRestart(try required(ThreadRestartParams.self))
             case .threadClose: .threadClose(try required(ThreadTargetParams.self))
             case .threadSend: .threadSend(try required(ThreadSendParams.self))
             case .taskClose: .taskClose(try required(TaskCloseParams.self))
@@ -244,7 +246,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .list: .list(try decoder.decode(Wrapped<ListResult>.self, from: data).result)
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
-            case .threadStop, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
+            case .threadStop, .threadRestart, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
                  .taskRestoreCheckpoint, .gc, .memory, .configGet, .configSet, .scheduleRun, .milestoneAdd, .milestoneDone,
                  .taskBranchAdd, .taskBranchRemove:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)

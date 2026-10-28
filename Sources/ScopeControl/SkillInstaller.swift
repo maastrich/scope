@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 32
+    public static let version = 33
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -206,6 +206,7 @@ public struct SkillInstaller: Sendable {
         | `scope thread read <id> [-n N] [--cursor C]` | `scope_thread_read` `{thread, lines, cursor}` |
         | `scope thread send <id> "<text>" [--no-enter] [--command] [--wait] [--timeout S]` | `scope_thread_send` `{thread, text, submit: false, command: true, wait: true, timeout}` |
         | `scope thread stop <id>` / `scope thread close <id>` | `scope_thread_stop` / `scope_thread_close` `{thread}` |
+        | `scope thread restart <id> [--force]` | `scope_thread_restart` `{thread, force?}` |
         | `scope task show <slug>` | `scope_task_show` `{task}` |
         | `scope task archive <slug>` | `scope_task_archive` `{task}` |
         | `scope task close <slug> [--delete-branch]` | `scope_task_close` `{task, delete_branch}` |

@@ -1,6 +1,7 @@
 import SwiftUI
 import ScopeControl
 import ScopeCore
+import ScopeDrivers
 
 /// Sidebar row for a thread: title, trailing caption (`scope root` / repo path; none under a task, the rule from
 /// its row already says "sandbox"), state dot. No driver icon: the terminal on the right shows which driver runs.
@@ -223,6 +224,15 @@ struct ThreadMenuItems: View {
                 set: { session.setRelaunchesAtStartup($0) }
             ))
             .disabled(!model.config.preferences.autoRelaunchThreads)
+        }
+        // Claude Code only: a new process on the same conversation, for MCP servers, settings or skills added since.
+        if session.isAlive, ThreadRestart.isClaude(session.profile) {
+            let unavailable = model.restartUnavailable(session)
+            Button(unavailable.map { "Restart Session — \($0)" } ?? "Restart Session") {
+                Task { await model.restartSessionAsked(session.id) }
+            }
+            .disabled(unavailable != nil)
+            .usageID("sidebar.thread.restart-session", label: "Restart session")
         }
         Button("Stop") {
             model.stop(session.id)
