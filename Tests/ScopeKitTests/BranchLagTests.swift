@@ -44,6 +44,20 @@ import ScopeCore
         #expect(lag.upstreamHead == (try await client.output(["rev-parse", "origin/main"])))
     }
 
+    /// Both sides changed one file in places that merge cleanly: no conflict, but an overlap worth updating for.
+    @Test func filesBothSidesChangedAreTheOverlap() async throws {
+        let (scope, client, sandbox) = try await fixture(mainCommits: 1)
+        #expect(try await client.branchLag(at: sandbox).overlaps == [])
+        let repo = URL(fileURLWithPath: try await client.output(["rev-parse", "--show-toplevel"]), isDirectory: true)
+        // The same content on both sides merges cleanly.
+        try scope.write(repo, "feature.txt", "feature\n")
+        try await scope.commit(in: repo, "align feature")
+        try await client.run(["push", "-q", "origin", "main"])
+        let lag = try await client.branchLag(at: sandbox)
+        #expect(lag.conflicts.isEmpty)
+        #expect(lag.overlaps == ["feature.txt"])
+    }
+
     @Test func aBranchThatContainsMainIsNotBehind() async throws {
         let (scope, client, sandbox) = try await fixture(mainCommits: 0)
         _ = scope

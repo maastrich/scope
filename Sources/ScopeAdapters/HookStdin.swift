@@ -19,6 +19,8 @@ public struct HookStdin: Sendable, Equatable {
     public var toolName: String?
     /// Claude Code `StopFailure`: the error code (`rate_limit`, `overloaded`, `billing_error`, …).
     public var error: String?
+    /// Claude Code `StopFailure`: what the error said beyond its code (`error_details`), when it says anything.
+    public var errorDetails: String?
     /// Where the driver is working: the folder of the file its tool call names (`tool_input.file_path`,
     /// `notebook_path` or `path`, when absolute), else the hook's own `cwd`. A driver never reports a directory
     /// the way a shell does, so this is the only thing that says which repository of a task it is in.
@@ -169,6 +171,7 @@ public struct HookStdin: Sendable, Equatable {
         result.hookEventName = (object["hook_event_name"] as? String) ?? (object["type"] as? String)
         result.toolName = object["tool_name"] as? String
         result.error = object["error"] as? String
+        result.errorDetails = (object["error_details"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         result.lastAssistantMessage = lastAssistantMessageKeys.lazy.compactMap { object[$0] as? String }
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let input = object["tool_input"] as? [String: Any]

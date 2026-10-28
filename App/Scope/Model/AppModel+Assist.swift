@@ -59,7 +59,7 @@ struct AssistNote: Equatable, Sendable {
 
 /// The assistant (spec §4.10): runs the jobs `AssistTriggers` asks for, on the on-device model first and the driver's
 /// light model second, and turns their labels into a sidebar caption, a mark, a quieter notification, an archive
-/// hint and a topic. It never acts: every output is a label the user reads.
+/// hint and a topic. It never acts on its own: a stuck verdict is handed to the stuck trigger (`AppModel+ActingTriggers`).
 extension AppModel {
     var assist: AssistEngine { AssistEngine.shared }
 
@@ -276,7 +276,14 @@ extension AppModel {
         let note = AssistNote(activity: digest.caption, stuckReason: digest.stuckReason, at: .now, tier: answeredBy)
         session.setAssistNote(note)
         Usage.record(.assist, "assist.digest.\(digest.stuck ? "stuck" : "working")", source: .app, context: answeredBy.rawValue)
-        if note.isStuck, !wasStuck { notifyStuck(session, reason: note.stuckReason ?? "") }
+        // With the stuck trigger on, Scope relaunches it first and only tells the user past the cap.
+        if note.isStuck, !wasStuck {
+            // With the stuck trigger on, the notification says the turn is about to be interrupted: its Not stuck
+            // is the user's last word before that.
+            let relaunches = noteStuck(session, reason: note.stuckReason ?? "")
+            notifyStuck(session, reason: note.stuckReason ?? "",
+                        subtitle: relaunches ? "seems stuck — Scope interrupts it in a minute unless you say Not stuck" : "seems stuck")
+        }
     }
 
     private func runArchiveHint(_ job: AssistJob, model: any AssistModel, tier: AssistTier) async {
@@ -348,6 +355,7 @@ extension AppModel {
     func markNotStuck(_ id: ThreadID) {
         guard let session = session(id), let note = session.assistNote, note.isStuck else { return }
         session.setAssistNote(AssistNote(activity: note.activity, stuckReason: nil, at: note.at, tier: note.tier))
+        cancelStuck(id)
         Usage.record(.assist, "assist.digest.stuck", source: .user, context: "false-positive")
         clearNotifications(for: id)
         if let store = assist.store {
@@ -381,10 +389,10 @@ extension AppModel {
         Usage.record(.assist, "assist.archive.dismissed", source: .user)
     }
 
-    private func notifyStuck(_ session: ThreadSession, reason: String) {
+    func notifyStuck(_ session: ThreadSession, reason: String, subtitle: String = "seems stuck") {
         guard !NSApplication.shared.isActive, let scope = scope(session.record.scopeID) else { return }
         let parts = [session.profile.name, scope.name] + (task(of: session).map { [$0.name] } ?? [])
-        let content = ThreadNotificationContent(title: parts.joined(separator: " · "), subtitle: "seems stuck",
+        let content = ThreadNotificationContent(title: parts.joined(separator: " · "), subtitle: subtitle,
                                                 body: reason.isEmpty ? "The agent looks like it is going in circles." : reason)
         notifier.post(content, threadID: session.id)
     }

@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 33
+    public static let version = 34
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -441,11 +441,13 @@ public struct SkillInstaller: Sendable {
         A task follows main on its own. Scope fetches and measures each open task's branch against `origin/<default>`
         in the background — `scope list tasks` shows it in MAIN: `behind 4`, `behind 4, 2 conflicts`, `held` — and, per
         the user's preference (Settings › Tasks › When main moves, default *Ask the agent*), either tells the task's
-        thread that main moved and asks it to rebase (once per head of main; the message says which pull requests
-        merged and where the conflicts are), rebases the sandbox itself when the lag is clean and pushes with lease,
-        or only shows the lag. So do not keep rebasing a task on your own schedule: if you are that thread and Scope
-        asks you to rebase, do it — rebase on `origin/<default>`, keep both sides, re-run the suites you touched one
-        at a time, push with `--force-with-lease`, reply when mergeable. `scope task rebase <slug>`
+        thread when the branch conflicts with main, or when main touched files the task changed while its pull request
+        waits (once per head of main; the message says where), rebases the sandbox itself when the lag is clean and
+        pushes with lease, or only shows the lag. So do not keep updating a task on your own schedule: if you are that
+        thread and Scope asks, do it — `git merge origin/<default>`, keep both sides, re-run the suites you touched one
+        at a time, push without forcing, reply when mergeable. Scope also wakes a task's idle thread on its own when
+        its pull request fails its checks or gets review comments, and resumes a turn cut by a network error or the
+        usage limit: such messages open on `[Scope: automatic message …]`; act on them, then reply in one line. `scope task rebase <slug>`
         (`scope_task_rebase`) does it on demand for any task: the clean rebase, or the message to its thread. A task
         the user marked *Don't rebase automatically* is left alone, and the call says so.
 

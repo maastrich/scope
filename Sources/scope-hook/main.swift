@@ -221,6 +221,10 @@ enum HookCLI {
         if payload[HookEvent.errorKey] == nil, let error = stdin.error, !error.isEmpty {
             payload[HookEvent.errorKey] = error
         }
+        if kind == .turnFailed, payload[HookEvent.failureKey] == nil {
+            let words = [stdin.lastAssistantMessage, stdin.errorDetails].compactMap { $0 }.joined(separator: "\n")
+            if !words.isEmpty { payload[HookEvent.failureKey] = String(words.prefix(HookEvent.failureLimit)) }
+        }
         if payload[HookEvent.directoryKey] == nil, let directory = stdin.directory {
             payload[HookEvent.directoryKey] = directory
         }

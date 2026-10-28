@@ -84,6 +84,19 @@ extension HookEvent {
 
     /// Payload key under which `scope-hook` forwards the error code of a failed turn (`rate_limit`, …).
     public static let errorKey = "error"
+    /// `turn.failed`: the error's own words — Claude Code's `last_assistant_message` (`API Error: Unable to connect to
+    /// API (ECONNREFUSED)`) and its `error_details` — bounded. The code alone does not tell a network failure apart.
+    public static let failureKey = "failure"
+    public static let failureLimit = 600
+
+    /// The words of a failed turn's error: `failureKey`, else what `raw` still holds.
+    public static func failureWords(_ event: AdapterEvent) -> String? {
+        if let words = event.payload[failureKey], !words.isEmpty { return words }
+        guard let raw = event.raw else { return nil }
+        let stdin = HookStdin.parse(Data(raw.utf8))
+        let words = [stdin.lastAssistantMessage, stdin.errorDetails].compactMap { $0 }.joined(separator: "\n")
+        return words.isEmpty ? nil : String(words.prefix(failureLimit))
+    }
 
     /// Payload key under which `scope-hook` forwards where the driver is working (`HookStdin.directory`).
     public static let directoryKey = "directory"

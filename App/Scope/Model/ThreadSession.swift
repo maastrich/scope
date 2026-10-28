@@ -72,6 +72,9 @@ final class ThreadSession: Identifiable {
     private(set) var activityHeadline: ThreadActivityHeadline?
     /// What the assistant last said about the turn in progress (spec §4.10); `nil` once the turn is over.
     private(set) var assistNote: AssistNote?
+    /// What an acting trigger is doing about this thread, between turns: `Waiting for the network to resume it`,
+    /// `Resumed by Scope — connection back`. The light trace of `AppModel+ActingTriggers`; a new turn clears it.
+    private(set) var actingNote: String?
     /// Bumped when a turn opens or closes, or the agent's plan moves: what the task timeline and the Plan card redraw
     /// on, since `activity` itself is not observed.
     private(set) var turnRevision = 0
@@ -114,6 +117,9 @@ final class ThreadSession: Identifiable {
     /// (`TerminalInputSignal`; raw bytes would count the terminal's own replies to the driver's queries). What
     /// the restart message yields to: a user already talking to the thread does not want Scope's prompt under theirs.
     @ObservationIgnored private(set) var lastUserInputAt: Date?
+    /// The same, for keys a person typed: what Scope itself writes into the terminal (a message, an Esc) also passes
+    /// through `handleUserInput`, and must not read as the user at the keyboard (`AppModel+ActingTriggers`).
+    @ObservationIgnored private(set) var lastHumanInputAt: Date?
     /// When the driver last said a session of it started (`sessionStarted`): its prompt is up from there on.
     @ObservationIgnored private(set) var lastSessionStartedAt: Date?
 
@@ -748,7 +754,26 @@ final class ThreadSession: Identifiable {
                 next = ThreadActivityHeadline(text: activity, detail: next?.detail)
             }
         }
+        if displayState != .running, let note = actingNote {
+            next = ThreadActivityHeadline(text: note, detail: next?.text)
+        }
         if activityHeadline != next { activityHeadline = next }
+    }
+
+    func setActingNote(_ note: String?) {
+        guard note != actingNote else { return }
+        actingNote = note
+        refreshActivityHeadline()
+    }
+
+    /// A trigger interrupts a turn going in circles the way Esc does, journaled with its own cause. `true` when a
+    /// turn was open.
+    func interruptForTrigger() -> Bool {
+        guard phase.isAlive, activity.inTurn || isWorking else { return false }
+        closeCause = "stuck"
+        setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        send("\u{1b}")
+        return true
     }
 
     /// Replaces the assistant's note; the caption follows.
@@ -794,7 +819,10 @@ final class ThreadSession: Identifiable {
         }
         guard let signal = inputTracker.feed(bytes) else { return }
         if case .submit = signal { userStashed = false }
-        if signal != .submit(hadText: false) { lastUserInputAt = .now }
+        if signal != .submit(hadText: false) {
+            lastUserInputAt = .now
+            if (terminalView as? ScopeTerminalView)?.isScopeWriting != true { lastHumanInputAt = .now }
+        }
         if signal == .interrupt, adapterState == .running {
             closeCause = "esc"
             setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))

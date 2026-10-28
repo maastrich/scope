@@ -20,6 +20,9 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         public var settled: Bool
         /// When the task joined the schedule: what a never-attempted task's stagger counts from.
         public var addedAt: Date
+        /// Its open pull request is likely to get a review soon — just opened, review requested, a batch of comments
+        /// still coming in: asked about every `eagerInterval` rather than every `interval`.
+        public var eager = false
 
         public init(lastAttempt: Date? = nil, failures: Int = 0, settled: Bool = false, addedAt: Date) {
             self.lastAttempt = lastAttempt
@@ -30,6 +33,8 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
     }
 
     public static let defaultInterval: TimeInterval = 5 * 60
+    /// The cadence of an eager entry: a Copilot review lands within minutes of the pull request opening.
+    public static let eagerInterval: TimeInterval = 90
 
     public var interval: TimeInterval
     public var settledInterval: TimeInterval
@@ -59,7 +64,7 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
     public func nextDue(_ id: TaskID) -> Date? {
         guard let entry = entries[id] else { return nil }
         guard let last = entry.lastAttempt else { return entry.addedAt.addingTimeInterval(stagger(id)) }
-        let base = entry.settled ? settledInterval : interval
+        let base = entry.settled ? settledInterval : (entry.eager ? min(Self.eagerInterval, interval) : interval)
         guard entry.failures > 0 else { return last.addingTimeInterval(base) }
         // 2×, 4×, 8× … the interval, capped.
         let backoff = base * pow(2, Double(min(entry.failures, 16)))
@@ -84,6 +89,10 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
     public mutating func succeeded(_ id: TaskID, settled: Bool) {
         entries[id]?.failures = 0
         entries[id]?.settled = settled
+    }
+
+    public mutating func setEager(_ id: TaskID, _ eager: Bool) {
+        entries[id]?.eager = eager
     }
 
     public mutating func failed(_ id: TaskID) {

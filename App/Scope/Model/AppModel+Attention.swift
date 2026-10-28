@@ -61,6 +61,8 @@ extension AppModel {
     func notifyIfNeeded(_ event: AdapterEvent, session: ThreadSession, triage: NotificationTriage? = nil) {
         // Posting would replace the question's notification, quote and Reply with it, by "asks for a permission".
         if let state = session.adapterState, ThreadStateMachine.keepsQuestion(state, over: event) { return }
+        // Scope relaunches it once the network is back or the limit resets: an error the user need not act on.
+        if event.kind == .turnFailed, actingWillRelaunch(session.id) { return }
         if event.kind == .turnEnded, let triage, !triage.interrupts, config.preferences.assistQuietsInformational {
             Usage.record(.assist, "assist.triage.quieted", source: .app)
             return

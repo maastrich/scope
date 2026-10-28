@@ -49,6 +49,11 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `none` (no pull request) / `failed` /
         /// `auth` / `timeout`.
         case gh
+        /// A trigger that acts on a thread (`ActingTrigger`) fired or held back. `name` the trigger, `outcome` `sent` /
+        /// `restarted` / `interrupted` / `waiting` (held until the network or the reset) / `skipped` / `capped` /
+        /// `notified` (the user was told instead) / `failed`, `cause` why it held or what it read (`network`, `busy`,
+        /// `typing`, `done`, …), `count` its acts on the thread in the last hour.
+        case trigger
         /// Events of `name`'s kind dropped past the daily cap; `count` how many.
         case journalDropped = "journal.dropped"
     }
