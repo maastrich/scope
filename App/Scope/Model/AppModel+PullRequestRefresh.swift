@@ -57,6 +57,8 @@ extension AppModel {
             pullRequestSchedule.failed(task.id)
         }
         await archiveIfMerged(task)
+        // Failed checks and reviews wake the task's thread (`AppModel+ActingPullRequests`).
+        await actOnPullRequests(of: task)
         // Independently of GitHub: fetch, measure the branch against main, and act on it (`AppModel+FollowMain`).
         guard !task.isArchived else { return }
         await followMain(task)

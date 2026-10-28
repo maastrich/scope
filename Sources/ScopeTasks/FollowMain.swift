@@ -34,6 +34,13 @@ public struct TaskLag: Sendable, Equatable {
         }
         return numbers
     }
+    /// Behind without conflicts: the paths both the task and main changed, prefixed like `conflictedPaths`.
+    public var overlappingPaths: [String] {
+        repos.sorted { $0.key < $1.key }.flatMap { repo, lag in
+            (lag.overlaps ?? []).map { repos.count > 1 && repo != "." ? "\(repo)/\($0)" : $0 }
+        }
+    }
+
     /// The conflicted paths, prefixed by the repository when the task has several.
     public var conflictedPaths: [String] {
         repos.sorted { $0.key < $1.key }.flatMap { repo, lag in
@@ -62,6 +69,9 @@ public enum FollowMain: Sendable, Equatable {
     case askAgent
     /// Rebase the sandbox and push with lease.
     case rebase
+    /// Behind without conflicts, but main touched files the task changed: ask the idle thread to bring main in
+    /// before it conflicts (`ActingTrigger.baseMoved`).
+    case askAgentPreventive
 
     public struct Facts: Sendable, Equatable {
         public var lag: TaskLag?
@@ -106,42 +116,13 @@ public enum FollowMain: Sendable, Equatable {
             return facts.threadRunning ? .leave("a thread is at work in the task") : .rebase
         case .askAgent:
             // On demand, a clean lag is rebased whatever the preference: that is what was asked for.
-            return onDemand ? (facts.threadRunning ? .leave("a thread is at work in the task") : .rebase)
-                            : .leave("behind without conflicts: the agent rebases when it pushes")
+            if onDemand { return facts.threadRunning ? .leave("a thread is at work in the task") : .rebase }
+            // Main touched the task's own files and its pull request waits: worth updating before it conflicts, while
+            // nobody is at work in the sandbox.
+            if !(facts.lag?.overlappingPaths.isEmpty ?? true), facts.pullRequestMergeable != nil, !facts.threadRunning {
+                return .askAgentPreventive
+            }
+            return .leave("behind without conflicts: the agent rebases when it pushes")
         }
     }
-}
-
-/// What a task's thread is told when main moved: pure text, under test.
-public enum FollowMainPrompts {
-    /// `main moved (4 commits, merged: #12, #15). Rebase on origin/main, …`
-    public static func mainMoved(lag: TaskLag, conflictsFromGitHub: Bool = false) -> String {
-        let base = lag.upstream
-        let branch = base.split(separator: "/", maxSplits: 1).last.map(String.init) ?? base
-        var head = "\(branch) moved"
-        var details: [String] = []
-        if lag.isBehind { details.append("\(lag.behind) commit\(lag.behind == 1 ? "" : "s")") }
-        let merged = lag.mergedPullRequests
-        if !merged.isEmpty { details.append("merged: " + merged.map { "#\($0)" }.joined(separator: ", ")) }
-        if !details.isEmpty { head += " (" + details.joined(separator: ", ") + ")" }
-        var text = head + ". "
-        let paths = lag.conflictedPaths
-        if !paths.isEmpty {
-            text += "Rebasing conflicts in " + paths.prefix(8).joined(separator: ", ")
-                + (paths.count > 8 ? " and \(paths.count - 8) more" : "") + ". "
-        } else if conflictsFromGitHub {
-            text += "GitHub reports the pull request as conflicting. "
-        }
-        text += """
-        Rebase on \(base), keep both sides where they do not overlap, regenerate anything generated, re-run the test \
-        suites you touched one at a time, rebuild, push with `--force-with-lease`, and reply when the branch is mergeable.
-        """
-        return text
-    }
-
-    /// The first line of what Scope types on its own: the agent knows it is not the user, and whom to answer.
-    public static let header = "[Scope: automatic message from Scope itself, not the user; reply here when done]"
-
-    /// `mainMoved` under its header, ready to type.
-    public static func envelope(_ text: String) -> String { "\(header)\n\(text)" }
 }

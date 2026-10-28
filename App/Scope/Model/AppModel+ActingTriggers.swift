@@ -42,6 +42,10 @@ final class ActingEngine {
     /// Holds already journaled, by trigger, thread, key and cause: a held proposal comes back at every refresh.
     var journaledHolds: Set<String> = []
     var sleptAt: Date?
+    /// When each pull request head was first seen failing, by `url@sha`.
+    var failingSince: [String: Date] = [:]
+    /// The last review probe of each pull request, by URL.
+    var reviewProbes: [String: AppModel.ReviewProbe] = [:]
     var tick: Task<Void, Never>?
     var observers: [NSObjectProtocol] = []
     var started = false

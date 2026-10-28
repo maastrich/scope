@@ -83,18 +83,28 @@ import ScopeGit
         #expect(TaskLag().caption == nil)
     }
 
-    @Test func theMessageSaysWhatMovedAndWhatToDo() {
-        let text = FollowMainPrompts.mainMoved(lag: lag(behind: 3, conflicts: ["Sources/A.swift", "docs/x.html"],
-                                                        subjects: ["feat: a (#12)", "Merge pull request #9 from acme/b", "chore"]))
-        #expect(text.hasPrefix("main moved (3 commits, merged: #12, #9). Rebasing conflicts in Sources/A.swift, docs/x.html. "))
-        #expect(text.contains("Rebase on origin/main"))
-        #expect(text.contains("--force-with-lease"))
-        #expect(text.contains("one at a time"))
-        #expect(text.hasSuffix("reply when the branch is mergeable."))
-        let fromGitHub = FollowMainPrompts.mainMoved(lag: lag(behind: 1), conflictsFromGitHub: true)
-        #expect(fromGitHub.hasPrefix("main moved (1 commit). GitHub reports the pull request as conflicting. "))
-        let envelope = FollowMainPrompts.envelope("body")
-        #expect(envelope == "[Scope: automatic message from Scope itself, not the user; reply here when done]\nbody")
+    @Test func mainTouchingTheTasksFilesAsksAnIdleThreadBeforeItConflicts() {
+        var overlapping = lag(behind: 2)
+        overlapping.repos["."]?.overlaps = ["Sources/A.swift"]
+        let open = FollowMain.Facts(lag: overlapping, pullRequestMergeable: .mergeable)
+        #expect(FollowMain.decide(open, mode: .askAgent) == .askAgentPreventive)
+        #expect(overlapping.overlappingPaths == ["Sources/A.swift"])
+        // Without an open pull request, at work, or once per head: left alone.
+        #expect(FollowMain.decide(.init(lag: overlapping), mode: .askAgent) != .askAgentPreventive)
+        #expect(FollowMain.decide(.init(lag: overlapping, pullRequestMergeable: .mergeable, threadRunning: true), mode: .askAgent)
+                != .askAgentPreventive)
+        #expect(FollowMain.decide(.init(lag: overlapping, pullRequestMergeable: .mergeable, actedOnHead: overlapping.upstreamHead),
+                                  mode: .askAgent) != .askAgentPreventive)
+        // No shared file: the agent updates when it pushes.
+        #expect(FollowMain.decide(.init(lag: lag(behind: 2), pullRequestMergeable: .mergeable), mode: .askAgent) != .askAgentPreventive)
+        // Rebase-when-clean rebases itself; never means never.
+        #expect(FollowMain.decide(open, mode: .rebaseWhenClean) == .rebase)
+        #expect(FollowMain.decide(open, mode: .never) != .askAgentPreventive)
+    }
+
+    @Test func overlappingPathsAreTheIntersectionOfBothDiffs() {
+        #expect(BranchLag.overlapping("a.swift\nb.swift\n", "b.swift\nc.swift") == ["b.swift"])
+        #expect(BranchLag.overlapping("", "a") == [])
     }
 
     @Test func theRecordKeepsTheHoldAndTheHead() throws {

@@ -1,4 +1,5 @@
 import Foundation
+import ScopeAssist
 import ScopeCore
 import ScopeDrivers
 import ScopeGit
@@ -96,30 +97,52 @@ extension AppModel {
             return "nothing to do for \(task.record.slug): \(why)"
         case .askAgent:
             return await askAgentToFollowMain(task, lag: lag ?? TaskLag())
+        case .askAgentPreventive:
+            return await askAgentToFollowMain(task, lag: lag ?? TaskLag(), preventive: true)
         case .rebase:
             guard let lag else { return "nothing to do for \(task.record.slug): the lag could not be measured" }
             return await rebaseSandboxes(of: task, lag: lag)
         }
     }
 
-    /// Tells the task's thread that main moved — the first live Claude Code or Codex thread, or a new one when none
-    /// runs — through the same delivery as a review or a failed check: now between turns, at the end of the turn
-    /// otherwise. Remembered against the head of main, so the same move is never asked twice.
-    private func askAgentToFollowMain(_ task: TaskState, lag: TaskLag) async -> String {
-        let fromGitHub = pullRequestStates(for: task).contains { $0.live?.state == .open && $0.live?.mergeable == .conflicting }
-        let text = FollowMainPrompts.envelope(FollowMainPrompts.mainMoved(lag: lag, conflictsFromGitHub: fromGitHub))
-        await noteFollowedMain(task, head: lag.upstreamHead)
-        if let thread = threads(in: task.id).first(where: { $0.isAlive && $0.deliversEvents }) {
-            switch deliver(text, to: thread.id, label: "main moved") {
-            case .sent:
-                return "asked \(displayTitle(for: thread)) to rebase \(task.branch) on \(lag.upstream)"
-            case .queued:
-                return "will ask \(displayTitle(for: thread)) to rebase \(task.branch) once its turn ends"
-            case .failed(let reason):
-                problems.warn("Could not ask \(task.name) to rebase", detail: reason, scope: task.scopeID)
-                return "could not reach the thread of \(task.record.slug): \(reason)"
+    /// Tells the task's thread that main moved — conflicts (`ActingTrigger.conflicts`), or main touching the task's
+    /// files before it conflicts (`.baseMoved`) — through the acting triggers' gate: once per head of main, never
+    /// mid-turn or while the user types, under the trigger's hourly cap. A held message is not remembered against the
+    /// head, so the next pass asks again. With no agent in the task, one is started with the message as its first
+    /// prompt. The message merges main in rather than rebasing: a thread's permissions refuse force pushes.
+    private func askAgentToFollowMain(_ task: TaskState, lag: TaskLag, preventive: Bool = false,
+                                      rebaseStopped: Bool = false) async -> String {
+        let open = pullRequestStates(for: task).compactMap(\.live).filter { $0.state == .open }
+        let trigger: ActingTrigger = preventive ? .baseMoved : .conflicts
+        let base = lag.upstream.split(separator: "/", maxSplits: 1).last.map(String.init) ?? lag.upstream
+        let number = open.first?.number
+        let text = preventive
+            ? ActingPrompts.baseMoved(base: base, branch: task.branch, files: lag.overlappingPaths, pullRequest: number)
+            : ActingPrompts.conflicts(pullRequest: number, base: base, branch: task.branch, paths: lag.conflictedPaths,
+                                      rebaseStopped: rebaseStopped)
+        guard preference(trigger).enabled else { return "nothing to do for \(task.record.slug): \(trigger.title) is off" }
+        if let thread = actingThread(in: task.id) {
+            let heads = open.compactMap(\.headRefOid).sorted().joined(separator: ",")
+            let key = preventive ? "base@\(lag.upstreamHead)" : "conflict@\(lag.upstreamHead)@\(heads)"
+            let verdict = fire(ActingTriggers.Proposal(trigger: trigger, thread: thread.id, key: key, action: .send(text),
+                                                       cause: rebaseStopped ? "rebase-stopped" : (preventive ? "overlap" : "conflicting")))
+            switch verdict {
+            case .act:
+                await noteFollowedMain(task, head: lag.upstreamHead)
+                return "asked \(displayTitle(for: thread)) to bring \(lag.upstream) into \(task.branch)"
+            case .hold(let why):
+                return "will ask \(displayTitle(for: thread)) about \(lag.upstream) once it is free (\(why))"
+            case .skip(let why):
+                await noteFollowedMain(task, head: lag.upstreamHead)
+                return "nothing to do for \(task.record.slug): \(why)"
+            case .capped:
+                await noteFollowedMain(task, head: lag.upstreamHead)
+                return "\(trigger.title) reached its hourly cap on \(displayTitle(for: thread)); the user is told"
             }
         }
+        // A preventive update is not worth an agent of its own.
+        guard !preventive else { return "nothing to do for \(task.record.slug): no agent thread to ask" }
+        await noteFollowedMain(task, head: lag.upstreamHead)
         // No agent in the task: one is started with the message as its first prompt, with the default driver, as
         // long as it reports its turns (a shell cannot be asked anything).
         let driver = [defaultProfile].compactMap { $0 }.first(where: AdapterInstaller.deliversEvents)
@@ -133,7 +156,8 @@ extension AppModel {
         guard let session = await newThread(in: task.scopeID, driverID: driver.id, taskID: task.id, initialPrompt: text, origin: origin) else {
             return "could not open a thread in \(task.record.slug)"
         }
-        return "opened \(displayTitle(for: session)) in \(task.record.slug) and asked it to rebase \(task.branch) on \(lag.upstream)"
+        journalTrigger(trigger, session: session, outcome: "sent", cause: "new-thread")
+        return "opened \(displayTitle(for: session)) in \(task.record.slug) and asked it to bring \(lag.upstream) into \(task.branch)"
     }
 
     /// `git rebase origin/<default>` in each sandbox that is behind, then a push with lease when the branch is
@@ -187,7 +211,7 @@ extension AppModel {
         task.refresh()
         if conflicted.hasConflicts {
             // The rebase said what the dry merge did not: hand it to the agent with the paths.
-            return "rebase of \(task.record.slug) stopped on conflicts; " + (await askAgentToFollowMain(task, lag: conflicted))
+            return "rebase of \(task.record.slug) stopped on conflicts; " + (await askAgentToFollowMain(task, lag: conflicted, rebaseStopped: true))
         }
         await noteFollowedMain(task, head: lag.upstreamHead)
         await measureLag(of: task)

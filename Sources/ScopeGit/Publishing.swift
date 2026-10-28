@@ -213,6 +213,11 @@ public struct GhClient: Sendable {
         _ = try await run(arguments, in: checkout, timeout: .seconds(120))
     }
 
+    /// `runJSON` for the extensions of this client in other files.
+    func json<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
+        try await runJSON(arguments, in: checkout, parse: parse)
+    }
+
     private func runJSON<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
         let command = "gh " + arguments.prefix(2).joined(separator: " ")
         let result = try await gh(

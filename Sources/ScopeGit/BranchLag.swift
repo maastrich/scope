@@ -22,10 +22,13 @@ public struct BranchLag: Sendable, Equatable, Codable {
     public var conflictsKnown: Bool
     /// Subjects of the commits the branch is behind by, newest first: what names the merged pull requests.
     public var behindSubjects: [String]
+    /// Behind without conflicts: the paths both the branch and `upstream` changed since they forked — where the next
+    /// move of main may conflict. `nil` when not measured (up to date, conflicting, or an older reading).
+    public var overlaps: [String]?
     public var checkedAt: Date
 
     public init(upstream: String, upstreamHead: String, ahead: Int = 0, behind: Int = 0, conflicts: [String] = [],
-                conflictsKnown: Bool = true, behindSubjects: [String] = [], checkedAt: Date = .now) {
+                conflictsKnown: Bool = true, behindSubjects: [String] = [], overlaps: [String]? = nil, checkedAt: Date = .now) {
         self.upstream = upstream
         self.upstreamHead = upstreamHead
         self.ahead = ahead
@@ -33,10 +36,19 @@ public struct BranchLag: Sendable, Equatable, Codable {
         self.conflicts = conflicts
         self.conflictsKnown = conflictsKnown
         self.behindSubjects = behindSubjects
+        self.overlaps = overlaps
         self.checkedAt = checkedAt
     }
 
     public var isBehind: Bool { behind > 0 }
+
+    /// The paths named in both `git diff --name-only` outputs, sorted.
+    public static func overlapping(_ theirs: String, _ ours: String) -> [String] {
+        func paths(_ text: String) -> Set<String> {
+            Set(text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        }
+        return paths(theirs).intersection(paths(ours)).sorted()
+    }
     public var hasConflicts: Bool { !conflicts.isEmpty }
 
     /// The pull requests merged into `upstream` that the branch does not have yet, from the subjects GitHub
@@ -105,7 +117,10 @@ public extension GitClient {
         let merge = try await run(c + ["merge-tree", "--write-tree", "--name-only", "HEAD", upstream],
                                   timeout: .seconds(60), allowFailure: true)
         switch merge.exitCode {
-        case 0: break
+        case 0:
+            let theirs = try? await output(c + ["diff", "--name-only", "HEAD...\(upstream)"], timeout: .seconds(30))
+            let ours = try? await output(c + ["diff", "--name-only", "\(upstream)...HEAD"], timeout: .seconds(30))
+            if let theirs, let ours { lag.overlaps = BranchLag.overlapping(theirs, ours) }
         case 1: lag.conflicts = BranchLag.conflictedPaths(in: merge.stdoutText)
         default: lag.conflictsKnown = false
         }

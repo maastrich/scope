@@ -1,5 +1,8 @@
 import Foundation
 import Testing
+import ScopeCore
+import ScopeGit
+import ScopeTasks
 @testable import ScopeAssist
 
 /// Which review comments wake a task's thread, and when: one wake per batch, Copilot included, the viewer's own
@@ -81,5 +84,52 @@ import Testing
         #expect(!CheckWake.isDue(failing: 1, pending: 2, failingSince: now.addingTimeInterval(-60), threadIdleSince: idle, now: now))
         #expect(CheckWake.isDue(failing: 1, pending: 2, failingSince: now.addingTimeInterval(-CheckWake.pendingGrace),
                                 threadIdleSince: idle, now: now))
+    }
+
+    // MARK: GitHub's answer
+
+    @Test func theGraphQLAnswerFoldsIntoItemsWithHandledThreads() throws {
+        let json = #"""
+        {"data":{"viewer":{"login":"me"},"repository":{"pullRequest":{
+          "reviews":{"nodes":[{"id":"R1","author":{"login":"copilot-pull-request-reviewer"},"body":"Copilot reviewed 2 files","state":"COMMENTED","submittedAt":"2026-10-28T10:00:00Z","url":"https://github.com/o/r/pull/12#pullrequestreview-1"},
+                              {"id":"R2","author":{"login":"bob"},"body":"","state":"PENDING","submittedAt":null,"url":null}]},
+          "comments":{"nodes":[{"id":"C1","author":{"login":"me"},"body":"Pushed a fix.","createdAt":"2026-10-28T10:05:00Z","url":"https://github.com/o/r/pull/12#issuecomment-1"}]},
+          "reviewThreads":{"nodes":[
+            {"isResolved":false,"comments":{"nodes":[
+              {"id":"T1","author":{"login":"Copilot"},"body":"Leak.","createdAt":"2026-10-28T10:00:01Z","url":"https://github.com/o/r/pull/12#discussion_r1","path":"A.swift","line":4,"originalLine":4},
+              {"id":"T2","author":{"login":"me"},"body":"Fixed.","createdAt":"2026-10-28T10:06:00Z","url":null,"path":"A.swift","line":4,"originalLine":4}]}},
+            {"isResolved":false,"comments":{"nodes":[
+              {"id":"T3","author":{"login":"Copilot"},"body":"Typo.","createdAt":"2026-10-28T10:00:02Z","url":null,"path":"B.swift","line":null,"originalLine":9}]}},
+            {"isResolved":true,"comments":{"nodes":[
+              {"id":"T4","author":{"login":"alice"},"body":"Nit.","createdAt":"2026-10-28T10:00:03Z","url":null,"path":"C.swift","line":1,"originalLine":1}]}}]}
+        }}}}
+        """#
+        let activity = try PullRequestReviewActivity.parse(json: Data(json.utf8))
+        #expect(activity.viewer == "me")
+        // The pending review has no date: not submitted, not shown.
+        #expect(activity.items.map(\.id).sorted() == ["C1", "R1", "T1", "T2", "T3", "T4"])
+        let handled = Dictionary(uniqueKeysWithValues: activity.items.map { ($0.id, $0.handled) })
+        #expect(handled == ["R1": false, "C1": false, "T1": true, "T2": true, "T3": false, "T4": true])
+        #expect(activity.items.first { $0.id == "T3" }?.line == 9)
+        let items = activity.items.map { item in
+            ReviewWake.Item(id: item.id, kind: ReviewWake.Kind(rawValue: item.kind.rawValue)!, author: item.author, body: item.body,
+                            at: item.at, url: item.url, state: item.state, path: item.path, line: item.line, handled: item.handled)
+        }
+        let batch = ReviewWake.batch(items, viewer: activity.viewer, handledThrough: nil,
+                                     now: ISO8601DateFormatter().date(from: "2026-10-28T11:00:00Z")!)
+        #expect(batch?.comments.map(\.location) == ["B.swift:9"])
+    }
+
+    @Test func aPullRequestAwaitingReviewIsAskedAboutMoreOften() throws {
+        let id = try #require(TaskID(rawValue: "7b520cd86149"))
+        var schedule = PullRequestRefreshSchedule()
+        schedule.sync([id], now: now)
+        schedule.started(id, at: now)
+        schedule.succeeded(id, settled: false)
+        #expect(schedule.nextDue(id) == now.addingTimeInterval(PullRequestRefreshSchedule.defaultInterval))
+        schedule.setEager(id, true)
+        #expect(schedule.nextDue(id) == now.addingTimeInterval(PullRequestRefreshSchedule.eagerInterval))
+        schedule.succeeded(id, settled: true)
+        #expect(schedule.nextDue(id) == now.addingTimeInterval(schedule.settledInterval))
     }
 }
