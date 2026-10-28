@@ -185,6 +185,22 @@ public enum RelaunchTiming {
         return failedAt.addingTimeInterval(backoff(attempt, steps: steps))
     }
 
+    /// A process that exited this long before the Mac reported going to sleep still died "during" it: the sleep
+    /// notification comes late, after the network is already down.
+    public static let sleepSlack: TimeInterval = 60
+
+    /// Whether a thread found dead on wake is the wake trigger's: its process exited since the Mac went to sleep, with
+    /// a turn cut short. One that died idle, or before the sleep, stays as the user left it.
+    public static func diedDuringSleep(exitedAt: Date?, turnCutShort: Bool, sleptAt: Date) -> Bool {
+        guard turnCutShort, let exitedAt else { return false }
+        return exitedAt >= sleptAt.addingTimeInterval(-sleepSlack)
+    }
+
+    /// Whether a turn that failed at `failedAt` failed because of the sleep that began at `sleptAt`, if any.
+    public static func failedDuringSleep(failedAt: Date, sleptAt: Date?) -> Bool {
+        sleptAt.map { failedAt >= $0.addingTimeInterval(-sleepSlack) } ?? false
+    }
+
     static func backoff(_ attempt: Int, steps: [TimeInterval]) -> TimeInterval {
         steps[min(max(attempt, 0), steps.count - 1)]
     }

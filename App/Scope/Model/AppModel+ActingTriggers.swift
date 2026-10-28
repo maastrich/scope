@@ -135,7 +135,7 @@ extension AppModel {
         switch failure {
         case .network:
             // A failure while the Mac slept, or Claude Code saying so, is the wake trigger's: same rules, its own cap.
-            let duringSleep = engine.sleptAt.map { event.receivedAt.timeIntervalSince($0) > -60 } ?? false
+            let duringSleep = RelaunchTiming.failedDuringSleep(failedAt: event.receivedAt, sleptAt: engine.sleptAt)
             trigger = (failure == .network("asleep") || duringSleep) ? .wake : .connectionLost
         case .usageLimit, .throttled:
             trigger = .usageLimit
@@ -235,8 +235,9 @@ extension AppModel {
         let slept = engine.sleptAt ?? now.addingTimeInterval(-60)
         Log.app.notice("woke after \(Int(now.timeIntervalSince(slept)), privacy: .public) s")
         for session in threads where session.deliversEvents && !session.isAlive {
-            guard engine.relaunches[session.id] == nil, let exit = session.record.lastExit, exit.at >= slept.addingTimeInterval(-60),
-                  session.activity.turns.last?.outcome == .exited || session.activity.inTurn else { continue }
+            let cutShort = session.activity.turns.last?.outcome == .exited || session.activity.inTurn
+            guard engine.relaunches[session.id] == nil, let exit = session.record.lastExit,
+                  RelaunchTiming.diedDuringSleep(exitedAt: exit.at, turnCutShort: cutShort, sleptAt: slept) else { continue }
             guard preference(.wake).enabled else {
                 journalTrigger(.wake, session: session, outcome: "skipped", cause: "off")
                 continue

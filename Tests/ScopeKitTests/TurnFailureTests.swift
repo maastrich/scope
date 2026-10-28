@@ -123,6 +123,18 @@ import ScopeCore
         #expect(RelaunchTiming.limitRelaunch(failedAt: now, resetsAt: nil, throttled: true, attempt: 0) == now.addingTimeInterval(60))
     }
 
+    @Test func onlyAThreadThatDiedMidTurnDuringTheSleepIsTheWakesToRelaunch() {
+        let slept = now
+        #expect(RelaunchTiming.diedDuringSleep(exitedAt: now.addingTimeInterval(600), turnCutShort: true, sleptAt: slept))
+        // The sleep notification comes late: an exit just before it still counts.
+        #expect(RelaunchTiming.diedDuringSleep(exitedAt: now.addingTimeInterval(-30), turnCutShort: true, sleptAt: slept))
+        #expect(!RelaunchTiming.diedDuringSleep(exitedAt: now.addingTimeInterval(-3600), turnCutShort: true, sleptAt: slept))
+        #expect(!RelaunchTiming.diedDuringSleep(exitedAt: now.addingTimeInterval(600), turnCutShort: false, sleptAt: slept))
+        #expect(!RelaunchTiming.diedDuringSleep(exitedAt: nil, turnCutShort: true, sleptAt: slept))
+        #expect(RelaunchTiming.failedDuringSleep(failedAt: now.addingTimeInterval(5), sleptAt: slept))
+        #expect(!RelaunchTiming.failedDuringSleep(failedAt: now, sleptAt: nil))
+    }
+
     // MARK: Hook payload
 
     @Test func theFailureWordsComeFromThePayloadOrFromRaw() {
