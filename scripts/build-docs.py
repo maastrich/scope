@@ -1148,10 +1148,11 @@ per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
 <ul>
   <li><b>Ask the agent</b> (default): when the branch conflicts with main, or GitHub reports the pull request as
   conflicting, the task's thread — the first live Claude Code or Codex thread, or a new one when none runs — is
-  told what moved (<i>main moved (4 commits, merged: #12, #15)</i>, the conflicting files) and asked to rebase on
-  <code>origin/main</code>, keep both sides, regenerate, re-run the suites it touched one at a time, rebuild, push
-  with lease and reply when mergeable. Once per move of main: no repeat until main moves again. A branch behind
-  without conflicts is left to the agent, which rebases when it pushes.</li>
+  told the conflicting files and asked to merge <code>origin/main</code> in, keep both sides, regenerate, re-run the
+  suites it touched one at a time, push without forcing and reply when mergeable. Once per move of main: no repeat
+  until main moves again. A branch behind without conflicts is left to the agent — unless main touched files the task
+  changed while its pull request waits and no thread is at work: then the thread is asked to merge main in before it
+  conflicts (<a href="adapters.html#triggers">Base branch moved</a>).</li>
   <li><b>Rebase when clean</b>: behind without conflicts and no thread at work in the task, Scope runs
   <code>git rebase origin/&lt;default&gt;</code> in the sandbox itself and pushes with
   <code>--force-with-lease</code> when the branch is published and its pull request open. A rebase that stops is
@@ -1758,6 +1759,39 @@ failure always notifies), and one it reads as blocking notifies with a <b>Not Bl
 the same way; a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
 its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
 one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
+
+<h2 id="triggers">Automatic actions</h2>
+<p>Labels tell you; some things are better done. When a thread's surroundings change, Scope relaunches it or tells
+it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic actions</b> with an hourly cap per thread:</p>
+<ul>
+  <li><b>Connection lost</b> (3 an hour): a Claude Code turn that ended on <code>StopFailure</code> with a network
+  error — <i>Unable to connect to API</i>, <i>Connection dropped</i>, <i>The response stopped arriving</i>, a timeout —
+  waits for the network path to come back (Wi-Fi, another interface, a VPN going up or down) and settle five seconds,
+  then the thread gets “continue” in the same session, or its session is restarted when the process died. A blip the
+  path never showed is retried after 30 s, 2, 5, then 10 minutes.</li>
+  <li><b>Mac woke up</b> (2 an hour): threads whose process died or whose turn failed while the Mac slept are relaunched
+  the same way, network first.</li>
+  <li><b>Usage limit reached</b> (2 an hour): a turn stopped by the 5-hour or weekly limit is resumed when the window
+  resets — read from the limits the status line reported, else from the error's own words, else after 15, 30, then 60
+  minutes — on the same model. A server asking clients to slow down is retried after a minute.</li>
+  <li><b>Pull request conflicts</b> (2 an hour) and <b>Base branch moved</b> (1 an hour): see
+  <a href="review.html#follow-main">A task follows main</a>.</li>
+  <li><b>Checks failed</b> (2 an hour): a task's pull request fails its checks while its thread is idle; the thread gets
+  each failed job with its link and is asked to rerun a flaky one once, or fix the cause. Once per head commit.</li>
+  <li><b>Review received</b> (3 an hour): a review, a line comment or a conversation comment, Copilot's included, wakes the
+  task's thread with each comment's author, file and line and link, once the batch has been quiet for two minutes —
+  once per batch. Your own summaries, bots and resolved or answered threads are left out. A pull request just opened
+  or awaiting review is refreshed every 90 seconds rather than every 5 minutes.</li>
+  <li><b>Thread seems stuck</b> (2 an hour, once per turn): when the assistant reads a running turn as going in circles,
+  the turn is interrupted a minute later — time to answer <b>Not stuck</b> — and the agent is told why and asked to
+  change approach.</li>
+</ul>
+<p>Whatever the trigger: nothing is typed while a turn runs (except to interrupt a stuck one), while the thread waits
+on your answer, or within 20 seconds of your last keystroke in it, and a draft in Claude Code's field is stashed and
+put back. Each message opens on <code>[Scope: automatic message from Scope itself, not the user — …]</code>. Past the
+cap Scope stops and notifies you; with no thread to tell, you are notified instead. Every decision goes to the event
+journal as <code>trigger</code> with its outcome; acts and keys are kept in <code>triggers.json</code> so a relaunch of
+Scope never acts twice on the same failure or commit.</p>
 
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too

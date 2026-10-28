@@ -168,6 +168,39 @@ the same way; a task whose last reply reads as a deliverable shows <i>Looks fini
 its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
 one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
 
+<h2 id="triggers">Automatic actions</h2>
+<p>Labels tell you; some things are better done. When a thread's surroundings change, Scope relaunches it or tells
+it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic actions</b> with an hourly cap per thread:</p>
+<ul>
+  <li><b>Connection lost</b> (3 an hour): a Claude Code turn that ended on <code>StopFailure</code> with a network
+  error — <i>Unable to connect to API</i>, <i>Connection dropped</i>, <i>The response stopped arriving</i>, a timeout —
+  waits for the network path to come back (Wi-Fi, another interface, a VPN going up or down) and settle five seconds,
+  then the thread gets “continue” in the same session, or its session is restarted when the process died. A blip the
+  path never showed is retried after 30 s, 2, 5, then 10 minutes.</li>
+  <li><b>Mac woke up</b> (2 an hour): threads whose process died or whose turn failed while the Mac slept are relaunched
+  the same way, network first.</li>
+  <li><b>Usage limit reached</b> (2 an hour): a turn stopped by the 5-hour or weekly limit is resumed when the window
+  resets — read from the limits the status line reported, else from the error's own words, else after 15, 30, then 60
+  minutes — on the same model. A server asking clients to slow down is retried after a minute.</li>
+  <li><b>Pull request conflicts</b> (2 an hour) and <b>Base branch moved</b> (1 an hour): see
+  <a href="review.html#follow-main">A task follows main</a>.</li>
+  <li><b>Checks failed</b> (2 an hour): a task's pull request fails its checks while its thread is idle; the thread gets
+  each failed job with its link and is asked to rerun a flaky one once, or fix the cause. Once per head commit.</li>
+  <li><b>Review received</b> (3 an hour): a review, a line comment or a conversation comment, Copilot's included, wakes the
+  task's thread with each comment's author, file and line and link, once the batch has been quiet for two minutes —
+  once per batch. Your own summaries, bots and resolved or answered threads are left out. A pull request just opened
+  or awaiting review is refreshed every 90 seconds rather than every 5 minutes.</li>
+  <li><b>Thread seems stuck</b> (2 an hour, once per turn): when the assistant reads a running turn as going in circles,
+  the turn is interrupted a minute later — time to answer <b>Not stuck</b> — and the agent is told why and asked to
+  change approach.</li>
+</ul>
+<p>Whatever the trigger: nothing is typed while a turn runs (except to interrupt a stuck one), while the thread waits
+on your answer, or within 20 seconds of your last keystroke in it, and a draft in Claude Code's field is stashed and
+put back. Each message opens on <code>[Scope: automatic message from Scope itself, not the user — …]</code>. Past the
+cap Scope stops and notifies you; with no thread to tell, you are notified instead. Every decision goes to the event
+journal as <code>trigger</code> with its outcome; acts and keys are kept in <code>triggers.json</code> so a relaunch of
+Scope never acts twice on the same failure or commit.</p>
+
 <h2 id="socket">The socket</h2>
 <p><code>$SCOPE_SOCK</code> points at <code>~/.scope/scope.sock</code> — or, when <code>SCOPE_HOME</code> is too
 deep for a unix socket path, at <code>$TMPDIR/scope-&lt;uid&gt;-&lt;hash of the home&gt;.sock</code>. One JSON object per
@@ -175,7 +208,7 @@ line:</p>
 <pre><code>{"thread":"3f9a2c17be04","kind":"Notification","session_id":"…","payload":{…}}</code></pre>
 <p>Anything that can write a line to a unix socket can drive the state of a thread — a wrapper script, a CI
 watcher, your own tool. <code>scope-hook</code> is only the convenient way to do it.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#pipeline">The pipeline</a><a class="lvl2" href="#claude">Claude Code</a><a class="lvl3" href="#limits">Your plan's limits</a><a class="lvl3" href="#tokens">Tokens consumed</a><a class="lvl2" href="#states">What the dot says</a><a class="lvl2" href="#others">Codex and Cursor</a><a class="lvl2" href="#notifications">Notifications and the badge</a><a class="lvl2" href="#assist">The assistant</a><a class="lvl2" href="#socket">The socket</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#pipeline">The pipeline</a><a class="lvl2" href="#claude">Claude Code</a><a class="lvl3" href="#limits">Your plan's limits</a><a class="lvl3" href="#tokens">Tokens consumed</a><a class="lvl2" href="#states">What the dot says</a><a class="lvl2" href="#others">Codex and Cursor</a><a class="lvl2" href="#notifications">Notifications and the badge</a><a class="lvl2" href="#assist">The assistant</a><a class="lvl2" href="#triggers">Automatic actions</a><a class="lvl2" href="#socket">The socket</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

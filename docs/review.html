@@ -194,10 +194,11 @@ per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
 <ul>
   <li><b>Ask the agent</b> (default): when the branch conflicts with main, or GitHub reports the pull request as
   conflicting, the task's thread — the first live Claude Code or Codex thread, or a new one when none runs — is
-  told what moved (<i>main moved (4 commits, merged: #12, #15)</i>, the conflicting files) and asked to rebase on
-  <code>origin/main</code>, keep both sides, regenerate, re-run the suites it touched one at a time, rebuild, push
-  with lease and reply when mergeable. Once per move of main: no repeat until main moves again. A branch behind
-  without conflicts is left to the agent, which rebases when it pushes.</li>
+  told the conflicting files and asked to merge <code>origin/main</code> in, keep both sides, regenerate, re-run the
+  suites it touched one at a time, push without forcing and reply when mergeable. Once per move of main: no repeat
+  until main moves again. A branch behind without conflicts is left to the agent — unless main touched files the task
+  changed while its pull request waits and no thread is at work: then the thread is asked to merge main in before it
+  conflicts (<a href="adapters.html#triggers">Base branch moved</a>).</li>
   <li><b>Rebase when clean</b>: behind without conflicts and no thread at work in the task, Scope runs
   <code>git rebase origin/&lt;default&gt;</code> in the sandbox itself and pushes with
   <code>--force-with-lease</code> when the branch is published and its pull request open. A rebase that stops is
