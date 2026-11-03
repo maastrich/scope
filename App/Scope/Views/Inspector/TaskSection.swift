@@ -15,39 +15,45 @@ struct InspectorSubjectBand: View {
     var body: some View {
         HStack(spacing: 6) {
             if let task = model.currentTask {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Ink.secondary)
-                Text(task.name)
-                    .font(.scopeTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(task.name)
-                Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                TaskTokenBadge(task: task)
-                if let hint = task.archiveHint {
-                    ArchiveHintChip(task: task, hint: hint)
+                subject {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Ink.secondary)
+                    Text(task.name)
+                        .font(.scopeTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+                        .help(task.name)
+                    Text(model.scope(task.scopeID)?.name ?? task.record.scopeName)
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    TaskTokenBadge(task: task)
+                    if let hint = task.archiveHint {
+                        ArchiveHintChip(task: task, hint: hint)
+                    }
                 }
-                Spacer(minLength: 4)
                 InspectorPaneStrip()
+                    .fixedSize()
             } else if let repo = model.baseRepo {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Ink.secondary)
-                Text(repo.shortName)
-                    .font(.scopeTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(repo.url.path)
-                Text("repository")
-                    .font(.scopeCaption)
-                    .foregroundStyle(Ink.tertiary)
-                Spacer(minLength: 4)
+                subject {
+                    Image(systemName: "square.stack.3d.up")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Ink.secondary)
+                    Text(repo.shortName)
+                        .font(.scopeTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+                        .help(repo.url.path)
+                    Text("repository")
+                        .font(.scopeCaption)
+                        .foregroundStyle(Ink.tertiary)
+                }
                 InspectorPaneStrip()
+                    .fixedSize()
             } else {
                 Text("Nothing selected")
                     .font(.scopeCaption)
@@ -60,6 +66,15 @@ struct InspectorSubjectBand: View {
         .frame(height: 30)
         .frame(maxWidth: .infinity)
         .background(Surface.panel)
+    }
+
+    /// What the band names, in whatever room the pane strip leaves. It may shrink to nothing: a band that asked for
+    /// more than the inspector's width (a `21M tokens` badge beside the strip at 320 pt) made the whole inspector wider
+    /// than its column, centred over the sash — the divider vanished and could no longer be dragged.
+    private func subject(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 6) { content() }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
     }
 }
 

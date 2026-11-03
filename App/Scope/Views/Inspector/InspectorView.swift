@@ -44,6 +44,9 @@ struct InspectorView: View {
             let page: InspectorPage = model.currentTask == nil ? .overview : model.inspector.page
             GeometryReader { geometry in
                 column(placement.cards(on: page), page: page, total: Double(geometry.size.height))
+                    // The cards get the column's width, whatever a row inside them asks for: the scroll view otherwise
+                    // takes its content's width and pushes the cards past the inspector's right edge.
+                    .frame(width: geometry.size.width)
             }
             .environment(\.inspectorPage, page)
             .onChange(of: PlacementKey(task: model.currentTask?.id, overview: placement.overview, details: placement.details,
@@ -132,6 +135,7 @@ struct InspectorView: View {
                 }
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: visible)
+            .frame(minWidth: 0, maxWidth: .infinity)
             .padding(.horizontal, Self.gap)
             .padding(.vertical, Self.gap)
         }

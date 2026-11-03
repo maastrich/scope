@@ -10,11 +10,15 @@ struct TaskTokenBadge: View {
 
     var body: some View {
         if let row = model.tokenUsage.snapshot.tasks[task.record.id.rawValue], !row.total.isZero {
-            Text(TokenUsageText.compact(row.total.total) + " tokens")
+            // Whole or not at all: the band gives the task's name its room first.
+            ViewThatFits(in: .horizontal) {
+                Text(TokenUsageText.compact(row.total.total) + " tokens")
+                    .lineLimit(1)
+                    .fixedSize()
+                Color.clear.frame(width: 0, height: 0)
+            }
                 .font(.scopeCaption.monospacedDigit())
                 .foregroundStyle(Ink.tertiary)
-                .lineLimit(1)
-                .fixedSize()
                 .help("Tokens its threads consumed: \(TokenUsageText.compact(row.windows.fiveHours.counts.total)) in the last 5 hours, \(TokenUsageText.compact(row.total.total)) all told")
         }
     }

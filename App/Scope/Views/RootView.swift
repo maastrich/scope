@@ -42,7 +42,7 @@ struct RootView: View {
                 InspectorViewerColumn()
                     .usageSurface("viewer", label: "Reading column")
                     .id(theme)
-                    .frame(width: viewerWidth.wrappedValue)
+                    .modifier(ColumnFrame(width: viewerWidth.wrappedValue))
                     .transition(.move(edge: .trailing))
             }
             if inspectorPresented.wrappedValue {
@@ -50,7 +50,7 @@ struct RootView: View {
                 InspectorView()
                     .usageSurface("inspector", label: "Inspector")
                     .id(theme)
-                    .frame(width: model.inspectorWidth)
+                    .modifier(ColumnFrame(width: model.inspectorWidth))
                     .transition(.move(edge: .trailing))
             }
             }
@@ -161,6 +161,19 @@ struct RootView: View {
             get: { !model.scopes.isEmpty && model.inspectorShown && !model.threadMaximized },
             set: { model.inspectorShown = $0 }
         )
+    }
+}
+
+/// A column right of a sash, held to its width. Content that asks for more than the width overflows to the right and
+/// is cut there: `.frame(width:)` alone centres it, and the half spilling left covered the sash — its line and its
+/// grip — for as long as that content was on screen.
+private struct ColumnFrame: ViewModifier {
+    let width: Double
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: width, alignment: .leading)
+            .clipped()
     }
 }
 
