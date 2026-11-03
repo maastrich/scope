@@ -11,6 +11,19 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.35.0](https://github.com/maastrich/scope/releases/tag/v0.35.0) - 2026-11-03
+
+### Added
+
+- group related tasks into topics on their own, and tighten tasks under a topic ([#127](https://github.com/maastrich/scope/pull/127)) by @maastrich
+- one orchestrator thread per topic, opened from the topic's row ([#128](https://github.com/maastrich/scope/pull/128)) by @maastrich
+
+### Fixed
+
+- keep the inspector's resize handle visible when the task's token count is large ([#126](https://github.com/maastrich/scope/pull/126)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.34.0...v0.35.0
+
 ## [0.34.0](https://github.com/maastrich/scope/releases/tag/v0.34.0) - 2026-11-03
 
 ### Added
