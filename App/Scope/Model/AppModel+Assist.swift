@@ -219,13 +219,14 @@ extension AppModel {
         }
     }
 
-    /// A task was just created: a topic from the scope's, when it has some and the preference says so.
-    func assistTaskCreated(_ task: TaskState) {
-        guard config.preferences.assistPicksTopic else { return }
-        let topics = topics(in: task.scopeID).filter { TaskTopic.key($0) != task.record.topic.map(TaskTopic.key) }
-        let occasion = AssistTriggers.Occasion.taskCreated(task: task.id.rawValue, hasTopic: task.record.topic != nil,
-                                                           topicsAvailable: !topics.isEmpty)
-        assist(on: occasion)
+    /// A task was just created with no strong link to another: whether its brief goes with one of the open tasks
+    /// (`TopicPick`), when the preference says so. Returns whether a job was started.
+    @discardableResult
+    func assistTaskCreated(_ task: TaskState, candidates: Bool) -> Bool {
+        guard config.preferences.assistPicksTopic else { return false }
+        let occasion = AssistTriggers.Occasion.taskCreated(task: task.id.rawValue, explicitTopic: task.record.topicIsExplicit,
+                                                           candidates: candidates)
+        return !assist(on: occasion).isEmpty
     }
 
     /// The thread is closed for good.
@@ -302,17 +303,37 @@ extension AppModel {
     }
 
     private func runTopicPick(_ job: AssistJob, model: any AssistModel, tier: AssistTier) async {
-        guard let taskID = job.task.flatMap(TaskID.init(rawValue:)), let task = task(taskID), task.record.topic == nil else { return }
-        let topics = topics(in: task.scopeID)
-        guard !topics.isEmpty, let brief = task.record.prompt, !brief.isEmpty else { return }
-        let input = TopicPick.input(brief: TranscriptTail.quoting(brief), topics: topics)
-        guard let pick: TopicPick = await ask(model, instructions: TopicPick.instructions, input: input,
-                                              schema: TopicPick.schema(topics: topics), job: job) else { return }
-        let chosen = pick.validated(against: topics)
-        Usage.record(.assist, "assist.topic.\(chosen == nil ? "none" : "picked")", source: .app, context: tier.rawValue)
-        // The user or an agent may have filed it meanwhile: theirs wins.
-        guard let chosen, let current = self.task(taskID), current.record.topic == nil else { return }
-        await setTopic(chosen, for: [taskID])
+        guard let taskID = job.task.flatMap(TaskID.init(rawValue:)), let task = task(taskID), !task.record.topicIsExplicit,
+              let brief = task.record.prompt, !brief.isEmpty else { return }
+        let candidates = topicCandidates(for: task)
+        guard !candidates.isEmpty else { return }
+        guard let pick = await askTopicPick(brief: brief, candidates: candidates, scope: task.scopeID, model: model, job: job)
+        else { return }
+        let related = pick.relatedIndex(count: candidates.count).map { candidates[$0] }
+        Usage.record(.assist, "assist.topic.\(related == nil ? "none" : "related")", source: .app, context: tier.rawValue)
+        guard let related else { return }
+        await attributeTopics(in: task.scopeID, extra: [.init(related.id.rawValue, taskID.rawValue, kind: .brief,
+                                                              name: TopicName.clean(pick.topic))])
+    }
+
+    /// The name of a topic about to be created for `tasks`, from the assistant: `nil` when it is off or unsure.
+    func assistTopicName(for tasks: [TaskState]) async -> String? {
+        guard config.preferences.assist != .off, let tier = assistTier(), let model = assistModel(tier),
+              let newest = tasks.max(by: { $0.record.createdAt < $1.record.createdAt }) else { return nil }
+        let others = tasks.filter { $0.id != newest.id }
+        let job = AssistJob.topicPick(task: newest.id.rawValue)
+        let pick = await askTopicPick(brief: newest.record.prompt ?? newest.name, candidates: others,
+                                      scope: newest.scopeID, model: model, job: job)
+        Usage.record(.assist, "assist.topic.named", source: .app, context: tier.rawValue)
+        return TopicName.clean(pick?.topic)
+    }
+
+    private func askTopicPick(brief: String, candidates: [TaskState], scope: ScopeID, model: any AssistModel,
+                              job: AssistJob) async -> TopicPick? {
+        let listed = candidates.map { TopicPick.Candidate(name: $0.name, topic: $0.record.topic, brief: $0.record.prompt) }
+        let input = TopicPick.input(brief: TranscriptTail.quoting(brief), candidates: listed, topics: topics(in: scope))
+        return await ask(model, instructions: TopicPick.instructions, input: input,
+                         schema: TopicPick.schema(candidates: listed.count), job: job)
     }
 
     /// One call, counted and timed; `nil` when the model failed, which is logged and otherwise silent.

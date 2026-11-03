@@ -270,6 +270,10 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // A preview reads; the real pass stops processes and removes folders no task owns.
                 if case .gc(let params) = call, params.dryRun { return .allow }
                 approval = settings.tasks
+            case .topicsRegroup:
+                // The report reads. Re-filing changes the user's sidebar: the approval tasks have.
+                if case .topicsRegroup(let params) = call, !params.apply { return .allow }
+                approval = settings.tasks
             case .memory:
                 // The report reads. Copying writes into the user's Claude Code memories: the user's own call.
                 if case .memory(let params) = call, !params.apply { return .allow }
@@ -418,6 +422,7 @@ public struct AutomationPolicy: Sendable, Equatable {
                 + (params.topic.map { "under “\($0)”" } ?? "out of its topic")
         case .gc: "clean up leftover sandboxes and processes"
         case .memory: "copy stray Claude Code memories into their repository's"
+        case .topicsRegroup: "file linked tasks under shared topics"
         case .release(let params):
             "release " + (params.repo.map { "\($0) " } ?? "") + (params.version.map { "v\($0)" } ?? "the next version")
                 + (params.scope.map { " in \($0)" } ?? "") + (params.force ? ", CI unchecked" : "")

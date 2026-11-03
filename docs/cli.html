@@ -62,6 +62,7 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope topics regroup [--apply]      <span class="c"># what grouping linked tasks under shared topics would change; --apply does it</span>
 scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
 scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
 scope browser click &lt;ref&gt;           <span class="c"># click what read called e12</span>
@@ -164,11 +165,14 @@ and labels open the brief, the task records it, and the context file asks for <c
 request. <code>@task:&lt;slug&gt;</code> and <code>@thread:&lt;id&gt;</code> in any prompt or message are replaced by
 that task's or thread's context — brief, branch, pull request, last answer kept — between markers; see
 <a href="tasks.html#mentions">Mentioning a past task</a>.</p>
-<p><code>scope task new --topic &lt;text&gt;</code> files the task under a topic: tasks sharing one sit together in
-the sidebar, under one row. A task created from inside a task gets that task's topic unless another is named — and
-when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
-orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
-<code>scope list tasks</code> shows each task's topic.</p>
+<p>Scope files related tasks under a shared topic on its own (<a href="concepts.html#topics">Topics</a>): a task
+created from inside a task is grouped with it, under its topic or a new one named for both. So
+<code>scope task new --topic &lt;text&gt;</code> is only for several tasks started together outside any task, under
+one name — never for a single task, which stays without topic. <code>scope list tasks</code> shows each task's
+topic; reuse one rather than a near-duplicate.</p>
+<p><code>scope topics regroup</code> lists what filing linked tasks (parent and child, stacked pull requests, the
+same issue) under shared topics would change for tasks filed before Scope did it itself; <code>--apply</code> files
+them, <code>--scope</code> limits it to one scope. A topic given by hand since never moves.</p>
 <p><code>scope task new --attempts &lt;n&gt;</code> runs the brief <i>n</i> ways: <i>n</i> sibling tasks under a topic
 named after the title, on <code>&lt;branch&gt;-a1</code>…<code>-an</code>, each with its own thread;
 <code>--models a,b,c</code> and <code>--drivers x,y,z</code> give each attempt its model or driver (one value for all,

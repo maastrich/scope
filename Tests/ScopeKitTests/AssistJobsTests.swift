@@ -9,7 +9,7 @@ import Testing
         #expect(text.hasPrefix("{\n") && text.hasSuffix("\n}"))
         #expect(text.contains("\"stuck\": \"boolean — "))
         #expect(NotificationTriage.schema.promptText.contains("one of \"blockingQuestion\", \"informational\", \"failure\""))
-        #expect(TopicPick.schema(topics: ["Auth", "Billing"]).promptText.contains("one of \"Auth\", \"Billing\", \"none\""))
+        #expect(TopicPick.schema(candidates: 2).promptText.contains("one of \"1\", \"2\", \"none\""))
     }
 
     @Test func aDigestIsReadAsACaptionAndAReason() {
@@ -33,13 +33,24 @@ import Testing
         #expect(!ArchiveHint.replyLooksFinal(long + "\nShould I open the pull request now?"))
     }
 
-    @Test func aTopicPickOnlyCountsWhenItNamesAnExistingTopic() {
-        let topics = ["Auth", "Billing"]
-        #expect(TopicPick(topic: "auth").validated(against: topics) == "Auth")
-        #expect(TopicPick(topic: "none").validated(against: topics) == nil)
-        #expect(TopicPick(topic: "Payments").validated(against: topics) == nil)
-        #expect(TopicPick(topic: nil).validated(against: topics) == nil)
-        #expect(TopicPick.input(brief: "Fix login", topics: topics).hasPrefix("Topics: \"Auth\", \"Billing\""))
+    @Test func aTopicPickOnlyCountsWhenItNamesAListedTask() {
+        #expect(TopicPick(related: "2").relatedIndex(count: 3) == 1)
+        #expect(TopicPick(related: " 1. ").relatedIndex(count: 3) == 0)
+        #expect(TopicPick(related: "none").relatedIndex(count: 3) == nil)
+        #expect(TopicPick(related: "4").relatedIndex(count: 3) == nil)
+        #expect(TopicPick(related: "1").relatedIndex(count: 0) == nil)
+        #expect(TopicPick(related: nil).relatedIndex(count: 3) == nil)
+    }
+
+    @Test func theTopicPickInputListsTopicsThenNumberedTasksThenTheBrief() {
+        let input = TopicPick.input(brief: "Log out\neverywhere", candidates: [
+            .init(name: "Refresh tokens", topic: "auth", brief: String(repeating: "x", count: 500)),
+            .init(name: "Docs"),
+        ], topics: ["auth"])
+        #expect(input.hasPrefix("Existing topics: \"auth\"\nOpen tasks:\n1. Refresh tokens [topic: auth] — "))
+        #expect(input.contains("\n2. Docs\n"))
+        #expect(input.hasSuffix("New task brief:\nLog out everywhere"))
+        #expect(!input.contains(String(repeating: "x", count: 300)))
     }
 
     @Test func theFakeAnswersFromItsScriptAndRecordsTheCalls() async throws {

@@ -370,11 +370,19 @@ something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>
 </ul>
 
 <h3 id="topics">Topics</h3>
-<p>Tasks that belong to one piece of work can share a <b>topic</b>: in the tree arrangement they sit under one
-row named after it, where the first of them stands, with the count and the most urgent state of their threads.
-Agents set it — <code>scope task new --topic</code>, and a task created from inside a task inherits its topic —
-and so can you: <b>Topic</b> in a task's menu files it under a topic in use, a new one, or none, at any point in
-its life — branch, worktrees and running threads are left alone. The tasks it started come along while they still
+<p>Tasks that belong to one piece of work share a <b>topic</b>: in the tree arrangement they sit under one
+row named after it, where the first of them stands, with the count and the most urgent state of their threads, and
+a short indent. <b>Scope groups them itself.</b> A task on its own has no topic and stays flat. When a related task
+appears — one an agent created from inside another, a pull request stacked on another task's branch, the same issue
+or pull request, or, with the assistant on, a brief about the same thing — Scope creates the topic, names it in one
+to three words after what the two share (an existing topic when one is a spelling of it: <i>Authentication</i> and
+<i>auth</i> are one), and files <i>both</i>. A topic left with a single open task stands flat again; the label stays
+on the task, for <code>scope summary</code> and for the next sibling.</p>
+<p>A choice made by hand always wins. <b>Topic</b> in a task's menu files it under a topic in use, a new one, or
+none, at any point in its life — branch, worktrees and running threads are left alone — and Scope never moves it
+again; neither does it move a topic an agent gave (<code>--topic</code>, <code>scope task topic</code>).
+Topics given before Scope grouped tasks itself count as given by hand; <code>scope topics regroup</code> shows what
+grouping them would change, and <code>--apply</code> does it. The tasks it started come along while they still
 share its old topic; one filed elsewhere stays. The topic's own menu renames it, ungroups its tasks or archives them
 all. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
@@ -1353,6 +1361,7 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope topics regroup [--apply]      <span class="c"># what grouping linked tasks under shared topics would change; --apply does it</span>
 scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
 scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
 scope browser click &lt;ref&gt;           <span class="c"># click what read called e12</span>
@@ -1455,11 +1464,14 @@ and labels open the brief, the task records it, and the context file asks for <c
 request. <code>@task:&lt;slug&gt;</code> and <code>@thread:&lt;id&gt;</code> in any prompt or message are replaced by
 that task's or thread's context — brief, branch, pull request, last answer kept — between markers; see
 <a href="tasks.html#mentions">Mentioning a past task</a>.</p>
-<p><code>scope task new --topic &lt;text&gt;</code> files the task under a topic: tasks sharing one sit together in
-the sidebar, under one row. A task created from inside a task gets that task's topic unless another is named — and
-when that task has none, both are filed under its name — so what an agent splits off lands next to it. An
-orchestrator at the scope root has no task to inherit from: it names the topic of the tasks it fans out.
-<code>scope list tasks</code> shows each task's topic.</p>
+<p>Scope files related tasks under a shared topic on its own (<a href="concepts.html#topics">Topics</a>): a task
+created from inside a task is grouped with it, under its topic or a new one named for both. So
+<code>scope task new --topic &lt;text&gt;</code> is only for several tasks started together outside any task, under
+one name — never for a single task, which stays without topic. <code>scope list tasks</code> shows each task's
+topic; reuse one rather than a near-duplicate.</p>
+<p><code>scope topics regroup</code> lists what filing linked tasks (parent and child, stacked pull requests, the
+same issue) under shared topics would change for tasks filed before Scope did it itself; <code>--apply</code> files
+them, <code>--scope</code> limits it to one scope. A topic given by hand since never moves.</p>
 <p><code>scope task new --attempts &lt;n&gt;</code> runs the brief <i>n</i> ways: <i>n</i> sibling tasks under a topic
 named after the title, on <code>&lt;branch&gt;-a1</code>…<code>-an</code>, each with its own thread;
 <code>--models a,b,c</code> and <code>--drivers x,y,z</code> give each attempt its model or driver (one value for all,
@@ -1747,7 +1759,7 @@ default) turns the quote off, for when your screen is shared.</p>
 <p>On events only — a turn that ends, a thread running for more than four minutes, a task being
 created — Scope can hand the end of the terminal to a small model and get <i>labels</i> back: what the agent is
 doing, whether it seems stuck and why, whether a finished turn is worth a notification, whether a task without a
-pull request looks done, which of the scope's topics a new task belongs with. It never acts on any of it, and it
+pull request looks done, which open task a new one goes with, and a name for what they share. It never acts on any of it, and it
 never reads the same words twice: a thread whose terminal has not moved keeps its last digest (asked again every
 eight minutes at most), a finished turn is triaged only when a notification could be quieted by it, and the same
 answer reported twice gets one verdict and one notification.</p>
@@ -1761,8 +1773,8 @@ output, under a daily cap you set (40 by default). Each call counts against your
 is remembered as a false positive; a finished turn the model reads as informational stays silent (a question or a
 failure always notifies), and one it reads as blocking notifies with a <b>Not Blocking</b> action that is remembered
 the same way; a task whose last reply reads as a deliverable shows <i>Looks finished — archive?</i> in
-its band, a proposal with its own ✕; a task created without a topic is filed under one of the scope's topics when
-one fits. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
+its band, a proposal with its own ✕; a new task whose brief goes with an open task is filed with it, under that
+task's topic or a new one the assistant names. Every decision goes to the <a href="cli.html#commands">usage log</a> by its id and tier only.</p>
 
 <h2 id="triggers">Automatic actions</h2>
 <p>Labels tell you; some things are better done. When a thread's surroundings change, Scope relaunches it or tells

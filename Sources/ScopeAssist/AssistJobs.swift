@@ -10,7 +10,7 @@ public struct AssistJob: Sendable, Equatable, Hashable {
         case notificationTriage = "triage"
         /// Whether a task's last reply reads as a final deliverable.
         case archiveHint = "archive"
-        /// Which of the scope's topics a new task belongs to.
+        /// Which open task a new one belongs with, and the name of what they share.
         case topicPick = "topic"
     }
 
@@ -139,37 +139,76 @@ public struct ArchiveHint: Codable, Sendable, Equatable {
 
 // MARK: - Topic pick
 
-/// Which existing topic a new task belongs to, if any.
+/// Which open task a new one belongs with, if any, and a name for what they share (`TopicAttribution`'s weak link).
 public struct TopicPick: Codable, Sendable, Equatable {
+    /// The number of the listed task the new one belongs with, or "none".
+    public var related: String?
+    /// 1 to 3 words naming the subject the two share.
     public var topic: String?
 
-    public init(topic: String? = nil) {
+    public init(related: String? = nil, topic: String? = nil) {
+        self.related = related
         self.topic = topic
     }
 
     public static let none = "none"
 
-    public static func schema(topics: [String]) -> AssistSchema {
+    /// One listed task: what the model reads of it.
+    public struct Candidate: Sendable, Equatable {
+        public var name: String
+        public var topic: String?
+        public var brief: String?
+
+        public init(name: String, topic: String? = nil, brief: String? = nil) {
+            self.name = name
+            self.topic = topic
+            self.brief = brief
+        }
+    }
+
+    public static func schema(candidates: Int) -> AssistSchema {
         AssistSchema(job: .topicPick, fields: [
-            .init(name: "topic", type: .choice(topics + [none]),
-                  description: "the topic this task belongs with, or \"\(none)\" when none of them fits"),
+            .init(name: "related", type: .choice((0..<candidates).map { "\($0 + 1)" } + [none]),
+                  description: "the number of the listed task the new task is part of the same piece of work as, or \"\(none)\" when it is unrelated to all of them"),
+            .init(name: "topic", type: .string,
+                  description: "1 to 3 lowercase words naming the subject the two tasks share (not either task's title); one of the existing topics when one fits"),
         ])
     }
 
     public static let instructions = assistPreamble + """
-         A task was just created in a workspace whose open tasks are filed under topics. Pick the topic the new \
-        task belongs with, from the list only, or "none" when it belongs with none of them.
+         A task was just created. Say whether it is part of the same piece of work as one of the listed open tasks \
+        (same feature, same bug, same subject), and name that shared subject in 1 to 3 words. Unrelated tasks that \
+        merely touch the same repository are not related. Answer "none" when in doubt.
         """
 
-    /// The input: the brief, cut short, and the choices.
-    public static func input(brief: String, topics: [String]) -> String {
-        let cut = brief.count > 1200 ? String(brief.prefix(1200)) + "…" : brief
-        return "Topics: " + topics.map { "\"\($0)\"" }.joined(separator: ", ") + "\n\nTask brief:\n" + cut
+    /// Characters of each brief kept: the on-device model has little room.
+    static let excerpt = 240
+
+    /// The input: the existing topics, the numbered candidates, then the new brief, all cut short.
+    public static func input(brief: String, candidates: [Candidate], topics: [String]) -> String {
+        func cut(_ text: String, _ limit: Int) -> String {
+            let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+            return flat.count > limit ? String(flat.prefix(limit)) + "…" : flat
+        }
+        var lines: [String] = []
+        if !topics.isEmpty { lines.append("Existing topics: " + topics.map { "\"\($0)\"" }.joined(separator: ", ")) }
+        lines.append("Open tasks:")
+        for (index, candidate) in candidates.enumerated() {
+            var line = "\(index + 1). \(candidate.name)"
+            if let topic = candidate.topic { line += " [topic: \(topic)]" }
+            if let brief = candidate.brief, !brief.isEmpty { line += " — " + cut(brief, excerpt) }
+            lines.append(line)
+        }
+        lines.append("")
+        lines.append("New task brief:")
+        lines.append(cut(brief, 1000))
+        return lines.joined(separator: "\n")
     }
 
-    /// The pick, only when it names one of `topics` (same spelling, case ignored); the model never invents one.
-    public func validated(against topics: [String]) -> String? {
-        guard let topic, !topic.isEmpty, topic.lowercased() != Self.none else { return nil }
-        return topics.first { $0.compare(topic, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+    /// The index of the related candidate, when the answer names one of the `count` listed.
+    public func relatedIndex(count: Int) -> Int? {
+        guard let related = related?.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)),
+              count > 0, let number = Int(related), (1...count).contains(number) else { return nil }
+        return number - 1
     }
 }

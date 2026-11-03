@@ -119,6 +119,9 @@ public enum ScopeCLI {
                                           next fire, last run
       scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope topics regroup                what filing linked tasks (parent and child, stacked pull requests, same
+                                          issue) under shared topics would change for tasks filed before Scope
+                                          grouped them itself; --apply files them, --scope <s> for one scope
       scope memory                        list the Claude Code memories tasks and other clones left behind, and
                                           what copying them into their repository's or scope's would do; --apply
                                           copies (never deletes nor overwrites), --claude-dir <path> works on
@@ -172,7 +175,8 @@ public enum ScopeCLI {
       --slug <name>                 sandbox folder name (default: from the title)
       --driver <id>                 driver for the first thread (default: the one chosen in Settings)
       --model <name>                model of the first thread (same defaults as thread new)
-      --topic <text>                file it under a topic (default: the topic of the caller's own task)
+      --topic <text>                file it under a topic; only for several tasks started together (default:
+                                    none — Scope groups related tasks, a task made from yours included)
       --deliverable <path>          the file the work ends in, relative to the task root or a sandbox; kept with
                                     the threads' last answers at archive (REPORT.md is kept anyway)
       --attempts <n>                run the brief n ways (2–9): n sibling tasks under one topic, branches
@@ -242,6 +246,21 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.gc(parameters), shared)
+        case "topics":
+            guard rest.first == "regroup" else {
+                throw UsageError(message: "topics commands: regroup", usage: usage)
+            }
+            rest = rest.dropFirst()
+            var parameters = TopicsRegroupParams()
+            let shared = try options(&rest, command: "topics regroup", specific: { flag, value in
+                switch flag {
+                case "--apply": parameters.apply = true
+                case "--scope": parameters.scope = try value()
+                default: return false
+                }
+                return true
+            })
+            return .call(.topicsRegroup(parameters), shared)
         case "memory":
             var parameters = MemoryParams()
             let shared = try options(&rest, command: "memory", specific: { flag, value in

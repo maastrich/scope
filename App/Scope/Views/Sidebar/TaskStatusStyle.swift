@@ -64,6 +64,7 @@ enum SidebarMetrics {
     static let disclosureSlot = CGFloat(SidebarRowLayout.disclosureSlot)
     static let spacing = CGFloat(SidebarRowLayout.spacing)
     static let indent = CGFloat(SidebarRowLayout.indent)
+    static let topicIndent = CGFloat(SidebarRowLayout.topicIndent)
     static let stateDot = CGFloat(SidebarRowLayout.stateDot)
     static let stateDotColumn = CGFloat(SidebarRowLayout.stateDotColumn)
     static let rowInset = CGFloat(SidebarRowLayout.rowInset)
