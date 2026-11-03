@@ -11,6 +11,21 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.34.0](https://github.com/maastrich/scope/releases/tag/v0.34.0) - 2026-11-03
+
+### Added
+
+- restart a Claude Code thread's session and keep the conversation ([#121](https://github.com/maastrich/scope/pull/121)) by @maastrich
+- triggers that act — resume on network, usage limit and wake; wake task threads on CI, reviews and conflicts ([#122](https://github.com/maastrich/scope/pull/122)) by @maastrich
+
+### Fixed
+
+- slow the pull request refresh down when nobody looks or GitHub is out of reach ([#123](https://github.com/maastrich/scope/pull/123)) by @maastrich
+- one restore at a time per task, Restore instead of a new thread on an archived task, and problems journaled with their cause ([#124](https://github.com/maastrich/scope/pull/124)) by @maastrich
+- smooth the sidebar scroll while agents work, and fit more of each task name ([#125](https://github.com/maastrich/scope/pull/125)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.33.0...v0.34.0
+
 ## [0.33.0](https://github.com/maastrich/scope/releases/tag/v0.33.0) - 2026-10-28
 
 ### Added
