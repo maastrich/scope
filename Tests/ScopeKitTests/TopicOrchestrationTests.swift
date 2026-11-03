@@ -41,8 +41,8 @@ import ScopeCore
         let before = Self.opened.addingTimeInterval(-60)
         let after = Self.opened.addingTimeInterval(60)
         let milestones = TopicOrchestration.milestones([
-            (task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: before)]),
-            (task: "b", pullRequests: [Self.pr(2, "merged", mergedAt: after), Self.pr(3, "open")]),
+            .init(task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: before)]),
+            .init(task: "b", pullRequests: [Self.pr(2, "merged", mergedAt: after), Self.pr(3, "open")]),
         ], since: Self.opened)
         #expect(milestones == [.merged(task: "b", number: 2, url: "https://github.com/acme/api/pull/2")])
     }
@@ -50,8 +50,8 @@ import ScopeCore
     @Test func theTopicIsDeliveredWhenEveryTaskHasLanded() {
         let after = Self.opened.addingTimeInterval(60)
         let milestones = TopicOrchestration.milestones([
-            (task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: Self.opened.addingTimeInterval(-60))]),
-            (task: "b", pullRequests: [Self.pr(2, "merged", mergedAt: after), Self.pr(3, "closed")]),
+            .init(task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: Self.opened.addingTimeInterval(-60))]),
+            .init(task: "b", pullRequests: [Self.pr(2, "merged", mergedAt: after), Self.pr(3, "closed")]),
         ], since: Self.opened)
         #expect(milestones.last == .delivered(tasks: ["a", "b"]))
         #expect(milestones.last?.key == "delivered:a,b")
@@ -61,11 +61,21 @@ import ScopeCore
     @Test func aTaskWithoutPullRequestHoldsTheTopicOpen() {
         let after = Self.opened.addingTimeInterval(60)
         #expect(!TopicOrchestration.milestones([
-            (task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: after)]), (task: "b", pullRequests: []),
+            .init(task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: after)]), .init(task: "b", pullRequests: []),
         ], since: Self.opened).contains(.delivered(tasks: ["a", "b"])))
         #expect(TopicOrchestration.milestones([
-            (task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: Self.opened.addingTimeInterval(-1))]),
+            .init(task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: Self.opened.addingTimeInterval(-1))]),
         ], since: Self.opened).isEmpty)
+    }
+
+    /// A task dropped without a pull request holds nothing up once archived; open, it does.
+    @Test func anArchivedTaskWithoutPullRequestIsDropped() {
+        let after = Self.opened.addingTimeInterval(60)
+        let members: [TopicOrchestration.Member] = [
+            .init(task: "a", pullRequests: [Self.pr(1, "merged", mergedAt: after)], archived: true),
+            .init(task: "b", pullRequests: [], archived: true),
+        ]
+        #expect(TopicOrchestration.milestones(members, since: Self.opened).last == .delivered(tasks: ["a"]))
     }
 
     /// The ledger acts once per key: a merge is one notice, whatever the refreshes that see it.

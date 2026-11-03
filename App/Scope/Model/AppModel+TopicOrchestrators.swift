@@ -86,6 +86,8 @@ extension AppModel {
                   TopicOrchestration.shouldClose(openTasks: tasks(inTopic: topic, scope: scope).count) else { continue }
             let waiting = if case .waiting = session.displayState { true } else { false }
             guard !session.isWorking, !waiting, (pendingDeliveries[session.id] ?? []).isEmpty else { continue }
+            // The last task went with its merge: the notices it brought are told first, and answered before it closes.
+            guard !noticeTopicMilestones(topic, in: scope) else { continue }
             Log.app.notice("closing the orchestrator of \(topic, privacy: .public): no open task left")
             await close(session.id, force: true, by: .automatic("topic “\(topic)” has no open task left"))
         }
@@ -93,16 +95,29 @@ extension AppModel {
 
     /// A refresh of `task`'s pull requests: what its topic's orchestrator, if one runs, should hear about.
     func noticeTopicMilestones(of task: TaskState) {
-        guard let topic = task.record.topic, !task.isArchived,
-              let session = topicOrchestrator(topic, in: task.scopeID), session.isAlive else { return }
-        let members = tasks(inTopic: topic, scope: task.scopeID).map { (task: $0.record.slug, pullRequests: $0.record.pullRequests) }
+        guard let topic = task.record.topic else { return }
+        noticeTopicMilestones(topic, in: task.scopeID)
+    }
+
+    /// The milestones of `topic` since its orchestrator opened, through the gate. Every task of the topic counts,
+    /// archived ones too: a merged task is archived right after its merge, and a notice held meanwhile must still
+    /// come. Returns whether one was sent.
+    @discardableResult
+    func noticeTopicMilestones(_ topic: String, in scope: ScopeID) -> Bool {
+        guard let session = topicOrchestrator(topic, in: scope), session.isAlive else { return false }
+        let key = TaskTopic.key(topic)
+        let members = tasks.filter { $0.scopeID == scope && $0.record.topic.map(TaskTopic.key) == key }
+            .map { TopicOrchestration.Member(task: $0.record.slug, pullRequests: $0.record.pullRequests, archived: $0.isArchived) }
+        var acted = false
         for milestone in TopicOrchestration.milestones(members, since: session.record.createdAt) {
             let (cause, message) = switch milestone {
             case .merged(let slug, let number, _): ("merged", ActingPrompts.topicMerged(topic: topic, task: slug, pullRequest: number))
             case .delivered(let slugs): ("delivered", ActingPrompts.topicDelivered(topic: topic, tasks: slugs))
             }
-            fire(ActingTriggers.Proposal(trigger: .topic, thread: session.id, key: milestone.key,
-                                         action: .send(message), cause: cause))
+            let verdict = fire(ActingTriggers.Proposal(trigger: .topic, thread: session.id, key: milestone.key,
+                                                       action: .send(message), cause: cause))
+            if case .act = verdict { acted = true }
         }
+        return acted
     }
 }

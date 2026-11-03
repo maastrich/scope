@@ -1541,7 +1541,8 @@ final class AppModel {
     /// order, then the loose threads. The
     /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
     func threadOrder(in scope: ScopeID) -> [ThreadSession] {
-        residents(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
+        residents(in: scope) + topicOrchestrators(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) }
+            + scopeLevelThreads(in: scope)
     }
 
     // MARK: Scope navigation

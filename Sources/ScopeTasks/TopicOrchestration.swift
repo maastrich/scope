@@ -107,12 +107,26 @@ public enum TopicOrchestration {
         }
     }
 
-    /// The milestones of the topic's open tasks since the orchestrator opened: each pull request merged after
-    /// `since`, then — once every task has its pull requests merged (closed ones aside, at least one merged each) —
-    /// the topic delivered. Read from the state, not from a change: a notice the gate holds while the orchestrator
-    /// works comes back at the next refresh, and the acting ledger keeps each key to one act. A task with no pull
-    /// request holds the topic undelivered: its work has not landed.
-    public static func milestones(_ tasks: [(task: String, pullRequests: [LinkedPullRequest])], since: Date) -> [Milestone] {
+    /// One task of the topic as the milestones read it.
+    public struct Member: Sendable, Equatable {
+        public var task: String
+        public var pullRequests: [LinkedPullRequest]
+        public var archived: Bool
+
+        public init(task: String, pullRequests: [LinkedPullRequest], archived: Bool = false) {
+            self.task = task
+            self.pullRequests = pullRequests
+            self.archived = archived
+        }
+    }
+
+    /// The milestones of the topic since the orchestrator opened: each pull request merged after `since`, then —
+    /// once every task has its pull requests merged (closed ones aside, at least one merged each) — the topic
+    /// delivered. Archived tasks count: a merged task is archived right after its merge, and a notice held meanwhile
+    /// must still come; one archived without a pull request was dropped and holds nothing up. Read from the state, not
+    /// from a change, so a notice the gate holds comes back at the next look, and the acting ledger keeps each key to
+    /// one act. An open task with no pull request holds the topic undelivered: its work has not landed.
+    public static func milestones(_ tasks: [Member], since: Date) -> [Milestone] {
         var result: [Milestone] = []
         for task in tasks {
             for link in task.pullRequests where link.isMerged {
@@ -120,11 +134,12 @@ public enum TopicOrchestration {
                 result.append(.merged(task: task.task, number: link.number, url: link.url.absoluteString))
             }
         }
-        let delivered = !tasks.isEmpty && tasks.allSatisfy { task in
+        let counted = tasks.filter { !$0.archived || !$0.pullRequests.isEmpty }
+        let delivered = !counted.isEmpty && counted.allSatisfy { task in
             task.pullRequests.contains(where: \.isMerged) && task.pullRequests.allSatisfy { $0.isMerged || $0.state == "closed" }
         }
-        let recent = tasks.contains { $0.pullRequests.contains { ($0.mergedAt ?? .distantPast) >= since } }
-        if delivered, recent { result.append(.delivered(tasks: tasks.map(\.task))) }
+        let recent = counted.contains { $0.pullRequests.contains { ($0.mergedAt ?? .distantPast) >= since } }
+        if delivered, recent { result.append(.delivered(tasks: counted.map(\.task))) }
         return result
     }
 
