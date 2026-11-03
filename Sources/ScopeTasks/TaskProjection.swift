@@ -129,7 +129,7 @@ public enum TaskProjection {
             "This task is a **mission**: the goal above is too big for one task. You are its orchestrator.",
             "",
             #"1. Split the goal into milestones, in order, each small enough for one task and each with a **validation**: a shell command that proves it (the test suite, a build, `gh pr checks <branch>` for green checks). Register them: `scope task milestone add \#(task.slug) "<title>" --validate "<command>"`."#,
-            #"2. Open **one milestone at a time** as a child task (`scope task new "<brief>" --topic "\#(task.topic ?? task.name)"`), with a complete brief. Wait for its thread (`scope thread wait`)."#,
+            #"2. Open **one milestone at a time** as a child task (`scope task new "<brief>"` from here: Scope files it with this task, no `--topic` needed), with a complete brief. Wait for its thread (`scope thread wait`)."#,
             #"3. When the child reports, mark the milestone done and name the child: `scope task milestone done \#(task.slug) <n> --child <slug>`. Scope runs the validation in the child's sandbox: `validated` opens the next milestone; `failed` sends the log to the child's thread, which fixes, and you mark done again."#,
             #"4. Open the next milestone only once the previous one is validated. The mission is reached when every milestone is. Then report: what each milestone delivered, its pull request, what is left."#,
         ]

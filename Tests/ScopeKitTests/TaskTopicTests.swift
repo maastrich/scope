@@ -18,39 +18,19 @@ import ScopeCore
         #expect(TaskTopic.distinct(["Auth rework", "auth rework", nil, "billing"]) == ["Auth rework", "billing"])
     }
 
-    /// The point of the thing: what an agent splits off lands next to it without the agent thinking about it.
-    @Test func aTaskCreatedFromATaskInheritsItsTopic() {
-        let inherited = TaskTopic.inherit(requested: nil, parentTopic: "auth rework", parentName: "Split the login")
-        #expect(inherited.child == "auth rework")
-        #expect(inherited.parent == nil)
-    }
-
-    @Test func aParentWithoutATopicLendsItsName() {
-        let lent = TaskTopic.inherit(requested: nil, parentTopic: nil, parentName: "Split the login")
-        #expect(lent.child == "Split the login")
-        #expect(lent.parent == "Split the login")
-    }
-
-    @Test func theTopicAskedForWinsAndLeavesTheParentAlone() {
-        let named = TaskTopic.inherit(requested: " billing ", parentTopic: "auth rework", parentName: "x")
-        #expect(named.child == "billing")
-        #expect(named.parent == nil)
-        let fromParentless = TaskTopic.inherit(requested: "billing", parentTopic: nil, parentName: "x")
-        #expect(fromParentless.parent == nil)
-    }
-
-    /// An orchestrator at the scope root has no task to inherit from.
-    @Test func outsideATaskThereIsNothingToInherit() {
-        let none = TaskTopic.inherit(requested: nil, parentTopic: nil, parentName: nil)
-        #expect(none.child == nil && none.parent == nil)
-    }
-
     @Test func theSidebarGathersATopicWhereItsFirstTaskStands() {
         let entries = TaskTopic.entries([
             (id: 1, topic: nil), (id: 2, topic: "Auth"), (id: 3, topic: nil), (id: 4, topic: "auth"), (id: 5, topic: "Billing"),
         ])
-        #expect(entries == [.task(1), .topic("Auth", [2, 4]), .task(3), .topic("Billing", [5])])
+        #expect(entries == [.task(1), .topic("Auth", [2, 4]), .task(3), .task(5)])
         #expect(TaskTopic.entries([(id: 1, topic: String?.none)]) == [.task(1)])
+    }
+
+    /// A topic down to one open task stands flat — unless its orchestrator holds the row open.
+    @Test func aTopicOfOneIsNoGroupUnlessItIsKept() {
+        let tasks: [(id: Int, topic: String?)] = [(id: 1, topic: "Billing"), (id: 2, topic: nil)]
+        #expect(TaskTopic.entries(tasks) == [.task(1), .task(2)])
+        #expect(TaskTopic.entries(tasks, kept: ["billing"]) == [.topic("Billing", [1]), .task(2)])
     }
 }
 
@@ -61,6 +41,20 @@ import ScopeCore
         let record = try JSONDecoder().decode(TaskRecord.self, from: Data((Self.base + "}").utf8))
         #expect(record.topic == nil && record.parentTask == nil && record.origin == nil)
         #expect(!record.createdByAgent)
+    }
+
+    /// A topic written before its source was recorded was given by hand or by an agent: Scope never re-files it.
+    @Test func aTopicFromBeforeItsSourceIsExplicit() throws {
+        let legacy = try JSONDecoder().decode(TaskRecord.self, from: Data((Self.base + #","topic":"auth"}"#).utf8))
+        #expect(legacy.topicSource == nil && legacy.topicIsExplicit)
+        let bare = try JSONDecoder().decode(TaskRecord.self, from: Data((Self.base + "}").utf8))
+        #expect(!bare.topicIsExplicit)
+        let automatic = try JSONDecoder().decode(TaskRecord.self, from: Data((Self.base + #","topic":"auth","topicSource":"automatic"}"#).utf8))
+        #expect(!automatic.topicIsExplicit)
+        let cleared = try JSONDecoder().decode(TaskRecord.self, from: Data((Self.base + #","topicSource":"explicit"}"#).utf8))
+        #expect(cleared.topic == nil && cleared.topicIsExplicit)
+        let roundTrip = try JSONDecoder().decode(TaskRecord.self, from: try JSONEncoder().encode(automatic))
+        #expect(roundTrip.topicSource == .automatic)
     }
 
     @Test func aBrokenParentDoesNotLoseTheTask() throws {
@@ -196,5 +190,32 @@ import ScopeCore
         #expect(AutomationPolicy(settings: AutomationSettings(tasks: .ask)).decide(call, from: .thread(thread, depth: 2)) == .allow)
         #expect(AutomationPolicy(settings: AutomationSettings(tasks: .deny)).decide(call, from: .externalAgent(client: "scope-mcp/1")) == .allow)
         #expect(ControlMethod.taskTopic.isMutating)
+    }
+}
+
+/// `scope topics regroup`: a report unless asked, gated like tasks when it files.
+@Suite struct TopicsRegroupFacadeTests {
+    @Test func theCommandLineReportsByDefault() throws {
+        guard case .call(let call, _) = try ScopeCLI.parse(["topics", "regroup"]) else {
+            Issue.record("that is a call")
+            return
+        }
+        #expect(call == .topicsRegroup(TopicsRegroupParams()))
+        guard case .call(let applied, _) = try ScopeCLI.parse(["topics", "regroup", "--apply", "--scope", "acme"]) else { return }
+        #expect(applied == .topicsRegroup(TopicsRegroupParams(apply: true, scope: "acme")))
+        #expect(throws: (any Error).self) { try ScopeCLI.parse(["topics"]) }
+    }
+
+    @Test func theRequestRoundTrips() throws {
+        let request = ControlRequest(id: "abcd1234", caller: ControlCaller(client: "scope-cli/1"),
+                                     call: .topicsRegroup(TopicsRegroupParams(apply: true, scope: "acme")))
+        #expect(try ControlRequest.decode(try request.encoded()).get() == request)
+    }
+
+    @Test func aDryRunIsFreeAndApplyingAsksLikeATask() {
+        let thread = ThreadID(rawValue: "3f9a2c17be04")!
+        let policy = AutomationPolicy(settings: AutomationSettings(tasks: .deny))
+        #expect(policy.decide(.topicsRegroup(TopicsRegroupParams()), from: .thread(thread, depth: 1)) == .allow)
+        #expect(policy.decide(.topicsRegroup(TopicsRegroupParams(apply: true)), from: .thread(thread, depth: 1)) != .allow)
     }
 }

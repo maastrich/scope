@@ -124,6 +124,7 @@ extension AppModel {
         do {
             let record = try await env.tasks.linkPullRequests(links, to: task.id)
             task.update(record: record)
+            attributeTopicsAfterPullRequests(of: task)
         } catch {
             // A refresh that outlived a close (`settlePullRequest`) finds no record left: nothing to report.
             guard await env.tasks.task(task.id) != nil else { return }

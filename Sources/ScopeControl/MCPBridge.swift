@@ -222,9 +222,9 @@ public enum MCPBridge {
             created and writes nothing — worth it only when you cannot tell which repositories the work needs. \
             The real call may wait for the user to approve it; a refusal is an answer, not an error to work \
             around. The answer names the task and its first thread: follow that with scope_thread_wait. Works \
-            from inside a task too. Tasks sharing a topic sit together in the user's sidebar: when you start \
-            several for one piece of work, give them the same topic; from inside a task, yours is passed on \
-            unless you name another. @task:<slug> or @thread:<id> anywhere in the prompt is replaced by that task's \
+            from inside a task too. Tasks sharing a topic sit together in the user's sidebar, and Scope groups \
+            related tasks itself: never give a topic to a single task, nor to one you create from inside your task \
+            (the parent link files it with yours). @task:<slug> or @thread:<id> anywhere in the prompt is replaced by that task's \
             or thread's context (brief, branch, pull request, last answer kept), so a study feeds the task that \
             implements it without pasting.
             """,
@@ -243,7 +243,7 @@ public enum MCPBridge {
             "dry_run":{"type":"boolean","description":"Answer with the proposal and create nothing."},\
             "open_thread":{"type":"boolean","description":"Open the task's first thread (default true)."},\
             "run_setup":{"type":"boolean","description":"Run the repositories' setup commands before the first thread starts (default true)."},\
-            "topic":{"type":"string","description":"Short name of the piece of work this task belongs to, shared by its sibling tasks; omitted inherits the topic of the task you are in."},\
+            "topic":{"type":"string","description":"Only to file several tasks you start together under one name (1-3 words, an existing topic when one fits). Omit it otherwise: a lone task stays without topic, and one created from inside your task is grouped with it by Scope."},\
             "deliverable":{"type":"string","description":"For a study whose result is a document: the file it ends in, relative to the task root or a sandbox (docs/study.md). Kept with the threads' last answers when the task is archived; REPORT.md is kept anyway."},\
             "attempts":{"type":"integer","minimum":1,"maximum":9,"description":"Run the brief this many ways: N sibling tasks under one topic named after the brief, branches <branch>-a1..N, same prompt, which the user compares in Scope and keeps one of (the others are archived, branches kept). Worth it for a brief whose best approach is uncertain; each attempt counts against the agents' task budget, and the call is refused with the number when N exceeds what is left. Default 1."},\
             "models":{"type":"array","items":{"type":"string"},"description":"With attempts: the model of each attempt — one for all, or one per attempt."},\
@@ -444,8 +444,8 @@ public enum MCPBridge {
             title: "File a task under a topic",
             description: """
             Files an existing task under a topic, or out of any with clear: true. Tasks sharing a topic sit together \
-            in the user's sidebar. Only the label changes: branch, worktrees and running threads are untouched. The \
-            tasks it started, and theirs, follow it when they still share its old topic; one someone filed elsewhere \
+            in the user's sidebar; Scope never moves a task filed (or cleared) this way. Only the label changes: \
+            branch, worktrees and running threads are untouched. The tasks it started, and theirs, follow it when they still share its old topic; one someone filed elsewhere \
             stays put. Omit task for the task you are in.
             """,
             schema: """

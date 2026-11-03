@@ -282,7 +282,7 @@ extension AppModel {
         if takesSelection(threadOrigin, in: scopeID) { selection = .task(record.id) }
         // The base checkouts gained a worktree: refresh their facts.
         scope.refreshFacts()
-        assistTaskCreated(state)
+        attributeTopic(createdTask: state)
         guard openThread else { return state }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         await newThread(in: scopeID, driverID: driverID, taskID: record.id,
@@ -293,10 +293,10 @@ extension AppModel {
     // MARK: Topics
 
     /// Files `ids` under `topic`, or out of any with `nil`, and only them (a topic renamed or ungrouped as a whole,
-    /// an agent's inherited topic).
-    func setTopic(_ topic: String?, for ids: [TaskID]) async {
+    /// Scope's own grouping with `source: .automatic`).
+    func setTopic(_ topic: String?, source: TopicSource = .explicit, for ids: [TaskID]) async {
         do {
-            try await applyTopic(topic, to: ids)
+            try await applyTopic(topic, source: source, to: ids)
         } catch {
             problems.error("Could not change the topic", error: error)
         }
@@ -328,8 +328,8 @@ extension AppModel {
     }
 
     @discardableResult
-    private func applyTopic(_ topic: String?, to ids: [TaskID]) async throws -> [TaskRecord] {
-        let changed = try await env.tasks.setTopic(topic, for: ids)
+    private func applyTopic(_ topic: String?, source: TopicSource = .explicit, to ids: [TaskID]) async throws -> [TaskRecord] {
+        let changed = try await env.tasks.setTopic(topic, source: source, for: ids)
         for record in changed {
             task(record.id)?.update(record: record)
         }
@@ -357,8 +357,8 @@ extension AppModel {
     func promptTopicName(title: String, current: String?, action: String) -> String? {
         let alert = NSAlert()
         alert.messageText = title
-        alert.informativeText = "Tasks sharing a topic sit together in the sidebar. Agents file the tasks they create "
-            + "under the topic of the task they work in."
+        alert.informativeText = "Tasks sharing a topic sit together in the sidebar. Scope groups related tasks on its "
+            + "own and never moves one you filed."
         alert.addButton(withTitle: action)
         alert.addButton(withTitle: "Cancel")
         let field = NSTextField(string: current ?? "")

@@ -25,7 +25,7 @@ public enum AssistTriggers {
     /// What happened.
     public enum Occasion: Sendable, Equatable {
         case hook(thread: ThreadID, kind: HookEvent.Kind)
-        case taskCreated(task: String, hasTopic: Bool, topicsAvailable: Bool)
+        case taskCreated(task: String, explicitTopic: Bool, candidates: Bool)
         case tick
     }
 
@@ -76,7 +76,7 @@ public enum AssistTriggers {
     /// - **triage**: the thread of an `input.requested` or `turn.ended` event, once per `triageDebounce` (whether it is
     ///   worth a call is `triageMatters`);
     /// - **archive hint**: the thread of a `turn.ended` in a task without pull request, when its reply looks final;
-    /// - **topic pick**: a task created without a topic, when the scope has topics to choose from.
+    /// - **topic pick**: a task created without an explicit topic, when the scope has other open tasks it could go with.
     public static func jobs(for occasion: Occasion, threads: [ThreadSnapshot], history: History,
                             now: Date = .now) -> [AssistJob] {
         var jobs: [AssistJob] = []
@@ -92,8 +92,8 @@ public enum AssistTriggers {
             if kind == .turnEnded, let task = snapshot.task, !snapshot.taskHasPullRequest, snapshot.replyLooksFinal {
                 jobs.append(.archiveHint(thread, task: task))
             }
-        case .taskCreated(let task, let hasTopic, let topicsAvailable):
-            if !hasTopic, topicsAvailable { jobs.append(.topicPick(task: task)) }
+        case .taskCreated(let task, let explicitTopic, let candidates):
+            if !explicitTopic, candidates { jobs.append(.topicPick(task: task)) }
         case .tick:
             break
         }

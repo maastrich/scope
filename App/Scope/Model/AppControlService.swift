@@ -208,6 +208,13 @@ final class AppControlService: ControlService {
                 return .failure(.failed("the cleanup did not run"))
             }
             return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
+        case .topicsRegroup(let params):
+            switch resolveScope(params.scope, from: origin, caller: caller) {
+            case .failure(let error): return .failure(error)
+            case .success(let scopeID):
+                let report = await model.regroupTopics(in: scopeID, apply: params.apply)
+                return .success(.action(ActionResult(message: report), .topicsRegroup))
+            }
         case .memory(let params):
             let report = await model.recoverClaudeMemory(apply: params.apply, claudeDir: params.claudeDir)
             return .success(.action(ActionResult(message: report), .memory))
@@ -1381,20 +1388,18 @@ final class AppControlService: ControlService {
                 }
             )))
         }
-        let topic = TaskTopic.inherit(requested: params.topic, parentTopic: parentTask?.record.topic,
-                                      parentName: parentTask?.name)
+        // Only the topic asked for: a task on its own stays flat, and one started from the caller's task is linked to
+        // it — `attributeTopic` files the two together, under the caller's topic or a new one named for both.
+        let topic = TaskTopic.normalize(params.topic)
         let state: TaskState
         do {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,
                                                repos: repos, startPoint: startPoint, openThread: params.openThread,
                                                runSetup: params.runSetup, threadOrigin: threadOrigin, createdBy: caller.client,
-                                               topic: topic.child, parentTask: parentTask?.id, deliverable: params.deliverable,
+                                               topic: topic, parentTask: parentTask?.id, deliverable: params.deliverable,
                                                model: requestedModel, issue: request.issue, mission: params.mission)
         } catch {
             return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
-        }
-        if let parentTopic = topic.parent, let parentTask {
-            await model.setTopic(parentTopic, for: [parentTask.id])
         }
         NSApp.requestUserAttention(.informationalRequest)
         let record = state.record

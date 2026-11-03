@@ -382,7 +382,10 @@ struct SidebarView: View {
                 TopicRow(scope: scope, topic: topic, tasks: members)
                     .selectionDisabled()
                 if !scope.collapsedTopics.contains(TaskTopic.key(topic)) || isFiltering {
-                    ForEach(members) { task in taskRows(task, depth: 1) }
+                    // At depth 0, not one level in: a task in a topic takes the room of a task outside one, its title
+                    // in the topic's own column. The topic's chevron, hanging left of that column, says where the
+                    // group starts; a nesting level used to push the name 19 pt right and cut it short.
+                    ForEach(members) { task in taskRows(task) }
                 }
             }
         }

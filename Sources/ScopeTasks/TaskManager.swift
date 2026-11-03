@@ -325,12 +325,13 @@ public actor TaskManager {
     /// Files the tasks `ids` under `topic` (`nil` takes them out of any). Unknown ids are skipped; the records
     /// that changed are returned.
     @discardableResult
-    public func setTopic(_ topic: String?, for ids: [TaskID]) async throws -> [TaskRecord] {
+    public func setTopic(_ topic: String?, source: TopicSource = .explicit, for ids: [TaskID]) async throws -> [TaskRecord] {
         let topic = TaskTopic.normalize(topic)
         var changed: [TaskRecord] = []
         for id in ids {
-            guard var record = records[id], record.topic != topic else { continue }
+            guard var record = records[id], record.topic != topic || record.topicSource != source else { continue }
             record.topic = topic
+            record.topicSource = source
             try await persist(record)
             records[id] = record
             changed.append(record)
@@ -363,6 +364,7 @@ public actor TaskManager {
         record.attempt = nil
         // The topic was the family's; alone under it, the kept task would read as a group of one.
         record.topic = nil
+        record.topicSource = nil
         record.attemptsKept = TaskAttemptsKept(count: attempt.count, at: now, otherBranches: otherBranches)
         try await persist(record)
         records[id] = record

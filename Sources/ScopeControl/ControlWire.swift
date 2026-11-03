@@ -53,6 +53,7 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskRestoreCheckpoint(let params): try encoder.encode(wire(params))
         case .gc(let params): try encoder.encode(wire(params))
         case .memory(let params): try encoder.encode(wire(params))
+        case .topicsRegroup(let params): try encoder.encode(wire(params))
         case .threadRead(let params): try encoder.encode(wire(params))
         case .threadWait(let params): try encoder.encode(wire(params))
         case .summary(let params): try encoder.encode(wire(params))
@@ -117,6 +118,7 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskRestoreCheckpoint: .taskRestoreCheckpoint(try required(TaskRestoreCheckpointParams.self))
             case .gc: .gc(try decoder.decode(Params<GCParams>.self, from: data).params ?? GCParams())
             case .memory: .memory(try decoder.decode(Params<MemoryParams>.self, from: data).params ?? MemoryParams())
+            case .topicsRegroup: .topicsRegroup(try decoder.decode(Params<TopicsRegroupParams>.self, from: data).params ?? TopicsRegroupParams())
             case .threadRead: .threadRead(try required(ThreadReadParams.self))
             case .threadWait: .threadWait(try required(ThreadWaitParams.self))
             case .summary: .summary(try decoder.decode(Params<SummaryParams>.self, from: data).params ?? SummaryParams())
@@ -247,7 +249,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .threadNew: .thread(try decoder.decode(Wrapped<ThreadNewResult>.self, from: data).result)
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
             case .threadStop, .threadRestart, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
-                 .taskRestoreCheckpoint, .gc, .memory, .configGet, .configSet, .scheduleRun, .milestoneAdd, .milestoneDone,
+                 .taskRestoreCheckpoint, .gc, .memory, .topicsRegroup, .configGet, .configSet, .scheduleRun, .milestoneAdd, .milestoneDone,
                  .taskBranchAdd, .taskBranchRemove:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .taskBranchList: .taskBranches(try decoder.decode(Wrapped<TaskBranchListResult>.self, from: data).result)

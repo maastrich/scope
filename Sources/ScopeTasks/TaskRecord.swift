@@ -397,6 +397,10 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     public var cleanup: PendingCleanup?
     /// The topic the task is filed under in the sidebar (`TaskTopic`), shared with the tasks of the same piece of work.
     public var topic: String?
+    /// Who put the task under `topic`, or out of any: the user or an agent (`explicit`), whose choice Scope never
+    /// undoes, or Scope's own grouping (`TopicAttribution`). `nil` with no topic: nobody decided anything yet.
+    /// Read through `topicIsExplicit`, which counts a topic from before the field existed as explicit.
+    public var topicSource: TopicSource?
     /// The task whose agent created this one, when one did.
     public var parentTask: TaskID?
     /// Who asked for the task, as recorded for its first thread: what tells an agent's task from the user's when the
@@ -447,6 +451,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         setup: TaskSetupRecord? = nil,
         cleanup: PendingCleanup? = nil,
         topic: String? = nil,
+        topicSource: TopicSource? = nil,
         parentTask: TaskID? = nil,
         origin: ThreadOrigin? = nil,
         deliverable: String? = nil,
@@ -474,6 +479,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         self.setup = setup
         self.cleanup = cleanup
         self.topic = TaskTopic.normalize(topic)
+        self.topicSource = topicSource ?? (self.topic == nil ? nil : .explicit)
         self.parentTask = parentTask
         self.origin = origin
         self.deliverable = deliverable
@@ -640,6 +646,17 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         let key = TaskRepo.normalize(repoRelativePath)
         return trying.first { $0.repoRelativePath == key }
     }
+    /// The topic, or its absence, is someone's choice: Scope's grouping leaves the task alone. A topic written before
+    /// `topicSource` existed counts as one — those were all given by hand or by an agent, and Scope does not
+    /// re-file what the user already has (`scope topics regroup` is the opt-in for that).
+    public var topicIsExplicit: Bool {
+        switch topicSource {
+        case .explicit: true
+        case .automatic: false
+        case nil: topic != nil
+        }
+    }
+
     /// Whether the task is a mission (`Mission`).
     public var isMission: Bool { mission != nil }
 
@@ -653,7 +670,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequests, prompt
-        case createdBy, portBase, setup, cleanup, topic, parentTask, origin, keptOpenAfterMerge, deliverable, issue
+        case createdBy, portBase, setup, cleanup, topic, topicSource, parentTask, origin, keptOpenAfterMerge, deliverable, issue
         case holdBranch, followedMainHead, trying, attempt, attemptsKept, mission
     }
 
@@ -689,6 +706,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         setup = try container.decodeIfPresent(TaskSetupRecord.self, forKey: .setup)
         cleanup = try? container.decodeIfPresent(PendingCleanup.self, forKey: .cleanup)
         topic = TaskTopic.normalize(try? container.decodeIfPresent(String.self, forKey: .topic))
+        topicSource = (try? container.decodeIfPresent(TopicSource.self, forKey: .topicSource)) ?? nil
         parentTask = (try? container.decodeIfPresent(TaskID.self, forKey: .parentTask)) ?? nil
         origin = (try? container.decodeIfPresent(ThreadOrigin.self, forKey: .origin)) ?? nil
         keptOpenAfterMerge = (try? container.decodeIfPresent(Bool.self, forKey: .keptOpenAfterMerge)) ?? false

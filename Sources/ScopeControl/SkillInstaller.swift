@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 34
+    public static let version = 35
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -273,16 +273,19 @@ public struct SkillInstaller: Sendable {
 
         ## Topics
 
-        A **topic** files tasks together in the user's sidebar, under one collapsible row. When you start several
-        tasks for one piece of work — an orchestrator fanning a change out across repositories — give them the
-        same `--topic` (a few words: `auth rework`). A task created from inside a task gets that task's topic
-        unless you name another; if the task you are in has none, both are filed under its name, so a split never
-        scatters. `scope list tasks` shows each task's topic.
+        A **topic** files related tasks together in the user's sidebar, under one collapsible row. **Scope groups
+        them itself**: a task on its own has no topic; when a related task appears — one created from inside
+        another, stacked pull requests, the same issue, or (with the assistant on) a brief about the same thing —
+        Scope creates the topic, names it in a few words, and files both. So **never invent a `--topic` for a
+        single task**, and do not pass one for a task you create from inside yours: the parent link is enough, it
+        lands under your topic or a new one named for both. Pass `--topic` only to file several tasks you start
+        together, outside any task, under one name (a few words: `auth rework`) — reuse an existing one from
+        `scope list tasks` rather than a near-duplicate. A topic someone gave is never changed by Scope.
 
         A topic can be set later: `scope task topic <slug> "<topic>"` files a running task (yours when you omit the
-        slug), `--clear` takes it out. Only the label moves — branch, worktrees and threads stay. The tasks it
-        started, and theirs, follow while they still share its old topic; `--no-children` moves it alone. Name the
-        topic once the work's shape is clear rather than leaving siblings scattered.
+        slug), `--clear` takes it out — and Scope leaves it out. Only the label moves — branch, worktrees and
+        threads stay. The tasks it started, and theirs, follow while they still share its old topic;
+        `--no-children` moves it alone.
 
         `scope thread new --task <slug> -p "<prompt>"` opens another agent in an existing task. Its working
         directory is the sandbox, so it commits on the task branch. `--task` finds a task in any scope.
@@ -493,7 +496,7 @@ public struct SkillInstaller: Sendable {
         1. Split the goal into milestones, in order, each one task's worth, each with a **validation**: a shell command
            that proves it, run by Scope in the sandbox — the test suite, a build, `gh pr checks <branch>`. Register
            them: `scope task milestone add "<title>" --validate "<command>"` (from inside the mission, no slug needed).
-        2. Open **one milestone at a time** as a child task (`scope task new`, same topic), with a complete brief, and
+        2. Open **one milestone at a time** as a child task (`scope task new` from inside the mission: Scope files it with it), with a complete brief, and
            wait for its thread.
         3. When it reports, `scope task milestone done <n> --child <slug>`: Scope runs the validation in the child's
            sandbox and records the verdict. `validated` — open the next milestone. `failed` — the log went to the

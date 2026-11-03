@@ -77,11 +77,11 @@ import ScopeCore
         #expect(AssistTriggers.jobs(for: ended, threads: snapshot(task: "t1", pr: false, final: false), history: .init(), now: now) == [.triage(a)])
     }
 
-    @Test func aTaskCreatedWithoutTopicGetsAPickWhenThereAreTopics() {
-        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", hasTopic: false, topicsAvailable: true), threads: [], history: .init(), now: now)
+    @Test func aTaskCreatedWithoutExplicitTopicGetsAPickWhenThereAreOtherTasks() {
+        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", explicitTopic: false, candidates: true), threads: [], history: .init(), now: now)
                 == [.topicPick(task: "t1")])
-        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", hasTopic: true, topicsAvailable: true), threads: [], history: .init(), now: now).isEmpty)
-        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", hasTopic: false, topicsAvailable: false), threads: [], history: .init(), now: now).isEmpty)
+        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", explicitTopic: true, candidates: true), threads: [], history: .init(), now: now).isEmpty)
+        #expect(AssistTriggers.jobs(for: .taskCreated(task: "t1", explicitTopic: false, candidates: false), threads: [], history: .init(), now: now).isEmpty)
     }
 
     @Test func anEventOnOneThreadStillNoticesAnotherRunningForLong() {

@@ -1,5 +1,13 @@
 import Foundation
 
+/// Who filed a task under its topic, or out of any.
+public enum TopicSource: String, Codable, Sendable, Hashable {
+    /// The user, in the app, or an agent (`--topic`, `scope task topic`): never undone by Scope.
+    case explicit
+    /// Scope, grouping related tasks (`TopicAttribution`).
+    case automatic
+}
+
 /// A topic: the few words several tasks of one piece of work share, so the sidebar files them together.
 ///
 /// A label on `TaskRecord`, not an entity: nothing to create first, to rename in two places or to leave behind
@@ -23,19 +31,6 @@ public enum TaskTopic {
     /// What two spellings of one topic have in common.
     public static func key(_ topic: String) -> String {
         (normalize(topic) ?? "").lowercased()
-    }
-
-    /// Where a task an agent creates is filed, and whether the task the agent sits in should be filed with it.
-    ///
-    /// The topic asked for wins. Otherwise the child takes the parent task's topic; a parent with none lends its own
-    /// name to both, so a task that splits its work keeps the pieces next to it without anyone thinking about it.
-    /// Outside any task (an orchestrator at the scope root) there is nothing to inherit: it names the topic itself.
-    public static func inherit(requested: String?, parentTopic: String?, parentName: String?)
-        -> (child: String?, parent: String?) {
-        if let requested = normalize(requested) { return (requested, nil) }
-        if let parentTopic = normalize(parentTopic) { return (parentTopic, nil) }
-        guard let name = normalize(parentName) else { return (nil, nil) }
-        return (name, name)
     }
 
     /// The tasks that move with `root` when its topic changes: those it started, and theirs, still filed where it is
@@ -65,9 +60,11 @@ public enum TaskTopic {
         case topic(String, [ID])
     }
 
-    /// `tasks` in their order, with every task of a topic gathered where the first of them stands. A topic holding a
-    /// single task is still a group: whoever named it meant one, and a second task is usually on its way.
-    public static func entries<ID: Hashable>(_ tasks: [(id: ID, topic: String?)]) -> [Entry<ID>] {
+    /// `tasks` in their order, with every task of a topic gathered where the first of them stands. A topic left with a
+    /// single task is no group: the task stands flat, like any task on its own — a row and an indent spent on a group
+    /// of one say nothing. It keeps the label (`scope summary` groups by it, and the next sibling regroups under it),
+    /// and a topic in `kept` (one whose orchestrator thread is open) keeps its row whatever its size.
+    public static func entries<ID: Hashable>(_ tasks: [(id: ID, topic: String?)], kept: Set<String> = []) -> [Entry<ID>] {
         var order: [String] = []
         var names: [String: String] = [:]
         var members: [String: [ID]] = [:]
@@ -88,7 +85,8 @@ public enum TaskTopic {
             members[key, default: []].append(task.id)
         }
         for key in order {
-            entries[slot[key]!] = .topic(names[key]!, members[key]!)
+            let ids = members[key]!
+            entries[slot[key]!] = ids.count > 1 || kept.contains(key) ? .topic(names[key]!, ids) : .task(ids[0])
         }
         return entries.compactMap { $0 }
     }

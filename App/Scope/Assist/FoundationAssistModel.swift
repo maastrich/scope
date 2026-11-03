@@ -102,7 +102,9 @@ private struct GeneratedArchiveHint: Encodable {
 @available(macOS 26, *)
 @Generable
 private struct GeneratedTopicPick: Encodable {
-    @Guide(description: "One of the listed topics, spelled exactly as listed, or \"none\" when none fits")
+    @Guide(description: "The number of the listed task the new task belongs with, or \"none\" when it is unrelated to all of them")
+    var related: String
+    @Guide(description: "1 to 3 lowercase words naming the subject the two tasks share, not either title; an existing topic when one fits")
     var topic: String
 }
 #endif

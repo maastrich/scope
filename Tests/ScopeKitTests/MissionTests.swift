@@ -93,7 +93,7 @@ import ScopeCore
         let md = TaskProjection.agentsMarkdown(task: record, otherRepos: [], scopeName: "Acme")
         #expect(md.contains("## Mission\n\nThis task is a **mission**"))
         #expect(md.contains("`scope task milestone add rework-auth \"<title>\" --validate \"<command>\"`"))
-        #expect(md.contains("--topic \"auth\""))
+        #expect(md.contains("Scope files it with this task, no `--topic` needed"))
         #expect(md.contains("Open the next milestone only once the previous one is validated."))
         #expect(md.contains("Milestones so far (1/2 milestones):\n1. [validated] Token model — validate: `pnpm test`\n2. [open] Refresh endpoint"))
         let plain = TaskProjection.agentsMarkdown(task: TaskRecord(scopeID: record.scopeID, scopeRoot: "/s", scopeSlug: "a",
