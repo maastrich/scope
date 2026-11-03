@@ -48,7 +48,7 @@ extension AppModel {
             try? await Task.sleep(for: Self.claudePullRequestSettle)
             guard !Task.isCancelled, let self, let task = self.task(id), !task.isArchived else { return }
             self.claudePullRequestRefreshes[id] = nil
-            await self.refreshTaskPullRequest(task)
+            await self.refreshTaskPullRequest(task, gated: true)
             await self.archiveIfMerged(task)
         }
     }
