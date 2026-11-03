@@ -182,7 +182,7 @@ extension AppModel {
         guard !due.isEmpty else { return false }
         for task in due {
             returnDigests.askedGitHub[task.id] = now
-            await refreshTaskPullRequest(task)
+            await refreshTaskPullRequest(task, gated: true)
         }
         return true
     }

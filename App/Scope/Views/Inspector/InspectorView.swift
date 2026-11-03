@@ -34,7 +34,7 @@ struct InspectorView: View {
     /// A card is its header, its body and the gap above it; the column ends on one more gap.
     private static let gap: Double = Layout.cardGap
     /// What notices the pull request a thread opened and binds it, and keeps its checks fresh.
-    static let pullRequestRefreshInterval: Duration = .seconds(60)
+    static let pullRequestPollInterval: Duration = .seconds(15)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,10 +80,12 @@ struct InspectorView: View {
         .task(id: model.currentTask?.id) {
             guard let task = model.currentTask else { return }
             await model.review.show(task: task.id)
-            // What notices the pull request a thread opened and binds it, and keeps its checks fresh.
+            // What notices the pull request a thread opened and binds it, and keeps its checks fresh: once a minute
+            // while Scope is in front, backing off on failures (`PullRequestRefreshSchedule.foregroundDue`). Polled
+            // more often than that, so coming back to Scope refreshes within seconds.
             while !Task.isCancelled {
-                await model.refreshTaskPullRequest(task)
-                try? await Task.sleep(for: Self.pullRequestRefreshInterval)
+                await model.refreshForegroundPullRequest(task)
+                try? await Task.sleep(for: Self.pullRequestPollInterval)
             }
         }
     }

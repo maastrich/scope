@@ -237,24 +237,38 @@ public struct GhClient: Sendable {
     }
 
     /// Every `gh` invocation, timed into the event journal under its first two words (`pr.list`): never the rest,
-    /// which carries branches, repositories and bodies.
+    /// which carries branches, repositories and bodies. A failure carries its `GhFailure` as `cause`, never its text.
+    /// A working directory that is gone fails here, without launching `gh`.
     private func gh(arguments: [String], currentDirectory: URL? = nil, environment: [String: String],
                     timeout: Duration) async throws -> ProcessResult {
         let name = arguments.prefix(2).joined(separator: ".")
+        if let currentDirectory, !FileManager.default.fileExists(atPath: currentDirectory.path(percentEncoded: false)) {
+            Journal.record(JournalEvent(kind: .gh, name: name, outcome: "failed", cause: GhFailure.missingCheckout.rawValue, seconds: 0))
+            throw SubprocessError.launchFailed(GhFailure.missingDirectory)
+        }
         return try await Journal.timed {
             try await Subprocess.run(executable: executable, arguments: arguments, currentDirectory: currentDirectory,
                                      environment: environment, timeout: timeout)
         } record: { result, seconds in
-            let outcome = switch result {
-            case .success(let process) where process.succeeded: "ok"
-            // `gh pr view` on a branch without one: an answer, not a failure.
-            case .success(let process) where process.stderrText.lowercased().contains("no pull requests found"): "none"
-            case .success(let process):
-                ProblemCause.classify(process.stderrText) == .auth ? "auth" : "failed"
-            case .failure(SubprocessError.timedOut): "timeout"
-            case .failure: "failed"
-            }
-            return JournalEvent(kind: .gh, name: name, outcome: outcome, seconds: seconds)
+            let (outcome, cause) = Self.journalOutcome(result)
+            return JournalEvent(kind: .gh, name: name, outcome: outcome, cause: cause?.rawValue, seconds: seconds)
+        }
+    }
+
+    /// `ok`, `none` (`gh pr view` on a branch without one: an answer, not a failure), or `failed` / `auth` /
+    /// `timeout` with the `GhFailure` behind it.
+    static func journalOutcome(_ result: Result<ProcessResult, any Error>) -> (outcome: String, cause: GhFailure?) {
+        switch result {
+        case .success(let process) where process.succeeded:
+            return ("ok", nil)
+        case .success(let process) where process.stderrText.lowercased().contains("no pull requests found"):
+            return ("none", nil)
+        case .success(let process):
+            let cause = GhFailure.classify(exitCode: process.exitCode == 0 ? 1 : process.exitCode, stderr: process.stderrText) ?? .other
+            return (cause == .auth ? "auth" : "failed", cause)
+        case .failure(let error):
+            let cause = GhFailure.classify(error: error)
+            return (cause == .timeout ? "timeout" : "failed", cause)
         }
     }
 

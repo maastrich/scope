@@ -256,6 +256,9 @@ final class AppModel {
     /// Tasks being restored (`restoreTask`): their Restore buttons show a spinner and do nothing.
     var restoringTasks: Set<TaskID> = []
     @ObservationIgnored var pullRequestSchedule = PullRequestRefreshSchedule()
+    /// Whether any automatic pull request refresh may call `gh` now (`AppModel+PullRequestRefresh`).
+    @ObservationIgnored var pullRequestGate = PullRequestRefreshGate()
+    @ObservationIgnored let attentionWatch = AttentionWatch()
     /// The minute loop behind `AppModel+Schedules`, when it started watching, and the schedules whose run is in flight.
     @ObservationIgnored var scheduler: Task<Void, Never>?
     @ObservationIgnored var scheduleWatchedSince = Date.now

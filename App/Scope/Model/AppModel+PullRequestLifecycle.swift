@@ -27,19 +27,30 @@ extension AppModel {
     /// and of the branches it visited (`VisitedBranches`: a docs branch, the next of a stack) — the thread ran
     /// `gh pr create`, or one was opened on GitHub — and every link not covered by that gets `gh pr view`. What
     /// comes back refreshes the record (title, state, dates: once the task is archived nobody asks GitHub again)
-    /// and the live state (checks, mergeability). `false` when `gh` failed on a bound pull request: the background
-    /// pass backs off on it.
+    /// and the live state (checks, mergeability).
+    ///
+    /// The first failure that is not about this task (`GhFailure.isGlobal`: offline, auth, a rate limit) ends the
+    /// refresh: every other call would fail the same way. A link of a repository whose branch lookup already failed
+    /// is not asked about either. The schedule and the gate learn the outcome, whoever asked; `gated` refreshes (the
+    /// automatic ones) do not run at all while the gate is closed.
     @discardableResult
-    func refreshTaskPullRequest(_ task: TaskState) async -> Bool {
-        guard let gh = pullRequests.gh else { return true }
+    func refreshTaskPullRequest(_ task: TaskState, gated: Bool = false) async -> PullRequestRefreshOutcome {
+        guard let gh = pullRequests.gh else { return .skipped }
+        if gated {
+            updatePullRequestPacing()
+            guard pullRequestGate.allows(at: .now) else { return .skipped }
+        }
+        pullRequestSchedule.started(task.id, at: .now)
         var found: [LinkedPullRequest] = []
         var live: [PullRequest] = []
-        var failed = false
+        var failure: GhFailure?
+        /// Repositories whose lookup failed: their links would only fail again.
+        var unreachable = Set<String>()
         // Every worktree: each one's own branch is asked about explicitly — a branch added with `task branch add`
         // never shows in the primary sandbox's reflog — then the branches its reflog says it visited. A branch two
         // worktrees of one repository both name is asked about once.
         var asked = Set<String>()
-        for repo in task.record.activeSandboxes {
+        sandboxes: for repo in task.record.activeSandboxes {
             let seen = await visitedBranches(of: repo, in: task)
             for branch in seen where asked.insert("\(repo.repoRelativePath)\0\(branch)").inserted {
                 do {
@@ -48,21 +59,27 @@ extension AppModel {
                         live.append(pr)
                     }
                 } catch {
-                    // A branch nobody pushed, or no GitHub remote: nothing to bind, nothing to report.
-                    continue
+                    let cause = GhFailure.classify(error: error)
+                    failure = failure ?? cause
+                    unreachable.insert(TaskRepo.normalize(repo.repoRelativePath))
+                    if cause.isGlobal { break sandboxes }
+                    // This sandbox's other branches fail the same way (no GitHub remote, the folder gone).
+                    continue sandboxes
                 }
             }
         }
         // Links the branches no longer name (a reflog cut, a link made from the Pull Requests sheet): asked one by one.
+        let first = task.record.repos.first?.repoRelativePath ?? "."
         for link in task.record.pullRequests where !found.contains(where: { $0.url == link.url }) {
-            guard let target = pullRequestTarget(task, link) else { continue }
+            guard failure?.isGlobal != true else { break }
+            guard !unreachable.contains(TaskRepo.normalize(link.repo ?? first)), let target = pullRequestTarget(task, link) else { continue }
             do {
                 let pr = try await target.gh.prView(number: link.number, in: target.checkout, repo: target.repo)
                 found.append(link.refreshed(with: pr))
                 live.append(pr)
             } catch {
                 pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
-                failed = true
+                failure = failure ?? GhFailure.classify(error: error)
             }
         }
         // An archived task keeps what it had: nothing new is bound to it, its sandboxes are gone.
@@ -77,7 +94,14 @@ extension AppModel {
         }
         if !stale.isEmpty { await link(stale, to: task) }
         for pr in live { await recordChecks(of: pr, for: task) }
-        return !failed
+        if let failure {
+            pullRequestSchedule.failed(task.id)
+            pullRequestGate.failed(failure, at: .now)
+            return .failed(failure)
+        }
+        pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)))
+        pullRequestGate.succeeded()
+        return .answered
     }
 
     /// The sandbox's branch first, then the branches its reflog says it was on, the default branch left out.

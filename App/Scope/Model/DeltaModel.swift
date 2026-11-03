@@ -188,8 +188,8 @@ final class DeltaModel {
             hasLoaded = false
             viewed = ViewedMarks()
             loadViewed(for: record.id)
-            Task { await lookupPRs(task: record) }
         }
+        lookupPRs(task: record)
         isLoading = true
         let git = env.git
         let loaded: [RepoDelta] = await Task.detached(priority: .userInitiated) {
@@ -220,13 +220,17 @@ final class DeltaModel {
         if selectedFile == nil, mode != .baseVsOrigin { selectedFile = orderedFiles.first }
     }
 
-    private func lookupPRs(task: TaskRecord) async {
-        guard let gh else { return }
+    /// The pull request of each sandbox, from the links the task's refresh bound (`refreshTaskPullRequest`) — not a
+    /// `gh pr view` per sandbox: that asked GitHub again what the record already knew, and on a branch without a pull
+    /// request it always came back empty-handed.
+    private func lookupPRs(task: TaskRecord) {
+        let first = task.repos.first?.repoRelativePath ?? "."
         for repo in task.activeSandboxes {
-            if let url = try? await gh.prView(in: repo.sandboxURL) {
-                guard taskID == task.id else { return }
-                prURLs[repo.sandboxKey] = url
-            }
+            let links = task.pullRequests.filter { TaskRepo.normalize($0.repo ?? first) == TaskRepo.normalize(repo.repoRelativePath) }
+            // The one opened from this sandbox's branch, the open one first; a link of unknown head stands for the
+            // repository's primary sandbox.
+            let onBranch = links.filter { $0.headRefName == repo.branch || ($0.headRefName == nil && !repo.isSecondary) }
+            if let link = onBranch.first(where: \.isOpen) ?? onBranch.first { prURLs[repo.sandboxKey] = link.url }
         }
     }
 

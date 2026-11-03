@@ -79,6 +79,8 @@ final class PullRequestsModel {
     let gh: GhClient?
 
     @ObservationIgnored private let problems: ProblemCenter
+    /// Whether the automatic refresh may call `gh` now: Scope in front and the gate open. Set by `AppModel`.
+    @ObservationIgnored var mayAutoRefresh: @MainActor () -> Bool = { true }
     @ObservationIgnored private var generation = 0
 
     static let refreshInterval: Duration = .seconds(180)
@@ -147,12 +149,17 @@ final class PullRequestsModel {
         }
     }
 
-    /// Sleeps `refreshInterval`, refreshes, repeats — run from the panel's `.task` so it stops on hide.
+    /// Sleeps `refreshInterval`, refreshes, repeats — run from the panel's `.task` so it stops on hide. A sheet left
+    /// open behind another app, on a locked screen or offline is not refreshed (`mayAutoRefresh`); a failed list
+    /// waits twice as long each time, up to half an hour.
     func autoRefresh() async {
+        var wait = Self.refreshInterval
         while !Task.isCancelled {
-            try? await Task.sleep(for: Self.refreshInterval)
+            try? await Task.sleep(for: wait)
             guard !Task.isCancelled else { return }
+            guard mayAutoRefresh() else { continue }
             await refresh()
+            if case .failed = status { wait = min(wait * 2, .seconds(30 * 60)) } else { wait = Self.refreshInterval }
         }
     }
 
