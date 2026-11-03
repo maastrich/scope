@@ -144,3 +144,25 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         interruptedTurn = try container.decodeIfPresent(Date.self, forKey: .interruptedTurn)
     }
 }
+
+/// Where a thread sits: its scope, its task, its resident role. The part of a record the sidebar files threads by,
+/// kept apart from the rest so that filing a thread does not depend on its state, its launches or its session id —
+/// fields a running thread rewrites on every turn.
+public struct ThreadPlacement: Sendable, Equatable, Hashable {
+    public var scopeID: ScopeID
+    public var taskID: String?
+    public var resident: ResidentRole?
+
+    public init(scopeID: ScopeID, taskID: String?, resident: ResidentRole?) {
+        self.scopeID = scopeID
+        self.taskID = taskID
+        self.resident = resident
+    }
+
+    public init(_ record: ThreadRecord) {
+        self.init(scopeID: record.scopeID, taskID: record.taskID, resident: record.resident)
+    }
+
+    /// A thread opened in the scope rather than in a task, and not one the scope keeps for itself.
+    public var isLoose: Bool { taskID == nil && resident == nil }
+}

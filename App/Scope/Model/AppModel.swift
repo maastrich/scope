@@ -395,7 +395,7 @@ final class AppModel {
     }
 
     func threads(in scope: ScopeID) -> [ThreadSession] {
-        threads.filter { $0.record.scopeID == scope }
+        threads.filter { $0.placement.scopeID == scope }
     }
 
     func task(_ id: TaskID) -> TaskState? {
@@ -407,13 +407,15 @@ final class AppModel {
         tasks.filter { $0.scopeID == scope && !$0.isArchived }
     }
 
+    /// Filed by `placement`, not `record`: a row that lists its task's threads must not redraw each time another
+    /// thread's turn starts or ends.
     func threads(in task: TaskID) -> [ThreadSession] {
-        threads.filter { $0.record.taskID == task.rawValue }
+        threads.filter { $0.placement.taskID == task.rawValue }
     }
 
     /// Threads whose cwd is not a task sandbox (scope root or a base), the resident ones aside: the loose threads.
     func scopeLevelThreads(in scope: ScopeID) -> [ThreadSession] {
-        threads.filter { $0.record.scopeID == scope && $0.record.taskID == nil && $0.record.resident == nil }
+        threads.filter { $0.placement.scopeID == scope && $0.placement.isLoose }
     }
 
     /// The orchestrator and the terminal Scope keeps in `scope`, in that order.
@@ -422,11 +424,11 @@ final class AppModel {
     }
 
     func resident(_ role: ResidentRole, in scope: ScopeID) -> ThreadSession? {
-        threads.first { $0.record.scopeID == scope && $0.record.resident == role }
+        threads.first { $0.placement.scopeID == scope && $0.placement.resident == role }
     }
 
     func task(of session: ThreadSession) -> TaskState? {
-        session.record.taskID.flatMap(TaskID.init(rawValue:)).flatMap(task)
+        session.placement.taskID.flatMap(TaskID.init(rawValue:)).flatMap(task)
     }
 
     /// The task the Delta inspector and ⌘T follow, derived from `selection` alone: a task row or a thread
@@ -559,7 +561,9 @@ final class AppModel {
     /// The tab / row label: duplicates of the same title in a scope are numbered in creation order
     /// (`acme`, `acme 2`). The driver is not in the title — the row's icon says which one it is.
     func displayTitle(for session: ThreadSession) -> String {
-        let twins = threads(in: session.record.scopeID).filter { $0.record.title == session.record.title }
+        // `placement` and `title` rather than `record`: every row calls this, and must not redraw at each turn of
+        // every other thread.
+        let twins = threads(in: session.placement.scopeID).filter { $0.title == session.title }
         guard twins.count > 1, let index = twins.firstIndex(where: { $0.id == session.id }), index > 0 else { return session.title }
         let title = session.title
         if let separator = title.range(of: " · ") {

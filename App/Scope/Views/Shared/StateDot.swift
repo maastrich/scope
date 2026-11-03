@@ -1,3 +1,5 @@
+import AppKit
+import QuartzCore
 import SwiftUI
 import ScopeCore
 
@@ -37,17 +39,14 @@ struct StateDot: View {
         .frame(width: size, height: size)
         .overlay {
             if animatesPulse {
-                // Read off the clock, like `ScopeSpinner`: a `withAnimation(.repeatForever)` in `onAppear`
-                // animated the layout around the dot too — the toolbar pill changing width as its label changed,
-                // a row moving as its thread started — and replayed it at every pulse.
-                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                    let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
-                    let eased = 1 - (1 - phase) * (1 - phase)
-                    Circle()
-                        .stroke(fill, lineWidth: 1)
-                        .scaleEffect(1 + 1.1 * eased)
-                        .opacity(0.8 * (1 - eased))
-                }
+                // A Core Animation ring, run by the render server: the dot costs the main thread nothing while it
+                // breathes. It was a `TimelineView` at 30 fps, one body and one layout pass per running dot per
+                // frame — with a dozen agents at work, hundreds a second, and the sidebar stuttered as it scrolled.
+                // Not `withAnimation(.repeatForever)` either: that animated the layout around the dot too (the
+                // toolbar pill changing width as its label changed, a row moving as its thread started).
+                PulseRing(color: fill)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .accessibilityLabel(state.displayLabel)
@@ -104,5 +103,89 @@ struct StatePill: View {
         // The cap is for the error of a failed turn, which can be a paragraph.
         .frame(maxWidth: 320)
         .fixedSize()
+    }
+}
+
+/// The ring a working dot sends out: from the dot's edge to twice its size, fading as it goes, every 1.4 s. Every
+/// ring on screen keeps the same beat, as when it was read off the wall clock.
+private struct PulseRing: NSViewRepresentable {
+    var color: Color
+
+    func makeNSView(context: Context) -> PulseRingView { PulseRingView() }
+
+    func updateNSView(_ view: PulseRingView, context: Context) {
+        view.color = NSColor(color)
+    }
+}
+
+private final class PulseRingView: NSView {
+    static let period: CFTimeInterval = 1.4
+    private let ring = CAShapeLayer()
+
+    var color: NSColor = .clear {
+        didSet { if color != oldValue { applyColor() } }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        ring.fillColor = nil
+        ring.lineWidth = 1
+        layer?.addSublayer(ring)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.frame = bounds
+        ring.path = CGPath(ellipseIn: bounds.insetBy(dx: 0.5, dy: 0.5), transform: nil)
+        CATransaction.commit()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        applyColor()
+        startIfNeeded()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColor()
+    }
+
+    private func applyColor() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            ring.strokeColor = color.cgColor
+        }
+    }
+
+    private func startIfNeeded() {
+        guard ring.animation(forKey: "pulse") == nil else { return }
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1
+        scale.toValue = 2.1
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.8
+        fade.toValue = 0
+        let pulse = CAAnimationGroup()
+        pulse.animations = [scale, fade]
+        pulse.duration = Self.period
+        // 1 − (1 − t)²: the ease the clock-driven ring used.
+        pulse.timingFunction = CAMediaTimingFunction(controlPoints: 0.33, 0.67, 0.67, 1)
+        pulse.repeatCount = .infinity
+        // On the wall clock's beat, so two rings that start apart still breathe together.
+        let now = CACurrentMediaTime()
+        let phase = Date.now.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.period)
+        pulse.beginTime = ring.convertTime(now, from: nil) - phase
+        pulse.isRemovedOnCompletion = false
+        ring.opacity = 0
+        ring.add(pulse, forKey: "pulse")
     }
 }

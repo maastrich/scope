@@ -12,7 +12,7 @@ struct RepoRow: View {
     var body: some View {
         HStack(spacing: SidebarMetrics.spacing) {
             Text(repo.shortName)
-                .font(.scopeBody)
+                .font(.scopeRow)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)

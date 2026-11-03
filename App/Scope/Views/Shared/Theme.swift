@@ -146,9 +146,10 @@ enum PullRequestStyle {
 extension Font {
     /// A name at the head of a panel: the task in the summary band, a banner title, a sheet heading.
     static let scopeTitle = Font.system(size: 13, weight: .semibold)
-    /// Ordinary body text: sidebar row titles, palette results, settings labels.
+    /// Ordinary body text: palette results, settings labels.
     static let scopeBody = Font.system(size: 13)
-    /// Dense list rows: thread and task titles, delta file paths.
+    /// Dense list rows: the sidebar's task, thread, topic and repository names, delta file paths. At 13 pt a task
+    /// name lost half its words to the sidebar's width.
     static let scopeRow = Font.system(size: 11.5)
     /// Captions, paths, prompts, helper text.
     static let scopeCaption = Font.system(size: 11)
@@ -188,36 +189,88 @@ extension EnvironmentValues {
 /// Takes the system's selection highlight off the list it sits behind, so a row can draw its own. SwiftUI's `List`
 /// is an `NSTableView` underneath, whose highlight is the system accent, full width — the one thing a `List`
 /// offers no modifier for.
+///
+/// It also says when a live scroll of that list begins and ends (`onLiveScroll`): the fingers on the trackpad and the
+/// momentum after them, which SwiftUI does not report for a `List` on macOS 15.
 struct ListSelectionHighlightRemover: NSViewRepresentable {
+    var onLiveScroll: ((Bool) -> Void)? = nil
+
     func makeNSView(context: Context) -> NSView { Probe() }
 
     func updateNSView(_ view: NSView, context: Context) {
-        (view as? Probe)?.apply()
+        guard let probe = view as? Probe else { return }
+        probe.onLiveScroll = onLiveScroll
+        probe.apply()
     }
 
     /// Looks for the table from its own place in the hierarchy. The list may not have built its table yet when
     /// this view lands in the window — and is rebuilt whenever the list is, on a scope switch — so it looks again
-    /// a few times rather than once.
+    /// a few times rather than once. Once found, an update finds it again for free: the search used to run four
+    /// times at every redraw of the sidebar, which while agents work is several times a second.
     private final class Probe: NSView {
+        var onLiveScroll: ((Bool) -> Void)?
+        private weak var table: NSTableView?
+        private weak var observedScrollView: NSScrollView?
+        nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+        private var isLiveScrolling = false
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             apply()
         }
 
+        /// A list taken away mid-scroll (a scope switch) never posts the end of it: end it here, or whatever waits for
+        /// it would wait for good.
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            if newWindow == nil { setLiveScrolling(false) }
+        }
+
         func apply() {
+            if let table, table.window != nil, table.window === window {
+                if table.selectionHighlightStyle != .none { table.selectionHighlightStyle = .none }
+                return
+            }
             for delay in [0, 0.05, 0.25, 0.8] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.table?.window == nil else { return }
                     var ancestor = self.superview
                     while let current = ancestor {
                         if let table = Self.table(in: current) {
                             table.selectionHighlightStyle = .none
+                            self.table = table
+                            self.observe(table.enclosingScrollView)
                             return
                         }
                         ancestor = current.superview
                     }
                 }
             }
+        }
+
+        private func observe(_ scrollView: NSScrollView?) {
+            guard let scrollView, scrollView !== observedScrollView else { return }
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observedScrollView = scrollView
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(forName: NSScrollView.willStartLiveScrollNotification, object: scrollView, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.setLiveScrolling(true) }
+                },
+                center.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: scrollView, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.setLiveScrolling(false) }
+                },
+            ]
+        }
+
+        private func setLiveScrolling(_ scrolling: Bool) {
+            guard scrolling != isLiveScrolling else { return }
+            isLiveScrolling = scrolling
+            onLiveScroll?(scrolling)
+        }
+
+        deinit {
+            observers.forEach(NotificationCenter.default.removeObserver)
         }
 
         private static func table(in view: NSView) -> NSTableView? {

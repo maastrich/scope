@@ -32,11 +32,8 @@ struct SidebarView: View {
     /// The time the sub-agent rows are drawn at (`SubagentRows`): moved when a finished sub-agent's time under its
     /// thread runs out, and otherwise left alone so the list is not redrawn on a timer.
     @State private var subagentClock = Date.now
-
-    /// When a finished sub-agent next leaves its thread's rows, across the scope's threads; `nil` when none lingers.
-    private var nextSubagentChange: Date? {
-        model.threads.compactMap { $0.claude.subagents.nextSidebarChange(after: subagentClock) }.min()
-    }
+    /// Rows keep their group and height while the list is scrolled (`SidebarScrollHold`).
+    @State private var scrollHold = SidebarScrollHold<SidebarRowKey>()
 
     private var filter: String { model.searchUI.sidebarFilter.trimmingCharacters(in: .whitespaces) }
     private var isFiltering: Bool { !filter.isEmpty }
@@ -71,7 +68,16 @@ struct SidebarView: View {
                 }
                 .environment(\.defaultMinListRowHeight, 28)
                 .scrollContentBackground(.hidden)
-                .background(ListSelectionHighlightRemover())
+                .background(ListSelectionHighlightRemover { scrolling in
+                    var hold = scrollHold
+                    if scrolling {
+                        hold.begin(liveGroups(in: scope))
+                    } else {
+                        hold.end()
+                    }
+                    scrollHold = hold
+                    SidebarLiveScroll.hold = hold
+                })
                 .background(Surface.surface.ignoresSafeArea())
                 .offset(x: swipeOffset)
                 .id(scope.id)
@@ -115,11 +121,7 @@ struct SidebarView: View {
             UsageMeterBand()
         }
         .onChange(of: model.searchUI.sidebarFilterFocusTick) { filterFocused = true }
-        .task(id: nextSubagentChange) {
-            guard let next = nextSubagentChange else { return }
-            try? await Task.sleep(for: .seconds(max(0.5, next.timeIntervalSinceNow)))
-            if !Task.isCancelled { subagentClock = .now }
-        }
+        .background { SubagentClock(now: $subagentClock) }
         // Picking a thread here is picking where to type: the List keeps its highlight, the terminal takes
         // the keyboard (the command palette already behaves this way).
         //
@@ -389,7 +391,7 @@ struct SidebarView: View {
     /// A task's row and, from its second thread on, its threads nested under it.
     @ViewBuilder
     private func taskRows(_ task: TaskState, depth: Int = 0) -> some View {
-        TaskRow(task: task, depth: depth)
+        TaskRow(task: task, depth: depth, heldGroup: heldGroup(of: task))
             .tag(SidebarItem.task(task.id))
         // The task row stands for its only thread: that thread's sub-agents hang from it.
         if model.threads(in: task.id).count == 1, let only = model.threads(in: task.id).first {
@@ -421,10 +423,8 @@ struct SidebarView: View {
     @ViewBuilder
     private func stateGroups(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let loose = visibleScopeThreads(in: scope)
-        let tasksByGroup = Dictionary(grouping: tasks) {
-            SidebarGroup(TaskStatus.resolve(model.taskFacts(for: $0)), dormancy: model.dormancy(of: $0))
-        }
-        let threadsByGroup = Dictionary(grouping: loose) { SidebarGroup($0.displayState) }
+        let tasksByGroup = Dictionary(grouping: tasks) { scrollHold.group(of: .task($0.id), live: liveGroup(of: $0)) }
+        let threadsByGroup = Dictionary(grouping: loose) { scrollHold.group(of: .thread($0.id), live: SidebarGroup($0.displayState)) }
         let sections = SidebarGroup.sections(tasksByGroup.flatMap { group, tasks in tasks.map { _ in group } }
                                              + threadsByGroup.flatMap { group, threads in threads.map { _ in group } })
         ForEach(sections, id: \.group) { section in
@@ -445,6 +445,26 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+
+    /// Where a task belongs by state, the grouping the by-state arrangement files it under.
+    private func liveGroup(of task: TaskState) -> SidebarGroup {
+        SidebarGroup(TaskStatus.resolve(model.taskFacts(for: task)), dormancy: model.dormancy(of: task))
+    }
+
+    /// The group of every row that can move, for `SidebarScrollHold` to keep while a scroll lasts.
+    private func liveGroups(in scope: ScopeState) -> [SidebarRowKey: SidebarGroup] {
+        var groups: [SidebarRowKey: SidebarGroup] = [:]
+        for task in model.tasks(in: scope.id) { groups[.task(task.id)] = liveGroup(of: task) }
+        for thread in model.scopeLevelThreads(in: scope.id) { groups[.thread(thread.id)] = SidebarGroup(thread.displayState) }
+        return groups
+    }
+
+    /// The group a scroll in progress holds the task row in, only when it is not where its state now puts it: the
+    /// row then keeps its height. `nil` otherwise, so beginning a scroll redraws no row.
+    private func heldGroup(of task: TaskState) -> SidebarGroup? {
+        guard scrollHold.isHolding, let held = scrollHold.heldGroup(of: .task(task.id)) else { return nil }
+        return held == liveGroup(of: task) ? nil : held
     }
 
     /// The scope's orchestrator and terminal, first, in both arrangements. They are furniture rather than work: always
@@ -545,6 +565,47 @@ struct SidebarView: View {
         .font(.scopeCaption)
         .help(message)
         .selectionDisabled()
+    }
+}
+
+/// What names a sidebar row that can change groups (`SidebarScrollHold`).
+enum SidebarRowKey: Hashable, Sendable {
+    case task(TaskID)
+    case thread(ThreadID)
+}
+
+/// The scroll in progress, where a row reads it without observing it, so that beginning a scroll redraws nothing.
+///
+/// A task row redraws on its own when its threads change, with the arguments its parent last gave it: one drawn
+/// before the scroll began would otherwise take the height its live state gives it, mid-scroll. And what reacts to
+/// the pointer must not take rows sliding under a still pointer for a pointer resting on them: a task's hover card
+/// would open over the list as it moves.
+@MainActor
+enum SidebarLiveScroll {
+    static var hold = SidebarScrollHold<SidebarRowKey>()
+    static var isActive: Bool { hold.isHolding }
+}
+
+/// Moves the sidebar's sub-agent clock when a finished sub-agent's time under its thread runs out. A view of its own,
+/// drawing nothing, so that what it reads — every thread's sub-agents, which change at each one that starts or ends —
+/// redraws this view alone and not the whole list.
+private struct SubagentClock: View {
+    @Environment(AppModel.self) private var model
+    @Binding var now: Date
+
+    /// When a finished sub-agent next leaves its thread's rows, across the threads; `nil` when none lingers.
+    private var nextChange: Date? {
+        model.threads.compactMap { $0.claude.subagents.nextSidebarChange(after: now) }.min()
+    }
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .task(id: nextChange) {
+                guard let next = nextChange else { return }
+                try? await Task.sleep(for: .seconds(max(0.5, next.timeIntervalSinceNow)))
+                if !Task.isCancelled { now = .now }
+            }
     }
 }
 
