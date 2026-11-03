@@ -10,9 +10,9 @@ import Foundation
 public enum SidebarRowLayout {
     /// The disclosure chevron's slot, drawn or blank. A chevron button's hover wash may overflow it; layout counts
     /// only the slot, or a row with a chevron would sit further right than one without.
-    public static let disclosureSlot: Double = 12
+    public static let disclosureSlot: Double = 10
     /// Between every item of a row.
-    public static let spacing: Double = 7
+    public static let spacing: Double = 5
     /// What one level of nesting adds: exactly a disclosure slot and its spacing, so a nested row's title sits
     /// under its parent's title and the rule hanging from the chevron says "child of".
     public static let indent = disclosureSlot + spacing
@@ -26,8 +26,9 @@ public enum SidebarRowLayout {
     /// Over this many points the text fades out before the hover controls begin.
     public static let fadeRamp: Double = 14
     /// A row's inset from the list's edge on each side; the selection fill is inset `selectionInset` and the
-    /// dot's halo must end inside it.
-    public static let rowInset: Double = 10
+    /// dot's halo must end inside it. Slot, spacing and inset were 12/7/10: 29 pt before every name, which the
+    /// owner found too much; 10/5/8 puts the name 23 pt in.
+    public static let rowInset: Double = 8
     public static let selectionInset: Double = 6
 
     /// Height of a one-line row (Settings ▸ Sidebar ▸ Rows ▸ Compact).
