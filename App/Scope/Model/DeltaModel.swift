@@ -149,7 +149,7 @@ final class DeltaModel {
             do {
                 try await store.save(snapshot, for: taskID)
             } catch {
-                problems.warn("Could not save the viewed marks", detail: String(describing: error))
+                problems.warn("Could not save the viewed marks", error: error)
             }
         }
     }
@@ -287,7 +287,7 @@ final class DeltaModel {
         do {
             try await Task.detached(priority: .userInitiated) { try await work(git) }.value
         } catch {
-            problems.error(failureTitle, detail: String(describing: error))
+            problems.error(failureTitle, error: error)
         }
     }
 

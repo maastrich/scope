@@ -1,5 +1,6 @@
 import SwiftUI
 import ScopeCore
+import ScopeTasks
 
 /// Toolbar badge showing the unread problem count, with a popover listing every `ProblemCenter` entry
 /// (title, copyable detail, age, actions). Opening the popover marks everything read.
@@ -26,10 +27,12 @@ struct ProblemPopover: View {
                 }
         }
         .buttonStyle(.icon)
+        .usageID("problems.open", label: "Problems (toolbar)")
         .help(model.problems.problems.isEmpty ? "No problems" : "\(model.problems.problems.count) problems")
         .accessibilityLabel(model.problems.unreadCount > 0 ? "Problems, \(model.problems.unreadCount) unread" : "Problems")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             ProblemList()
+                .usageArea("problems")
                 .frame(width: 380)
                 .frame(minHeight: 120, maxHeight: 480)
                 .onAppear { model.problems.markAllRead() }
@@ -92,6 +95,7 @@ private struct ProblemRowView: View {
                 .foregroundStyle(Ink.secondary)
                 .help("Dismiss")
                 .accessibilityLabel("Dismiss \(problem.title)")
+                .usageID("dismiss", label: "Dismiss (problems)")
             }
             if let detail = problem.detail, !detail.isEmpty {
                 Text(detail)
@@ -104,16 +108,30 @@ private struct ProblemRowView: View {
             if !problem.actions.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(problem.actions) { action in
-                        Button(action.title) {
+                        let working = isWorking(action)
+                        Button {
                             model.problems.onAction?(action)
+                        } label: {
+                            HStack(spacing: 5) {
+                                if working { ProgressView().controlSize(.mini) }
+                                Text(action.title)
+                            }
                         }
                         .buttonStyle(.scopeSecondary)
+                        // A restore under way: a second click would only start a second one.
+                        .disabled(working)
+                        .usageID("problems.\(action.usageElement)", label: "\(action.title) (problems)")
                     }
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+    }
+
+    private func isWorking(_ action: ProblemAction) -> Bool {
+        if case .reopenTask(let raw) = action.kind, let id = TaskID(rawValue: raw) { return model.restoringTasks.contains(id) }
+        return false
     }
 
     private var severitySymbol: String {

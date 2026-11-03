@@ -57,6 +57,7 @@ private struct ExitToast: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .usageID("exit-toast.dismiss", label: "Dismiss (exit toast)")
             .help(notice.closesThread ? "Close for good" : "Dismiss (the tab stays until you close it)")
             .accessibilityLabel(notice.closesThread ? "Close thread" : "Dismiss")
         }

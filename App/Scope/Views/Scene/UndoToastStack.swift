@@ -50,6 +50,7 @@ private struct UndoToast: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .usageID("undo-toast.dismiss", label: "Dismiss (undo toast)")
             .help("Dismiss (⌘Z still works for a few minutes)")
             .accessibilityLabel("Dismiss")
         }

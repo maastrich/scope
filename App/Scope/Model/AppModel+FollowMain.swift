@@ -85,7 +85,7 @@ extension AppModel {
             let record = try await env.tasks.setHoldBranch(hold, for: task.id)
             task.update(record: record)
         } catch {
-            problems.warn("Could not mark the branch of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.warn("Could not mark the branch of \(task.name)", error: error, scope: task.scopeID)
         }
     }
 
@@ -193,7 +193,7 @@ extension AppModel {
                 conflicted.repos[repo.sandboxKey]?.conflicts = paths
                 stopped = true
             case .failure(let error):
-                problems.warn("Could not rebase \(task.name) on \(upstream)", detail: String(describing: error), scope: task.scopeID)
+                problems.warn("Could not rebase \(task.name) on \(upstream)", error: error, scope: task.scopeID)
                 stopped = true
             }
             if stopped { break }

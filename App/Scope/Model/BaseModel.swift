@@ -163,7 +163,7 @@ final class BaseModel {
             await loadHistory()
             await loadTree()
         } catch {
-            problems.error("Pull failed in \(repo.shortName)", detail: String(describing: error), scope: scope.id)
+            problems.error("Pull failed in \(repo.shortName)", error: error, scope: scope.id)
         }
     }
 
@@ -184,7 +184,7 @@ final class BaseModel {
         guard generation == self.generation else { return }
         switch result {
         case .success(let node): tree = node
-        case .failure(let error): problems.error("Could not list \(url.lastPathComponent)", detail: String(describing: error))
+        case .failure(let error): problems.error("Could not list \(url.lastPathComponent)", error: error)
         }
     }
 

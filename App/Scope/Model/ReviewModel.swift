@@ -70,7 +70,7 @@ final class ReviewModel {
             do {
                 try await store.save(snapshot, for: taskID)
             } catch {
-                problems.warn("Could not save the review comments", detail: String(describing: error))
+                problems.warn("Could not save the review comments", error: error)
             }
         }
     }

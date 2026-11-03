@@ -21,6 +21,7 @@ struct SentToast: View {
                 model.showMessageTarget(notice.thread)
             }
             .buttonStyle(.scopeSecondary)
+            .usageID("sent-toast.show", label: "Show (sent toast)")
             Button {
                 model.messageUI.dismissSent()
             } label: {
@@ -31,6 +32,7 @@ struct SentToast: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .usageID("sent-toast.dismiss", label: "Dismiss (sent toast)")
             .accessibilityLabel("Dismiss")
         }
         .padding(.leading, 14)

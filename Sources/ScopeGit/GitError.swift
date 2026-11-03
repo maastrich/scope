@@ -89,3 +89,20 @@ public enum GitFailureHint {
             + "Install it (brew install git-lfs), then try again."
     }
 }
+
+extension GitError: ProblemCauseProviding {
+    /// What git's stderr says (a lock, a refused login, a network error), else a plain non-zero exit.
+    public var problemCause: ProblemCause {
+        let cause = ProblemCause.classify(message)
+        return cause == .unknown ? .exit : cause
+    }
+}
+
+extension WorktreeError: ProblemCauseProviding {
+    public var problemCause: ProblemCause {
+        switch self {
+        case .uncommittedChanges: .conflict
+        case .missingStartPoint: .missing
+        }
+    }
+}

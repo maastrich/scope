@@ -53,7 +53,7 @@ extension AppModel {
                 directory: task.record.threadCwd.path, taskID: task.id, scopeID: task.scopeID
             ))
         } catch {
-            problems.error("Could not read checkpoint \(checkpoint.number) of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not read checkpoint \(checkpoint.number) of \(task.name)", error: error, scope: task.scopeID)
         }
     }
 
@@ -74,7 +74,7 @@ extension AppModel {
             problems.report(Problem(severity: .info, title: "Restored checkpoint \(checkpoint.number) of \(task.name)",
                                     detail: "Every sandbox has the files as the checkpoint had them; the branch and its commits did not move\(undo)."))
         } catch {
-            problems.error("Could not restore checkpoint \(checkpoint.number) of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not restore checkpoint \(checkpoint.number) of \(task.name)", error: error, scope: task.scopeID)
         }
     }
 
@@ -97,7 +97,7 @@ extension AppModel {
                                     detail: "The branch points at the checkpoint's commit in every repository of the task; nothing was checked out."))
             scope(task.scopeID)?.refreshFacts()
         } catch {
-            problems.error("Could not branch from checkpoint \(checkpoint.number) of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not branch from checkpoint \(checkpoint.number) of \(task.name)", error: error, scope: task.scopeID)
         }
     }
 

@@ -158,6 +158,32 @@ import ScopeGit
         #expect(try await base.hasUncommittedChanges(at: sandbox))
     }
 
+    /// The burst of 02/11: Restore clicked ten times in ten seconds on a task of two repositories. Every call used to
+    /// pass the archived guard while the first was still fetching, then tripped on the worktrees the others had made,
+    /// and each one's rollback took the others' work apart: ten failures, no task.
+    @Test func tenConcurrentRestoresMakeOneRestore() async throws {
+        let scope = try await TestScope.make()
+        try await scope.makeRepo("api")
+        try await scope.makeRepo("web")
+        let manager = makeManager(scope)
+        let task = try await manager.create(name: "burst", branch: "feat/burst", in: scope.declaration, repos: ["api", "web"])
+        _ = try await manager.dismantle(task.id, .archive)
+
+        let results = await withTaskGroup(of: Result<TaskRecord, any Error>.self) { group in
+            for _ in 0..<10 {
+                group.addTask { do { return .success(try await manager.reopen(task.id)) } catch { return .failure(error) } }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+        let records = results.compactMap { try? $0.get() }
+        #expect(records.count == 10, "failures: \(results.compactMap { if case .failure(let e) = $0 { e } else { nil } })")
+        #expect(records.allSatisfy { !$0.isArchived && $0.repos.allSatisfy { $0.state == .active } })
+        for repo in try #require(records.first).repos {
+            #expect(scope.exists(repo.sandboxURL))
+        }
+        #expect(await manager.isReopening(task.id) == false)
+    }
+
     @Test func restoringATaskWithAPullRequestKeepsItOpenAfterTheMerge() async throws {
         let scope = try await TestScope.make()
         _ = try await scope.makeRepo("api")

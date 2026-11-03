@@ -104,7 +104,7 @@ extension AppModel {
             // A refresh that outlived a close (`settlePullRequest`) finds no record left: nothing to report.
             guard await env.tasks.task(task.id) != nil else { return }
             let labels = links.map(\.label).joined(separator: ", ")
-            problems.warn("Could not bind \(labels) to the task", detail: String(describing: error), scope: task.scopeID)
+            problems.warn("Could not bind \(labels) to the task", error: error, scope: task.scopeID)
         }
     }
 
@@ -117,7 +117,7 @@ extension AppModel {
             do {
                 log = try await target.gh.failedLog(of: job, in: target.checkout, repo: target.repo)
             } catch {
-                problems.warn("Could not fetch the log of \(check.title)", detail: String(describing: error), scope: task.scopeID)
+                problems.warn("Could not fetch the log of \(check.title)", error: error, scope: task.scopeID)
             }
         }
         let text = PullRequestPrompts.checkFailed(check, pullRequest: target.link.number, log: log)
@@ -153,7 +153,7 @@ extension AppModel {
             }
             method = allowed
         } catch {
-            problems.error("Could not read how #\(pr.number) may be merged", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not read how #\(pr.number) may be merged", error: error, scope: task.scopeID)
             return
         }
         guard await confirmForce(title: "Merge #\(pr.number) into \(pr.baseRefName)?",
@@ -162,7 +162,7 @@ extension AppModel {
         do {
             try await target.gh.prMerge(number: pr.number, method: method, in: target.checkout, repo: target.repo)
         } catch {
-            problems.error("Could not merge #\(pr.number)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not merge #\(pr.number)", error: error, scope: task.scopeID)
             return
         }
         await refreshTaskPullRequest(task)

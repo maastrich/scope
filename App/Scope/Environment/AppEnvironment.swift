@@ -127,7 +127,8 @@ final class AppEnvironment {
                 severity: .error,
                 title: "Could not create \(home.path)",
                 detail: String(describing: error),
-                actions: [.reveal(home.deletingLastPathComponent().path)]
+                actions: [.reveal(home.deletingLastPathComponent().path)],
+                cause: ProblemCause.of(error)
             ))
         }
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"

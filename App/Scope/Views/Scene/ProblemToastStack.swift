@@ -74,6 +74,7 @@ private struct ProblemToast: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .usageID("problem-toast.dismiss", label: "Dismiss (problem toast)")
             .help("Dismiss (it stays in the problems popover)")
             .accessibilityLabel("Dismiss")
         }

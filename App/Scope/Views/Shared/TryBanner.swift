@@ -85,7 +85,7 @@ struct TryBanner: View {
         Task {
             defer { busy = false }
             do { _ = try await action() } catch {
-                model.problems.error("Could not \(what) your checkout for \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                model.problems.error("Could not \(what) your checkout for \(task.name)", error: error, scope: task.scopeID)
             }
         }
     }

@@ -71,6 +71,7 @@ struct SceneView: View {
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.icon)
+            .usageID("toolbar.sidebar", label: "Toggle Sidebar (toolbar)")
             .commandKeyHint("command.sidebar", .inside)
             .help("Toggle Sidebar (⌃⌘S)")
             .accessibilityLabel("Toggle Sidebar")
@@ -119,6 +120,7 @@ struct SceneView: View {
                     }
                 }
                 .buttonStyle(.scopeGhost)
+                .usageID("toolbar.open-in-editor", label: "Open in Editor (toolbar)")
                 .help("Open this checkout in your editor (⌘E, ⌥-click copies the path)")
             }
             ProblemPopover()
@@ -133,6 +135,7 @@ struct SceneView: View {
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.icon)
+            .usageID("toolbar.inspector", label: "Toggle Inspector (toolbar)")
             .disabled(model.scopes.isEmpty)
             .commandKeyHint("command.inspector", .inside)
             .help("Toggle Inspector (⌥⌘I)")
