@@ -116,6 +116,10 @@ extension AppModel {
             engine.relaunches[id] = nil
             engine.attempts[id] = nil
             engine.stuck[id] = nil
+            // A topic orchestrator left without tasks was kept for the end of this turn — its last report.
+            if session.placement.topicKey != nil {
+                Task { [weak self] in await self?.closeIdleTopicOrchestrators(in: session.record.scopeID) }
+            }
         case .turnFailed:
             noteFailedTurn(event, session: session)
         default:

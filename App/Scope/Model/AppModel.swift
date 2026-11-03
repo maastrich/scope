@@ -1191,7 +1191,8 @@ final class AppModel {
     /// instead of the task's usual directory.
     func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
                    title customTitle: String? = nil, initialPrompt: String? = nil,
-                   origin: ThreadOrigin = .user, model: String? = nil, branch: String? = nil) async -> ThreadSession? {
+                   origin: ThreadOrigin = .user, model: String? = nil, branch: String? = nil,
+                   topic: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -1250,7 +1251,8 @@ final class AppModel {
             cwdKind: kind,
             taskID: task?.id.rawValue,
             origin: origin,
-            model: resolvedModel(model, profile: profile, in: scope)
+            model: resolvedModel(model, profile: profile, in: scope),
+            topic: topic
         )
         let session = ThreadSession(record: record, profile: profile)
         register(session)
@@ -1539,7 +1541,8 @@ final class AppModel {
     /// order, then the loose threads. The
     /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
     func threadOrder(in scope: ScopeID) -> [ThreadSession] {
-        residents(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) } + scopeLevelThreads(in: scope)
+        residents(in: scope) + topicOrchestrators(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) }
+            + scopeLevelThreads(in: scope)
     }
 
     // MARK: Scope navigation

@@ -333,6 +333,7 @@ extension AppModel {
         for record in changed {
             task(record.id)?.update(record: record)
         }
+        for scope in Set(changed.map(\.scopeID)) { await closeIdleTopicOrchestrators(in: scope) }
         return changed
     }
 
@@ -350,6 +351,8 @@ extension AppModel {
     /// Renames a topic on every open task of `scope` filed under it.
     func renameTopic(_ topic: String, to newName: String, in scope: ScopeID) async {
         guard let newName = TaskTopic.normalize(newName) else { return }
+        // The orchestrator first: once the tasks moved, nothing would be left under the old name and it would close.
+        renameTopicOrchestrator(topic, to: newName, in: scope)
         await setTopic(newName, for: tasks(inTopic: topic, scope: scope).map(\.id))
     }
 
@@ -755,6 +758,7 @@ extension AppModel {
             forgetUndo(id: "task:\(task.id.rawValue)")
         }
         reportOutcome(outcome, task: task, mode: mode, notice: notice)
+        await closeIdleTopicOrchestrators(in: task.scopeID)
         Task { await collectGarbage() }
         return outcome
     }

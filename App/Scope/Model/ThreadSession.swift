@@ -198,6 +198,14 @@ final class ThreadSession: Identifiable {
         onRecordChanged?(record)
     }
 
+    /// Follows its topic through a rename (`TopicOrchestration`).
+    func setTopic(_ topic: String, title: String) {
+        guard topic != record.topic || title != record.title else { return }
+        record.topic = topic
+        record.title = title
+        onRecordChanged?(record)
+    }
+
     /// Makes an ordinary thread of a resident one (a second claim on its role) or the reverse.
     func setResident(_ role: ResidentRole?) {
         guard role != record.resident else { return }

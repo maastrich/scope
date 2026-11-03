@@ -171,6 +171,18 @@ import ScopeCore
         #expect(newer == ActingTriggerPreferences())
     }
 
+    /// A merge and the topic delivered come from one refresh: both go, the cap aside.
+    @Test func twoTopicMilestonesAtOnceBothAct() {
+        var ledger = ActingLedger()
+        let thread = ThreadID(rawValue: "3f9a2c17be04")!
+        let preference = ActingTriggerPreferences()[.topic]
+        for key in ["merged:https://x/pull/2", "delivered:a,b"] {
+            let proposal = ActingTriggers.Proposal(trigger: .topic, thread: thread, key: key, action: .send("x"), cause: "merged")
+            #expect(ActingTriggers.decide(proposal, thread: .init(id: thread), preference: preference, ledger: ledger, now: now) == .act)
+            ledger.recordAct(.topic, on: thread, key: key, at: now)
+        }
+    }
+
     // MARK: Messages
 
     @Test(arguments: ActingTrigger.allCases)
@@ -184,6 +196,7 @@ import ScopeCore
         case .review: ActingPrompts.review(pullRequest: 12, comments: [.init(author: "Copilot", location: "a.swift:3", excerpt: "nit")])
         case .baseMoved: ActingPrompts.baseMoved(base: "main", branch: "feat/x", files: ["a.swift"], pullRequest: 12)
         case .stuck: ActingPrompts.stuck(reason: "edits the same file back and forth")
+        case .topic: ActingPrompts.topicMerged(topic: "auth", task: "refresh", pullRequest: 12)
         }
         #expect(text.hasPrefix("[Scope: automatic message from Scope itself, not the user — \(trigger.title.lowercased())]"))
         #expect(!text.contains("--force"))

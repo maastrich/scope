@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 35
+    public static let version = 36
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -217,6 +217,7 @@ public struct SkillInstaller: Sendable {
         | `scope task checkpoints [<slug>] [--scope S]` | `scope_task_checkpoints` `{task, scope}` |
         | `scope task restore-checkpoint [<slug>] <n> [--scope S]` | `scope_task_restore_checkpoint` `{task, number, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
+        | `scope topic show ["<topic>"]` | `scope_topic_show` `{topic}` |
         | `scope task milestone add [<slug>] "<title>" [--validate C] [--child S]` | `scope_task_milestone_add` `{task, title, validation, child}` |
         | `scope task milestone done [<slug>] <n\\|title> [--child S]` | `scope_task_milestone_done` `{task, milestone, child}` |
         | `scope schedule list [--scope S]` / `scope schedule run <name>` | `scope_schedule_list` `{scope}` / `scope_schedule_run` `{name, scope}` |
@@ -286,6 +287,11 @@ public struct SkillInstaller: Sendable {
         slug), `--clear` takes it out — and Scope leaves it out. Only the label moves — branch, worktrees and
         threads stay. The tasks it started, and theirs, follow while they still share its old topic;
         `--no-children` moves it alone.
+
+        A topic can have its own **orchestrator** thread, opened by the user from the topic's row. If you are one
+        (your opening prompt says so), `scope topic show` is the topic as it stands now — run it rather than relying
+        on what you were told at the start; `scope task new` from your thread files the task in your topic; Scope
+        sends you a notice when a pull request of the topic merges or every task is delivered — do not poll.
 
         `scope thread new --task <slug> -p "<prompt>"` opens another agent in an existing task. Its working
         directory is the sandbox, so it commits on the task branch. `--task` finds a task in any scope.

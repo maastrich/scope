@@ -6,7 +6,8 @@ import ScopeTasks
 ///
 /// Built like **Loose threads**: not selectable — a topic has nothing of its own to show — it expands and collapses
 /// and carries the most urgent state of its tasks' threads, so a collapsed group never hides an agent that wants
-/// you. Its menu acts on the topic as a whole: rename it, take the tasks out of it, archive them together.
+/// you. Its menu acts on the topic as a whole: open its orchestrator (`TopicOrchestration`), rename it, take the
+/// tasks out of it, archive them together.
 struct TopicRow: View {
     @Environment(AppModel.self) private var model
     let scope: ScopeState
@@ -54,6 +55,11 @@ struct TopicRow: View {
                 Button("Compare Attempts…") { model.presentCompare(group: group.id) }
                 Divider()
             }
+            Button(model.topicOrchestrator(topic, in: scope.id) == nil ? "Open Orchestrator" : "Show Orchestrator") {
+                Task { await model.openTopicOrchestrator(topic, in: scope.id) }
+            }
+            .help("One agent thread for this topic: it knows its tasks, talks to their threads and opens new ones in it")
+            Divider()
             Button("Rename Topic…") {
                 guard let name = model.promptTopicName(title: "Rename Topic", current: topic, action: "Rename") else { return }
                 Task { await model.renameTopic(topic, to: name, in: scope.id) }

@@ -82,6 +82,8 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case summary
     /// One task's whole brief and what was kept of it at archive: its threads' last answers, its report file.
     case taskShow = "task.show"
+    /// A topic's tasks as its orchestrator reads them: state, branch, pull requests, threads, brief.
+    case topicShow = "topic.show"
     /// The preferences `ConfigKey` lists, as the app holds them right now.
     case configGet = "config.get"
     /// Changes one of them live, as the Settings window would. The user's own terminal only.
@@ -111,7 +113,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     /// `false` for the calls that only read.
     public var isMutating: Bool {
         switch self {
-        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList,
+        case .ping, .list, .threadRead, .threadWait, .summary, .taskShow, .topicShow, .taskCheckpoints, .configGet, .usage, .scheduleList,
              .taskBranchList: false
         case .threadNew, .threadStop, .threadRestart, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
              .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .topicsRegroup, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
@@ -270,6 +272,7 @@ public enum ControlCall: Sendable, Equatable {
     case threadWait(ThreadWaitParams)
     case summary(SummaryParams)
     case taskShow(TaskShowParams)
+    case topicShow(TopicShowParams)
     case configGet(ConfigGetParams)
     case configSet(ConfigSetParams)
     case usage(UsageParams)
@@ -308,6 +311,7 @@ public enum ControlCall: Sendable, Equatable {
         case .threadWait: .threadWait
         case .summary: .summary
         case .taskShow: .taskShow
+        case .topicShow: .topicShow
         case .configGet: .configGet
         case .configSet: .configSet
         case .usage: .usage
@@ -331,7 +335,7 @@ public enum ControlCall: Sendable, Equatable {
     public var timeout: Duration {
         switch self {
         case .ping: .seconds(5)
-        case .list, .threadRead, .summary, .taskShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList,
+        case .list, .threadRead, .summary, .taskShow, .topicShow, .taskCheckpoints, .configGet, .configSet, .usage, .scheduleList,
              .taskBranchList: .seconds(15)
         case .threadNew: .seconds(60)
         case .threadStop, .threadClose, .taskTopic, .milestoneAdd: .seconds(30)
@@ -816,6 +820,23 @@ public struct TaskTopicParams: Codable, Sendable, Equatable {
         task = try container.decodeIfPresent(String.self, forKey: .task)
         topic = try container.decodeIfPresent(String.self, forKey: .topic)
         children = try container.decodeIfPresent(Bool.self, forKey: .children) ?? true
+    }
+}
+
+/// `scope topic show [<topic>] [--scope S]`: without a topic, the one the calling thread orchestrates or its task's.
+public struct TopicShowParams: Codable, Sendable, Equatable {
+    public var topic: String?
+    public var scope: String?
+
+    public init(topic: String? = nil, scope: String? = nil) {
+        self.topic = topic
+        self.scope = scope
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        topic = try container.decodeIfPresent(String.self, forKey: .topic)
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
     }
 }
 

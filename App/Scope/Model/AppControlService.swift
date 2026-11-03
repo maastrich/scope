@@ -208,6 +208,8 @@ final class AppControlService: ControlService {
                 return .failure(.failed("the cleanup did not run"))
             }
             return .success(.action(ActionResult(message: Self.describe(report, dryRun: params.dryRun)), .gc))
+        case .topicShow(let params):
+            return showTopic(params, from: origin, caller: caller)
         case .topicsRegroup(let params):
             switch resolveScope(params.scope, from: origin, caller: caller) {
             case .failure(let error): return .failure(error)
@@ -359,6 +361,32 @@ final class AppControlService: ControlService {
     private func callerScopeID(_ origin: ControlOrigin) -> String? {
         if case .thread(let id, _) = origin { return model.session(id)?.record.scopeID.rawValue }
         return nil
+    }
+
+    /// `topic.show`: the topic named, else the one the calling thread orchestrates, else its task's.
+    private func showTopic(_ params: TopicShowParams, from origin: ControlOrigin,
+                           caller: ControlCaller) -> Result<ControlResultPayload, ControlError> {
+        let session: ThreadSession? = if case .thread(let id, _) = origin { model.session(id) } else { nil }
+        let scopeID: ScopeID
+        switch resolveScope(params.scope, from: origin, caller: caller) {
+        case .failure(let error): return .failure(error)
+        case .success(let resolved?): scopeID = resolved
+        case .success(nil):
+            guard let own = session?.record.scopeID ?? (model.scopes.count == 1 ? model.scopes.first?.id : nil) else {
+                return .failure(.badRequest("which scope?", detail: "Pass --scope <slug>."))
+            }
+            scopeID = own
+        }
+        let named = TaskTopic.normalize(params.topic) ?? session?.record.topic
+            ?? session.flatMap { model.task(of: $0)?.record.topic }
+        guard let topic = named else {
+            return .failure(.badRequest("which topic?", detail: "Name one: `scope topic show \"<topic>\"`; `scope list tasks` shows them."))
+        }
+        let facts = model.topicFacts(topic, in: scopeID)
+        guard !facts.isEmpty else { return .failure(.notFound("no task is filed under “\(topic)”")) }
+        let spelled = model.tasks.first { $0.scopeID == scopeID && $0.record.topic.map(TaskTopic.key) == TaskTopic.key(topic) }?
+            .record.topic ?? topic
+        return .success(.action(ActionResult(message: TopicOrchestration.report(topic: spelled, tasks: facts)), .topicShow))
     }
 
     private func resolveScope(_ query: String?, from origin: ControlOrigin, caller: ControlCaller) -> Result<ScopeID?, ControlError> {
@@ -1390,7 +1418,9 @@ final class AppControlService: ControlService {
         }
         // Only the topic asked for: a task on its own stays flat, and one started from the caller's task is linked to
         // it — `attributeTopic` files the two together, under the caller's topic or a new one named for both.
-        let topic = TaskTopic.normalize(params.topic)
+        // A topic's orchestrator opens tasks in its topic.
+        let orchestrated: String? = if case .thread(let id, _) = origin { model.session(id)?.record.topic } else { nil }
+        let topic = TaskTopic.normalize(params.topic) ?? orchestrated
         let state: TaskState
         do {
             state = try await model.createTask(proposal, prompt: prompt, driverID: params.driver, in: scope.id,

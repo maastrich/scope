@@ -193,6 +193,9 @@ it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic acti
   <li><b>Thread seems stuck</b> (2 an hour, once per turn): when the assistant reads a running turn as going in circles,
   the turn is interrupted a minute later — time to answer <b>Not stuck</b> — and the agent is told why and asked to
   change approach.</li>
+  <li><b>Topic milestone</b> (3 an hour): a topic whose <a href="concepts.html#topic-orchestrator">orchestrator</a> is
+  open tells it when one of its pull requests merges, and once every task of the topic is delivered — only what
+  happened since it was opened.</li>
 </ul>
 <p>Whatever the trigger: nothing is typed while a turn runs (except to interrupt a stuck one), while the thread waits
 on your answer, or within 20 seconds of your last keystroke in it, and a draft in Claude Code's field is stashed and

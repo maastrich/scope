@@ -372,7 +372,7 @@ struct SidebarView: View {
     @ViewBuilder
     private func taskTree(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
-        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) })
+        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: model.orchestratedTopics(in: scope.id))
         ForEach(entries, id: \.self) { entry in
             switch entry {
             case .task(let id):
@@ -382,6 +382,14 @@ struct SidebarView: View {
                 TopicRow(scope: scope, topic: topic, tasks: members)
                     .selectionDisabled()
                 if !scope.collapsedTopics.contains(TaskTopic.key(topic)) || isFiltering {
+                    // The topic's orchestrator first, its title in the column of the topic's tasks.
+                    if let orchestrator = model.topicOrchestrator(topic, in: scope.id) {
+                        ThreadRow(session: orchestrator, depth: 1)
+                            .tag(SidebarItem.thread(orchestrator.id))
+                        if model.messageUI.replyingTo == orchestrator.id {
+                            InlineReplySlot(thread: orchestrator.id, depth: 1)
+                        }
+                    }
                     // At depth 0, not one level in: a task in a topic takes the room of a task outside one, its title
                     // in the topic's own column. The topic's chevron, hanging left of that column, says where the
                     // group starts; a nesting level used to push the name 19 pt right and cut it short.
@@ -425,7 +433,8 @@ struct SidebarView: View {
     /// groups as their state changes; that is the price of the answer.
     @ViewBuilder
     private func stateGroups(_ scope: ScopeState, tasks: [TaskState]) -> some View {
-        let loose = visibleScopeThreads(in: scope)
+        // A topic's orchestrator has no topic row to sit under here: it is a thread among the others.
+        let loose = visibleScopeThreads(in: scope) + model.topicOrchestrators(in: scope.id).filter { matches($0.title) }
         let tasksByGroup = Dictionary(grouping: tasks) { scrollHold.group(of: .task($0.id), live: liveGroup(of: $0)) }
         let threadsByGroup = Dictionary(grouping: loose) { scrollHold.group(of: .thread($0.id), live: SidebarGroup($0.displayState)) }
         let sections = SidebarGroup.sections(tasksByGroup.flatMap { group, tasks in tasks.map { _ in group } }

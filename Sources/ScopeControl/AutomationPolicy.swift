@@ -225,7 +225,7 @@ public struct AutomationPolicy: Sendable, Equatable {
             }
             let approval: AutomationSettings.Approval
             switch call.method {
-            case .ping, .list, .summary, .taskShow, .taskCheckpoints, .configGet, .usage, .scheduleList, .taskBranchList:
+            case .ping, .list, .summary, .taskShow, .topicShow, .taskCheckpoints, .configGet, .usage, .scheduleList, .taskBranchList:
                 return .allow
             case .milestoneAdd, .milestoneDone:
                 // Bookkeeping on a mission the agent is part of: nothing opened, nothing removed. The service checks
@@ -400,6 +400,7 @@ public struct AutomationPolicy: Sendable, Equatable {
         switch call {
         case .ping, .list, .summary, .configGet, .usage: ""
         case .taskShow(let params): "show the task “\(params.task)”"
+        case .topicShow(let params): "show the topic " + (params.topic.map { "“\($0)”" } ?? "it orchestrates")
         case .configSet(let params): "set \(params.key) to \(params.value)"
         case .threadNew(let params):
             "open a thread" + (params.scope.map { " in \($0)" } ?? "")

@@ -92,7 +92,8 @@ extension AppModel {
                 || known.headRefName != link.headRefName || known.baseRefName != link.baseRefName
                 || (link.headRefOid != nil && known.headRefOid != link.headRefOid)
         }
-        if !stale.isEmpty { await link(stale, to: task) }
+        // A notice the gate held while the orchestrator worked is offered again at the next refresh.
+        if !stale.isEmpty { await link(stale, to: task) } else { noticeTopicMilestones(of: task) }
         for pr in live { await recordChecks(of: pr, for: task) }
         if let failure {
             pullRequestSchedule.failed(task.id)
@@ -125,6 +126,7 @@ extension AppModel {
             let record = try await env.tasks.linkPullRequests(links, to: task.id)
             task.update(record: record)
             attributeTopicsAfterPullRequests(of: task)
+            noticeTopicMilestones(of: task)
         } catch {
             // A refresh that outlived a close (`settlePullRequest`) finds no record left: nothing to report.
             guard await env.tasks.task(task.id) != nil else { return }

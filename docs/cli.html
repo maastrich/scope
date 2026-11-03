@@ -62,6 +62,7 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope topic show [&lt;topic&gt;]          <span class="c"># a topic's tasks: state, branch, PRs and checks, threads, brief</span>
 scope topics regroup [--apply]      <span class="c"># what grouping linked tasks under shared topics would change; --apply does it</span>
 scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
 scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
