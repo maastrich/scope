@@ -66,6 +66,9 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     /// at the next load when the record still says a process was alive and mid-turn. Cleared once the relaunched
     /// thread has been asked to go on — or not, for a reason — so one interruption asks once.
     public var interruptedTurn: Date?
+    /// The topic this thread orchestrates (`TopicOrchestration`): one per topic of a scope, opened on demand from the
+    /// topic's row, filed under it, closed when the topic has no open task left. `nil` for every other thread.
+    public var topic: String?
 
     public init(
         id: ThreadID = .generate(),
@@ -79,7 +82,8 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         createdAt: Date = .now,
         origin: ThreadOrigin? = nil,
         resident: ResidentRole? = nil,
-        model: String? = nil
+        model: String? = nil,
+        topic: String? = nil
     ) {
         version = ThreadRecord.currentVersion
         self.id = id
@@ -103,6 +107,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         relaunchesAtStartup = true
         self.resident = resident
         interruptedTurn = nil
+        self.topic = topic
     }
 
     /// The origin to reason about, defaulting to the user for records that predate the field.
@@ -114,7 +119,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, driverID, model, title, cwd, cwdKind, taskID, createdAt
         case lastLaunchedAt, lastExit, launchCount, resumeID, lastState, log, origin
-        case processAlive, relaunchesAtStartup, resident, interruptedTurn
+        case processAlive, relaunchesAtStartup, resident, interruptedTurn, topic
     }
 
     // Lenient decoding: only identity, driver and cwd are required.
@@ -142,6 +147,7 @@ public struct ThreadRecord: Codable, Sendable, Equatable, Identifiable {
         relaunchesAtStartup = try container.decodeIfPresent(Bool.self, forKey: .relaunchesAtStartup) ?? true
         resident = (try? container.decodeIfPresent(ResidentRole.self, forKey: .resident)) ?? nil
         interruptedTurn = try container.decodeIfPresent(Date.self, forKey: .interruptedTurn)
+        topic = (try? container.decodeIfPresent(String.self, forKey: .topic)) ?? nil
     }
 }
 
@@ -152,17 +158,21 @@ public struct ThreadPlacement: Sendable, Equatable, Hashable {
     public var scopeID: ScopeID
     public var taskID: String?
     public var resident: ResidentRole?
+    /// The topic it orchestrates, as `TaskTopic.key` spells it.
+    public var topicKey: String?
 
-    public init(scopeID: ScopeID, taskID: String?, resident: ResidentRole?) {
+    public init(scopeID: ScopeID, taskID: String?, resident: ResidentRole?, topicKey: String? = nil) {
         self.scopeID = scopeID
         self.taskID = taskID
         self.resident = resident
+        self.topicKey = topicKey
     }
 
     public init(_ record: ThreadRecord) {
-        self.init(scopeID: record.scopeID, taskID: record.taskID, resident: record.resident)
+        self.init(scopeID: record.scopeID, taskID: record.taskID, resident: record.resident,
+                  topicKey: record.topic.map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased() })
     }
 
-    /// A thread opened in the scope rather than in a task, and not one the scope keeps for itself.
-    public var isLoose: Bool { taskID == nil && resident == nil }
+    /// A thread opened in the scope rather than in a task, and not one the scope keeps for itself or a topic's.
+    public var isLoose: Bool { taskID == nil && resident == nil && topicKey == nil }
 }

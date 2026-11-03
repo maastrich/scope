@@ -22,6 +22,22 @@ public enum ActingPrompts {
         return line.count > 160 ? String(line.prefix(159)) + "…" : line
     }
 
+    /// A pull request of the topic merged: told to the topic's orchestrator.
+    public static func topicMerged(topic: String, task: String, pullRequest: Int) -> String {
+        envelope(.topic, """
+        #\(pullRequest) of the task \(task), in the topic “\(topic)”, merged. Check the topic (`scope topic show`) and \
+        move forward what it unblocks, or say that nothing needs doing.
+        """)
+    }
+
+    /// Every task of the topic has its pull requests merged.
+    public static func topicDelivered(topic: String, tasks: [String]) -> String {
+        envelope(.topic, """
+        Every task of the topic “\(topic)” has its pull requests merged (\(tasks.joined(separator: ", "))). Say where the \
+        topic stands and what, if anything, is left.
+        """)
+    }
+
     public static func connectionBack(error: String?) -> String {
         var text = "Your last turn stopped on a network error"
         if let quoted = quoted(error) { text += " (“\(quoted)”)" }

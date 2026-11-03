@@ -20,6 +20,9 @@ public enum ActingTrigger: String, Codable, Sendable, CaseIterable, Identifiable
     case baseMoved = "base-moved"
     /// The assistant reads the running turn as going in circles: interrupted, and asked to change approach.
     case stuck
+    /// A pull request of a topic merged, or every task of the topic is delivered: the topic's orchestrator, when one
+    /// is open, is told (`TopicOrchestration`).
+    case topic
 
     public var id: String { rawValue }
 
@@ -33,6 +36,7 @@ public enum ActingTrigger: String, Codable, Sendable, CaseIterable, Identifiable
         case .review: "Review received"
         case .baseMoved: "Base branch moved"
         case .stuck: "Thread seems stuck"
+        case .topic: "Topic milestone"
         }
     }
 
@@ -47,6 +51,7 @@ public enum ActingTrigger: String, Codable, Sendable, CaseIterable, Identifiable
         case .review: "The task's thread gets new review comments, Copilot's included, to address."
         case .baseMoved: "An idle task with an open pull request is asked to update when the base touches its files."
         case .stuck: "A turn the assistant reads as going in circles is interrupted and asked to change approach."
+        case .topic: "An open topic orchestrator is told when a pull request of its topic merges and when every task is delivered."
         }
     }
 }
@@ -85,6 +90,7 @@ public struct ActingTriggerPreferences: Codable, Sendable, Equatable {
         case .review: .init(enabled: true, hourlyCap: 3)
         case .baseMoved: .init(enabled: true, hourlyCap: 1)
         case .stuck: .init(enabled: true, hourlyCap: 2)
+        case .topic: .init(enabled: true, hourlyCap: 3)
         }
     }
 

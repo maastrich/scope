@@ -173,7 +173,8 @@ struct ThreadRow: View {
     }
 
     private var caption: String? {
-        switch session.record.cwdKind {
+        if session.placement.topicKey != nil { return "orchestrator" }
+        return switch session.record.cwdKind {
         case .scopeRoot: "scope root"
         case .repoBase(let relativePath): relativePath
         case .task: depth >= 1 ? nil : (model.task(of: session)?.name ?? "task")

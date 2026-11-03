@@ -1191,7 +1191,8 @@ final class AppModel {
     /// instead of the task's usual directory.
     func newThread(in scopeID: ScopeID, driverID: String? = nil, cwdKind: ThreadCwdKind = .scopeRoot, taskID: TaskID? = nil,
                    title customTitle: String? = nil, initialPrompt: String? = nil,
-                   origin: ThreadOrigin = .user, model: String? = nil, branch: String? = nil) async -> ThreadSession? {
+                   origin: ThreadOrigin = .user, model: String? = nil, branch: String? = nil,
+                   topic: String? = nil) async -> ThreadSession? {
         guard let scope = scope(scopeID) else { return nil }
         let task = taskID.flatMap(task)
         guard scope.kind != .missing else {
@@ -1250,7 +1251,8 @@ final class AppModel {
             cwdKind: kind,
             taskID: task?.id.rawValue,
             origin: origin,
-            model: resolvedModel(model, profile: profile, in: scope)
+            model: resolvedModel(model, profile: profile, in: scope),
+            topic: topic
         )
         let session = ThreadSession(record: record, profile: profile)
         register(session)

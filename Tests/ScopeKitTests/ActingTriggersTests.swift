@@ -184,6 +184,7 @@ import ScopeCore
         case .review: ActingPrompts.review(pullRequest: 12, comments: [.init(author: "Copilot", location: "a.swift:3", excerpt: "nit")])
         case .baseMoved: ActingPrompts.baseMoved(base: "main", branch: "feat/x", files: ["a.swift"], pullRequest: 12)
         case .stuck: ActingPrompts.stuck(reason: "edits the same file back and forth")
+        case .topic: ActingPrompts.topicMerged(topic: "auth", task: "refresh", pullRequest: 12)
         }
         #expect(text.hasPrefix("[Scope: automatic message from Scope itself, not the user — \(trigger.title.lowercased())]"))
         #expect(!text.contains("--force"))

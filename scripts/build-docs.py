@@ -384,8 +384,19 @@ again; neither does it move a topic an agent gave (<code>--topic</code>, <code>s
 Topics given before Scope grouped tasks itself count as given by hand; <code>scope topics regroup</code> shows what
 grouping them would change, and <code>--apply</code> does it. The tasks it started come along while they still
 share its old topic; one filed elsewhere stays. The topic's own menu renames it, ungroups its tasks or archives them
-all. By state, tasks sit with what they are doing and the
+all, and opens its <a href="#topic-orchestrator">orchestrator</a>. By state, tasks sit with what they are doing and the
 topic shows in the hover card, with the task an agent created it from.</p>
+
+<h3 id="topic-orchestrator">A topic's orchestrator</h3>
+<p><b>Open Orchestrator</b> in a topic's menu starts one agent thread for that topic — the driver of the scope's
+orchestrator, at the scope root — filed first under the topic's row. Its opening prompt lists the topic's tasks, and
+it reads them again whenever it needs to with <code>scope topic show</code> (<code>scope_topic_show</code>): state,
+branch, pull requests and their checks, threads, the opening of each brief. It talks to the tasks' agents with
+<code>scope thread send</code>, and a task it creates lands in the topic. It is never created on its own, so a topic
+nobody opens costs nothing. Once open, it hears from Scope only about the topic's milestones — a pull request merged,
+every task delivered — through the <b>Topic milestone</b> automatic action, with its hourly cap; never about each turn
+of each task. A topic keeps its row while its orchestrator is open, even with one task; when the topic has no open
+task left, the orchestrator is closed at the end of its turn. One per topic: opening it again shows the same thread.</p>
 
 <h3 id="attempts">Several attempts at one brief</h3>
 <p>When the best approach is uncertain, run the brief more than once. The <b>Attempts</b> stepper of the New Task
@@ -1361,6 +1372,7 @@ scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: on
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
 scope task topic [&lt;id|slug&gt;] &lt;topic&gt; <span class="c"># file it under a topic later (--clear, --no-children)</span>
+scope topic show [&lt;topic&gt;]          <span class="c"># a topic's tasks: state, branch, PRs and checks, threads, brief</span>
 scope topics regroup [--apply]      <span class="c"># what grouping linked tasks under shared topics would change; --apply does it</span>
 scope browser open [url]            <span class="c"># open a page in the task's browser and wait for it (:41001, /checkout, --port)</span>
 scope browser read|screenshot|console <span class="c"># the page as text, a JPEG of it, what it logged (--all)</span>
@@ -1801,6 +1813,9 @@ it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic acti
   <li><b>Thread seems stuck</b> (2 an hour, once per turn): when the assistant reads a running turn as going in circles,
   the turn is interrupted a minute later — time to answer <b>Not stuck</b> — and the agent is told why and asked to
   change approach.</li>
+  <li><b>Topic milestone</b> (3 an hour): a topic whose <a href="concepts.html#topic-orchestrator">orchestrator</a> is
+  open tells it when one of its pull requests merges, and once every task of the topic is delivered — only what
+  happened since it was opened.</li>
 </ul>
 <p>Whatever the trigger: nothing is typed while a turn runs (except to interrupt a stuck one), while the thread waits
 on your answer, or within 20 seconds of your last keystroke in it, and a draft in Claude Code's field is stashed and

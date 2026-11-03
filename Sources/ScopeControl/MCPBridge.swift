@@ -90,6 +90,22 @@ public enum MCPBridge {
             readOnly: true
         ),
         MCPTool(
+            name: "scope_topic_show",
+            title: "Show a topic's tasks",
+            description: """
+            The tasks filed under a topic, as they stand now: state, branch, pull requests with their checks, thread \
+            ids (for scope_thread_send), the opening of each brief, and what was archived. Omit topic from a topic's \
+            orchestrator thread, or from inside a task, for that topic. Read-only.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "topic":{"type":"string","description":"The topic, any spelling; omitted, the one you orchestrate or your task's."},\
+            "scope":{"type":"string","description":"Slug, name or id of the scope; omitted, yours."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: true
+        ),
+        MCPTool(
             name: "scope_usage",
             title: "How Scope itself is used",
             description: """
@@ -806,6 +822,8 @@ public enum MCPBridge {
                 return .success(.gc(try decoder.decode(GCArguments.self, from: arguments).call))
             case "scope_summary":
                 return .success(.summary(try decoder.decode(SummaryParams.self, from: arguments)))
+            case "scope_topic_show":
+                return .success(.topicShow(try decoder.decode(TopicShowParams.self, from: arguments)))
             case "scope_task_show":
                 return .success(.taskShow(try decoder.decode(TaskShowParams.self, from: arguments)))
             case "scope_release":

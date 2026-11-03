@@ -117,6 +117,8 @@ public enum ActingTriggers {
         case .connectionLost, .wake: 30
         case .usageLimit: 60
         case .ciFailed, .review, .stuck: 5 * 60
+        // Two merges of one topic minutes apart are two notices; a burst of a whole stack lands within the cap.
+        case .topic: 60
         case .conflicts: 10 * 60
         case .baseMoved: 30 * 60
         }

@@ -119,6 +119,8 @@ public enum ScopeCLI {
                                           next fire, last run
       scope schedule run <name>           fire a schedule now, whatever its rule says (--scope for a shared name)
       scope gc                            clean up now what Scope cleans every 30 minutes (--dry-run to preview)
+      scope topic show [<topic>]          a topic's tasks: state, branch, pull requests, threads, brief (default:
+                                          the topic the calling thread orchestrates, or its task's); --scope <s>
       scope topics regroup                what filing linked tasks (parent and child, stacked pull requests, same
                                           issue) under shared topics would change for tasks filed before Scope
                                           grouped them itself; --apply files them, --scope <s> for one scope
@@ -246,6 +248,20 @@ public enum ScopeCLI {
                 return true
             })
             return .call(.gc(parameters), shared)
+        case "topic":
+            guard rest.first == "show" else {
+                throw UsageError(message: "topic commands: show", usage: usage)
+            }
+            rest = rest.dropFirst()
+            var words: [String] = []
+            var scope: String?
+            let shared = try options(&rest, command: "topic show", positional: { words.append($0) }, specific: { flag, value in
+                guard flag == "--scope" else { return false }
+                scope = try value()
+                return true
+            })
+            guard words.count <= 1 else { throw UsageError(message: "topic show takes at most one topic (quote it)", usage: usage) }
+            return .call(.topicShow(TopicShowParams(topic: words.first, scope: scope)), shared)
         case "topics":
             guard rest.first == "regroup" else {
                 throw UsageError(message: "topics commands: regroup", usage: usage)
