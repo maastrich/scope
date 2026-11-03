@@ -757,7 +757,7 @@ extension AppModel {
         let race = SettleRace()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             Task {
-                await refreshTaskPullRequest(task)
+                await refreshTaskPullRequest(task, gated: true)
                 race.finish(continuation)
             }
             Task {

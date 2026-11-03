@@ -6,15 +6,32 @@ import ScopeTasks
 /// Every open task's pull request, asked about in the background — not only the task on screen, whose inspector
 /// keeps its faster loop — and the task archived once its pull request merges.
 ///
-/// `PullRequestRefreshSchedule` decides who is due (every 5 minutes, staggered, backing off on failures); this asks
-/// `gh` for them two at a time. Skipped while Low Power Mode is on: nothing here is urgent.
+/// `PullRequestRefreshSchedule` decides who is due (every 5 minutes while someone looks at Scope, up to an hour when
+/// nobody does, staggered, backing off on failures); `PullRequestRefreshGate` decides whether anything goes out at all
+/// (asleep, offline, an outage). This asks `gh` for the due ones two at a time. Skipped while Low Power Mode is on:
+/// nothing here is urgent.
 extension AppModel {
     /// How often the background pass looks for due tasks; the schedule decides which.
     static let pullRequestRefreshTick: Duration = .seconds(30)
 
+    /// What one refresh of a task's pull requests came to.
+    enum PullRequestRefreshOutcome: Equatable {
+        case answered
+        /// `gh` failed; a global cause (`GhFailure.isGlobal`) ended the refresh at its first call.
+        case failed(GhFailure)
+        /// Not run: the gate is closed (asleep, offline, backing off), or no `gh`.
+        case skipped
+    }
+
     func startPullRequestRefresh() {
         pullRequestRefresher?.cancel()
         guard pullRequests.gh != nil else { return }
+        attentionWatch.start()
+        pullRequests.mayAutoRefresh = { [weak self] in
+            guard let self else { return false }
+            self.updatePullRequestPacing()
+            return self.pullRequestSchedule.attention == .active && self.pullRequestGate.allows(at: .now)
+        }
         pullRequestRefresher = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: AppModel.pullRequestRefreshTick)
@@ -24,26 +41,44 @@ extension AppModel {
         }
     }
 
+    /// Brings the schedule and the gate up to date with the system: who is looking, the network, sleep, and which
+    /// tasks have a thread at work.
+    func updatePullRequestPacing(now: Date = .now) {
+        pullRequestGate.setOnline(acting.network.state.online, at: now)
+        pullRequestGate.setAsleep(attentionWatch.asleep, at: now)
+        pullRequestSchedule.attention = attentionWatch.attention
+        for task in tasks where pullRequestSchedule.entries[task.id] != nil {
+            pullRequestSchedule.setBusy(task.id, threads(in: task.id).contains(where: \.isWorking))
+        }
+    }
+
     /// One pass: the schedule follows the open tasks, the due ones are refreshed, a merged one is archived.
     func refreshDuePullRequests(now: Date = .now) async {
         let candidates = tasks.filter { !$0.isArchived && mayHavePullRequest($0) }
         pullRequestSchedule.sync(candidates.map(\.id), now: now)
         // Already known merged, held by a running thread: no `gh` call needed to archive it once the thread stops,
-        // rather than at the next refresh of a settled pull request, half an hour later.
+        // rather than at the next refresh of a settled pull request, half an hour later. Offline and asleep included.
         for task in candidates where task.record.pullRequestState == "merged" { await archiveIfMerged(task) }
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        updatePullRequestPacing(now: now)
+        guard pullRequestGate.allows(at: now) else { return }
         let due = pullRequestSchedule.due(at: now).compactMap { task($0) }
         guard !due.isEmpty else { return }
-        // Marked started before any of them runs, so the next tick cannot pick a task still in flight.
-        for task in due { pullRequestSchedule.started(task.id, at: now) }
+        // Handed out one by one, and only while the gate stays open: once a call says GitHub is out of reach, the
+        // tasks still queued wait for the gate rather than fail the same way. The pass is awaited before the next
+        // tick, so a queued task cannot be picked twice.
         var queue = due.makeIterator()
+        func next() -> TaskState? {
+            guard pullRequestGate.allows(at: .now), let task = queue.next() else { return nil }
+            return task
+        }
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<max(1, pullRequestSchedule.concurrency) {
-                guard let task = queue.next() else { break }
+                guard let task = next() else { break }
                 group.addTask { await self.refreshInBackground(task) }
             }
             while await group.next() != nil {
-                guard let task = queue.next() else { continue }
+                guard let task = next() else { continue }
                 group.addTask { await self.refreshInBackground(task) }
             }
         }
@@ -51,11 +86,7 @@ extension AppModel {
 
     private func refreshInBackground(_ task: TaskState) async {
         guard !task.isArchived else { return }
-        if await refreshTaskPullRequest(task) {
-            pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)))
-        } else {
-            pullRequestSchedule.failed(task.id)
-        }
+        await refreshTaskPullRequest(task)
         await archiveIfMerged(task)
         // Failed checks and reviews wake the task's thread (`AppModel+ActingPullRequests`).
         await actOnPullRequests(of: task)
@@ -64,10 +95,20 @@ extension AppModel {
         await followMain(task)
     }
 
+    /// The inspector's loop for the task on screen: once a minute while Scope is in front and the gate is open,
+    /// backing off with the task's failures. Nothing to ask for a task with nothing committed yet.
+    func refreshForegroundPullRequest(_ task: TaskState, now: Date = .now) async {
+        guard !task.isArchived, mayHavePullRequest(task) else { return }
+        updatePullRequestPacing(now: now)
+        pullRequestSchedule.include(task.id, now: now)
+        guard pullRequestSchedule.foregroundDue(task.id, at: now) else { return }
+        await refreshTaskPullRequest(task, gated: true)
+    }
+
     /// A task bound to a pull request, or whose branch carries commits a pull request could be made of. One with
     /// nothing committed yet has nothing to open a pull request from: no `gh` call until it does. Summaries not
     /// read yet count as maybe.
-    private func mayHavePullRequest(_ task: TaskState) -> Bool {
+    func mayHavePullRequest(_ task: TaskState) -> Bool {
         if !task.record.pullRequests.isEmpty { return true }
         let summaries = task.activeRepos.compactMap { task.summary(for: $0) }
         return summaries.isEmpty || summaries.contains { $0.ahead > 0 }

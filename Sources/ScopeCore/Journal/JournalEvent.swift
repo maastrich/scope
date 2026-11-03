@@ -47,7 +47,8 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// One garbage-collection pass. `count` what it removed or stopped.
         case taskGC = "task.gc"
         /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `none` (no pull request) / `failed` /
-        /// `auth` / `timeout`.
+        /// `auth` / `timeout`, `cause` on a failure (`GhFailure`: `offline`, `auth`, `rate-limit`, `not-found`,
+        /// `no-remote`, `server`, `timeout`, `missing-checkout`, `other`).
         case gh
         /// A trigger that acts on a thread (`ActingTrigger`) fired or held back. `name` the trigger, `outcome` `sent` /
         /// `restarted` / `interrupted` / `waiting` (held until the network or the reset) / `skipped` / `capped` /

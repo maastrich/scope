@@ -1,16 +1,52 @@
 import Foundation
 import ScopeCore
+import ScopeGit
 
-/// When each open task's pull request is asked about again, off screen.
+/// When each open task's pull request is asked about again.
 ///
-/// The inspector keeps the task on screen fresh every minute; every other task used to keep what `gh` said on its
-/// last visit. The app's background pass asks this schedule which tasks are due, refreshes them a few at a time and
-/// reports back. A task is due `interval` after its last attempt; a failed attempt doubles the wait, up to
-/// `maximumBackoff`, so a task whose repository is gone or whose network is down stops costing a `gh` call every pass.
-/// A pull request already merged or closed changes rarely: `settledInterval`.
+/// The app's background pass asks this schedule which tasks are due, refreshes them a few at a time and reports back;
+/// the inspector asks it whether the task on screen is due (`foregroundDue`). A task is due one interval after its last
+/// attempt; a failed attempt doubles the wait, up to `maximumBackoff`, so a task whose repository is gone stops costing
+/// a `gh` call every pass. A pull request already merged or closed changes rarely: `settledInterval`.
+///
+/// The intervals stretch with `attention` — nobody reads a pull request's checks at 3 a.m. — except for a task whose
+/// thread is at work (`Entry.busy`): an agent working unattended still needs its failed check or its review noticed.
+/// `PullRequestRefreshGate` decides whether any call goes out at all (network, sleep, an outage).
 ///
 /// Tasks never attempted are spread over the first interval (`stagger`) rather than all asked at launch.
 public struct PullRequestRefreshSchedule: Sendable, Equatable {
+    /// Whether someone is likely looking at Scope, as the app reads it from the system.
+    public enum Attention: String, Sendable, CaseIterable {
+        /// Scope is frontmost and someone touched the keyboard or the pointer lately.
+        case active
+        /// Another app is frontmost, but someone is at the Mac.
+        case background
+        /// The screen is locked, the displays are asleep, or nobody has touched anything for `awayAfter`.
+        case away
+
+        /// No input for this long counts as gone: long enough that reading a long answer is not leaving.
+        public static let awayAfter: TimeInterval = 10 * 60
+
+        /// From what the system says: the lock screen or sleeping displays, how long since the last input in any app,
+        /// and whether Scope is frontmost.
+        public static func resolve(frontmost: Bool, locked: Bool, displaysAsleep: Bool, idleSeconds: TimeInterval) -> Attention {
+            if locked || displaysAsleep || idleSeconds >= awayAfter { return .away }
+            return frontmost ? .active : .background
+        }
+
+        /// How much longer than in `active` every interval is. `background`: the person is one ⌘-Tab away, and
+        /// coming back makes every task due at once anyway (its last attempt is older than the active interval).
+        /// `away`: one check an hour still archives a task whose pull request merged overnight, and that is all
+        /// anyone needs before they are back.
+        public var stretch: Double {
+            switch self {
+            case .active: 1
+            case .background: 2
+            case .away: 12
+            }
+        }
+    }
+
     public struct Entry: Sendable, Equatable {
         /// When the last refresh started; `nil` before the first one.
         public var lastAttempt: Date?
@@ -23,6 +59,8 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         /// Its open pull request is likely to get a review soon — just opened, review requested, a batch of comments
         /// still coming in: asked about every `eagerInterval` rather than every `interval`.
         public var eager = false
+        /// A thread of the task is at work or waiting: kept at the active cadence whoever is looking.
+        public var busy = false
 
         public init(lastAttempt: Date? = nil, failures: Int = 0, settled: Bool = false, addedAt: Date) {
             self.lastAttempt = lastAttempt
@@ -35,12 +73,15 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
     public static let defaultInterval: TimeInterval = 5 * 60
     /// The cadence of an eager entry: a Copilot review lands within minutes of the pull request opening.
     public static let eagerInterval: TimeInterval = 90
+    /// The task on screen, while Scope is frontmost: what notices the pull request a thread just opened.
+    public static let foregroundInterval: TimeInterval = 60
 
     public var interval: TimeInterval
     public var settledInterval: TimeInterval
     public var maximumBackoff: TimeInterval
     /// `gh` calls in flight at once.
     public var concurrency: Int
+    public var attention: Attention = .active
     public private(set) var entries: [TaskID: Entry] = [:]
 
     public init(interval: TimeInterval = PullRequestRefreshSchedule.defaultInterval, settledInterval: TimeInterval = 30 * 60,
@@ -60,15 +101,32 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         }
     }
 
+    /// Adds one task without waiting for the next `sync`: the task on screen that just got something to ask about.
+    public mutating func include(_ id: TaskID, now: Date) {
+        if entries[id] == nil { entries[id] = Entry(addedAt: now) }
+    }
+
+    /// The wait after a successful attempt, before any backoff.
+    func baseInterval(_ entry: Entry) -> TimeInterval {
+        // A busy task is looked at as if someone were: its agent is the one reading.
+        let stretch = entry.busy ? 1 : attention.stretch
+        if entry.settled { return settledInterval * stretch }
+        if entry.eager, attention != .away || entry.busy { return min(Self.eagerInterval * stretch, interval) }
+        return interval * stretch
+    }
+
     /// When `id` is next due; `nil` for a task not in the schedule.
     public func nextDue(_ id: TaskID) -> Date? {
         guard let entry = entries[id] else { return nil }
         guard let last = entry.lastAttempt else { return entry.addedAt.addingTimeInterval(stagger(id)) }
-        let base = entry.settled ? settledInterval : (entry.eager ? min(Self.eagerInterval, interval) : interval)
-        guard entry.failures > 0 else { return last.addingTimeInterval(base) }
-        // 2×, 4×, 8× … the interval, capped.
+        return last.addingTimeInterval(wait(entry, base: baseInterval(entry)))
+    }
+
+    /// `base`, or after failures 2×, 4×, 8× … `base`, capped at `maximumBackoff` (never below `base`).
+    private func wait(_ entry: Entry, base: TimeInterval) -> TimeInterval {
+        guard entry.failures > 0 else { return base }
         let backoff = base * pow(2, Double(min(entry.failures, 16)))
-        return last.addingTimeInterval(min(max(backoff, base), max(maximumBackoff, base)))
+        return min(max(backoff, base), max(maximumBackoff, base))
     }
 
     /// The tasks due at `now`, the longest overdue first.
@@ -79,6 +137,15 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         }
         due.sort { lhs, rhs in lhs.at == rhs.at ? lhs.id.rawValue < rhs.id.rawValue : lhs.at < rhs.at }
         return due.map(\.id)
+    }
+
+    /// Whether the task on screen is due for the inspector's faster refresh: only while Scope is in front, one
+    /// `foregroundInterval` after any attempt (the background pass's included), backing off on failures like the rest.
+    /// A task not in the schedule is never due: `include` it first.
+    public func foregroundDue(_ id: TaskID, at now: Date) -> Bool {
+        guard attention == .active, let entry = entries[id] else { return false }
+        guard let last = entry.lastAttempt else { return true }
+        return now >= last.addingTimeInterval(wait(entry, base: Self.foregroundInterval))
     }
 
     public mutating func started(_ id: TaskID, at now: Date) {
@@ -95,6 +162,10 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         entries[id]?.eager = eager
     }
 
+    public mutating func setBusy(_ id: TaskID, _ busy: Bool) {
+        entries[id]?.busy = busy
+    }
+
     public mutating func failed(_ id: TaskID) {
         entries[id]?.failures += 1
     }
@@ -108,6 +179,74 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
             hash = hash &* 0x0000_0100_0000_01b3
         }
         return Double(hash % 10_000) / 10_000 * interval
+    }
+}
+
+/// Whether any pull request refresh may call `gh` right now, whatever task it is for.
+///
+/// Nothing goes out while the Mac sleeps or the network is down (`NWPathMonitor`), nor for `resumeGrace` after either
+/// comes back: the first seconds after a wake, DNS and the VPN are not ready and every call would fail. And an outage
+/// the network monitor does not see — GitHub down, a captive portal, a token revoked, a rate limit — backs every
+/// refresh off together after the first failure of that kind (`GhFailure.isGlobal`): 1, 2, 4 … minutes up to
+/// `maximumBackoff`, at least `rateLimitBackoff` for a rate limit, back to normal at the first success.
+public struct PullRequestRefreshGate: Sendable, Equatable {
+    public static let resumeGrace: TimeInterval = 20
+    public static let firstBackoff: TimeInterval = 60
+    public static let maximumBackoff: TimeInterval = 60 * 60
+    /// GitHub's secondary limits last minutes; asking again sooner only extends them.
+    public static let rateLimitBackoff: TimeInterval = 15 * 60
+
+    public private(set) var online = true
+    public private(set) var asleep = false
+    /// When the Mac woke or the network came back.
+    public private(set) var resumedAt: Date?
+    /// Global failures in a row since the last success.
+    public private(set) var streak = 0
+    public private(set) var lastFailure: Date?
+    public private(set) var lastCause: GhFailure?
+
+    public init() {}
+
+    public mutating func setOnline(_ online: Bool, at now: Date) {
+        guard online != self.online else { return }
+        self.online = online
+        if online { resumedAt = now }
+    }
+
+    public mutating func setAsleep(_ asleep: Bool, at now: Date) {
+        guard asleep != self.asleep else { return }
+        self.asleep = asleep
+        if !asleep { resumedAt = now }
+    }
+
+    /// When calls may go out again; `nil` while the network is down or the Mac asleep (no date to wait for).
+    public func nextAllowed() -> Date? {
+        guard online, !asleep else { return nil }
+        var at = resumedAt.map { $0.addingTimeInterval(Self.resumeGrace) } ?? .distantPast
+        if streak > 0, let lastFailure {
+            var backoff = min(Self.firstBackoff * pow(2, Double(min(streak - 1, 16))), Self.maximumBackoff)
+            if lastCause == .rateLimit { backoff = max(backoff, Self.rateLimitBackoff) }
+            at = max(at, lastFailure.addingTimeInterval(backoff))
+        }
+        return at
+    }
+
+    public func allows(at now: Date) -> Bool {
+        nextAllowed().map { now >= $0 } ?? false
+    }
+
+    /// A call answered: whatever was wrong is over.
+    public mutating func succeeded() {
+        streak = 0
+        lastCause = nil
+    }
+
+    /// A call failed. Only a failure that says nothing about one task (`GhFailure.isGlobal`) holds everything back.
+    public mutating func failed(_ cause: GhFailure, at now: Date) {
+        guard cause.isGlobal else { return }
+        streak += 1
+        lastFailure = now
+        lastCause = cause
     }
 }
 

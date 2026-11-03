@@ -137,7 +137,11 @@ simply shows nothing to list.</p></div>
 
 <h2 id="pr-lifecycle">A task's pull requests, to the merge</h2>
 <p>Once a task has a pull request — opened from its thread, or the one it was opened on — the Pull Request section
-lists its checks, refreshed every minute: state, name, and a link to each check's page.</p>
+lists its checks, refreshed every minute while Scope is in front: state, name, and a link to each check's page. The
+other tasks are asked every 5 minutes, every 10 while another app is in front, and once an hour once nobody has touched
+the Mac for 10 minutes or the screen is locked — a task whose thread is at work keeps the 5 minutes. Nothing is asked
+while the Mac sleeps or is offline, and when GitHub stops answering Scope waits 1, 2, 4… up to 60 minutes between
+tries, back to normal at the first answer.</p>
 <p>A task can have several: one per repository, two on the same branch, a stack, a docs pull request next to the
 prototype's. Scope finds them on every branch a sandbox has been on (<code>gh pr list --head</code>, the reflog
 says which) and keeps them all, in a fixed order — the task's repositories, then the numbers — that never moves

@@ -188,6 +188,10 @@ def control(journal):
     outcomes = counted(journal, "control", "outcome")
     print(f"## Control calls: {sum(outcomes.values())}\n")
     print("Outcomes: " + ", ".join(f"{k} {n}" for k, n in outcomes.most_common()) + "\n")
+    causes = counted(journal, "gh", "cause")
+    causes.pop("-", None)
+    if causes:
+        print("Failure causes: " + ", ".join(f"{k} {n}" for k, n in causes.most_common()) + "\n")
     print("Refusals and errors by cause: " + ", ".join(
         f"{k} {n}" for k, n in counted(journal, "control", "cause").most_common() if k != "-") + "\n")
     rows = []
