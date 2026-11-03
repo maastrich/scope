@@ -24,7 +24,7 @@ struct TaskRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let task: TaskState
-    /// The nesting level; a topic's tasks stay at 0 and are shifted by `SidebarMetrics.topicIndent` instead.
+    /// The nesting level; a topic's tasks stay at 0, in the topic's title column.
     var depth = 0
     /// The group a scroll in progress holds the row in (`SidebarScrollHold`), when its state has since moved it: the
     /// row keeps the height it had.

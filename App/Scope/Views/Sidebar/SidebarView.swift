@@ -382,12 +382,10 @@ struct SidebarView: View {
                 TopicRow(scope: scope, topic: topic, tasks: members)
                     .selectionDisabled()
                 if !scope.collapsedTopics.contains(TaskTopic.key(topic)) || isFiltering {
-                    // At their own depth, shifted by the topic's short indent rather than a full level: a task in a
-                    // topic takes the room of a task outside one, and its threads still hang from its chevron.
-                    ForEach(members) { task in
-                        Group { taskRows(task) }
-                            .padding(.leading, SidebarMetrics.topicIndent)
-                    }
+                    // At depth 0, not one level in: a task in a topic takes the room of a task outside one, its title
+                    // in the topic's own column. The topic's chevron, hanging left of that column, says where the
+                    // group starts; a nesting level used to push the name 19 pt right and cut it short.
+                    ForEach(members) { task in taskRows(task) }
                 }
             }
         }

@@ -16,9 +16,6 @@ public enum SidebarRowLayout {
     /// What one level of nesting adds: exactly a disclosure slot and its spacing, so a nested row's title sits
     /// under its parent's title and the rule hanging from the chevron says "child of".
     public static let indent = disclosureSlot + spacing
-    /// What a topic adds in front of its tasks: enough to read them as its members, far less than a nesting level.
-    /// A full `indent` put a member's title 38 pt in, twice a lone task's, and cost the name its width.
-    public static let topicIndent: Double = 10
     /// The trailing state dot.
     public static let stateDot: Double = 8
     /// What a pulsing dot's halo may add on each side of it. The dot's column is this wide on both sides so the
