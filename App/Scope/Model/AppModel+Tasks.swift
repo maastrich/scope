@@ -269,7 +269,7 @@ extension AppModel {
             )
         } catch {
             journalTask(.taskCreate, outcome: "failed", scope: scopeID, since: creating, cause: ProblemCause.classify(String(describing: error)))
-            problems.error("Could not create task “\(proposal.title)”", detail: String(describing: error), scope: scopeID)
+            problems.error("Could not create task “\(proposal.title)”", error: error, scope: scopeID)
             throw error
         }
         journalTask(.taskCreate, outcome: "ok", task: record.id, scope: scopeID, since: creating, count: record.repos.count)
@@ -298,7 +298,7 @@ extension AppModel {
         do {
             try await applyTopic(topic, to: ids)
         } catch {
-            problems.error("Could not change the topic", detail: String(describing: error))
+            problems.error("Could not change the topic", error: error)
         }
     }
 
@@ -308,7 +308,7 @@ extension AppModel {
         do {
             try await refile(ids, underTopic: topic, withChildren: true)
         } catch {
-            problems.error("Could not change the topic", detail: String(describing: error))
+            problems.error("Could not change the topic", error: error)
         }
     }
 
@@ -394,7 +394,7 @@ extension AppModel {
             task.startWatching()
             startSetup(for: task, runCommands: true, only: [relativePath])
         } catch {
-            problems.error("Could not add \(relativePath) to \(task.name)", detail: String(describing: error), scope: task.scopeID, toast: true)
+            problems.error("Could not add \(relativePath) to \(task.name)", error: error, scope: task.scopeID, toast: true)
         }
     }
 
@@ -480,7 +480,7 @@ extension AppModel {
         let repo = repos.count > 1 ? repos[max(0, picker.indexOfSelectedItem)].repoRelativePath : nil
         Task {
             do { try await addBranch(branch, to: task.id, repo: repo) } catch {
-                problems.error("Could not add \(branch) to \(task.name)", detail: String(describing: error), scope: task.scopeID, toast: true)
+                problems.error("Could not add \(branch) to \(task.name)", error: error, scope: task.scopeID, toast: true)
             }
         }
     }
@@ -490,7 +490,7 @@ extension AppModel {
         Usage.click("task.remove-branch", label: "Remove a branch from the task")
         Task {
             do { try await removeBranch(sandbox.branch, from: task.id, repo: sandbox.repoRelativePath) } catch {
-                problems.error("Could not remove \(sandbox.branch) from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                problems.error("Could not remove \(sandbox.branch) from \(task.name)", error: error, scope: task.scopeID)
             }
         }
     }
@@ -586,7 +586,7 @@ extension AppModel {
             }
             journalTask(.taskSetup, outcome: "failed", task: task.id, scope: task.scopeID, since: started,
                         cause: ProblemCause.classify(String(describing: error)))
-            problems.error("Could not run the setup of \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not run the setup of \(task.name)", error: error, scope: task.scopeID)
         }
     }
 
@@ -664,22 +664,34 @@ extension AppModel {
         }
     }
 
-    /// The Restore of an archive notice: the task comes back with its sandboxes and the changes it had.
+    /// The Restore of an archive notice, of the empty task view, the inbox, the palette and the undo toast: the task
+    /// comes back with its sandboxes and the changes it had. A click while a restore of the task runs does nothing
+    /// (the buttons show it working, `restoringTasks`); an archive still under way is said so rather than tried.
     func reopenTask(_ taskID: TaskID) async {
-        guard let task = task(taskID), task.record.isArchived else { return }
+        guard let task = task(taskID), task.record.isArchived, !restoringTasks.contains(taskID) else { return }
+        guard task.record.cleanup == nil, !task.isDismantling else {
+            problems.error("\(task.name) is still being archived", detail: "Its last archive did not finish; run it again, then restore it.",
+                           cause: .busy, scope: task.scopeID,
+                           actions: [ProblemAction(title: "Retry Archive", kind: .retryTaskCleanup(taskID.rawValue))])
+            return
+        }
         forgetUndo(id: "task:\(taskID.rawValue)")
         do {
             try await restoreTask(taskID)
             selection = .task(taskID)
         } catch {
-            problems.error("Could not restore \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not restore \(task.name)", error: error, scope: task.scopeID,
+                           actions: [ProblemAction(title: "Try Again", kind: .reopenTask(taskID.rawValue))])
         }
     }
 
     /// `reopenTask` for a caller that reports the failure itself and leaves the selection alone (`task.restore`).
+    /// One restore per task runs at a time: the task manager hands a second caller the first one's answer.
     @discardableResult
     func restoreTask(_ taskID: TaskID) async throws -> TaskRecord {
         guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
+        restoringTasks.insert(taskID)
+        defer { restoringTasks.remove(taskID) }
         let record = try await env.tasks.reopen(taskID)
         task.update(record: record)
         task.startWatching()
@@ -856,7 +868,7 @@ extension AppModel {
     }
 
     func dismantleFailed(_ task: TaskState, verb: String, error: any Error) {
-        problems.error("Could not \(verb) \(task.name)", detail: String(describing: error), scope: task.scopeID,
+        problems.error("Could not \(verb) \(task.name)", error: error, scope: task.scopeID,
                        actions: [ProblemAction(title: "Retry", kind: .retryTaskCleanup(task.id.rawValue)),
                                  .reveal(task.record.root, title: "Reveal Task Folder")])
     }

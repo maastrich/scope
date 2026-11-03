@@ -1,4 +1,5 @@
 import Foundation
+import ScopeCore
 import ScopeGit
 
 /// Failures of `TaskManager`. Git failures are wrapped with the repo they concern.
@@ -52,6 +53,24 @@ public enum TaskError: Error, Sendable, CustomStringConvertible {
         case .checkpointNotFound(let number): "the task has no checkpoint \(number)"
         case .branchAlreadyInTask(let repo, let branch): "\(repo): \(branch) is already a worktree of this task"
         case .branchNotInTask(let branch): "no worktree of this task is on \(branch) — `scope task branch list` shows them"
+        }
+    }
+}
+
+extension TaskError: ProblemCauseProviding {
+    public var problemCause: ProblemCause {
+        switch self {
+        case .repoNotFound, .pullRequestHeadMissing, .branchNotFound, .checkpointNotFound, .noDefaultBranch: .missing
+        case .repoAlreadyInTask, .invalidRepoSelection, .invalidBranch, .branchAlreadyInTask, .branchNotInTask: .invalid
+        case .taskArchived: .archived
+        case .branchAlreadyCheckedOut: .busy
+        case .git(_, let error): error.problemCause
+        case .worktree(_, let error): error.problemCause
+        case .persistence(let message):
+            switch ProblemCause.classify(message) {
+            case .unknown: .persistence
+            case let cause: cause
+            }
         }
     }
 }

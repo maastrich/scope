@@ -19,6 +19,9 @@ public struct Problem: Identifiable, Sendable, Equatable {
     public var threadID: ThreadID?
     public var actions: [ProblemAction]
     public var createdAt: Date
+    /// Why it happened, when the call site knows: read from the error's type (`ProblemCause.of`). `nil` leaves
+    /// `journalCause` to work it out.
+    public var cause: ProblemCause?
 
     public init(
         severity: Severity = .error,
@@ -28,8 +31,10 @@ public struct Problem: Identifiable, Sendable, Equatable {
         threadID: ThreadID? = nil,
         actions: [ProblemAction] = [],
         createdAt: Date = .now,
+        cause: ProblemCause? = nil,
         id: UUID = UUID()
     ) {
+        self.cause = cause
         self.id = id
         self.severity = severity
         self.title = title
@@ -38,6 +43,16 @@ public struct Problem: Identifiable, Sendable, Equatable {
         self.threadID = threadID
         self.actions = actions
         self.createdAt = createdAt
+    }
+}
+
+extension Problem {
+    /// The cause the event journal keeps: the one the call site gave, `notice` for a notice that reports no failure,
+    /// else what the detail reads as. `unknown` only for a failure that said nothing.
+    public var journalCause: ProblemCause {
+        if let cause { return cause }
+        if severity == .info { return .notice }
+        return ProblemCause.classify(detail)
     }
 }
 
@@ -62,6 +77,22 @@ public struct ProblemAction: Identifiable, Sendable, Equatable {
     public let id: UUID
     public var title: String
     public var kind: Kind
+
+    /// The element of the button in the usage log: one per kind, never the payload (ids, paths).
+    public var usageElement: String {
+        switch kind {
+        case .retryLaunch: "retry-launch"
+        case .reprobeShell: "reprobe-shell"
+        case .openSettings: "open-settings"
+        case .revealFile: "reveal-file"
+        case .rescan: "rescan"
+        case .locateScope: "locate-scope"
+        case .rerunTaskSetup: "rerun-task-setup"
+        case .retryTaskCleanup: "retry-task-cleanup"
+        case .reopenTask: "restore-task"
+        case .dismiss: "dismiss"
+        }
+    }
 
     public init(title: String, kind: Kind, id: UUID = UUID()) {
         self.id = id

@@ -269,7 +269,7 @@ extension AppModel {
                                                               scopeRepos: scopeRepos, repoSummaries: summaries,
                                                               contextFiles: contextFileNames)
         } catch {
-            problems.error("Could not open #\(pr.number) in Scope", detail: String(describing: error), scope: scope.id)
+            problems.error("Could not open #\(pr.number) in Scope", error: error, scope: scope.id)
             return
         }
         let state = TaskState(record: record, git: env.git)

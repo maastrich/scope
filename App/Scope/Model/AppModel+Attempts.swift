@@ -188,7 +188,7 @@ extension AppModel {
             }
             task.refresh()
         } catch {
-            problems.error("Could not keep \(task.name)", detail: String(describing: error), scope: task.scopeID)
+            problems.error("Could not keep \(task.name)", error: error, scope: task.scopeID)
             return
         }
         if attemptsCompared == attempt.group { globalSheet = nil }
@@ -212,7 +212,7 @@ extension AppModel {
             _ = try AttemptFileCopy.copy(path, from: from, to: to)
             target.refresh()
         } catch {
-            problems.error("Could not copy \(path) into \(target.name)", detail: String(describing: error), scope: target.scopeID)
+            problems.error("Could not copy \(path) into \(target.name)", error: error, scope: target.scopeID)
         }
     }
 }

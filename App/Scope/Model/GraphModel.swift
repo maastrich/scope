@@ -224,7 +224,7 @@ final class GraphModel {
             if scopeID == scope.id { graph = result }
             return result
         } catch {
-            problems.error("Could not analyze \(scope.name)", detail: String(describing: error), scope: scope.id)
+            problems.error("Could not analyze \(scope.name)", error: error, scope: scope.id)
             return nil
         }
     }
@@ -251,7 +251,7 @@ final class GraphModel {
         do {
             graph = try await env.graphStore.saveManual(card, for: key, slug: slug)
         } catch {
-            problems.error("Could not save the card of \(card.name)", detail: String(describing: error), scope: scopeID)
+            problems.error("Could not save the card of \(card.name)", error: error, scope: scopeID)
         }
         editingKey = nil
     }
@@ -265,7 +265,7 @@ final class GraphModel {
             try await env.graphStore.save(stored)
             graph = stored
         } catch {
-            problems.error("Could not reset the card", detail: String(describing: error), scope: scopeID)
+            problems.error("Could not reset the card", error: error, scope: scopeID)
         }
         editingKey = nil
     }
@@ -314,7 +314,7 @@ extension AppModel {
                 try await env.tasks.regenerateProjection(task.id, scopeContext: scope.declaration.context, scopeRepos: scopeRepos,
                                                          repoSummaries: summaries, contextFiles: contextFileNames)
             } catch {
-                problems.warn("Could not refresh the context file of \(task.name)", detail: String(describing: error), scope: scope.id)
+                problems.warn("Could not refresh the context file of \(task.name)", error: error, scope: scope.id)
             }
         }
     }

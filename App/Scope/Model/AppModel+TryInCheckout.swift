@@ -181,7 +181,7 @@ extension AppModel {
         for (session, error) in failed {
             let repo = task.record.repo(at: session.repoRelativePath)
             problems.error("Could not put your checkout of \(repo?.name ?? session.repoRelativePath) back",
-                           detail: String(describing: error), scope: task.scopeID)
+                           error: error, scope: task.scopeID)
         }
         if let first = failed.first { throw first.1 }
         let backTo = task.record.trying.map(\.previousLabel).joined(separator: ", ")

@@ -253,6 +253,8 @@ final class AppModel {
     /// The loop behind `AppModel+DiskUsage`, and the one-off measurements in flight, per task.
     @ObservationIgnored var diskUsageRefresher: Task<Void, Never>?
     @ObservationIgnored var diskUsageRuns: [TaskID: Task<Void, Never>] = [:]
+    /// Tasks being restored (`restoreTask`): their Restore buttons show a spinner and do nothing.
+    var restoringTasks: Set<TaskID> = []
     @ObservationIgnored var pullRequestSchedule = PullRequestRefreshSchedule()
     /// Whether any automatic pull request refresh may call `gh` now (`AppModel+PullRequestRefresh`).
     @ObservationIgnored var pullRequestGate = PullRequestRefreshGate()
@@ -1220,8 +1222,14 @@ final class AppModel {
                 }
                 directory = worktree.sandboxURL
             }
+            // An archived task has no sandbox to open a thread in: the way back is Restore, offered on the problem.
+            guard !task.isArchived else {
+                problems.error("\(task.name) is archived", detail: "Restore it to open a thread in it.", cause: .archived, scope: scopeID,
+                               actions: [ProblemAction(title: "Restore", kind: .reopenTask(task.id.rawValue))])
+                return nil
+            }
             guard ScopeState.rootExists(directory) else {
-                problems.error("Sandbox of \(task.name) is missing", detail: directory.path, scope: scopeID)
+                problems.error("Sandbox of \(task.name) is missing", detail: directory.path, cause: .missing, scope: scopeID)
                 return nil
             }
             resolvedCwd = directory.path

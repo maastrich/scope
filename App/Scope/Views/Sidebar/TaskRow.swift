@@ -326,7 +326,7 @@ struct TryInCheckoutMenuItems: View {
                 Usage.click("sidebar.task.try-in-checkout", label: "Try in my checkout")
                 Task {
                     do { _ = try await model.tryInCheckout(task) } catch {
-                        model.problems.error("Could not try \(task.name) in your checkout", detail: String(describing: error), scope: task.scopeID)
+                        model.problems.error("Could not try \(task.name) in your checkout", error: error, scope: task.scopeID)
                     }
                 }
             }
@@ -336,7 +336,7 @@ struct TryInCheckoutMenuItems: View {
                 Usage.click("sidebar.task.try-refresh", label: "Refresh my checkout")
                 Task {
                     do { _ = try await model.refreshTry(task) } catch {
-                        model.problems.error("Could not refresh your checkout for \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                        model.problems.error("Could not refresh your checkout for \(task.name)", error: error, scope: task.scopeID)
                     }
                 }
             }
@@ -344,7 +344,7 @@ struct TryInCheckoutMenuItems: View {
                 Usage.click("sidebar.task.try-put-back", label: "Put my checkout back")
                 Task {
                     do { _ = try await model.putBack(task) } catch {
-                        model.problems.error("Could not put your checkout back from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                        model.problems.error("Could not put your checkout back from \(task.name)", error: error, scope: task.scopeID)
                     }
                 }
             }

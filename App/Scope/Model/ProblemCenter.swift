@@ -34,7 +34,7 @@ final class ProblemCenter {
         }
         Journal.record(JournalEvent(
             kind: .problem, name: Self.site(file: file, function: function), title: title,
-            outcome: toast ? "toast" : nil, cause: ProblemCause.classify(problem.detail).rawValue,
+            outcome: toast ? "toast" : nil, cause: problem.journalCause.rawValue,
             severity: problem.severity.rawValue, scope: problem.scopeID.flatMap { scopeSlug?($0) },
             task: Self.taskID(of: problem), thread: problem.threadID?.rawValue
         ))
@@ -75,17 +75,22 @@ final class ProblemCenter {
         ), file: file, function: function)
     }
 
-    /// A one-line convenience for warnings.
-    func warn(_ title: ProblemTitle, detail: String? = nil, scope: ScopeID? = nil, actions: [ProblemAction] = [],
-              file: String = #fileID, function: String = #function) {
-        report(Problem(severity: .warning, title: title.text, detail: detail, scopeID: scope, actions: actions),
+    /// A one-line convenience for warnings. `error`, when the warning is about one, is the detail (unless one is
+    /// given) and the journal's cause (`ProblemCause.of`, from its type); `cause` says it outright.
+    func warn(_ title: ProblemTitle, detail: String? = nil, error: (any Error)? = nil, cause: ProblemCause? = nil,
+              scope: ScopeID? = nil, actions: [ProblemAction] = [], file: String = #fileID, function: String = #function) {
+        report(Problem(severity: .warning, title: title.text, detail: detail ?? error.map { String(describing: $0) }, scopeID: scope,
+                       actions: actions, cause: cause ?? error.map(ProblemCause.of)),
                title: title, file: file, function: function)
     }
 
-    /// A one-line convenience for errors. `toast` also puts it on screen, for a failure of an action the user started.
-    func error(_ title: ProblemTitle, detail: String? = nil, scope: ScopeID? = nil, actions: [ProblemAction] = [], toast: Bool = false,
+    /// A one-line convenience for errors, `error` and `cause` as for `warn`. `toast` also puts it on screen, for a
+    /// failure of an action the user started.
+    func error(_ title: ProblemTitle, detail: String? = nil, error: (any Error)? = nil, cause: ProblemCause? = nil,
+               scope: ScopeID? = nil, actions: [ProblemAction] = [], toast: Bool = false,
                file: String = #fileID, function: String = #function) {
-        let problem = Problem(severity: .error, title: title.text, detail: detail, scopeID: scope, actions: actions)
+        let problem = Problem(severity: .error, title: title.text, detail: detail ?? error.map { String(describing: $0) },
+                              scopeID: scope, actions: actions, cause: cause ?? error.map(ProblemCause.of))
         report(problem, title: title, toast: toast, file: file, function: function)
         if toast {
             toasts.append(problem)

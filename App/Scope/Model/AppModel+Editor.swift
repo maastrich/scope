@@ -138,7 +138,7 @@ extension AppModel {
                 NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
             }
         } catch {
-            problems.error("Could not open the editor", detail: String(describing: error),
+            problems.error("Could not open the editor", error: error,
                            actions: [ProblemAction(title: "Open Settings", kind: .openSettings)])
         }
     }

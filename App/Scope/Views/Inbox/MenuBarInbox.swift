@@ -99,7 +99,7 @@ private struct MenuBarTryRow: View {
                 Usage.click("menu-bar.try-put-back", label: "Put my checkout back")
                 Task {
                     do { _ = try await model.putBack(task) } catch {
-                        model.problems.error("Could not put your checkout back from \(task.name)", detail: String(describing: error), scope: task.scopeID)
+                        model.problems.error("Could not put your checkout back from \(task.name)", error: error, scope: task.scopeID)
                     }
                 }
             }

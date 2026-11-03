@@ -211,7 +211,27 @@ public enum ProblemCause: String, Codable, Sendable, CaseIterable {
     case conflict
     /// A command exited non-zero for another reason.
     case exit
+    /// What the action needs is gone: a sandbox, a folder, a branch, a record.
+    case missing
+    /// The task is archived: what was asked needs it open.
+    case archived
+    /// The same thing is already under way, or holds what was asked for (a branch checked out elsewhere).
+    case busy
+    /// The request itself does not hold: a name refused, a repository already there.
+    case invalid
+    /// A record or a file of Scope's own could not be written.
+    case persistence
+    /// Not a failure: a notice with nothing gone wrong (an archive that saved work, a cleanup done).
+    case notice
     case unknown
+
+    /// The cause of a thrown error: the error's own (`ProblemCauseProviding`), read from its type; the words of its
+    /// description only for an error that does not say.
+    public static func of(_ error: any Error) -> ProblemCause {
+        if let error = error as? any ProblemCauseProviding { return error.problemCause }
+        let cause = classify(String(describing: error))
+        return cause == .unknown ? .exit : cause
+    }
 
     /// The first cause `detail` matches, checked from the most specific; `unknown` without a detail.
     public static func classify(_ detail: String?) -> ProblemCause {
@@ -231,5 +251,24 @@ public enum ProblemCause: String, Codable, Sendable, CaseIterable {
         ]
         for (cause, needles) in rules where needles.contains(where: text.contains) { return cause }
         return .unknown
+    }
+}
+
+/// An error that knows its `ProblemCause`: the journal reads it from the error's type rather than from its words.
+public protocol ProblemCauseProviding: Error {
+    var problemCause: ProblemCause { get }
+}
+
+extension SubprocessError: ProblemCauseProviding {
+    public var problemCause: ProblemCause {
+        switch self {
+        case .timedOut: .timeout
+        case .launchFailed(let message):
+            switch ProblemCause.classify(message) {
+            case .unknown: .missing
+            case let cause: cause
+            }
+        case .nonZeroExit: .exit
+        }
     }
 }

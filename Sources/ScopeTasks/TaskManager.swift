@@ -26,6 +26,8 @@ public actor TaskManager {
     private var collecting = false
     /// Record files `loadAll` could not read; the garbage collection removes no folder while there are any.
     private var loadProblems = 0
+    /// Restores under way (`reopen`).
+    private var reopening: [TaskID: Task<TaskRecord, any Error>] = [:]
     private var dismantling: [TaskID: (token: UUID, mode: DismantleMode, run: Task<DismantleOutcome, any Error>)] = [:]
     /// Where Claude Code keeps the task threads' auto memory, for the context file's `## Memory` section; `nil` leaves
     /// the section out (memory sharing off, or the user chose a folder of their own).
@@ -712,9 +714,26 @@ public actor TaskManager {
     /// Brings an archived task back where it was: one worktree per repository on the branch it kept, and the
     /// changes saved when it was archived put back as uncommitted changes. The app rewrites the context files.
     @discardableResult
+    /// Whether a restore of `id` is under way.
+    public func isReopening(_ id: TaskID) -> Bool { reopening[id] != nil }
+
+    /// One restore per task at a time: a second call while the first runs waits for it and gets its answer. Without
+    /// this, every call of a burst passed the archived check while the first was still fetching (the actor lets them
+    /// in at each `await`), then failed on the worktrees the others had made, and each failure's rollback removed
+    /// the task folder under the one that had succeeded.
     public func reopen(_ id: TaskID) async throws -> TaskRecord {
+        if let running = reopening[id] { return try await running.value }
+        let run = Task { try await self.reopenOnce(id) }
+        reopening[id] = run
+        defer { reopening[id] = nil }
+        return try await run.value
+    }
+
+    private func reopenOnce(_ id: TaskID) async throws -> TaskRecord {
         guard var record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
         guard record.isArchived, record.cleanup == nil else { return record }
+        // The folder is this restore's to remove on failure only if this restore made it.
+        let rootExisted = FileManager.default.fileExists(atPath: record.rootURL.path(percentEncoded: false))
         var created: [(TaskRepo, branchWasNew: Bool)] = []
         do {
             for index in record.repos.indices {
@@ -740,7 +759,7 @@ public actor TaskManager {
                 }
             }
         } catch {
-            await rollback(created, task: record)
+            await rollback(created, task: record, removeRoot: !rootExisted)
             throw error
         }
         record.archivedAt = nil
@@ -1102,13 +1121,13 @@ public actor TaskManager {
         return (record, notices)
     }
 
-    private func rollback(_ created: [(TaskRepo, branchWasNew: Bool)], task: TaskRecord) async {
+    private func rollback(_ created: [(TaskRepo, branchWasNew: Bool)], task: TaskRecord, removeRoot: Bool = true) async {
         for (repo, branchWasNew) in created {
             guard let client = try? await baseClient(for: repo.repoRelativePath, task: task) else { continue }
             try? await client.removeWorktree(at: repo.sandboxURL, force: true)
             if branchWasNew { try? await client.deleteBranch(name: repo.branch, force: true) }
         }
-        removeRootIfNotSandbox(task)
+        if removeRoot { removeRootIfNotSandbox(task) }
     }
 
     /// Moves the worktree into the trash and drops git's record of it. A rename never trips on what git
