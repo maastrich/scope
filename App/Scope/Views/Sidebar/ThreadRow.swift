@@ -38,7 +38,7 @@ struct ThreadRow: View {
         HStack(spacing: SidebarMetrics.spacing) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.displayTitle(for: session))
-                    .font(.scopeBody)
+                    .font(.scopeRow)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if detailed, let headline {

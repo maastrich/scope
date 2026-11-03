@@ -14,7 +14,27 @@ import SwiftTerm
 @Observable
 final class ThreadSession: Identifiable {
     let id: ThreadID
-    private(set) var record: ThreadRecord
+    /// The record, observed as one value: a view that reads any field redraws when any field moves. A running thread
+    /// rewrites `lastState` and `resumeID` on every turn, so a view that only files threads (by scope, by task) reads
+    /// `placement` instead. A write that changes nothing notifies nobody.
+    private(set) var record: ThreadRecord {
+        get {
+            access(keyPath: \.record)
+            return storedRecord
+        }
+        set {
+            guard newValue != storedRecord else { return }
+            withMutation(keyPath: \.record) { storedRecord = newValue }
+            let placement = ThreadPlacement(newValue)
+            if placement != self.placement { self.placement = placement }
+            if newValue.title != title { title = newValue.title }
+        }
+    }
+    @ObservationIgnored private var storedRecord: ThreadRecord
+    /// The scope, task and role of the thread (`ThreadPlacement`), observed on its own and only set when it moves.
+    private(set) var placement: ThreadPlacement
+    /// The record's title, observed on its own for the same reason: telling twins apart reads every thread's title.
+    private(set) var title: String
     let profile: DriverProfile
 
     /// Created on first access (a restored record costs nothing until its tab is shown), with the
@@ -135,7 +155,9 @@ final class ThreadSession: Identifiable {
 
     init(record: ThreadRecord, profile: DriverProfile) {
         self.id = record.id
-        self.record = record
+        self.storedRecord = record
+        self.placement = ThreadPlacement(record)
+        self.title = record.title
         self.profile = profile
         if record.lastState == .exited, let exit = record.lastExit {
             phase = .exited(exit)
@@ -213,7 +235,6 @@ final class ThreadSession: Identifiable {
 
     // MARK: Derived
 
-    var title: String { record.title }
     var isAlive: Bool { phase.isAlive }
     var pid: pid_t? { phase.pid }
     var canResume: Bool { profile.canResume && record.resumeID != nil }
@@ -835,9 +856,9 @@ final class ThreadSession: Identifiable {
     }
 
     private func setAdapterState(_ state: ThreadState) {
-        adapterState = state
+        if adapterState != state { adapterState = state }
         refreshActivityHeadline()
-        if state != .failed { lastFailure = nil }
+        if state != .failed, lastFailure != nil { lastFailure = nil }
         record.lastState = state
         onRecordChanged?(record)
     }

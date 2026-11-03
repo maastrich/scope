@@ -26,6 +26,9 @@ struct TaskRow: View {
     let task: TaskState
     /// 1 under a topic's row, like a thread under **Loose threads**.
     var depth = 0
+    /// The group a scroll in progress holds the row in (`SidebarScrollHold`), when its state has since moved it: the
+    /// row keeps the height it had.
+    var heldGroup: SidebarGroup? = nil
     @State private var isHovered = false
     @State private var showsCard = false
     @State private var cardDelay: Task<Void, Never>?
@@ -39,7 +42,8 @@ struct TaskRow: View {
         let threads = model.threads(in: task.id)
         let facts = model.taskFacts(for: task)
         let status = TaskStatus.resolve(facts)
-        let secondLine = SidebarTaskRowPolicy.showsSecondLine(rows: model.config.preferences.sidebarRows, status: status)
+        let secondLine = SidebarTaskRowPolicy.showsSecondLine(rows: model.config.preferences.sidebarRows, status: status,
+                                                                  held: heldGroup ?? SidebarLiveScroll.hold.heldGroup(of: .task(task.id)))
         let trailing = SidebarTaskRowPolicy.trailing(status: status, secondLine: secondLine)
         HStack(spacing: SidebarMetrics.spacing) {
             SidebarDisclosure(isExpanded: threads.count > 1 ? task.isExpanded : nil) {
@@ -49,7 +53,7 @@ struct TaskRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 0) {
                     Text(task.name)
-                        .font(.scopeBody)
+                        .font(.scopeRow)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     // On a one-line row, what would open the second line follows the name instead: `· idle 4d`.
@@ -191,13 +195,14 @@ struct TaskRow: View {
             withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
         }
         cardDelay?.cancel()
-        guard hovering else {
+        // Rows slide under a still pointer while the list scrolls: that is not the pointer resting on a task.
+        guard hovering, !SidebarLiveScroll.isActive else {
             showsCard = false
             return
         }
         cardDelay = Task {
             try? await Task.sleep(for: Self.cardDelay)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, !SidebarLiveScroll.isActive else { return }
             showsCard = true
         }
     }

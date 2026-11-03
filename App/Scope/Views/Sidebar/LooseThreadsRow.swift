@@ -23,7 +23,7 @@ struct LooseThreadsRow: View {
             }
 
             Text("Loose threads")
-                .font(.scopeBody)
+                .font(.scopeRow)
                 .foregroundStyle(Ink.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
