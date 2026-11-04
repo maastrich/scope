@@ -426,7 +426,7 @@ extension AppModel {
     /// `scope task branch remove` and *Remove Branch*: the worktree on `branch` leaves the task, its threads hung up
     /// first and its uncommitted changes saved (`TaskManager.removeBranch`). The notice says where they went.
     @discardableResult
-    func removeBranch(_ branch: String, from taskID: TaskID, repo: String? = nil) async throws -> [DismantleNotice] {
+    func removeBranch(_ branch: String, from taskID: TaskID, repo: String? = nil, by requester: CloseRequester = .user) async throws -> [DismantleNotice] {
         guard let task = task(taskID) else { throw TaskError.persistence("no such task") }
         let leaving = task.record.sandboxes(onBranch: branch).filter(\.isSecondary).map(\.sandboxURL.standardizedFileURL.path)
         for session in threads(in: taskID) {
@@ -434,7 +434,14 @@ extension AppModel {
             guard leaving.contains(where: { cwd == $0 || cwd.hasPrefix($0 + "/") }) else { continue }
             await close(session.id, force: true, undoable: false)
         }
-        let (record, notices) = try await env.tasks.removeBranch(taskID, branch: branch, repo: repo)
+        let record: TaskRecord, notices: [DismantleNotice]
+        do {
+            (record, notices) = try await env.tasks.removeBranch(taskID, branch: branch, repo: repo)
+        } catch {
+            journalRemove("worktree", task: task, outcome: "failed", by: requester)
+            throw error
+        }
+        journalRemove("worktree", task: task, outcome: "ok", by: requester)
         task.update(record: record)
         if currentTask?.id == taskID { await delta.load(task: task) }
         refreshDiskUsage(of: task)

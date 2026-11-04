@@ -346,7 +346,7 @@ final class AppControlService: ControlService {
             return .failure(.badRequest("\(slug) is archived", detail: "Its worktrees are already gone; `scope task restore \(slug)` brings them back."))
         }
         do {
-            let notices = try await model.removeBranch(params.branch, from: task.id, repo: params.repo)
+            let notices = try await model.removeBranch(params.branch, from: task.id, repo: params.repo, by: requester(origin))
             var lines = ["removed the worktree on \(params.branch) from \(slug); the branch is kept"]
             for notice in notices {
                 if case .changesSaved(let repo, let ref, let skipped) = notice {

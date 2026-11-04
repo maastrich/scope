@@ -44,7 +44,7 @@ extension AppModel {
         scope(task.scopeID)?.refreshFacts()
     }
 
-    private func journalRemove(_ element: String, task: TaskState, outcome: String, by requester: CloseRequester) {
+    func journalRemove(_ element: String, task: TaskState, outcome: String, by requester: CloseRequester) {
         Journal.record(JournalEvent(kind: .taskRemove, name: element, outcome: outcome, scope: scope(task.scopeID)?.declaration.slug,
                                     task: task.id.rawValue, source: requester.isAgent ? "agent" : "user"))
     }
