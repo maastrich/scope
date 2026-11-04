@@ -319,6 +319,7 @@ extension PullRequestSection {
         case .changesRequested: "text.bubble"
         case .draft: "pencil.line"
         case .checksRunning: "clock"
+        case .checksCancelled: "slash.circle"
         case .reviewNeeded, .ready: "checkmark"
         case .open: "circle"
         }
@@ -330,7 +331,7 @@ extension PullRequestSection {
         case .conflicting, .checksFailing, .changesRequested: PullRequestStyle.failing
         case .checksRunning: PullRequestStyle.pending
         case .reviewNeeded: Ink.secondary
-        case .closed, .draft, .open: Ink.tertiary
+        case .closed, .draft, .checksCancelled, .open: Ink.tertiary
         }
     }
 }

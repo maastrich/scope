@@ -56,7 +56,8 @@ public struct PullRequestFacts: Sendable, Equatable {
         case .failing: return .checksFailing
         case .pending: return .checksRunning
         case .passing: return .checksPassed
-        case .none: break
+        // Cancelled without a newer run: not green, not a failure; the pull request panel lists the job.
+        case .cancelled, .none: break
         }
         return isDraft ? .draft : .pullRequestOpen
     }

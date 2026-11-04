@@ -185,7 +185,8 @@ it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic acti
   <li><b>Pull request conflicts</b> (2 an hour) and <b>Base branch moved</b> (1 an hour): see
   <a href="review.html#follow-main">A task follows main</a>.</li>
   <li><b>Checks failed</b> (2 an hour): a task's pull request fails its checks while its thread is idle; the thread gets
-  each failed job with its link and is asked to rerun a flaky one once, or fix the cause. Once per head commit.</li>
+  each failed job with its link and is asked to rerun a flaky one once, or fix the cause. Once per head commit; a job
+  cancelled for a newer run never counts, the newer run's own failure does.</li>
   <li><b>Review received</b> (3 an hour): a review, a line comment or a conversation comment, Copilot's included, wakes the
   task's thread with each comment's author, file and line and link, once the batch has been quiet for two minutes —
   once per batch. Your own summaries, bots and resolved or answered threads are left out. A pull request just opened

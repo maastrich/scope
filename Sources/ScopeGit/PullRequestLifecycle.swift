@@ -1,11 +1,15 @@
 import Foundation
 
-/// One check of a pull request, as the rollup lists it.
+/// One check of a pull request, as the rollup lists it once `CheckResolution` has followed the runs that replaced
+/// cancelled ones.
 public struct PullRequestCheck: Sendable, Equatable, Hashable, Identifiable {
     public enum State: String, Sendable, Equatable, Hashable {
         case passing, failing, pending
         /// Neutral, skipped or stale: counts for nothing.
         case skipped
+        /// Cancelled and not replaced: by hand, or a matrix leg stopped by its sibling's failure. Neither green nor
+        /// a failure.
+        case cancelled
     }
 
     public let name: String
@@ -14,12 +18,20 @@ public struct PullRequestCheck: Sendable, Equatable, Hashable, Identifiable {
     public let state: State
     /// Where the check's page is: an Actions job, or whatever a third-party status points at.
     public let detailsURL: URL?
+    /// When the check run started, `nil` for a status or one still queued: orders runs that carry no job id.
+    public let startedAt: Date?
+    /// The row stands for a run GitHub cancelled because a newer one of the same workflow took its place, before
+    /// that newer run's jobs show in the rollup: `state` is then `.pending`, and the link the cancelled job's.
+    public let awaitingReplacement: Bool
 
-    public init(name: String, workflow: String? = nil, state: State, detailsURL: URL? = nil) {
+    public init(name: String, workflow: String? = nil, state: State, detailsURL: URL? = nil, startedAt: Date? = nil,
+                awaitingReplacement: Bool = false) {
         self.name = name
         self.workflow = workflow
         self.state = state
         self.detailsURL = detailsURL
+        self.startedAt = startedAt
+        self.awaitingReplacement = awaitingReplacement
     }
 
     public var id: String { "\(workflow ?? "")/\(name)/\(detailsURL?.absoluteString ?? "")" }
@@ -30,6 +42,11 @@ public struct PullRequestCheck: Sendable, Equatable, Hashable, Identifiable {
     /// The Actions run and job behind the check, `nil` for anything that is not a GitHub Actions job — a
     /// third-party status has no log `gh` can fetch.
     public var actionsJob: ActionsJob? { detailsURL.flatMap(ActionsJob.init(detailsURL:)) }
+
+    func with(state: State, awaitingReplacement: Bool) -> PullRequestCheck {
+        PullRequestCheck(name: name, workflow: workflow, state: state, detailsURL: detailsURL, startedAt: startedAt,
+                         awaitingReplacement: awaitingReplacement)
+    }
 }
 
 /// A GitHub Actions run, and one of its jobs when known.

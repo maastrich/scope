@@ -171,6 +171,14 @@ public struct GhClient: Sendable {
         try await prView(number: number, in: checkout, repo: repo).checkRuns
     }
 
+    /// Whether GitHub cancelled Actions job `job` of `repo` (`owner/name`) because a newer run of its concurrency
+    /// group took its place (`gh api repos/<repo>/check-runs/<job>/annotations`): the one question a cancelled check
+    /// without a visible successor is worth (`CheckResolution`). Cancelled is final, so the answer never changes.
+    public func wasSuperseded(job: Int, repo: String, in checkout: URL) async throws -> Bool {
+        try await runJSON(["api", "repos/\(repo)/check-runs/\(job)/annotations"], in: checkout,
+                          parse: CheckResolution.isConcurrencyCancellation(annotationsJSON:))
+    }
+
     /// The log of the failed steps of an Actions run, the one job when it is known
     /// (`gh run view <run> [--job <job>] --log-failed`).
     public func failedLog(of job: ActionsJob, in checkout: URL, repo: String? = nil) async throws -> String {

@@ -74,13 +74,15 @@ public enum PullRequestSet {
         let failing = open.filter { $0.mergeable != .conflicting && $0.checks == .failing }.count
         let running = open.filter { $0.mergeable != .conflicting && $0.checks == .pending }.count
         let passed = open.filter { $0.mergeable != .conflicting && $0.checks == .passing }.count
+        let cancelled = open.filter { $0.mergeable != .conflicting && $0.checks == .cancelled }.count
         let drafts = open.filter { $0.mergeable != .conflicting && $0.checks == .none && $0.isDraft }.count
-        let quiet = open.count - conflicted - failing - running - passed - drafts
+        let quiet = open.count - conflicted - failing - running - passed - cancelled - drafts
         if merged > 0 { parts.append("\(merged) merged") }
         if conflicted > 0 { parts.append("\(conflicted) conflicting") }
         if failing > 0 { parts.append("\(failing) checks failing") }
         if running > 0 { parts.append("\(running) checks running") }
         if passed > 0 { parts.append("\(passed) checks passed") }
+        if cancelled > 0 { parts.append("\(cancelled) checks cancelled") }
         if drafts > 0 { parts.append("\(drafts) draft") }
         if quiet > 0 { parts.append("\(quiet) open") }
         if closed > 0 { parts.append("\(closed) closed") }
@@ -96,16 +98,19 @@ public enum PullRequestSet {
         public var failed = 0
         public var pending = 0
         public var skipped = 0
+        /// Cancelled with no newer run in their place: they count, as not passed.
+        public var cancelled = 0
 
-        public init(passed: Int = 0, failed: Int = 0, pending: Int = 0, skipped: Int = 0) {
+        public init(passed: Int = 0, failed: Int = 0, pending: Int = 0, skipped: Int = 0, cancelled: Int = 0) {
             self.passed = passed
             self.failed = failed
             self.pending = pending
             self.skipped = skipped
+            self.cancelled = cancelled
         }
 
         /// The checks that count.
-        public var total: Int { passed + failed + pending }
+        public var total: Int { passed + failed + pending + cancelled }
 
         /// `✗ 1 / 4` while any failed, `● 2 / 4` while any still runs, `✓ 4 / 4` when all passed; `nil` with no check
         /// that counts. The glyphs are `PullRequest.Checks`'s, so a row and a chip read the same.
@@ -113,6 +118,7 @@ public enum PullRequestSet {
             guard total > 0 else { return nil }
             if failed > 0 { return "✗ \(failed) / \(total)" }
             if pending > 0 { return "● \(passed) / \(total)" }
+            if cancelled > 0 { return "⊘ \(passed) / \(total)" }
             return "✓ \(passed) / \(total)"
         }
 
@@ -120,7 +126,8 @@ public enum PullRequestSet {
         public var checks: PullRequest.Checks {
             guard total > 0 else { return .none }
             if failed > 0 { return .failing }
-            return pending > 0 ? .pending : .passing
+            if pending > 0 { return .pending }
+            return cancelled > 0 ? .cancelled : .passing
         }
     }
 
@@ -132,6 +139,7 @@ public enum PullRequestSet {
             case .failing: tally.failed += 1
             case .pending: tally.pending += 1
             case .skipped: tally.skipped += 1
+            case .cancelled: tally.cancelled += 1
             }
         }
         return tally
@@ -142,7 +150,10 @@ public enum PullRequestSet {
     public enum Verdict: Sendable, Equatable {
         case merged, closed, conflicting
         case checksFailing(Int)
-        case changesRequested, draft, checksRunning, reviewNeeded, ready, open
+        case changesRequested, draft, checksRunning
+        /// A check was cancelled and nothing replaced it: someone has to run it again before it can merge.
+        case checksCancelled
+        case reviewNeeded, ready, open
 
         public var label: String {
             switch self {
@@ -153,6 +164,7 @@ public enum PullRequestSet {
             case .changesRequested: "Changes requested"
             case .draft: "Draft"
             case .checksRunning: "Checks running"
+            case .checksCancelled: "Checks cancelled"
             case .reviewNeeded: "Ready to merge · review needed"
             case .ready: "Ready to merge"
             case .open: "Open"
@@ -163,7 +175,7 @@ public enum PullRequestSet {
         public var asksTheAgent: Bool {
             switch self {
             case .conflicting, .checksFailing, .ready, .reviewNeeded: true
-            case .merged, .closed, .changesRequested, .draft, .checksRunning, .open: false
+            case .merged, .closed, .changesRequested, .draft, .checksRunning, .checksCancelled, .open: false
             }
         }
     }
@@ -180,6 +192,7 @@ public enum PullRequestSet {
         if review == .changesRequested { return .changesRequested }
         if isDraft { return .draft }
         if tally.pending > 0 { return .checksRunning }
+        if tally.cancelled > 0 { return .checksCancelled }
         guard tally.total > 0 || mergeable == .mergeable else { return .open }
         return review == .reviewRequired ? .reviewNeeded : .ready
     }

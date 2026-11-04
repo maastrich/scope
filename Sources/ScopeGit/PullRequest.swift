@@ -6,9 +6,12 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         case approved, changesRequested, reviewRequired, none
     }
 
-    /// The `statusCheckRollup` folded into one state: a failure beats a pending check, which beats success.
+    /// The `statusCheckRollup` folded into one state, once the runs replaced by newer ones are set aside
+    /// (`CheckResolution`): a failure beats a pending check, which beats a cancellation, which beats success.
     public enum Checks: String, Codable, Sendable, Equatable, Hashable {
         case passing, failing, pending, none
+        /// Nothing failed nor runs, but a check was cancelled without a newer run taking its place: not green.
+        case cancelled
     }
 
     public enum Mergeable: String, Sendable, Equatable, Hashable {
@@ -39,7 +42,8 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
     /// Login of the owner of the head repository (the fork owner for a cross-repository PR).
     public let headOwner: String?
     public let mergeable: Mergeable
-    /// Every check of the rollup, in the order `gh` listed them; `checks` is their fold.
+    /// Every check of the rollup, in the order `gh` listed them, without the cancelled ones a newer run of the same
+    /// job replaced; `checks` is their fold.
     public let checkRuns: [PullRequestCheck]
     /// When it was opened, merged and closed, as GitHub dates them: what a task's timeline marks.
     public let createdAt: Date?
@@ -107,17 +111,31 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         return decoder
     }()
 
-    /// Folds the rollup entries (`CheckRun` with `status` / `conclusion`, `StatusContext` with `state`).
+    /// The pull request with its cancelled checks GitHub says were cancelled for a newer run (`supersededJobs`, job
+    /// ids) read as pending: what one question per cancelled job adds to the rollup (`CheckResolution`).
+    public func following(supersededJobs: Set<Int>) -> PullRequest {
+        let runs = CheckResolution.following(checkRuns, supersededJobs: supersededJobs)
+        guard runs != checkRuns else { return self }
+        return PullRequest(
+            number: number, title: title, author: author, headRefName: headRefName, baseRefName: baseRefName,
+            isDraft: isDraft, reviewDecision: reviewDecision, checks: CheckResolution.summarize(runs.map(\.state)),
+            updatedAt: updatedAt, url: url, isCrossRepository: isCrossRepository, headOwner: headOwner,
+            mergeable: mergeable, checkRuns: runs, state: state, createdAt: createdAt, mergedAt: mergedAt,
+            closedAt: closedAt, additions: additions, deletions: deletions, headRefOid: headRefOid
+        )
+    }
+
+    /// Folds the rollup entries (`CheckRun` with `status` / `conclusion`, `StatusContext` with `state`), the
+    /// cancelled ones a newer run replaced set aside.
     static func summarize(checks: [DTO.Check]) -> Checks {
-        guard !checks.isEmpty else { return .none }
-        let states = checks.map(state(of:))
-        if states.contains(.failing) { return .failing }
-        return states.contains(.pending) ? .pending : .passing
+        CheckResolution.summarize(CheckResolution.resolve(checks.map { check(of: $0) }).map(\.state))
     }
 
     static func state(of check: DTO.Check) -> PullRequestCheck.State {
         switch (check.conclusion ?? check.state ?? check.status ?? "").uppercased() {
-        case "FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE":
+        case "CANCELLED":
+            return .cancelled
+        case "FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE":
             return .failing
         case "SUCCESS":
             return .passing
@@ -144,6 +162,7 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
             var workflowName: String?
             var detailsUrl: String?
             var targetUrl: String?
+            var startedAt: Date?
         }
         var number: Int
         var title: String
@@ -179,25 +198,35 @@ public struct PullRequest: Sendable, Equatable, Hashable, Identifiable {
         case "CONFLICTING": .conflicting
         default: .unknown
         }
+        let runs = CheckResolution.resolve((dto.statusCheckRollup ?? []).map { check in
+            Self.check(of: check, number: dto.number, pullRequestURL: dto.url)
+        })
         self.init(
             number: dto.number, title: dto.title, author: dto.author?.login ?? "",
             headRefName: dto.headRefName, baseRefName: dto.baseRefName, isDraft: dto.isDraft ?? false,
-            reviewDecision: decision, checks: Self.summarize(checks: dto.statusCheckRollup ?? []),
+            reviewDecision: decision, checks: CheckResolution.summarize(runs.map(\.state)),
             updatedAt: dto.updatedAt ?? .distantPast, url: dto.url, isCrossRepository: dto.isCrossRepository ?? false,
             headOwner: dto.headRepositoryOwner?.login, mergeable: mergeable,
-            checkRuns: (dto.statusCheckRollup ?? []).map { check in
-                PullRequestCheck(
-                    name: check.name ?? check.context ?? "check",
-                    workflow: check.workflowName.flatMap { $0.isEmpty ? nil : $0 },
-                    state: Self.state(of: check),
-                    detailsURL: (check.detailsUrl ?? check.targetUrl).flatMap { $0.isEmpty ? nil : URL(string: $0) }
-                        .map { ActionsJob.pullRequestLink($0, number: dto.number, pullRequestURL: dto.url) }
-                )
-            },
+            checkRuns: runs,
             state: State(rawValue: (dto.state ?? "").lowercased()) ?? .open,
             createdAt: Self.real(dto.createdAt), mergedAt: Self.real(dto.mergedAt), closedAt: Self.real(dto.closedAt),
             additions: dto.additions, deletions: dto.deletions,
             headRefOid: dto.headRefOid.flatMap { $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// One rollup entry as a check, its Actions job link tagged with the pull request (`pullRequestLink`) when known.
+    static func check(of check: DTO.Check, number: Int? = nil, pullRequestURL: URL? = nil) -> PullRequestCheck {
+        let url = (check.detailsUrl ?? check.targetUrl).flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        return PullRequestCheck(
+            name: check.name ?? check.context ?? "check",
+            workflow: check.workflowName.flatMap { $0.isEmpty ? nil : $0 },
+            state: state(of: check),
+            detailsURL: url.map { url in
+                guard let number, let pullRequestURL else { return url }
+                return ActionsJob.pullRequestLink(url, number: number, pullRequestURL: pullRequestURL)
+            },
+            startedAt: real(check.startedAt)
         )
     }
 
