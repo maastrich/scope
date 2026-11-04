@@ -11,6 +11,19 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.36.0](https://github.com/maastrich/scope/releases/tag/v0.36.0) - 2026-11-04
+
+### Added
+
+- list tasks on their own above the topics in the sidebar tree ([#129](https://github.com/maastrich/scope/pull/129)) by @maastrich
+- remove what a task gained, one by one or with an undoable sweep ([#131](https://github.com/maastrich/scope/pull/131)) by @maastrich
+
+### Fixed
+
+- follow the run that replaced a CI job cancelled by concurrency ([#130](https://github.com/maastrich/scope/pull/130)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.35.0...v0.36.0
+
 ## [0.35.0](https://github.com/maastrich/scope/releases/tag/v0.35.0) - 2026-11-03
 
 ### Added
