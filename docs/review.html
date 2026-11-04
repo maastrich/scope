@@ -153,6 +153,15 @@ and <b>Send to Thread</b> act on. The context menu and the palette offer one <b>
 request, named by repository; the Inbox lists one item per pull request. A task is archived on merge only once none
 of its pull requests is still open.</p>
 <ul>
+  <li><b>A job cancelled for a newer run is followed, not counted.</b> A workflow under <code>concurrency</code> with
+  <code>cancel-in-progress</code> cancels its running job when a newer run of the same group starts; on the same
+  commit the checks then list both. Scope drops the cancelled job when a newer job of the same workflow and the
+  same name (a matrix leg's parameters included) is there, so the pull request shows the new run's state — running,
+  passed or failed — with its link. When the new run's jobs have not shown yet, Scope asks GitHub once about that
+  job: a cancellation GitHub annotates as made for a newer request reads <i>replaced, new run starting</i>, pending,
+  never red. Any other cancellation — by hand, a matrix leg stopped by its sibling's failure — stays in the list as
+  <i>cancelled</i>, grey: the pull request then reads <i>Checks cancelled</i>, neither failing nor ready to merge.
+  None of these wakes the thread with <b>Checks failed</b>.</li>
   <li><b>Send to Thread</b> on a failed check fetches the failed steps' log with <code>gh run view --log-failed</code>
   and pastes its end, with a sentence naming the check, into the task's thread — the same delivery as a review, so
   a thread mid-turn gets it when the turn ends. A check that is not a GitHub Actions job has no log to fetch; the

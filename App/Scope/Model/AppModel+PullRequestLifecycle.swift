@@ -84,6 +84,7 @@ extension AppModel {
         }
         // An archived task keeps what it had: nothing new is bound to it, its sandboxes are gone.
         if task.isArchived { found = found.filter { link in task.record.pullRequests.contains { $0.url == link.url } } }
+        live = await pullRequests.explainingCancellations(live)
         for pr in live { pullRequests.setTaskPullRequest(pr, for: task.id) }
         let stale = found.filter { link in
             guard let known = task.record.pullRequests.first(where: { $0.url == link.url }) else { return true }

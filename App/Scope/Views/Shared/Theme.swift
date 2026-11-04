@@ -118,7 +118,8 @@ enum PullRequestStyle {
         case .passing: passing
         case .failing: failing
         case .pending: pending
-        case .none: neutral
+        // Cancelled with nothing in its place: grey, never the failure red.
+        case .cancelled, .none: neutral
         }
     }
 
@@ -127,6 +128,7 @@ enum PullRequestStyle {
         case .passing: "✓"
         case .failing: "✗"
         case .pending: "●"
+        case .cancelled: "⊘"
         case .none: "–"
         }
     }
