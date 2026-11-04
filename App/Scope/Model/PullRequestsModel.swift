@@ -46,6 +46,38 @@ final class PullRequestsModel {
     /// Tasks Scope is measuring, rebasing or messaging about main right now: one pass at a time per task.
     private(set) var followingMain: Set<TaskID> = []
 
+    /// Cancelled Actions jobs GitHub was asked about, by job id: `true` when `concurrency` cancelled the job for a
+    /// newer run (`CheckResolution`). Cancelled is final, so each job is asked about once, whatever the answer.
+    @ObservationIgnored private var cancelledJobs: [Int: Bool] = [:]
+    /// Questions one refresh may ask: a rollup full of cancelled jobs must not become a burst of `gh` calls.
+    static let cancellationLookupsPerPass = 8
+
+    /// `pr` with what is already known of its cancelled jobs applied; asks nothing.
+    func following(_ pr: PullRequest) -> PullRequest {
+        pr.following(supersededJobs: Set(cancelledJobs.filter(\.value).keys))
+    }
+
+    /// `prs` once every cancelled job no newer job replaced in the rollup has been asked about — one
+    /// `gh api …/annotations` per job never asked before, up to `cancellationLookupsPerPass`. A failed question
+    /// counts as an answer: the job then stays cancelled, neutral, until its successor shows in the rollup.
+    func explainingCancellations(_ prs: [PullRequest]) async -> [PullRequest] {
+        guard let gh else { return prs }
+        var budget = Self.cancellationLookupsPerPass
+        for pr in prs {
+            guard let repo = PullRequest.repository(fromURL: pr.url) else { continue }
+            for job in CheckResolution.unexplainedCancellations(pr.checkRuns) {
+                guard let id = job.job, cancelledJobs[id] == nil, budget > 0 else { continue }
+                budget -= 1
+                let home = FileManager.default.homeDirectoryForCurrentUser
+                let superseded = await Task.detached(priority: .utility) {
+                    (try? await gh.wasSuperseded(job: id, repo: repo, in: home)) ?? false
+                }.value
+                cancelledJobs[id] = superseded
+            }
+        }
+        return prs.map(following)
+    }
+
     func setTaskLag(_ lag: TaskLag?, for task: TaskID) {
         taskLags[task] = lag
     }
@@ -144,7 +176,8 @@ final class PullRequestsModel {
         lastRefresh = .now
         switch outcome {
         case .success(let list):
-            pullRequests = list
+            // The sheet lists every open pull request: it applies what the task refreshes learnt, and asks nothing.
+            pullRequests = list.map(following)
             status = .loaded
         case .failure(.notAuthenticated(let message)):
             status = .notAuthenticated(message)

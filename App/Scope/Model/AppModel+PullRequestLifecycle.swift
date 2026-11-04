@@ -87,6 +87,7 @@ extension AppModel {
         // A pull request the user forgot stays forgotten: not bound again, not shown, not counted.
         found = task.record.discovered(found)
         live = live.filter { !task.record.ignores($0.url) }
+        live = await pullRequests.explainingCancellations(live)
         for pr in live { pullRequests.setTaskPullRequest(pr, for: task.id) }
         let stale = found.filter { link in
             guard let known = task.record.pullRequests.first(where: { $0.url == link.url }) else { return true }

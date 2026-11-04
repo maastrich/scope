@@ -47,8 +47,9 @@ struct TaskPullRequestPanel: View {
         switch state {
         case .failing: 0
         case .pending: 1
-        case .passing: 2
-        case .skipped: 3
+        case .cancelled: 2
+        case .passing: 3
+        case .skipped: 4
         }
     }
 
@@ -60,7 +61,7 @@ struct TaskPullRequestPanel: View {
             withAnimation(.easeOut(duration: 0.15)) { unfolded.toggle() }
         } label: {
             HStack(spacing: 8) {
-                ForEach([PullRequestCheck.State.failing, .pending, .passing, .skipped], id: \.self) { state in
+                ForEach([PullRequestCheck.State.failing, .pending, .cancelled, .passing, .skipped], id: \.self) { state in
                     if let count = counts[state], count > 0 {
                         HStack(spacing: 3) {
                             Image(systemName: Self.symbol(state))
@@ -121,6 +122,19 @@ struct TaskPullRequestPanel: View {
                 .font(.scopeCaption)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if check.awaitingReplacement {
+                Text("replaced, new run starting")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                    .layoutPriority(-1)
+            } else if check.state == .cancelled {
+                Text("cancelled")
+                    .font(.scopeCaption)
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(1)
+                    .layoutPriority(-1)
+            }
             Spacer(minLength: 4)
             if check.state == .failing {
                 ThreadPicker(task: task, title: "Send the failure to the thread", systemImage: "paperplane") { thread in
@@ -141,6 +155,9 @@ struct TaskPullRequestPanel: View {
             }
         }
         .frame(height: Self.rowHeight)
+        .help(check.awaitingReplacement
+            ? "GitHub cancelled this run for a newer one of the same workflow, whose jobs have not shown yet"
+            : check.state == .cancelled ? "Cancelled, and no newer run took its place" : check.title)
     }
 
     private static func symbol(_ state: PullRequestCheck.State) -> String {
@@ -149,6 +166,7 @@ struct TaskPullRequestPanel: View {
         case .failing: "xmark.circle.fill"
         case .pending: "clock.fill"
         case .skipped: "minus.circle"
+        case .cancelled: "slash.circle"
         }
     }
 
@@ -157,7 +175,7 @@ struct TaskPullRequestPanel: View {
         case .passing: AnyShapeStyle(PullRequestStyle.passing)
         case .failing: AnyShapeStyle(PullRequestStyle.failing)
         case .pending: AnyShapeStyle(PullRequestStyle.pending)
-        case .skipped: AnyShapeStyle(.tertiary)
+        case .skipped, .cancelled: AnyShapeStyle(.tertiary)
         }
     }
 }

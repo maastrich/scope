@@ -30,6 +30,7 @@ struct PullRequestChecksLabel: View {
         case .passing: "checks passed"
         case .failing: "checks failing"
         case .pending: "checks running"
+        case .cancelled: "checks cancelled"
         case .none: ""
         }
     }
