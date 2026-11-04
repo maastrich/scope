@@ -38,7 +38,7 @@ public struct SkillInstaller: Sendable {
     public let summaryName: String
 
     /// Bumped whenever `SKILL.md`'s text changes, so installed copies read as outdated and get rewritten.
-    public static let version = 36
+    public static let version = 37
     static let marker = "scope-skill-version:"
 
     public init(userHome: URL, debug: Bool) {
@@ -214,6 +214,8 @@ public struct SkillInstaller: Sendable {
         | `scope task rebase [<slug>] [--scope S]` | `scope_task_rebase` `{task, scope}` |
         | `scope task branch add [<slug>] <branch> [--repo R] [--from <ref>\\|--pr <ref>]` | `scope_task_branch_add` `{task, branch, repo, from, pr}` |
         | `scope task branch list [<slug>]` / `scope task branch remove [<slug>] <branch> [--repo R]` | `scope_task_branch_list` `{task}` / `scope_task_branch_remove` `{task, branch, repo}` |
+        | `scope task remove [<slug>] <repo\\|worktree\\|pr\\|issue\\|topic\\|milestone> [<which>]` | `scope_task_remove` `{task, element, target, repo}` |
+        | `scope task sweep [<slug>] [--keep-branches] [--yes\\|--dry-run] [--undo]` | `scope_task_sweep` `{task, reset_branches, dry_run, undo}` |
         | `scope task checkpoints [<slug>] [--scope S]` | `scope_task_checkpoints` `{task, scope}` |
         | `scope task restore-checkpoint [<slug>] <n> [--scope S]` | `scope_task_restore_checkpoint` `{task, number, scope}` |
         | `scope task topic [<slug>] "<topic>"` / `--clear` `[--no-children]` | `scope_task_topic` `{task, topic}` / `{task, clear: true}`, `children: false` |
@@ -441,6 +443,16 @@ public struct SkillInstaller: Sendable {
         worktrees, `scope task branch remove <branch>` takes one out (uncommitted changes saved first, branch kept).
         Never `git worktree add` by hand: Scope would neither track that folder, nor bind its pull request, nor
         clean it up. Same approval as creating a task; no budget, a worktree opens no agent.
+
+        What a task gained can be taken out again with `scope task remove <element> <which>` (`scope_task_remove`): a
+        repository (its worktrees go, changes saved, branch kept; never the last one), a worktree, a pull request
+        (Scope forgets it and never binds it again — it is not closed on GitHub), the issue, the topic, a milestone.
+        `scope task sweep` (`scope_task_sweep`) brings a task back to a fresh state in one go: pull requests forgotten,
+        added worktrees and repositories removed, the remaining branches recreated on the base, local changes
+        discarded — after a checkpoint and a save of every sandbox under `refs/scope/salvage/`; `--undo` (`undo: true`)
+        takes it back. Its `dry_run` lists exactly what would go. Closing the pull requests on GitHub
+        (`close_pull_requests`) or deleting the remote branches (`delete_remote_branches`) always waits for the user's
+        approval: do not ask for them unless the user did.
 
         To pick archived work back up, `scope task restore <slug>` rebuilds its worktrees on the branch it kept and
         puts back the uncommitted changes saved at archive; then open a thread in it (`scope thread new --task`).
