@@ -394,7 +394,7 @@ public actor TaskManager {
 
         var (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
         // What a sweep takes away again: the repositories the task was created with stay.
-        sandbox.addedAt = .now
+        sandbox.addedAt = TaskRecord.roundedToMilliseconds(.now)
         record.repos.append(sandbox)
         do {
             try await writeProjection(record, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
@@ -1340,6 +1340,12 @@ public actor TaskManager {
         return (saved, notes)
     }
 
+    /// Whether a sweep may delete `branch` on a remote: never the default branch, never a reserved or empty name.
+    static func mayDeleteRemote(branch: String, defaultBranch: String?) -> Bool {
+        let protected: Set<String> = ["main", "master", "develop", "HEAD"]
+        return !branch.isEmpty && branch != defaultBranch && !protected.contains(branch) && !TaskBranch.isReserved(branch)
+    }
+
     /// The start point a new task branch gets in `client`'s repository: `origin/<default>` when there is one, else the
     /// local default branch.
     private func defaultStartPoint(_ client: GitClient, repo path: String) async throws -> String {
@@ -1368,17 +1374,19 @@ public actor TaskManager {
         }
     }
 
-    /// `git push <remote> --delete <branch>` for each swept branch that had an upstream. A failure is a note, not an error:
-    /// the local side of the sweep is done.
+    /// `git push <remote> --delete <branch>` for each swept branch the remote has under its own name. Never the
+    /// upstream's name as such — a task branch starts tracking `origin/main` — and never the repository's default
+    /// branch. A failure is a note, not an error: the local side of the sweep is done.
     private func deleteRemoteBranches(_ sandboxes: [TaskSweepUndo.Sandbox], task: TaskRecord) async -> [String] {
         var notes: [String] = []
         var done = Set<String>()
         for entry in sandboxes {
-            guard let upstream = entry.upstream, let slash = upstream.firstIndex(of: "/") else { continue }
-            let remote = String(upstream[..<slash])
-            let branch = String(upstream[upstream.index(after: slash)...])
+            let remote = entry.upstream?.split(separator: "/", maxSplits: 1).first.map(String.init) ?? "origin"
+            let branch = entry.branch
             guard done.insert("\(entry.repo)\0\(remote)/\(branch)").inserted,
-                  let client = try? await baseClient(for: entry.repo, task: task) else { continue }
+                  let client = try? await baseClient(for: entry.repo, task: task),
+                  Self.mayDeleteRemote(branch: branch, defaultBranch: await client.defaultBranch()),
+                  await client.refExists("\(remote)/\(branch)") else { continue }
             let result = try? await client.run(["push", remote, "--delete", branch], timeout: .seconds(120), allowFailure: true)
             notes.append(result?.succeeded == true ? "\(entry.repo): deleted \(branch) on \(remote)"
                          : "\(entry.repo): could not delete \(branch) on \(remote)")

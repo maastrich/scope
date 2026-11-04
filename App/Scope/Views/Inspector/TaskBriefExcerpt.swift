@@ -39,6 +39,9 @@ struct TaskBriefExcerpt: View {
                             ContextChip(text: topic)
                         }
                         .help("The task's topic (scope task topic, scope_task_topic): what it is about, in a word")
+                        .contextMenu {
+                            Button("Remove from Topic") { Task { await model.removeTopic(of: task.id) } }
+                        }
                     }
                 }
                 .buttonStyle(.plain)

@@ -291,6 +291,18 @@ struct TaskRepoRow: View {
                     .help("Remove Branch — the worktree goes, uncommitted changes saved first; the branch stays")
                     .accessibilityLabel("Remove the worktree on \(repo.branch)")
                     .usageID("inspector.task.branch-remove", label: "Remove a branch from the task")
+                } else if canRemoveRepo {
+                    Button {
+                        model.removeRepoFromUI(repo, of: task)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.iconTight)
+                    .foregroundStyle(Ink.secondary)
+                    .help("Remove Repository — its worktrees go, uncommitted changes saved first; the branch stays")
+                    .accessibilityLabel("Remove \(repoName) from the task")
+                    .usageID("inspector.task.repo-remove", label: "Remove a repository from the task")
                 }
                 Button {
                     model.openInEditorOrCopy(path: repo.sandboxPath)
@@ -331,6 +343,19 @@ struct TaskRepoRow: View {
         .padding(.horizontal, -6)
         .onHover { hovering = $0 }
         .help(repo.sandboxPath)
+        .contextMenu {
+            if repo.isSecondary {
+                Button("Remove Branch") { model.removeBranchFromUI(repo, of: task) }
+            } else if canRemoveRepo {
+                Button("Remove Repository") { model.removeRepoFromUI(repo, of: task) }
+            }
+            Button("Sweep Task…") { model.sweepFromUI(task) }
+        }
+    }
+
+    /// A primary worktree goes with its repository, never the last one, never a repo scope task's.
+    private var canRemoveRepo: Bool {
+        !repo.isSecondary && !task.isArchived && !task.record.isMonoRepo && task.activeRepos.count > 1
     }
 
     private var summary: RepoDeltaSummary? { task.summary(for: repo) }

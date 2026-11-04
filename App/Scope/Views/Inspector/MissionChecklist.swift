@@ -87,6 +87,18 @@ struct MilestoneRow: View {
                 }
             }
             Spacer(minLength: 0)
+            Button {
+                model.removeMilestoneFromUI(milestone, of: task)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.iconTight)
+            .foregroundStyle(Ink.tertiary)
+            .help("Remove Milestone")
+            .accessibilityLabel("Remove the milestone \(milestone.title)")
+            .usageID("mission.milestone-remove", label: "Remove a milestone")
+            .opacity(hovering ? 1 : 0)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
@@ -94,6 +106,9 @@ struct MilestoneRow: View {
         .padding(.horizontal, -6)
         .onHover { hovering = $0 }
         .help(milestone.log ?? milestone.title)
+        .contextMenu {
+            Button("Remove Milestone") { model.removeMilestoneFromUI(milestone, of: task) }
+        }
     }
 
     private var symbol: String {

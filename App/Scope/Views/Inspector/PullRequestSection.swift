@@ -108,6 +108,23 @@ struct PullRequestSection: View {
             .help("Open issue \(issue.label) on GitHub — \(issue.url.absoluteString)")
             .accessibilityLabel("Open issue \(issue.label) on GitHub")
             .usageID("open-issue", label: "Open the task's issue")
+            if let task = model.currentTask, !task.isArchived {
+                Button {
+                    model.unlinkIssueFromUI(task)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.iconTight)
+                .foregroundStyle(Ink.tertiary)
+                .help("Unlink issue \(issue.label) — the task stops naming it; the brief keeps what it said")
+                .accessibilityLabel("Unlink issue \(issue.label)")
+            }
+        }
+        .contextMenu {
+            if let task = model.currentTask, !task.isArchived {
+                Button("Unlink Issue") { model.unlinkIssueFromUI(task) }
+            }
         }
     }
 
@@ -410,6 +427,11 @@ struct PullRequestList: View {
             .background(isSelected ? Fill.selectedTint : .clear, in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Open on GitHub") { model.openOnGitHub(link.url) }
+            Button("Forget Pull Request") { model.forgetPullRequestFromUI(link, of: task) }
+                .help("Out of the task and never bound again; it stays open on GitHub")
+        }
         .help("\(link.label) \(live?.title ?? link.title) — \(verdict.label)")
         .accessibilityLabel("\(link.label) \(live?.title ?? link.title), \(verdict.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
