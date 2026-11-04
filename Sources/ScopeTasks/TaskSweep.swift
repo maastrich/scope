@@ -265,9 +265,9 @@ public enum TaskSweep {
             record.repos[index].worktrees.removeAll { worktree in removedKeys.contains(repo.sandbox(worktree).sandboxKey) }
         }
         for link in record.pullRequests { record.ignore(link.url) }
+        // `keptOpenAfterMerge` stays: with no pull request left nothing archives the task, and an undo brings back
+        // the merged one the user chose to keep the task open past.
         record.pullRequests = []
-        // Forgotten pull requests: nothing left to keep the task open for after a merge.
-        record.keptOpenAfterMerge = false
         record.lastSweep = undo
         return record
     }

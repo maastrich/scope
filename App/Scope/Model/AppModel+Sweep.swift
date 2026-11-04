@@ -298,23 +298,15 @@ extension AppModel {
         }
     }
 
-    /// The confirmation: `nil` when cancelled, else the boxes as the user left them.
+    /// The confirmation: `nil` when cancelled, else the boxes as the user left them. The list follows the boxes, so it
+    /// always says exactly what the button would do.
     private func confirmSweep(_ task: TaskState, plan: TaskSweepPlan, running: [ThreadSession]) -> TaskSweepOptions? {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Sweep “\(task.name)”?"
-        var lines = plan.lines(scopeName: task.record.scopeName)
-        if lines.isEmpty { lines = ["Nothing to forget: no pull request, no worktree beyond the task's own."] }
-        if !running.isEmpty {
-            lines.append("Interrupted: " + running.map { "“\(displayTitle(for: $0))”" }.joined(separator: ", ") + " (the threads stay)")
-        }
-        var summary = "Back to a fresh state. Everything is saved first (a checkpoint and refs/scope/salvage/): Undo takes it all back."
-        if plan.unpushedCommits > 0 || plan.changedFiles > 0 {
-            summary += " At stake: \(plan.unpushedCommits) unpushed \(plan.unpushedCommits == 1 ? "commit" : "commits"), "
-                + "\(plan.changedFiles) modified \(plan.changedFiles == 1 ? "file" : "files")."
-        }
-        alert.informativeText = summary
-        let list = NSTextField(wrappingLabelWithString: lines.map { "• " + $0 }.joined(separator: "\n"))
+        let interrupted = running.isEmpty ? nil
+            : "Interrupted: " + running.map { "“\(displayTitle(for: $0))”" }.joined(separator: ", ") + " (the threads stay)"
+        let list = NSTextField(wrappingLabelWithString: "")
         list.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         list.preferredMaxLayoutWidth = 380
         let reset = NSButton(checkboxWithTitle: "Reset the branches on the base (local changes discarded)", target: nil, action: nil)
@@ -324,17 +316,58 @@ extension AppModel {
         close.isEnabled = plan.pullRequests.contains(where: \.isOpen)
         let remote = NSButton(checkboxWithTitle: "Also delete the remote branches", target: nil, action: nil)
         remote.state = .off
+        let record = task.record
+        let facts = Dictionary(plan.sandboxes.map { ($0.key, SandboxFacts(unpushedCommits: $0.unpushedCommits, changedFiles: $0.changedFiles)) },
+                               uniquingKeysWith: { first, _ in first })
+        let follower = SweepConfirmationFollower { [weak alert] in
+            let options = TaskSweepOptions(resetBranches: reset.state == .on, closePullRequests: close.state == .on,
+                                           deleteRemoteBranches: remote.state == .on)
+            let current = TaskSweepPlan.make(record, facts: facts, options: options)
+            var lines = current.lines(scopeName: record.scopeName)
+            if lines.isEmpty { lines = ["Nothing to sweep: no pull request, no worktree to remove or reset."] }
+            if let interrupted { lines.append(interrupted) }
+            list.stringValue = lines.map { "• " + $0 }.joined(separator: "\n")
+            var summary = "Back to a fresh state. Everything is saved first (a checkpoint and refs/scope/salvage/): Undo takes it all back."
+            if current.unpushedCommits > 0 || current.changedFiles > 0 {
+                summary += " At stake: \(current.unpushedCommits) unpushed \(current.unpushedCommits == 1 ? "commit" : "commits"), "
+                    + "\(current.changedFiles) modified \(current.changedFiles == 1 ? "file" : "files")."
+            }
+            if options.touchesGitHub { summary += " GitHub is told, and that part cannot be undone." }
+            alert?.informativeText = summary
+        }
+        for box in [reset, close, remote] {
+            box.target = follower
+            box.action = #selector(SweepConfirmationFollower.changed(_:))
+        }
+        follower.refresh()
         let stack = NSStackView(views: [list, reset, close, remote])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         let size = stack.fittingSize
-        stack.frame = NSRect(x: 0, y: 0, width: max(380, size.width), height: size.height)
+        // Room for the line *Also delete the remote branches* adds once ticked.
+        stack.frame = NSRect(x: 0, y: 0, width: max(380, size.width), height: size.height + 32)
         alert.accessoryView = stack
         alert.addButton(withTitle: "Sweep").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let answer = alert.runModal()
+        withExtendedLifetime(follower) {}
+        guard answer == .alertFirstButtonReturn else { return nil }
         return TaskSweepOptions(resetBranches: reset.state == .on, closePullRequests: close.state == .on,
                                 deleteRemoteBranches: remote.state == .on)
     }
+}
+
+/// The target of the sweep confirmation's boxes: each change rewrites the list, so it says what the button would do.
+@MainActor
+private final class SweepConfirmationFollower: NSObject {
+    private let update: () -> Void
+
+    init(_ update: @escaping () -> Void) {
+        self.update = update
+    }
+
+    func refresh() { update() }
+
+    @objc func changed(_ sender: Any?) { update() }
 }

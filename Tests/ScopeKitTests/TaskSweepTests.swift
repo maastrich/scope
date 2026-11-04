@@ -88,7 +88,9 @@ import ScopeGit
     }
 
     @Test func applyThenRevertGivesTheRecordBack() {
-        let record = Self.multiRepoRecord()
+        var record = Self.multiRepoRecord()
+        // Kept open past a merge: the undo must not hand the next refresh a task to archive.
+        record.keptOpenAfterMerge = true
         let plan = TaskSweepPlan.make(record)
         let undo = TaskSweepUndo(at: .now, options: plan.options, sandboxes: [],
                                  removedRepos: record.repos.filter { $0.repoRelativePath == "docs" },
@@ -105,6 +107,8 @@ import ScopeGit
         #expect(back.repos[0].worktrees == record.repos[0].worktrees)
         #expect(back.pullRequests == record.pullRequests)
         #expect(back.ignoredPullRequests.isEmpty && back.lastSweep == nil)
+        #expect(back.keptOpenAfterMerge)
+        #expect(back == record)
     }
 
     // MARK: One at a time, on the record
