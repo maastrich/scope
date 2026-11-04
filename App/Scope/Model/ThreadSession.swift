@@ -805,6 +805,16 @@ final class ThreadSession: Identifiable {
         return true
     }
 
+    /// A sweep of the thread's task interrupts its turn the way Esc does, journaled with its own cause. `true` when a
+    /// turn was open.
+    func interruptForSweep() -> Bool {
+        guard phase.isAlive, activity.inTurn || isWorking else { return false }
+        closeCause = "sweep"
+        setActivity(activity.closingOpenTurn(as: .interrupted, at: .now))
+        send("\u{1b}")
+        return true
+    }
+
     /// Replaces the assistant's note; the caption follows.
     func setAssistNote(_ note: AssistNote?) {
         guard note != assistNote else { return }

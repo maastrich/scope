@@ -101,6 +101,16 @@ public enum ScopeCLI {
       scope task branch remove [<id|slug>] <branch>
                                           take a secondary worktree out of the task: uncommitted changes saved
                                           first, folder removed, branch kept (--repo when several hold it)
+      scope task remove [<id|slug>] <repo|worktree|pr|issue|topic|milestone> [<which>]
+                                          take one thing out of the task: a repository (its worktrees go,
+                                          changes saved, branch kept), a worktree (its branch), a pull request
+                                          (forgotten and ignored from then on, never closed on GitHub), the
+                                          issue, the topic, a milestone (number, id or title)
+      scope task sweep [<id|slug>]        bring the task back to a fresh state: pull requests forgotten,
+                                          added worktrees and repositories removed, branches recreated on the
+                                          base (--keep-branches leaves them); everything saved first. Lists
+                                          what would go unless --yes; --undo takes the last sweep back;
+                                          --close-prs and --delete-remote-branches also act on GitHub
       scope browser open [url]            open a page in the task's browser (agent store, watched in its Browser
                                           pane) and wait for the load: a URL, localhost:5173, :41001 or a /path;
                                           --port <n|index> for a port of the block (default: the first server)
@@ -634,6 +644,62 @@ public enum ScopeCLI {
                     throw UsageError(message: "task branch commands: add, list, remove", usage: usage)
                 }
             }
+            if sub == "remove" || sub == "rm" {
+                var words: [String] = []
+                var repo: String?
+                var task: String?
+                var scope: String?
+                let shared = try options(&rest, command: "task remove", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--repo": repo = try value()
+                    case "--task": task = try value()
+                    case "--scope": scope = try value()
+                    default: return false
+                    }
+                    return true
+                })
+                // `[<task>] <element> [<which>]`: the first word that names an element is the element, unless the task
+                // was given with --task.
+                if task == nil, let first = words.first, TaskRemoveElement.parse(first) == nil, words.count >= 2 {
+                    task = first
+                    words.removeFirst()
+                }
+                guard let word = words.first, let element = TaskRemoveElement.parse(word) else {
+                    throw UsageError(message: "task remove takes what to remove: "
+                                     + TaskRemoveElement.allCases.map(\.rawValue).joined(separator: ", "), usage: usage)
+                }
+                let target = words.count > 1 ? words.dropFirst().joined(separator: " ") : nil
+                if element.needsTarget, target == nil {
+                    throw UsageError(message: "task remove \(element.rawValue) takes which one", usage: usage)
+                }
+                if !element.needsTarget, target != nil {
+                    throw UsageError(message: "task remove \(element.rawValue) takes nothing after it", usage: usage)
+                }
+                return .call(.taskRemove(TaskRemoveParams(task: task, element: element, target: target, repo: repo, scope: scope)), shared)
+            }
+            if sub == "sweep" {
+                var words: [String] = []
+                var parameters = TaskSweepParams()
+                var yes = false
+                let shared = try options(&rest, command: "task sweep", positional: { words.append($0) }, specific: { flag, value in
+                    switch flag {
+                    case "--keep-branches": parameters.resetBranches = false
+                    case "--close-prs", "--close-pull-requests": parameters.closePullRequests = true
+                    case "--delete-remote-branches": parameters.deleteRemoteBranches = true
+                    case "--dry-run": parameters.dryRun = true
+                    case "--yes", "-y": yes = true
+                    case "--undo": parameters.undo = true
+                    case "--scope": parameters.scope = try value()
+                    default: return false
+                    }
+                    return true
+                })
+                guard words.count <= 1 else { throw UsageError(message: "task sweep takes at most a task id or slug", usage: usage) }
+                parameters.task = words.first
+                // Destructive: without --yes the command only lists what would go.
+                if !parameters.undo, !yes { parameters.dryRun = true }
+                return .call(.taskSweep(parameters), shared)
+            }
             if sub == "show" {
                 var words: [String] = []
                 let shared = try options(&rest, command: "task show", positional: { words.append($0) })
@@ -761,7 +827,7 @@ public enum ScopeCLI {
                                                         children: children)), shared)
             }
             guard sub == "new" else {
-                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, branch, checkpoints, restore-checkpoint, topic, milestone", usage: usage)
+                throw UsageError(message: "task commands: new, show, archive, close, restore, rebase, branch, remove, sweep, checkpoints, restore-checkpoint, topic, milestone", usage: usage)
             }
             var prompt: [String] = []
             var parameters = TaskNewParams(prompt: "")

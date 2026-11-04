@@ -115,9 +115,12 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
     /// `true` on the view of a secondary worktree (`TaskRecord.sandboxes`); never written to disk — the record
     /// keeps secondary worktrees under `worktrees`, where their repository entry is.
     public var isSecondary: Bool = false
+    /// When the repository joined a running task (`TaskManager.addRepo`); `nil` for the repositories the task was
+    /// created with, and on records written before the date was kept. What a sweep removes and what it keeps.
+    public var addedAt: Date?
 
     public init(repoRelativePath: String, sandboxPath: String, branch: String, state: State = .active,
-                branchCreated: Bool? = nil, salvageRef: String? = nil, worktrees: [TaskWorktree] = []) {
+                branchCreated: Bool? = nil, salvageRef: String? = nil, worktrees: [TaskWorktree] = [], addedAt: Date? = nil) {
         self.repoRelativePath = TaskRepo.normalize(repoRelativePath)
         self.sandboxPath = sandboxPath
         self.branch = branch
@@ -125,9 +128,10 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.branchCreated = branchCreated
         self.salvageRef = salvageRef
         self.worktrees = worktrees
+        self.addedAt = addedAt.map(TaskRecord.roundedToMilliseconds)
     }
 
-    private enum CodingKeys: String, CodingKey { case repoRelativePath, sandboxPath, branch, state, branchCreated, salvageRef, worktrees }
+    private enum CodingKeys: String, CodingKey { case repoRelativePath, sandboxPath, branch, state, branchCreated, salvageRef, worktrees, addedAt }
 
     // Lenient on the newer fields: a record from before several worktrees per repository has none.
     public init(from decoder: any Decoder) throws {
@@ -139,6 +143,7 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
         branchCreated = try container.decodeIfPresent(Bool.self, forKey: .branchCreated)
         salvageRef = try container.decodeIfPresent(String.self, forKey: .salvageRef)
         worktrees = (try? container.decodeIfPresent([TaskWorktree].self, forKey: .worktrees)) ?? []
+        addedAt = (try? container.decodeIfPresent(Date.self, forKey: .addedAt)) ?? nil
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -150,6 +155,7 @@ public struct TaskRepo: Codable, Sendable, Equatable, Hashable, Identifiable {
         try container.encodeIfPresent(branchCreated, forKey: .branchCreated)
         try container.encodeIfPresent(salvageRef, forKey: .salvageRef)
         if !worktrees.isEmpty { try container.encode(worktrees, forKey: .worktrees) }
+        try container.encodeIfPresent(addedAt, forKey: .addedAt)
     }
 
     public var id: String { repoRelativePath }
@@ -430,6 +436,11 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     /// A mission: the brief is a goal, reached through milestones the orchestrator names and Scope validates
     /// (`Mission`). `nil` for an ordinary task.
     public var mission: Mission?
+    /// Pull requests forgotten on purpose (`TaskElement.pullRequest`, a sweep): the discovery never binds them again.
+    /// Linking one explicitly takes it off the list.
+    public var ignoredPullRequests: [URL] = []
+    /// What the last sweep took away, for its undo (`TaskSweepUndo`); `nil` when there is nothing to undo.
+    public var lastSweep: TaskSweepUndo?
 
     public init(
         id: TaskID = .generate(),
@@ -671,7 +682,7 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case version, id, scopeID, scopeRoot, scopeSlug, scopeName, name, slug, branch, root, repos, createdAt, archivedAt, pullRequests, prompt
         case createdBy, portBase, setup, cleanup, topic, topicSource, parentTask, origin, keptOpenAfterMerge, deliverable, issue
-        case holdBranch, followedMainHead, trying, attempt, attemptsKept, mission
+        case holdBranch, followedMainHead, trying, attempt, attemptsKept, mission, ignoredPullRequests, lastSweep
     }
 
     /// Keys read but no longer written.
@@ -718,5 +729,46 @@ public struct TaskRecord: Codable, Sendable, Equatable, Identifiable {
         attempt = (try? container.decodeIfPresent(TaskAttempt.self, forKey: .attempt)) ?? nil
         attemptsKept = (try? container.decodeIfPresent(TaskAttemptsKept.self, forKey: .attemptsKept)) ?? nil
         mission = (try? container.decodeIfPresent(Mission.self, forKey: .mission)) ?? nil
+        ignoredPullRequests = (try? container.decodeIfPresent([URL].self, forKey: .ignoredPullRequests)) ?? []
+        lastSweep = (try? container.decodeIfPresent(TaskSweepUndo.self, forKey: .lastSweep)) ?? nil
+    }
+
+    // Written by hand so the newer keys stay out of records that never used them: an older build reads them untouched.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(id, forKey: .id)
+        try container.encode(scopeID, forKey: .scopeID)
+        try container.encode(scopeRoot, forKey: .scopeRoot)
+        try container.encode(scopeSlug, forKey: .scopeSlug)
+        try container.encode(scopeName, forKey: .scopeName)
+        try container.encode(name, forKey: .name)
+        try container.encode(slug, forKey: .slug)
+        try container.encode(branch, forKey: .branch)
+        try container.encode(root, forKey: .root)
+        try container.encode(repos, forKey: .repos)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(archivedAt, forKey: .archivedAt)
+        try container.encode(pullRequests, forKey: .pullRequests)
+        try container.encodeIfPresent(prompt, forKey: .prompt)
+        try container.encodeIfPresent(createdBy, forKey: .createdBy)
+        try container.encodeIfPresent(portBase, forKey: .portBase)
+        try container.encodeIfPresent(setup, forKey: .setup)
+        try container.encodeIfPresent(cleanup, forKey: .cleanup)
+        try container.encodeIfPresent(topic, forKey: .topic)
+        try container.encodeIfPresent(topicSource, forKey: .topicSource)
+        try container.encodeIfPresent(parentTask, forKey: .parentTask)
+        try container.encodeIfPresent(origin, forKey: .origin)
+        try container.encode(keptOpenAfterMerge, forKey: .keptOpenAfterMerge)
+        try container.encodeIfPresent(deliverable, forKey: .deliverable)
+        try container.encodeIfPresent(issue, forKey: .issue)
+        try container.encode(holdBranch, forKey: .holdBranch)
+        try container.encodeIfPresent(followedMainHead, forKey: .followedMainHead)
+        try container.encode(trying, forKey: .trying)
+        try container.encodeIfPresent(attempt, forKey: .attempt)
+        try container.encodeIfPresent(attemptsKept, forKey: .attemptsKept)
+        try container.encodeIfPresent(mission, forKey: .mission)
+        if !ignoredPullRequests.isEmpty { try container.encode(ignoredPullRequests, forKey: .ignoredPullRequests) }
+        try container.encodeIfPresent(lastSweep, forKey: .lastSweep)
     }
 }

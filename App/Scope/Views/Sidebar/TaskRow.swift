@@ -259,6 +259,18 @@ struct TaskContextMenu: View {
             }
         }
         .disabled(secondary.isEmpty)
+        TaskRemoveMenu(task: task)
+        Button("Sweep Task…") {
+            model.sweepFromUI(task)
+        }
+        .disabled(task.isArchived)
+        .help("Back to a fresh state: pull requests forgotten, added worktrees and repositories removed, branches reset on the base")
+        if task.record.lastSweep != nil, !task.isArchived {
+            Button("Undo Sweep") {
+                Usage.click("sidebar.task.undo-sweep", label: "Undo a task's sweep")
+                Task { await model.undoSweepFromUndo(task.id) }
+            }
+        }
         Button("Open Task in Editor") {
             model.openTaskInEditor(task)
         }
@@ -354,6 +366,31 @@ struct TryInCheckoutMenuItems: View {
                 }
             }
         }
+    }
+}
+
+/// *Remove* — one item per thing the task gained: a repository, a pull request, the issue (the worktrees have
+/// *Remove Branch*, the topic *Topic ▸ Remove from Topic*).
+struct TaskRemoveMenu: View {
+    @Environment(AppModel.self) private var model
+    let task: TaskState
+
+    var body: some View {
+        let repos = task.isArchived || task.record.isMonoRepo || task.activeRepos.count < 2 ? [] : task.activeRepos
+        Menu("Remove") {
+            ForEach(repos) { repo in
+                Button("Repository \(repo.repoRelativePath)") { model.removeRepoFromUI(repo, of: task) }
+            }
+            if !repos.isEmpty, !task.record.pullRequests.isEmpty { Divider() }
+            ForEach(task.record.pullRequests) { pr in
+                Button("Forget Pull Request \(pr.label)") { model.forgetPullRequestFromUI(pr, of: task) }
+            }
+            if let issue = task.record.issue {
+                Divider()
+                Button("Unlink Issue \(issue.label)") { model.unlinkIssueFromUI(task) }
+            }
+        }
+        .disabled(repos.isEmpty && task.record.pullRequests.isEmpty && task.record.issue == nil)
     }
 }
 

@@ -70,6 +70,8 @@ public struct ControlRequest: Sendable, Equatable {
         case .taskBranchAdd(let params): try encoder.encode(wire(params))
         case .taskBranchList(let params): try encoder.encode(wire(params))
         case .taskBranchRemove(let params): try encoder.encode(wire(params))
+        case .taskRemove(let params): try encoder.encode(wire(params))
+        case .taskSweep(let params): try encoder.encode(wire(params))
         case .browser(let params): try encoder.encode(wire(params))
         }
     }
@@ -136,6 +138,8 @@ public struct ControlRequest: Sendable, Equatable {
             case .taskBranchAdd: .taskBranchAdd(try required(TaskBranchAddParams.self))
             case .taskBranchList: .taskBranchList(try decoder.decode(Params<TaskBranchListParams>.self, from: data).params ?? TaskBranchListParams())
             case .taskBranchRemove: .taskBranchRemove(try required(TaskBranchRemoveParams.self))
+            case .taskRemove: .taskRemove(try required(TaskRemoveParams.self))
+            case .taskSweep: .taskSweep(try decoder.decode(Params<TaskSweepParams>.self, from: data).params ?? TaskSweepParams())
             case .browser: .browser(try required(BrowserParams.self))
             }
             return .success(ControlRequest(id: envelope.id, caller: caller, call: call, rpc: envelope.rpc))
@@ -252,7 +256,7 @@ public struct ControlResponse: Sendable, Equatable {
             case .taskNew: .task(try decoder.decode(Wrapped<TaskNewResult>.self, from: data).result)
             case .threadStop, .threadRestart, .threadClose, .threadSend, .taskClose, .taskArchive, .taskTopic, .taskRestore, .taskRebase, .taskTry,
                  .taskRestoreCheckpoint, .gc, .memory, .topicsRegroup, .topicShow, .configGet, .configSet, .scheduleRun, .milestoneAdd, .milestoneDone,
-                 .taskBranchAdd, .taskBranchRemove:
+                 .taskBranchAdd, .taskBranchRemove, .taskRemove, .taskSweep:
                 .action(try decoder.decode(Wrapped<ActionResult>.self, from: data).result, method)
             case .taskBranchList: .taskBranches(try decoder.decode(Wrapped<TaskBranchListResult>.self, from: data).result)
             case .browser: .browser(try decoder.decode(Wrapped<BrowserResult>.self, from: data).result)

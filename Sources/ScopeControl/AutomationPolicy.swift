@@ -261,6 +261,24 @@ public struct AutomationPolicy: Sendable, Equatable {
                 // and archiving a task do, under the same approval. No budget: a worktree opens no agent, and the
                 // task it joins already holds its share.
                 approval = settings.tasks
+            case .taskRemove:
+                // A topic or a milestone is a label on the task, like `task.topic` and `task.milestone.add`. A
+                // repository, a worktree, a pull request or the issue changes what the task holds: archive's approval.
+                if case .taskRemove(let params) = call, params.element == .topic || params.element == .milestone { return .allow }
+                approval = settings.tasks
+            case .taskSweep:
+                // A preview reads.
+                if case .taskSweep(let params) = call, params.dryRun { return .allow }
+                // GitHub is told — pull requests closed, branches deleted on origin, neither undoable: the user
+                // approves it every time, whatever the automation settings say for tasks.
+                if case .taskSweep(let params) = call, params.touchesGitHub {
+                    if settings.tasks == .deny {
+                        return .refuse(.denied("task.sweep is turned off for agents", detail: "Settings ▸ Automation.", rule: .methodOff))
+                    }
+                    return .ask(subject: AutomationPolicy.subject(of: call))
+                }
+                // Worktrees removed and branches reset, all of it saved first and undoable: archive's approval.
+                approval = settings.tasks
             case .taskRestore:
                 // A task opened again, sandboxes and all: the budget and the approval of a new one. No depth to
                 // check — the task keeps the place in the chain it had, and opens no thread.
@@ -445,6 +463,31 @@ public struct AutomationPolicy: Sendable, Equatable {
             "\(params.action.rawValue) the browser of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
         case .taskBranchRemove(let params):
             "remove the worktree on \(params.branch) from " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+        case .taskRemove(let params):
+            "remove " + Self.describe(params.element, target: params.target) + " from "
+                + (params.task.map { "the task “\($0)”" } ?? "its own task")
+        case .taskSweep(let params):
+            if params.undo {
+                "undo the last sweep of " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+            } else {
+                "sweep " + (params.task.map { "the task “\($0)”" } ?? "its own task")
+                    + (params.resetBranches ? ", resetting its branches on the base" : "")
+                    + (params.closePullRequests ? ", closing its pull requests on GitHub" : "")
+                    + (params.deleteRemoteBranches ? ", deleting its branches on origin" : "")
+            }
+        }
+    }
+
+    /// `the repository api`, `the pull request #42`, `the issue`.
+    static func describe(_ element: TaskRemoveElement, target: String?) -> String {
+        let target = target.map { " \($0)" } ?? ""
+        return switch element {
+        case .repo: "the repository\(target)"
+        case .worktree: "the worktree\(target)"
+        case .pullRequest: "the pull request\(target)"
+        case .issue: "the issue"
+        case .topic: "the topic"
+        case .milestone: "the milestone\(target)"
         }
     }
 }

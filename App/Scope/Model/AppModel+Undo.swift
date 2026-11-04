@@ -30,6 +30,7 @@ extension AppModel {
         switch undoLedger.live(at: .now).last?.entry {
         case .closedThread(let closed): "Undo Close “\(closed.record.title)”"
         case .archivedTask(_, let name, _): "Undo Archive “\(name)”"
+        case .sweptTask(_, let name, _): "Undo Sweep “\(name)”"
         case nil: "Undo"
         }
     }
@@ -111,10 +112,18 @@ extension AppModel {
         case .archivedTask(let id, _, _):
             element = "restore-task"
             Task { await reopenTask(id) }
+        case .sweptTask(let id, _, _):
+            element = "undo-sweep"
+            Task { await undoSweepFromUndo(id) }
         }
         // The usage log counts every undo, whichever control asked for it, under one id per kind.
         let source = Usage.currentInput ?? .app
-        Usage.register("undo.\(element)", label: element == "reopen-thread" ? "Reopen a closed thread" : "Restore an archived task")
+        let label = switch element {
+        case "reopen-thread": "Reopen a closed thread"
+        case "undo-sweep": "Undo a task's sweep"
+        default: "Restore an archived task"
+        }
+        Usage.register("undo.\(element)", label: label)
         Usage.record(source == .keyboard ? .shortcut : .click, "undo.\(element)", source: source, context: via)
     }
 

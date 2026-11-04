@@ -155,6 +155,38 @@ all; Close with the branches deletes every branch of the task. <b>Remove Branch<
 remove</code>) takes one worktree out of a live task the way an archive would: changes saved, folder gone, branch
 kept. The task's own branch is not removable that way; archive or close the task.</p>
 
+<h3 id="sweep">Removing what a task gained, and sweeping it</h3>
+<p>Whatever was added to a task comes out again, one thing at a time: hover a row of the inspector (a repository,
+a worktree, the issue, a milestone) for its <b>✕</b>, or right-click it (a pull request, the topic chip too); the
+task's context menu has <b>Remove ▸</b>, the palette one row each. From a thread, <code>scope task remove
+&lt;repo|worktree|pr|issue|topic|milestone&gt; &lt;which&gt;</code> (<code>scope_task_remove</code>).</p>
+<ul>
+  <li><b>A repository</b>: its worktrees go to the trash, their uncommitted changes saved under
+  <code>refs/scope/salvage/</code> first; its branch stays in your repository, your checkout is never touched. The
+  last repository of a task is not one to remove.</li>
+  <li><b>A pull request</b>: Scope forgets it — out of the task and of the Pull Request card — and never binds it
+  again when it finds it on the branch. It is <i>not</i> closed on GitHub. Creating it again from Scope brings it
+  back.</li>
+  <li><b>The issue</b>, <b>the topic</b>, <b>a milestone</b> (by number, id or title): the task stops naming them.</li>
+</ul>
+<p><b>Sweep Task…</b> (context menu, palette, the inspector's rows; <code>scope task sweep</code>,
+<code>scope_task_sweep</code>) brings the task back to how it was created, in one go: every pull request forgotten,
+the worktrees added with <b>Add Branch</b> and the repositories added after creation removed (their branches kept),
+and — ticked by default — each remaining worktree's branch recreated on the repository's base, its local changes
+discarded. The repositories the task was created with stay: the brief and the context file were written for them,
+and the threads need a sandbox. Issue, topic, milestones and brief stay too. The threads stay; the ones in the middle
+of a turn are interrupted. The confirmation lists exactly what goes: pull requests, worktrees, branches, unpushed
+commits, modified files, the turns it interrupts.</p>
+<p>Nothing is lost: before anything moves, Scope takes a checkpoint and keeps every sandbox it touches under
+<code>refs/scope/salvage/</code> — its working tree when dirty, its tip when clean. <b>Undo</b> (the toast,
+<kbd>⌘Z</kbd>, <b>Undo Sweep</b> in the menu and the palette, <code>scope task sweep --undo</code>) rebuilds the
+worktrees, puts each branch back on its old tip with its upstream, the uncommitted changes back, the pull requests
+back.</p>
+<p>Nothing reaches GitHub unless you tick it: <b>Also close the pull requests on GitHub</b> and <b>Also delete the
+remote branches</b> are off by default, cannot be undone, and an agent asking for either always waits for your
+approval, whatever Settings ▸ Automation allows for tasks. Only the task's own branch name is deleted on the remote,
+never the default branch. On the command line a sweep only lists what would go until you add <code>--yes</code>.</p>
+
 <h2 id="setup">Setup and teardown</h2>
 <p>A fresh worktree has the committed tree and nothing else: no <code>node_modules</code>, no <code>.env</code>.
 Right after <b>Create</b>, in the background, Scope prepares each sandbox — and the task's first thread waits for
@@ -382,7 +414,7 @@ answer kept when it was archived (or its report file). Archived and closed tasks
 that implements it without anyone pasting. <code>@thread:&lt;id&gt;</code> does the same for a thread: title, task,
 last answer. In the app, typing <code>@</code> in a message field offers the tasks of the scope, recent first; Tab
 or ↩ completes one. A mention nothing answers to stays as typed, with a note.</p>
-</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#branches">Several branches in one task</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl3" href="#memory">Claude Code memory, per repository</a><a class="lvl2" href="#missions">Missions</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl3" href="#checkpoints">Every turn leaves a checkpoint</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
+</main><aside class="toc"><strong>On this page</strong><a class="lvl2" href="#create">Creating a task</a><a class="lvl2" href="#reading">What Scope reads out of the prompt</a><a class="lvl2" href="#branch">The driver proposes the branch</a><a class="lvl2" href="#continue">Continuing existing work</a><a class="lvl2" href="#sandboxes">Sandboxes</a><a class="lvl2" href="#branches">Several branches in one task</a><a class="lvl3" href="#sweep">Removing what a task gained, and sweeping it</a><a class="lvl2" href="#setup">Setup and teardown</a><a class="lvl2" href="#threads">Threads inside a task</a><a class="lvl2" href="#guardrails">Git guardrails</a><a class="lvl2" href="#release">Cutting a release from a thread</a><a class="lvl2" href="#context">AGENTS.md</a><a class="lvl3" href="#skills">Every repository's skills</a><a class="lvl3" href="#memory">Claude Code memory, per repository</a><a class="lvl2" href="#missions">Missions</a><a class="lvl2" href="#lifecycle">Archiving and closing</a><a class="lvl3" href="#checkpoints">Every turn leaves a checkpoint</a><a class="lvl2" href="#cleanup">Automatic cleanup</a><a class="lvl2" href="#from-pr">Starting from a pull request</a><a class="lvl2" href="#from-issue">Starting from an issue</a><a class="lvl2" href="#mentions">Mentioning a past task</a></aside></div>
 <footer class="footer"><div class="footer-inner">
   <span>Scope — a control room for CLI code agents.</span>
   <a href="https://github.com/maastrich/scope">Source</a>

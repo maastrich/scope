@@ -8,12 +8,15 @@ import ScopeTasks
 enum UndoableAction {
     case closedThread(ClosedThread)
     case archivedTask(id: TaskID, name: String, scope: ScopeID)
+    /// A sweep (`AppModel.sweepTask`): its undo puts the worktrees, branches, changes and pull requests back.
+    case sweptTask(id: TaskID, name: String, scope: ScopeID)
 
     /// What the ledger keys the action by, so a second close of the same thread replaces the first.
     var id: String {
         switch self {
         case .closedThread(let closed): "thread:\(closed.id.rawValue)"
         case .archivedTask(let id, _, _): "task:\(id.rawValue)"
+        case .sweptTask(let id, _, _): "sweep:\(id.rawValue)"
         }
     }
 
@@ -65,13 +68,14 @@ final class UndoNotice: Identifiable {
         return switch action {
         case .closedThread(let closed): "“\(closed.record.title)” closed\(by)"
         case .archivedTask(_, let name, _): "“\(name)” archived\(by)"
+        case .sweptTask(_, let name, _): "“\(name)” swept\(by)"
         }
     }
 
     var buttonTitle: String {
         switch action {
         case .closedThread: "Reopen"
-        case .archivedTask: "Undo"
+        case .archivedTask, .sweptTask: "Undo"
         }
     }
 
@@ -79,6 +83,7 @@ final class UndoNotice: Identifiable {
         switch action {
         case .closedThread: "reopen-thread"
         case .archivedTask: "restore-task"
+        case .sweptTask: "undo-sweep"
         }
     }
 

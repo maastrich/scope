@@ -772,6 +772,38 @@ all; Close with the branches deletes every branch of the task. <b>Remove Branch<
 remove</code>) takes one worktree out of a live task the way an archive would: changes saved, folder gone, branch
 kept. The task's own branch is not removable that way; archive or close the task.</p>
 
+<h3 id="sweep">Removing what a task gained, and sweeping it</h3>
+<p>Whatever was added to a task comes out again, one thing at a time: hover a row of the inspector (a repository,
+a worktree, the issue, a milestone) for its <b>✕</b>, or right-click it (a pull request, the topic chip too); the
+task's context menu has <b>Remove ▸</b>, the palette one row each. From a thread, <code>scope task remove
+&lt;repo|worktree|pr|issue|topic|milestone&gt; &lt;which&gt;</code> (<code>scope_task_remove</code>).</p>
+<ul>
+  <li><b>A repository</b>: its worktrees go to the trash, their uncommitted changes saved under
+  <code>refs/scope/salvage/</code> first; its branch stays in your repository, your checkout is never touched. The
+  last repository of a task is not one to remove.</li>
+  <li><b>A pull request</b>: Scope forgets it — out of the task and of the Pull Request card — and never binds it
+  again when it finds it on the branch. It is <i>not</i> closed on GitHub. Creating it again from Scope brings it
+  back.</li>
+  <li><b>The issue</b>, <b>the topic</b>, <b>a milestone</b> (by number, id or title): the task stops naming them.</li>
+</ul>
+<p><b>Sweep Task…</b> (context menu, palette, the inspector's rows; <code>scope task sweep</code>,
+<code>scope_task_sweep</code>) brings the task back to how it was created, in one go: every pull request forgotten,
+the worktrees added with <b>Add Branch</b> and the repositories added after creation removed (their branches kept),
+and — ticked by default — each remaining worktree's branch recreated on the repository's base, its local changes
+discarded. The repositories the task was created with stay: the brief and the context file were written for them,
+and the threads need a sandbox. Issue, topic, milestones and brief stay too. The threads stay; the ones in the middle
+of a turn are interrupted. The confirmation lists exactly what goes: pull requests, worktrees, branches, unpushed
+commits, modified files, the turns it interrupts.</p>
+<p>Nothing is lost: before anything moves, Scope takes a checkpoint and keeps every sandbox it touches under
+<code>refs/scope/salvage/</code> — its working tree when dirty, its tip when clean. <b>Undo</b> (the toast,
+<kbd>⌘Z</kbd>, <b>Undo Sweep</b> in the menu and the palette, <code>scope task sweep --undo</code>) rebuilds the
+worktrees, puts each branch back on its old tip with its upstream, the uncommitted changes back, the pull requests
+back.</p>
+<p>Nothing reaches GitHub unless you tick it: <b>Also close the pull requests on GitHub</b> and <b>Also delete the
+remote branches</b> are off by default, cannot be undone, and an agent asking for either always waits for your
+approval, whatever Settings ▸ Automation allows for tasks. Only the task's own branch name is deleted on the remote,
+never the default branch. On the command line a sweep only lists what would go until you add <code>--yes</code>.</p>
+
 <h2 id="setup">Setup and teardown</h2>
 <p>A fresh worktree has the committed tree and nothing else: no <code>node_modules</code>, no <code>.env</code>.
 Right after <b>Create</b>, in the background, Scope prepares each sandbox — and the task's first thread waits for
@@ -1379,6 +1411,9 @@ scope task restore &lt;id|slug&gt;        <span class="c"># bring an archived ta
 scope task rebase [&lt;id|slug&gt;]        <span class="c"># bring it up to date with main now: rebase when clean, ask its thread when not</span>
 scope task branch add [&lt;id|slug&gt;] &lt;branch&gt; <span class="c"># a second worktree of a repository, on that branch (--repo, --from, --pr)</span>
 scope task branch list|remove [&lt;id|slug&gt;] … <span class="c"># every worktree of the task; take one out, its changes saved, branch kept</span>
+scope task remove [&lt;id|slug&gt;] &lt;repo|worktree|pr|issue|topic|milestone&gt; [&lt;which&gt;]
+                                    <span class="c"># take one thing out of the task; a pull request is forgotten, never closed</span>
+scope task sweep [&lt;id|slug&gt;]        <span class="c"># back to a fresh state, everything saved first (--yes, --keep-branches, --undo)</span>
 scope task checkpoints [&lt;id|slug&gt;]   <span class="c"># its checkpoints: one snapshot of the sandboxes per turn that changed a file</span>
 scope task restore-checkpoint [&lt;id|slug&gt;] &lt;n&gt;
                                     <span class="c"># put checkpoint n's files back; the files as they are become a checkpoint first</span>
@@ -1565,7 +1600,8 @@ Debug build answers <code>scope-debug://</code> instead.</p>
 <code>scope_thread_new</code>, <code>scope_thread_send</code>, <code>scope_thread_read</code>, <code>scope_thread_wait</code>, <code>scope_thread_stop</code>, <code>scope_thread_restart</code>,
 <code>scope_thread_close</code>, <code>scope_task_new</code>, <code>scope_task_archive</code>,
 <code>scope_task_close</code>, <code>scope_task_restore</code>, <code>scope_task_rebase</code>, <code>scope_task_branch_add</code>,
-<code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_checkpoints</code>,
+<code>scope_task_branch_list</code>, <code>scope_task_branch_remove</code>, <code>scope_task_remove</code>,
+<code>scope_task_sweep</code>, <code>scope_task_checkpoints</code>,
 <code>scope_task_restore_checkpoint</code>, <code>scope_browser_open</code>, <code>scope_browser_read</code>,
 <code>scope_browser_screenshot</code>, <code>scope_browser_console</code>, <code>scope_browser_click</code>,
 <code>scope_browser_type</code>, <code>scope_browser_wait</code>, <code>scope_browser_network</code>,

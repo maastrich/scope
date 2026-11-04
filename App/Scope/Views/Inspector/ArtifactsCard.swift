@@ -602,6 +602,7 @@ private struct TaskCheckpointRow: View {
         switch checkpoint.reason {
         case .beforeRestore: "Before restore"
         case .beforeCopy: "Before copy"
+        case .beforeSweep: "Before sweep"
         case .turn: checkpoint.threadTitle ?? "Thread"
         }
     }

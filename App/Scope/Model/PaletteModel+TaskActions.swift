@@ -78,6 +78,39 @@ extension PaletteModel {
                 Task { await model.keepAttempt(task) }
             })
         }
+        if !task.isArchived {
+            if !task.record.isMonoRepo, task.activeRepos.count > 1 {
+                for repo in task.activeRepos {
+                    items.append(PaletteItem(id: "task-remove-repo-\(repo.repoRelativePath)", section: .actions, icon: "xmark.circle",
+                                             label: "Remove Repository \(repo.repoRelativePath)",
+                                             hint: "its worktrees go, changes saved, branch kept") {
+                        model.removeRepoFromUI(repo, of: task)
+                    })
+                }
+            }
+            for pr in task.record.pullRequests {
+                items.append(PaletteItem(id: "task-forget-pr-\(pr.url.path)", section: .actions, icon: "eye.slash",
+                                         label: "Forget Pull Request \(pr.label)", hint: "out of the task, not closed on GitHub") {
+                    model.forgetPullRequestFromUI(pr, of: task)
+                })
+            }
+            if let issue = task.record.issue {
+                items.append(PaletteItem(id: "task-unlink-issue", section: .actions, icon: "link.badge.plus", label: "Unlink Issue \(issue.label)",
+                                         hint: issue.title) {
+                    model.unlinkIssueFromUI(task)
+                })
+            }
+            items.append(PaletteItem(id: "task-sweep", section: .actions, icon: "wind", label: "Sweep Task…",
+                                     hint: "back to a fresh state, everything saved first") {
+                model.sweepFromUI(task)
+            })
+            if task.record.lastSweep != nil {
+                items.append(PaletteItem(id: "task-undo-sweep", section: .actions, icon: "arrow.uturn.backward", label: "Undo Sweep",
+                                         hint: "worktrees, branches, changes and pull requests back") {
+                    Task { await model.undoSweepFromUndo(task.id) }
+                })
+            }
+        }
         items.append(PaletteItem(id: "task-archive", section: .actions, icon: "archivebox", label: "Archive Task",
                                  hint: task.name) {
             Task { await model.archiveTask(task.id) }

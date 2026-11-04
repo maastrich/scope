@@ -255,17 +255,27 @@ public actor TaskManager {
     /// branch of a sandbox). A link with the same URL is replaced, so a refresh updates in place; the rest keep
     /// their order (`PullRequestSet.ordered`).
     @discardableResult
-    public func linkPullRequest(_ link: LinkedPullRequest, to id: TaskID) async throws -> TaskRecord {
-        try await linkPullRequests([link], to: id)
+    public func linkPullRequest(_ link: LinkedPullRequest, to id: TaskID, explicit: Bool = false) async throws -> TaskRecord {
+        try await linkPullRequests([link], to: id, explicit: explicit)
     }
 
     /// `linkPullRequest` for several at once: one write.
     @discardableResult
-    public func linkPullRequests(_ links: [LinkedPullRequest], to id: TaskID) async throws -> TaskRecord {
+    ///
+    /// A pull request the user forgot (`forgetPullRequest`, a sweep) is dropped from a discovery's `links`, read on the
+    /// record as it is when the write lands: a refresh that started before the forget never brings it back. An
+    /// `explicit` link — the user created or picked it — takes it off the ignore list instead.
+    public func linkPullRequests(_ links: [LinkedPullRequest], to id: TaskID, explicit: Bool = false) async throws -> TaskRecord {
         guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
-        let merged = PullRequestSet.merging(record.pullRequests, with: links)
-        guard merged != record.pullRequests else { return record }
-        return try await mutate(id) { $0.pullRequests = PullRequestSet.ordered(PullRequestSet.merging($0.pullRequests, with: links), repoOrder: $0.repos.map(\.repoRelativePath)) }
+        let wanted = explicit ? links : record.discovered(links)
+        let merged = PullRequestSet.merging(record.pullRequests, with: wanted)
+        guard merged != record.pullRequests || (explicit && links.contains { record.ignores($0.url) }) else { return record }
+        return try await mutate(id) { current in
+            if explicit { current.ignoredPullRequests.removeAll { url in links.contains { $0.url == url } } }
+            let wanted = explicit ? links : current.discovered(links)
+            current.pullRequests = PullRequestSet.ordered(PullRequestSet.merging(current.pullRequests, with: wanted),
+                                                          repoOrder: current.repos.map(\.repoRelativePath))
+        }
     }
 
     /// "Don't rebase automatically": the branch is held, or released, when main moves (`TaskRecord.holdBranch`).
@@ -382,7 +392,9 @@ public actor TaskManager {
         }
         guard record.repo(at: path) == nil else { throw TaskError.repoAlreadyInTask(repo: path) }
 
-        let (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
+        var (sandbox, isNew) = try await makeSandbox(repoRelativePath: path, task: record)
+        // What a sweep takes away again: the repositories the task was created with stay.
+        sandbox.addedAt = TaskRecord.roundedToMilliseconds(.now)
         record.repos.append(sandbox)
         do {
             try await writeProjection(record, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
@@ -869,7 +881,10 @@ public actor TaskManager {
         report.emptiedTrash = ((try? fileManager.contentsOfDirectory(atPath: trash.path)) ?? []).count
         if !dryRun { emptyTrashInBackground() }
 
-        let referenced = Set(records.values.flatMap { $0.repos.compactMap(\.salvageRef) })
+        let referenced = Set(records.values.flatMap { record in
+            record.repos.compactMap(\.salvageRef) + record.repos.flatMap { $0.worktrees.compactMap(\.salvageRef) }
+                + (record.lastSweep?.sandboxes.map(\.ref) ?? [])
+        })
         let knownTasks = Set(records.keys.map(\.rawValue))
         for base in baseCheckouts(extra: extraBases) {
             let client = await registry.client(for: base)
@@ -1005,8 +1020,7 @@ public actor TaskManager {
                 throw TaskError.branchNotFound(repo: path, branch: ref)
             }
         case .defaultBranch:
-            guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
-            startPoint = await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
+            startPoint = try await defaultStartPoint(client, repo: path)
         }
         let branchWasNew = !(await client.branchExists(branch))
         if !branchWasNew, let checkout = await client.worktreePath(ofBranch: branch) {
@@ -1121,6 +1135,263 @@ public actor TaskManager {
         try await save(record)
         emptyTrashInBackground()
         return (record, notices)
+    }
+
+    // MARK: - Removing what was added
+
+    /// Takes a repository out of a running task: every worktree of it (the primary and its secondaries) has its
+    /// processes stopped and its uncommitted changes saved under `refs/scope/salvage/`, then goes to the trash. Its
+    /// branches stay in the user's repository, its pull requests leave the task, the context file is rewritten (a
+    /// task down to one repository starts its threads in that sandbox). The user's checkout is never touched. Refused
+    /// for the last repository and for a repo scope task (`TaskSweep.removingRepo`).
+    public func removeRepo(_ id: TaskID, repo: String, scopeContext: String? = nil, scopeRepos: [String] = [],
+                           repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = []) async throws -> (record: TaskRecord, notices: [DismantleNotice]) {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        let path = TaskRepo.normalize(repo)
+        var updated = try TaskSweep.removingRepo(path, from: record)
+        guard let entry = record.repo(at: path) else { throw TaskError.repoNotFound(repo: path) }
+        var notices: [DismantleNotice] = []
+        let leaving = entry.sandboxes.filter { $0.state == .active }
+        let swept = await sweep(leaving.map(\.sandboxURL))
+        if !swept.survivors.isEmpty { notices.append(.processesSurvived(swept.survivors.map(\.description))) }
+        for sandbox in leaving {
+            if let saved = try await salvage(sandbox, task: record) {
+                notices.append(.changesSaved(repo: sandbox.sandboxKey, ref: saved.ref, skipped: saved.skipped))
+            }
+            try await removeSandbox(sandbox, task: record)
+        }
+        try await writeProjection(updated, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+        updated = try await mutate(id) { current in
+            if let without = try? TaskSweep.removingRepo(path, from: current) { current = without }
+        }
+        emptyTrashInBackground()
+        return (updated, notices)
+    }
+
+    /// Forgets a pull request: it leaves the task and the discovery never binds it again (`TaskRecord.ignoredPullRequests`).
+    /// Nothing is said to GitHub.
+    @discardableResult
+    public func forgetPullRequest(_ id: TaskID, url: URL) async throws -> TaskRecord {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.pullRequests.contains(where: { $0.url == url }) || !record.ignores(url) else { return record }
+        return try await mutate(id) { $0.forgetPullRequest(url) }
+    }
+
+    /// The task no longer names the issue it was opened from. Its brief keeps what the issue said.
+    @discardableResult
+    public func unlinkIssue(_ id: TaskID) async throws -> TaskRecord {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard record.issue != nil else { return record }
+        return try await mutate(id) { $0.issue = nil }
+    }
+
+    /// One milestone of a mission removed (by id, or by its number in the list).
+    public func removeMilestone(_ id: TaskID, milestone: String) async throws -> (record: TaskRecord, removed: Milestone) {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        let updated = try TaskSweep.removingMilestone(milestone, from: record)
+        guard let removed = record.mission?.milestones.first(where: { gone in !(updated.mission?.milestones.contains(gone) ?? false) }) else {
+            throw TaskError.persistence("no milestone \(milestone) on \(record.name)")
+        }
+        let saved = try await mutate(id) { $0.mission?.milestones.removeAll { $0.id == removed.id } }
+        return (saved, removed)
+    }
+
+    // MARK: - Sweep
+
+    /// What git says about each active sandbox: unpushed commits and changed files, what the confirmation lists.
+    public func sandboxFacts(_ record: TaskRecord) async -> [String: SandboxFacts] {
+        var facts: [String: SandboxFacts] = [:]
+        for sandbox in record.activeSandboxes where FileManager.default.fileExists(atPath: sandbox.sandboxPath) {
+            let client = await registry.client(for: sandbox.sandboxURL)
+            let heads = record.pullRequests.filter { ($0.headRefName ?? sandbox.branch) == sandbox.branch }.compactMap(\.headRefOid)
+            let unpushed = await client.unpushedCommits(at: sandbox.sandboxURL, pullRequestHeads: heads)
+            let status = (try? await client.run(["-C", sandbox.sandboxURL.filesystemPath, "status", "--porcelain", "-z", "--untracked-files=all"],
+                                                timeout: .seconds(60), allowFailure: true))?.stdoutText ?? ""
+            facts[sandbox.sandboxKey] = SandboxFacts(unpushedCommits: unpushed, changedFiles: SandboxFacts.changedFiles(porcelainZ: status))
+        }
+        return facts
+    }
+
+    /// The sweep `sweepTask` would carry out now, with what each sandbox would lose.
+    public func planSweep(_ id: TaskID, options: TaskSweepOptions = .init()) async throws -> TaskSweepPlan {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        return TaskSweepPlan.make(record, facts: await sandboxFacts(record), options: options)
+    }
+
+    /// What a sweep did, beside the record: the notes the answer and the notice read.
+    public struct SweepOutcome: Sendable, Equatable {
+        public var record: TaskRecord
+        public var plan: TaskSweepPlan
+        /// One line per thing worth saying: where the work went, what failed on the way.
+        public var notes: [String]
+    }
+
+    /// Brings the task back to a fresh state (`TaskSweepPlan`): every sandbox touched is first preserved under
+    /// `refs/scope/salvage/` (its working tree, or its tip when clean), then the secondary worktrees and the
+    /// repositories added later go, and with `resetBranches` the primary worktrees go back to the base — `reset
+    /// --hard`, `clean -fd` (ignored files such as `.env` and `node_modules` stay), upstream unset. The pull
+    /// requests are forgotten and ignored. `lastSweep` keeps what `undoSweep` needs. With `deleteRemoteBranches` the
+    /// task's branches are deleted on `origin`; closing pull requests on GitHub is the app's (`gh`).
+    public func sweepTask(_ id: TaskID, options: TaskSweepOptions = .init(), checkpoint: Int? = nil, scopeContext: String? = nil,
+                          scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [], contextFiles: [String] = [],
+                          now: Date = .now) async throws -> SweepOutcome {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        let plan = TaskSweepPlan.make(record, facts: await sandboxFacts(record), options: options)
+        if let blocked = plan.blocked { throw TaskError.invalidRepoSelection(blocked) }
+        var notes: [String] = []
+        // Everything the sweep moves is kept first: nothing it changes may hang on the reflog alone.
+        var kept: [TaskSweepUndo.Sandbox] = []
+        for entry in plan.sandboxes where entry.action != .keep {
+            guard let sandbox = record.sandbox(key: entry.key), FileManager.default.fileExists(atPath: sandbox.sandboxPath) else { continue }
+            let client = await registry.client(for: sandbox.sandboxURL)
+            let path = sandbox.sandboxURL.filesystemPath
+            do {
+                let head = try await client.output(["-C", path, "rev-parse", "HEAD"])
+                let upstream = try? await client.output(["-C", path, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], timeout: .seconds(10))
+                let ref = Self.salvageRef(for: record, kind: "sweep-\(TaskBranch.slug(for: entry.key))", at: now)
+                let saved = try await salvage(sandbox: sandbox.sandboxURL, ref: ref,
+                                              message: "Scope: \(record.name) (\(entry.key)) before it was swept")
+                if saved == nil { try await client.run(["-C", path, "update-ref", ref, head]) }
+                if let skipped = saved?.skipped, !skipped.isEmpty {
+                    notes.append("\(entry.key): too big to keep, deleted: \(skipped.joined(separator: ", "))")
+                }
+                kept.append(TaskSweepUndo.Sandbox(key: entry.key, repo: entry.repo, branch: entry.branch, path: entry.path,
+                                                  isSecondary: entry.isSecondary, action: entry.action, head: head,
+                                                  upstream: upstream?.isEmpty == false ? upstream : nil, ref: ref))
+            } catch let error as GitError {
+                throw TaskError.git(repo: entry.key, error)
+            }
+        }
+        // Whatever still runs in the folders that go (a dev server a thread left) goes before them.
+        let leaving = plan.removed.compactMap { record.sandbox(key: $0.key) }
+        let swept = await sweep(leaving.map(\.sandboxURL))
+        if !swept.survivors.isEmpty { notes.append("still running: " + swept.survivors.map(\.description).joined(separator: ", ")) }
+        for sandbox in leaving { try await removeSandbox(sandbox, task: record) }
+        for entry in plan.reset {
+            guard let sandbox = record.sandbox(key: entry.key), FileManager.default.fileExists(atPath: sandbox.sandboxPath) else { continue }
+            try await resetToBase(sandbox, task: record)
+        }
+        if options.deleteRemoteBranches {
+            notes += await deleteRemoteBranches(kept, task: record)
+        }
+        let undo = TaskSweepUndo(
+            at: now, options: options, sandboxes: kept,
+            removedRepos: record.repos.filter { plan.removedRepos.contains($0.repoRelativePath) },
+            removedWorktrees: Dictionary(grouping: plan.removed.filter { $0.isSecondary && !plan.removedRepos.contains($0.repo) }, by: \.repo)
+                .compactMapValues { entries in
+                    let worktrees = entries.compactMap { entry in record.repo(at: entry.repo)?.worktree(onBranch: entry.branch) }
+                    return worktrees.isEmpty ? nil : worktrees
+                },
+            pullRequests: record.pullRequests, ignoredPullRequests: record.ignoredPullRequests, checkpoint: checkpoint
+        )
+        let swept2 = try await mutate(id) { current in current = TaskSweep.apply(plan, to: current, undo: undo) }
+        try await writeProjection(swept2, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+        emptyTrashInBackground()
+        return SweepOutcome(record: swept2, plan: plan, notes: notes)
+    }
+
+    /// Takes the last sweep back (`TaskRecord.lastSweep`): the removed worktrees and repositories rebuilt on their
+    /// branches, every branch put back on its old tip with its upstream, the changes it had put back uncommitted, the
+    /// pull requests bound again. What a reset sandbox gained since the sweep is saved under `refs/scope/salvage/`
+    /// first. Pull requests closed and remote branches deleted on GitHub stay so.
+    public func undoSweep(_ id: TaskID, scopeContext: String? = nil, scopeRepos: [String] = [], repoSummaries: [RepoContextSummary] = [],
+                          contextFiles: [String] = []) async throws -> (record: TaskRecord, notes: [String]) {
+        guard let record = records[id] else { throw TaskError.persistence("unknown task \(id)") }
+        guard !record.isArchived else { throw TaskError.taskArchived }
+        guard let undo = record.lastSweep else { throw TaskError.persistence("\(record.name) has no sweep to undo") }
+        var notes: [String] = []
+        let rebuilt = TaskSweep.revert(undo, on: record)
+        for entry in undo.sandboxes {
+            let folder = URL(fileURLWithPath: entry.path, isDirectory: true)
+            guard let sandbox = rebuilt.sandbox(key: entry.key) else { continue }
+            switch entry.action {
+            case .remove:
+                if !FileManager.default.fileExists(atPath: entry.path) {
+                    _ = try await makeSandbox(repoRelativePath: entry.repo, task: rebuilt, startPoint: .existingBranch(entry.branch),
+                                              branch: entry.branch, sandbox: folder)
+                }
+            case .reset:
+                // Whatever the sandbox did since the sweep is kept before the old tip comes back.
+                if let saved = try await salvage(sandbox, task: rebuilt) {
+                    notes.append("\(entry.key): changes made since the sweep saved under \(saved.ref)")
+                }
+            case .keep:
+                continue
+            }
+            let client = await registry.client(for: folder)
+            let path = folder.filesystemPath
+            do {
+                try await client.run(["-C", path, "reset", "--hard", entry.head], timeout: .seconds(600))
+                try await client.run(["-C", path, "clean", "-fd"], timeout: .seconds(600))
+                if let upstream = entry.upstream {
+                    _ = try? await client.run(["-C", path, "branch", "--set-upstream-to=\(upstream)", entry.branch], allowFailure: true)
+                }
+                if try await client.output(["-C", path, "rev-parse", entry.ref]) != entry.head {
+                    try await client.run(["-C", path, "restore", "--source=\(entry.ref)", "--worktree", "--no-overlay", "--", "."],
+                                         timeout: .seconds(600))
+                }
+            } catch let error as GitError {
+                throw TaskError.git(repo: entry.key, error)
+            }
+        }
+        let saved = try await mutate(id) { current in current = TaskSweep.revert(undo, on: current) }
+        try await writeProjection(saved, scopeContext: scopeContext, scopeRepos: scopeRepos, repoSummaries: repoSummaries, contextFiles: contextFiles)
+        return (saved, notes)
+    }
+
+    /// Whether a sweep may delete `branch` on a remote: never the default branch, never a reserved or empty name.
+    static func mayDeleteRemote(branch: String, defaultBranch: String?) -> Bool {
+        let protected: Set<String> = ["main", "master", "develop", "HEAD"]
+        return !branch.isEmpty && branch != defaultBranch && !protected.contains(branch) && !TaskBranch.isReserved(branch)
+    }
+
+    /// The start point a new task branch gets in `client`'s repository: `origin/<default>` when there is one, else the
+    /// local default branch.
+    private func defaultStartPoint(_ client: GitClient, repo path: String) async throws -> String {
+        guard let defaultBranch = await client.defaultBranch() else { throw TaskError.noDefaultBranch(repo: path) }
+        return await client.refExists("origin/\(defaultBranch)") ? "origin/\(defaultBranch)" : defaultBranch
+    }
+
+    /// The sandbox's branch recreated on the repository's base, its local changes discarded — the caller saved them.
+    /// Ignored files stay: they are the setup's (`.env`, dependencies), not the task's work.
+    private func resetToBase(_ sandbox: TaskRepo, task: TaskRecord) async throws {
+        let base = try await baseClient(for: sandbox.repoRelativePath, task: task)
+        if await base.hasRemote("origin") {
+            do { try await base.fetch(remote: "origin") } catch {
+                Log.tasks.warning("fetch failed in \(sandbox.repoRelativePath): \(String(describing: error)); resetting on the local base")
+            }
+        }
+        let start = try await defaultStartPoint(base, repo: sandbox.repoRelativePath)
+        let client = await registry.client(for: sandbox.sandboxURL)
+        let path = sandbox.sandboxURL.filesystemPath
+        do {
+            try await client.run(["-C", path, "reset", "--hard", start], timeout: .seconds(600))
+            try await client.run(["-C", path, "clean", "-fd"], timeout: .seconds(600))
+            _ = try? await client.run(["-C", path, "branch", "--unset-upstream"], allowFailure: true)
+        } catch let error as GitError {
+            throw TaskError.git(repo: sandbox.sandboxKey, error)
+        }
+    }
+
+    /// `git push <remote> --delete <branch>` for each swept branch the remote has under its own name. Never the
+    /// upstream's name as such — a task branch starts tracking `origin/main` — and never the repository's default
+    /// branch. A failure is a note, not an error: the local side of the sweep is done.
+    private func deleteRemoteBranches(_ sandboxes: [TaskSweepUndo.Sandbox], task: TaskRecord) async -> [String] {
+        var notes: [String] = []
+        var done = Set<String>()
+        for entry in sandboxes {
+            let remote = entry.upstream?.split(separator: "/", maxSplits: 1).first.map(String.init) ?? "origin"
+            let branch = entry.branch
+            guard done.insert("\(entry.repo)\0\(remote)/\(branch)").inserted,
+                  let client = try? await baseClient(for: entry.repo, task: task),
+                  Self.mayDeleteRemote(branch: branch, defaultBranch: await client.defaultBranch()),
+                  await client.refExists("\(remote)/\(branch)") else { continue }
+            let result = try? await client.run(["push", remote, "--delete", branch], timeout: .seconds(120), allowFailure: true)
+            notes.append(result?.succeeded == true ? "\(entry.repo): deleted \(branch) on \(remote)"
+                         : "\(entry.repo): could not delete \(branch) on \(remote)")
+        }
+        return notes
     }
 
     private func rollback(_ created: [(TaskRepo, branchWasNew: Bool)], task: TaskRecord, removeRoot: Bool = true) async {

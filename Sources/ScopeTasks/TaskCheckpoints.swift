@@ -15,6 +15,8 @@ public struct TaskCheckpoint: Codable, Sendable, Equatable, Identifiable {
         case beforeRestore
         /// Taken just before a file of another attempt is copied in (`AttemptFileCopy`), so the overwritten file is a restore away.
         case beforeCopy
+        /// Taken just before a sweep (`TaskManager.sweepTask`) resets the sandboxes or removes some.
+        case beforeSweep
     }
 
     /// One sandbox's part of the checkpoint.
@@ -83,6 +85,7 @@ public struct TaskCheckpoint: Codable, Sendable, Equatable, Identifiable {
         case .beforeRestore: return "Before restoring checkpoint \(restoring.map(String.init) ?? "")".trimmingCharacters(in: .whitespaces)
         case .turn: return turn.map { "Turn \($0)" } ?? "Checkpoint"
         case .beforeCopy: return "Before a file was copied in"
+        case .beforeSweep: return "Before the task was swept"
         }
     }
 }
@@ -397,6 +400,8 @@ public actor TaskCheckpoints {
             }
         case .beforeCopy:
             line += ": before a file was copied in from another attempt"
+        case .beforeSweep:
+            line += ": before the task was swept"
         }
         return line
     }

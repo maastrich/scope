@@ -234,6 +234,10 @@ final class AppControlService: ControlService {
             return listBranches(params, from: origin, caller: caller)
         case .taskBranchRemove(let params):
             return await removeBranch(params, from: origin, caller: caller)
+        case .taskRemove(let params):
+            return await removeFromTask(params, from: origin, caller: caller)
+        case .taskSweep(let params):
+            return await sweep(params, from: origin, caller: caller)
         case .browser(let params):
             return await browser(params, from: origin, caller: caller)
         }
@@ -342,7 +346,7 @@ final class AppControlService: ControlService {
             return .failure(.badRequest("\(slug) is archived", detail: "Its worktrees are already gone; `scope task restore \(slug)` brings them back."))
         }
         do {
-            let notices = try await model.removeBranch(params.branch, from: task.id, repo: params.repo)
+            let notices = try await model.removeBranch(params.branch, from: task.id, repo: params.repo, by: requester(origin))
             var lines = ["removed the worktree on \(params.branch) from \(slug); the branch is kept"]
             for notice in notices {
                 if case .changesSaved(let repo, let ref, let skipped) = notice {
@@ -353,6 +357,162 @@ final class AppControlService: ControlService {
             return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskBranchRemove))
         } catch {
             return .failure(.failed("could not remove \(params.branch) from \(slug)", detail: String(describing: error)))
+        }
+    }
+
+    // MARK: Removing what a task gained
+
+    /// `task.remove`: one thing out of the task. The worktree case is `task.branch.remove`, the topic case
+    /// `task.topic --clear`; the rest go through `AppModel+Sweep`.
+    private func removeFromTask(_ params: TaskRemoveParams, from origin: ControlOrigin,
+                                caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "remove something from") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        let requester = requester(origin)
+        let callerThread: ThreadID? = if case .thread(let id, _) = origin { id } else { nil }
+        let target = params.target?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let done = { (message: String) in Result<ControlResultPayload, ControlError>.success(
+            .action(ActionResult(message: message, task: task.record.id.rawValue), .taskRemove)) }
+        if params.element.needsTarget, target.isEmpty {
+            return .failure(.badRequest("say which \(params.element.rawValue) to remove"))
+        }
+        if task.isArchived, params.element == .repo || params.element == .worktree {
+            return .failure(.badRequest("\(slug) is archived", detail: "Its worktrees are already gone; `scope task restore \(slug)` brings them back."))
+        }
+        switch params.element {
+        case .worktree:
+            return await removeBranch(TaskBranchRemoveParams(task: task.record.id.rawValue, branch: target, repo: params.repo), from: origin, caller: caller)
+                .map { payload in
+                    guard case .action(let result, _) = payload else { return payload }
+                    return .action(result, .taskRemove)
+                }
+        case .repo:
+            do {
+                let notices = try await model.removeRepo(target, from: task.id, by: requester, except: callerThread)
+                var lines = ["removed \(TaskRepo.displayName(target)) from \(slug); its branch is kept, your checkout untouched"]
+                lines += Self.savedLines(notices)
+                return done(lines.joined(separator: "\n"))
+            } catch {
+                return .failure(.failed("could not remove \(target) from \(slug)", detail: String(describing: error)))
+            }
+        case .pullRequest:
+            let matches = Self.pullRequests(matching: target, repo: params.repo, in: task.record)
+            guard let link = matches.first else {
+                return .failure(.notFound("\(target) is not a pull request of \(slug)",
+                                          detail: task.record.pullRequests.isEmpty ? "The task has none."
+                                              : "It has: " + task.record.pullRequests.map(\.label).joined(separator: ", ")))
+            }
+            guard matches.count == 1 else {
+                return .failure(.badRequest("\(target) names \(matches.count) pull requests of \(slug)", detail: "Give its URL, or the repository with repo."))
+            }
+            do {
+                try await model.forgetPullRequest(link.url, of: task.id, by: requester)
+                return done("forgot \(link.label) on \(slug): out of the task, and never bound again; it is still \(link.state ?? "open") on GitHub")
+            } catch {
+                return .failure(.failed("could not forget \(link.label)", detail: String(describing: error)))
+            }
+        case .issue:
+            guard let issue = task.record.issue else { return .failure(.notFound("\(slug) names no issue")) }
+            do {
+                try await model.unlinkIssue(of: task.id, by: requester)
+                return done("\(slug) no longer names issue \(issue.label); the brief keeps what it said")
+            } catch {
+                return .failure(.failed("could not unlink the issue of \(slug)", detail: String(describing: error)))
+            }
+        case .topic:
+            guard let topic = task.record.topic else { return .failure(.notFound("\(slug) is under no topic")) }
+            await model.removeTopic(of: task.id, by: requester)
+            return done("took \(slug) out of “\(topic)”; Scope will not file it again on its own")
+        case .milestone:
+            let mission: TaskState
+            switch self.mission(params.task ?? task.record.id.rawValue, from: origin, caller: caller) {
+            case .failure(let error): return .failure(error)
+            case .success(let found): mission = found.0
+            }
+            do {
+                let removed = try await model.removeMilestone(target, of: mission, by: requester)
+                return done("removed the milestone “\(removed.title)” from \(mission.record.slug)\n\(mission.record.mission?.caption ?? "")")
+            } catch {
+                return .failure(.failed("could not remove the milestone \(target)", detail: String(describing: error)))
+            }
+        }
+    }
+
+    /// The task's pull requests `text` names: its URL, `#123` or `123` (in `repo` when given), `owner/repo#123`.
+    static func pullRequests(matching text: String, repo: String?, in record: TaskRecord) -> [LinkedPullRequest] {
+        if let url = URL(string: text), url.scheme != nil {
+            let exact = record.pullRequests.filter { $0.url == url }
+            if !exact.isEmpty { return exact }
+        }
+        guard let reference = PullRequestReference.parse(text) else { return [] }
+        return record.pullRequests.filter { link in
+            guard link.number == reference.number else { return false }
+            if let full = reference.fullName, PullRequest.repository(fromURL: link.url)?.lowercased() != full.lowercased() { return false }
+            if let repo, TaskRepo.normalize(link.repo ?? "") != TaskRepo.normalize(repo) { return false }
+            return true
+        }
+    }
+
+    static func savedLines(_ notices: [DismantleNotice]) -> [String] {
+        notices.compactMap { notice in
+            guard case .changesSaved(let repo, let ref, let skipped) = notice else { return nil }
+            return "\(repo): uncommitted changes saved under \(ref)" + (skipped.isEmpty ? "" : " (too big to keep: \(skipped.joined(separator: ", ")))")
+        }
+    }
+
+    /// `task.sweep`: the plan for a dry run, the sweep, or its undo. The approval was the policy's; an agent's own
+    /// thread is never interrupted (it is waiting for this answer).
+    private func sweep(_ params: TaskSweepParams, from origin: ControlOrigin,
+                       caller: ControlCaller) async -> Result<ControlResultPayload, ControlError> {
+        let task: TaskState
+        switch resolveTaskOrOwn(params.task, scope: params.scope, from: origin, caller: caller, verb: "sweep") {
+        case .failure(let error): return .failure(error)
+        case .success(let match): task = match
+        }
+        let slug = task.record.slug
+        let done = { (message: String) in Result<ControlResultPayload, ControlError>.success(
+            .action(ActionResult(message: message, task: task.record.id.rawValue), .taskSweep)) }
+        if params.undo {
+            guard task.record.lastSweep != nil else { return .failure(.notFound("\(slug) has no sweep to undo")) }
+            do {
+                let notes = try await model.undoSweep(task.id, by: requester(origin))
+                return done((["undid the last sweep of \(slug): worktrees, branch tips, uncommitted changes and pull requests are back"] + notes)
+                    .joined(separator: "\n"))
+            } catch {
+                return .failure(.failed("could not undo the sweep of \(slug)", detail: String(describing: error)))
+            }
+        }
+        let options = TaskSweepOptions(resetBranches: params.resetBranches, closePullRequests: params.closePullRequests,
+                                       deleteRemoteBranches: params.deleteRemoteBranches)
+        let callerThread: ThreadID? = if case .thread(let id, _) = origin { id } else { nil }
+        if params.dryRun {
+            let plan: TaskSweepPlan
+            do { plan = try await model.env.tasks.planSweep(task.id, options: options) } catch {
+                return .failure(.failed("could not plan the sweep of \(slug)", detail: String(describing: error)))
+            }
+            var lines = ["sweeping \(slug) would:"]
+            let items = plan.lines(scopeName: task.record.scopeName)
+            lines += items.isEmpty ? ["  nothing: no pull request, no worktree beyond the task's own"] : items.map { "  " + $0 }
+            let running = model.runningThreads(of: task.id).filter { $0.id != callerThread }
+            if !running.isEmpty { lines.append("  interrupt " + running.map { $0.id.rawValue }.joined(separator: ", ") + " (the threads stay)") }
+            if let blocked = plan.blocked { lines.append("refused now: \(blocked)") }
+            lines.append("everything is saved first; `scope task sweep \(slug) --yes` runs it, `--undo` takes it back")
+            return done(lines.joined(separator: "\n"))
+        }
+        do {
+            let result = try await model.sweepTask(task.id, options: options, by: requester(origin), except: callerThread)
+            var lines = ["swept \(slug):"]
+            lines += result.outcome.plan.lines(scopeName: task.record.scopeName).map { "  " + $0 }
+            if result.interrupted > 0 { lines.append("  \(result.interrupted) running \(result.interrupted == 1 ? "turn" : "turns") interrupted") }
+            lines += result.notes.map { "  " + $0 }
+            lines.append("`scope task sweep \(slug) --undo` takes it back")
+            return done(lines.joined(separator: "\n"))
+        } catch {
+            return .failure(.failed("could not sweep \(slug)", detail: String(describing: error)))
         }
     }
 
@@ -872,7 +1032,7 @@ final class AppControlService: ControlService {
         }
         let entries = await model.env.tasks.checkpoints.list(task.id).map { checkpoint in
             TaskCheckpointsResult.Entry(
-                number: checkpoint.number, at: checkpoint.at, reason: checkpoint.reason == .turn ? "turn" : "before_restore",
+                number: checkpoint.number, at: checkpoint.at, reason: checkpoint.reason == .turn ? "turn" : checkpoint.reason == .beforeSweep ? "before_sweep" : "before_restore",
                 thread: checkpoint.threadID, threadTitle: checkpoint.threadTitle, turn: checkpoint.turn, said: checkpoint.said,
                 additions: checkpoint.additions, deletions: checkpoint.deletions, repos: checkpoint.repos.map(\.repoRelativePath)
             )

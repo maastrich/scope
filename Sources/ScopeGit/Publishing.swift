@@ -221,6 +221,14 @@ public struct GhClient: Sendable {
         _ = try await run(arguments, in: checkout, timeout: .seconds(120))
     }
 
+    /// `gh pr close <n>`: only when the user asked for it (a sweep's *Close the pull requests on GitHub*). The branch
+    /// stays; a sweep that also deletes remote branches does it with git.
+    public func prClose(number: Int, in checkout: URL, repo: String? = nil) async throws {
+        var arguments = ["pr", "close", String(number)]
+        if let repo { arguments += ["--repo", repo] }
+        _ = try await run(arguments, in: checkout, timeout: .seconds(120))
+    }
+
     /// `runJSON` for the extensions of this client in other files.
     func json<T>(_ arguments: [String], in checkout: URL, parse: (Data) throws -> T) async throws -> T {
         try await runJSON(arguments, in: checkout, parse: parse)
