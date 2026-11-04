@@ -84,6 +84,9 @@ extension AppModel {
         }
         // An archived task keeps what it had: nothing new is bound to it, its sandboxes are gone.
         if task.isArchived { found = found.filter { link in task.record.pullRequests.contains { $0.url == link.url } } }
+        // A pull request the user forgot stays forgotten: not bound again, not shown, not counted.
+        found = task.record.discovered(found)
+        live = live.filter { !task.record.ignores($0.url) }
         for pr in live { pullRequests.setTaskPullRequest(pr, for: task.id) }
         let stale = found.filter { link in
             guard let known = task.record.pullRequests.first(where: { $0.url == link.url }) else { return true }
@@ -132,6 +135,17 @@ extension AppModel {
             guard await env.tasks.task(task.id) != nil else { return }
             let labels = links.map(\.label).joined(separator: ", ")
             problems.warn("Could not bind \(labels) to the task", error: error, scope: task.scopeID)
+        }
+    }
+
+    /// `gh pr close` for a sweep that was asked to (*Also close the pull requests on GitHub*): one line for the notice.
+    func closeOnGitHub(_ link: LinkedPullRequest, of task: TaskState) async -> String {
+        guard let target = pullRequestTarget(task, link) else { return "\(link.label): gh is not available, left open on GitHub" }
+        do {
+            try await target.gh.prClose(number: link.number, in: target.checkout, repo: target.repo)
+            return "\(link.label): closed on GitHub"
+        } catch {
+            return "\(link.label): could not close it on GitHub — \(String(describing: error))"
         }
     }
 

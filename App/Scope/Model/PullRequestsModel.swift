@@ -60,6 +60,12 @@ final class PullRequestsModel {
         taskPullRequestCheckedAt[task, default: [:]][pr.url] = .now
     }
 
+    /// Drops what `gh` said about `url` for `task`: the pull request was forgotten.
+    func forgetTaskPullRequest(_ url: URL, for task: TaskID) {
+        taskPullRequests[task]?[url] = nil
+        taskPullRequestCheckedAt[task]?[url] = nil
+    }
+
     /// What `gh` last answered about `url` for `task`, if anything.
     func taskPullRequest(_ url: URL, for task: TaskID) -> PullRequest? {
         taskPullRequests[task]?[url]

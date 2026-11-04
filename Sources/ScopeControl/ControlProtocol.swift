@@ -107,6 +107,12 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
     case taskBranchList = "task.branch.list"
     /// A secondary worktree removed from the task, its uncommitted changes saved first; the branch stays.
     case taskBranchRemove = "task.branch.remove"
+    /// One thing taken out of a task: a repository, a worktree, a pull request (forgotten, never closed), the issue,
+    /// the topic, a milestone (`TaskRemoveElement`).
+    case taskRemove = "task.remove"
+    /// A task brought back to a fresh state: pull requests forgotten, worktrees and added repositories removed,
+    /// branches reset on the base — everything saved first, undoable.
+    case taskSweep = "task.sweep"
     /// One action on a task's agent browser tab: open, read, screenshot, console (`BrowserAction`).
     case browser
 
@@ -117,7 +123,7 @@ public enum ControlMethod: String, Codable, Sendable, CaseIterable {
              .taskBranchList: false
         case .threadNew, .threadStop, .threadRestart, .threadClose, .threadSend, .taskNew, .taskClose, .taskArchive, .taskTopic, .taskRestore,
              .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .topicsRegroup, .configSet, .release, .scheduleRun, .milestoneAdd, .milestoneDone,
-             .taskBranchAdd, .taskBranchRemove, .browser: true
+             .taskBranchAdd, .taskBranchRemove, .taskRemove, .taskSweep, .browser: true
         }
     }
 
@@ -284,6 +290,8 @@ public enum ControlCall: Sendable, Equatable {
     case taskBranchAdd(TaskBranchAddParams)
     case taskBranchList(TaskBranchListParams)
     case taskBranchRemove(TaskBranchRemoveParams)
+    case taskRemove(TaskRemoveParams)
+    case taskSweep(TaskSweepParams)
     case browser(BrowserParams)
 
     public var method: ControlMethod {
@@ -323,6 +331,8 @@ public enum ControlCall: Sendable, Equatable {
         case .taskBranchAdd: .taskBranchAdd
         case .taskBranchList: .taskBranchList
         case .taskBranchRemove: .taskBranchRemove
+        case .taskRemove: .taskRemove
+        case .taskSweep: .taskSweep
         case .browser: .browser
         }
     }
@@ -344,7 +354,7 @@ public enum ControlCall: Sendable, Equatable {
         // Typing takes a moment; with `wait`, the thread's whole turn follows.
         case .threadSend(let params): .seconds(30 + (params.waitParams.map { $0.effectiveTimeout + 15 } ?? 0))
         case .taskNew, .taskClose, .taskArchive, .taskRestore, .taskRebase, .taskTry, .taskRestoreCheckpoint, .gc, .memory, .topicsRegroup, .scheduleRun,
-             .taskBranchAdd, .taskBranchRemove: .seconds(300)
+             .taskBranchAdd, .taskBranchRemove, .taskRemove, .taskSweep: .seconds(300)
         // A clone, the CI check and the release script itself, one after the other.
         case .release: .seconds(ReleaseParams.serverTimeout + 30)
         // Marking done starts the validation; the answer waits for it, up to its own limit.
@@ -663,6 +673,111 @@ public struct TaskBranchRemoveParams: Codable, Sendable, Equatable {
         self.branch = branch
         self.repo = repo
         self.scope = scope
+    }
+}
+
+/// What can be taken out of a task one at a time (`scope task remove`): each undoes one of the ways a task grows.
+public enum TaskRemoveElement: String, Codable, Sendable, CaseIterable {
+    /// A repository of the task: its worktrees go (changes saved first), its branch stays in the user's repository.
+    case repo
+    /// A secondary worktree (`scope task branch add`): the same as `scope task branch remove`.
+    case worktree
+    /// A pull request bound to the task: Scope forgets it and ignores it from then on. Nothing happens on GitHub.
+    case pullRequest = "pull-request"
+    /// The issue the task was opened from.
+    case issue
+    /// The topic the task is filed under; the task stays out of any until someone files it again.
+    case topic
+    /// One milestone of a mission.
+    case milestone
+
+    /// `pr` and `branch` read as their element on the command line.
+    public static func parse(_ word: String) -> TaskRemoveElement? {
+        switch word.lowercased() {
+        case "repo", "repository": .repo
+        case "worktree", "branch": .worktree
+        case "pr", "pull-request", "pullrequest", "pull_request": .pullRequest
+        case "issue": .issue
+        case "topic": .topic
+        case "milestone": .milestone
+        default: nil
+        }
+    }
+
+    /// Whether the element needs a target to name which one (a repository path, a branch, a pull request).
+    public var needsTarget: Bool {
+        switch self {
+        case .repo, .worktree, .pullRequest, .milestone: true
+        case .issue, .topic: false
+        }
+    }
+}
+
+/// `scope task remove [<id|slug>] <element> [<target>] [--repo R]` — one thing taken out of a task. `target` names which:
+/// the repository path, the branch, the pull request (`123`, `#123`, its URL), the milestone (id or number). The
+/// issue and the topic need none.
+public struct TaskRemoveParams: Codable, Sendable, Equatable {
+    public var task: String?
+    public var element: TaskRemoveElement
+    public var target: String?
+    /// Repository relative to the scope root, when a branch is a worktree of several repositories of the task.
+    public var repo: String?
+    public var scope: String?
+
+    public init(task: String? = nil, element: TaskRemoveElement, target: String? = nil, repo: String? = nil, scope: String? = nil) {
+        self.task = task
+        self.element = element
+        self.target = target
+        self.repo = repo
+        self.scope = scope
+    }
+}
+
+/// `scope task sweep [<id|slug>] [--keep-branches] [--close-prs] [--delete-remote-branches] [--dry-run | --yes] [--undo]`
+/// — the task back to a fresh state (`TaskSweepPlan` in ScopeTasks): every pull request forgotten and ignored, the
+/// secondary worktrees and the repositories added later removed, the branches of the rest recreated on the base, local
+/// changes discarded. Everything is saved under `refs/scope/salvage/` and a checkpoint first; `undo` takes the last
+/// sweep back. Closing the pull requests and deleting the remote branches happen only when asked, and an agent asking
+/// always needs the user's approval.
+public struct TaskSweepParams: Codable, Sendable, Equatable {
+    public var task: String?
+    /// Put the primary worktrees back on the base (the default). `false` leaves them as they are.
+    public var resetBranches: Bool
+    /// Also close the forgotten pull requests on GitHub.
+    public var closePullRequests: Bool
+    /// Also delete the swept branches on origin.
+    public var deleteRemoteBranches: Bool
+    /// Say what would go, do nothing.
+    public var dryRun: Bool
+    /// Take the last sweep back instead.
+    public var undo: Bool
+    public var scope: String?
+
+    public init(task: String? = nil, resetBranches: Bool = true, closePullRequests: Bool = false, deleteRemoteBranches: Bool = false,
+                dryRun: Bool = false, undo: Bool = false, scope: String? = nil) {
+        self.task = task
+        self.resetBranches = resetBranches
+        self.closePullRequests = closePullRequests
+        self.deleteRemoteBranches = deleteRemoteBranches
+        self.dryRun = dryRun
+        self.undo = undo
+        self.scope = scope
+    }
+
+    /// Something would leave the machine.
+    public var touchesGitHub: Bool { !dryRun && !undo && (closePullRequests || deleteRemoteBranches) }
+
+    private enum CodingKeys: String, CodingKey { case task, resetBranches, closePullRequests, deleteRemoteBranches, dryRun, undo, scope }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        task = try container.decodeIfPresent(String.self, forKey: .task)
+        resetBranches = try container.decodeIfPresent(Bool.self, forKey: .resetBranches) ?? true
+        closePullRequests = try container.decodeIfPresent(Bool.self, forKey: .closePullRequests) ?? false
+        deleteRemoteBranches = try container.decodeIfPresent(Bool.self, forKey: .deleteRemoteBranches) ?? false
+        dryRun = try container.decodeIfPresent(Bool.self, forKey: .dryRun) ?? false
+        undo = try container.decodeIfPresent(Bool.self, forKey: .undo) ?? false
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
     }
 }
 

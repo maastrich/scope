@@ -229,6 +229,56 @@ public enum MCPBridge {
             destructive: true
         ),
         MCPTool(
+            name: "scope_task_remove",
+            title: "Remove one thing from a task",
+            description: """
+            Takes one thing a task gained out of it again. element repo: the repository's worktrees go (uncommitted \
+            changes saved under refs/scope/salvage/ first), its branch stays, the user's checkout is untouched; the last \
+            repository cannot go. worktree: a worktree added with scope_task_branch_add (target is its branch). \
+            pull-request: Scope forgets the pull request (target 123, #123 or its URL) and never binds it again; it is \
+            NOT closed on GitHub. issue: the task stops naming its issue. topic: out of its topic, filed nowhere. \
+            milestone: one milestone of a mission (target its number, id or title). Without a task, the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "element":{"type":"string","enum":["repo","worktree","pull-request","issue","topic","milestone"],"description":"What to remove."},\
+            "target":{"type":"string","description":"Which one: the repository path, the branch, the pull request, the milestone. None for issue and topic."},\
+            "repo":{"type":"string","description":"For worktree: the repository, when the branch is a worktree of several."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"required":["element"],"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
+            name: "scope_task_sweep",
+            title: "Sweep a task back to a fresh state",
+            description: """
+            Brings a task back to how it was created: every pull request forgotten (and never bound again), the \
+            worktrees added with scope_task_branch_add and the repositories added after creation removed (branches \
+            kept), and with reset_branches (the default) each remaining worktree's branch recreated on the \
+            repository's base, local changes discarded. Every sandbox is saved first (refs/scope/salvage/ and a \
+            checkpoint) and undo: true takes the last sweep back. Threads stay; the running ones are interrupted. \
+            dry_run lists exactly what would go (worktrees, branches, pull requests, unpushed commits, modified \
+            files). close_pull_requests and delete_remote_branches act on GitHub and always wait for the user's \
+            approval. Without a task, the task you run in.
+            """,
+            schema: """
+            {"type":"object","properties":{\
+            "task":{"type":"string","description":"Task id or slug; omitted means the task you run in."},\
+            "reset_branches":{"type":"boolean","description":"Recreate the remaining branches on the base, local changes discarded. Defaults to true."},\
+            "close_pull_requests":{"type":"boolean","description":"Also close the pull requests on GitHub. Defaults to false; needs the user's approval."},\
+            "delete_remote_branches":{"type":"boolean","description":"Also delete the branches on origin. Defaults to false; needs the user's approval."},\
+            "dry_run":{"type":"boolean","description":"Only list what would go."},\
+            "undo":{"type":"boolean","description":"Take the last sweep back instead."},\
+            "scope":{"type":"string","description":"Slug, name, id or path of its scope, when the slug exists in several."}\
+            },"additionalProperties":false}
+            """,
+            readOnly: false,
+            destructive: true
+        ),
+        MCPTool(
             name: "scope_task_new",
             title: "Create a task",
             description: """
@@ -844,6 +894,10 @@ public enum MCPBridge {
                 return .success(.taskBranchList(try decoder.decode(TaskBranchListParams.self, from: arguments)))
             case "scope_task_branch_remove":
                 return .success(.taskBranchRemove(try decoder.decode(TaskBranchRemoveParams.self, from: arguments)))
+            case "scope_task_remove":
+                return try decoder.decode(TaskRemoveArguments.self, from: arguments).call.map(ControlCall.taskRemove)
+            case "scope_task_sweep":
+                return .success(.taskSweep(try decoder.decode(TaskSweepArguments.self, from: arguments).call))
             case _ where name.hasPrefix(browserToolPrefix) && BrowserAction(rawValue: String(name.dropFirst(browserToolPrefix.count))) != nil:
                 let action = BrowserAction(rawValue: String(name.dropFirst(browserToolPrefix.count)))!
                 return .success(.browser(try decoder.decode(BrowserArguments.self, from: arguments).params(action)))
@@ -940,6 +994,11 @@ public enum MCPBridge {
                                                      "start": .rename("from"), "base": .rename("from"), "repository": .rename("repo")]) { $1 },
             "scope_task_branch_list": taskID,
             "scope_task_branch_remove": taskID.merging(["name": .rename("branch"), "repository": .rename("repo")]) { $1 },
+            "scope_task_remove": taskID.merging(["kind": .rename("element"), "what": .rename("element"), "branch": .rename("target"),
+                                                 "pr": .rename("target"), "pull_request": .rename("target"), "milestone": .rename("target"),
+                                                 "repository": .rename("repo")]) { $1 },
+            "scope_task_sweep": taskID.merging(["preview": .rename("dry_run"), "keep_branches": .negate("reset_branches"),
+                                                "close_prs": .rename("close_pull_requests"), "delete_branches": .rename("delete_remote_branches")]) { $1 },
         ]
     }()
 
@@ -1091,6 +1150,50 @@ public enum MCPBridge {
             case (nil, false):
                 return .failure(.badRequest("no topic given", detail: "Name one with topic, or pass clear: true to take the task out of its topic."))
             }
+        }
+    }
+
+    /// `scope_task_remove` arguments: lenient about how the element is spelled (`pr`, `branch`).
+    struct TaskRemoveArguments: Decodable {
+        var task: String?
+        var element: String
+        var target: String?
+        var repo: String?
+        var scope: String?
+
+        var call: Result<TaskRemoveParams, ControlError> {
+            guard let parsed = TaskRemoveElement.parse(element) else {
+                return .failure(.badRequest("“\(element)” is not something to remove",
+                                            detail: "One of: " + TaskRemoveElement.allCases.map(\.rawValue).joined(separator: ", ")))
+            }
+            let trimmed = target?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let target = trimmed?.isEmpty == false ? trimmed : nil
+            if parsed.needsTarget, target == nil {
+                return .failure(.badRequest("say which \(parsed.rawValue) to remove", detail: "Pass it as target."))
+            }
+            return .success(TaskRemoveParams(task: task, element: parsed, target: target, repo: repo, scope: scope))
+        }
+    }
+
+    /// `scope_task_sweep` arguments.
+    struct TaskSweepArguments: Decodable {
+        var task: String?
+        var resetBranches: Bool?
+        var closePullRequests: Bool?
+        var deleteRemoteBranches: Bool?
+        var dryRun: Bool?
+        var undo: Bool?
+        var scope: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case task, undo, scope
+            case resetBranches = "reset_branches", closePullRequests = "close_pull_requests"
+            case deleteRemoteBranches = "delete_remote_branches", dryRun = "dry_run"
+        }
+
+        var call: TaskSweepParams {
+            TaskSweepParams(task: task, resetBranches: resetBranches ?? true, closePullRequests: closePullRequests ?? false,
+                            deleteRemoteBranches: deleteRemoteBranches ?? false, dryRun: dryRun ?? false, undo: undo ?? false, scope: scope)
         }
     }
 

@@ -29,7 +29,7 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         case turnSettled = "turn.settled"
         /// A turn that did not end on its own. `cause` `esc`, `sent` (Scope typed a message in mid-turn), `typed` (the
         /// user submitted a prompt of their own), `exit` (the process went away), `restart` (Scope quit with it open),
-        /// `session-restart` (Restart Session cut it),
+        /// `session-restart` (Restart Session cut it), `sweep` (the task was swept),
         /// `crash` (Scope died with it open) or `unknown`.
         case turnInterrupted = "turn.interrupted"
         /// A permission `claude agents` had confirmed early was decided by another hook.
@@ -44,6 +44,12 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         case taskSetup = "task.setup"
         case taskArchive = "task.archive"
         case taskClose = "task.close"
+        /// One thing taken out of a task (`scope task remove`, the inspector). `name` the element (`repo`, `worktree`,
+        /// `pull-request`, `issue`, `topic`, `milestone`), `source` `user` / `agent`, `outcome` `ok` / `failed`.
+        case taskRemove = "task.remove"
+        /// A sweep. `name` `sweep` or `undo`, `count` the worktrees removed or reset, `outcome` `ok` / `failed` /
+        /// `refused`, `cause` `github` when it closed pull requests or deleted remote branches.
+        case taskSweep = "task.sweep"
         /// One garbage-collection pass. `count` what it removed or stopped.
         case taskGC = "task.gc"
         /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `none` (no pull request) / `failed` /
