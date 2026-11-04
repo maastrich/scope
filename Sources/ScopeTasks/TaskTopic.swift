@@ -58,12 +58,18 @@ public enum TaskTopic {
     public enum Entry<ID: Hashable>: Hashable {
         case task(ID)
         case topic(String, [ID])
+
+        var isTask: Bool {
+            if case .task = self { true } else { false }
+        }
     }
 
-    /// `tasks` in their order, with every task of a topic gathered where the first of them stands. A topic left with a
-    /// single task is no group: the task stands flat, like any task on its own — a row and an indent spent on a group
-    /// of one say nothing. It keeps the label (`scope summary` groups by it, and the next sibling regroups under it),
-    /// and a topic in `kept` (one whose orchestrator thread is open) keeps its row whatever its size.
+    /// The tasks standing flat first, in their order, then the topics, each with every one of its tasks and ordered by
+    /// where its first task stands. Flat tasks go on top because a topic's tasks are not indented: a task on its own
+    /// right after a group read as one of its members. A topic left with a single task is no group: the task stands
+    /// flat, like any task on its own — a row spent on a group of one says nothing. It keeps the label (`scope summary`
+    /// groups by it, and the next sibling regroups under it), and a topic in `kept` (one whose orchestrator thread is
+    /// open) keeps its row whatever its size.
     public static func entries<ID: Hashable>(_ tasks: [(id: ID, topic: String?)], kept: Set<String> = []) -> [Entry<ID>] {
         var order: [String] = []
         var names: [String: String] = [:]
@@ -88,7 +94,8 @@ public enum TaskTopic {
             let ids = members[key]!
             entries[slot[key]!] = ids.count > 1 || kept.contains(key) ? .topic(names[key]!, ids) : .task(ids[0])
         }
-        return entries.compactMap { $0 }
+        let all = entries.compactMap { $0 }
+        return all.filter(\.isTask) + all.filter { !$0.isTask }
     }
 
     /// The distinct topics of `topics`, first spelling kept, sorted for a menu.

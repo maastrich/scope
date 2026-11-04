@@ -1537,12 +1537,31 @@ final class AppModel {
 
     // MARK: Tab navigation
 
-    /// The sidebar's own order — the residents (⌘1 is the orchestrator, ⌘2 the terminal), each task's threads in task
-    /// order, then the loose threads. The
+    /// The sidebar's own order — the residents (⌘1 is the orchestrator, ⌘2 the terminal), then, in the tree, the loose
+    /// threads, the threads of the tasks standing flat, and each topic's orchestrator and tasks (`TaskTopic.entries`,
+    /// as the sidebar draws them). By state the rows move with their state, so the order stays the tasks' own. The
     /// sidebar is the only thread switcher, so ⌘1…⌘9, ⇧⌘[ / ⇧⌘] and the pick after a close all walk it.
     func threadOrder(in scope: ScopeID) -> [ThreadSession] {
-        residents(in: scope) + topicOrchestrators(in: scope) + tasks(in: scope).flatMap { threads(in: $0.id) }
-            + scopeLevelThreads(in: scope)
+        let tasks = tasks(in: scope)
+        guard config.preferences.sidebarArrangement == .tree else {
+            return residents(in: scope) + topicOrchestrators(in: scope) + tasks.flatMap { threads(in: $0.id) }
+                + scopeLevelThreads(in: scope)
+        }
+        var orchestrators = topicOrchestrators(in: scope)
+        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: orchestratedTopics(in: scope))
+        let work = entries.flatMap { entry -> [ThreadSession] in
+            switch entry {
+            case .task(let id):
+                return threads(in: id)
+            case .topic(let topic, let ids):
+                let key = TaskTopic.key(topic)
+                let own = orchestrators.filter { $0.placement.topicKey == key }
+                orchestrators.removeAll { $0.placement.topicKey == key }
+                return own + ids.flatMap { threads(in: $0) }
+            }
+        }
+        // An orchestrator whose topic has no row left (closing at the end of its turn) still has to be reachable.
+        return residents(in: scope) + scopeLevelThreads(in: scope) + work + orchestrators
     }
 
     // MARK: Scope navigation

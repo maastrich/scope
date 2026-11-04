@@ -101,8 +101,10 @@ something by hand. They sit at the top of the sidebar (<kbd>⌘1</kbd> and <kbd>
 
 <h3 id="topics">Topics</h3>
 <p>Tasks that belong to one piece of work share a <b>topic</b>: in the tree arrangement they sit under one
-row named after it, where the first of them stands, with the count and the most urgent state of their threads; their
-names line up with the topic's, no deeper than a task on its own. <b>Scope groups them itself.</b> A task on its own has no topic and stays flat. When a related task
+row named after it, with the count and the most urgent state of their threads; their names line up with the topic's,
+no deeper than a task on its own. Tasks on their own come first, in the order they were created, and the topics
+below them, in the order of their first task, so a lone task never sits right after a group where it would read as one
+of its members. <b>Scope groups them itself.</b> A task on its own has no topic and stays flat. When a related task
 appears — one an agent created from inside another, a pull request stacked on another task's branch, the same issue
 or pull request, or, with the assistant on, a brief about the same thing — Scope creates the topic, names it in one
 to three words after what the two share (an existing topic when one is a spelling of it: <i>Authentication</i> and

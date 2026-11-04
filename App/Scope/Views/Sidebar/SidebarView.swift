@@ -367,8 +367,9 @@ struct SidebarView: View {
         }
     }
 
-    /// The tasks in creation order, those sharing a topic gathered under its row where the first of them stands
-    /// (`TaskTopic.entries`). Only in the tree: by state, a task sits with what it is doing, not with its topic.
+    /// The tasks standing flat first, in creation order, then the topics, each gathering its tasks under its row
+    /// (`TaskTopic.entries`; `AppModel.threadOrder` walks the same order). Only in the tree: by state, a task sits with
+    /// what it is doing, not with its topic.
     @ViewBuilder
     private func taskTree(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })

@@ -18,11 +18,12 @@ import ScopeCore
         #expect(TaskTopic.distinct(["Auth rework", "auth rework", nil, "billing"]) == ["Auth rework", "billing"])
     }
 
+    /// Flat tasks first, then each topic in the order its first task stands.
     @Test func theSidebarGathersATopicWhereItsFirstTaskStands() {
         let entries = TaskTopic.entries([
             (id: 1, topic: nil), (id: 2, topic: "Auth"), (id: 3, topic: nil), (id: 4, topic: "auth"), (id: 5, topic: "Billing"),
         ])
-        #expect(entries == [.task(1), .topic("Auth", [2, 4]), .task(3), .task(5)])
+        #expect(entries == [.task(1), .task(3), .task(5), .topic("Auth", [2, 4])])
         #expect(TaskTopic.entries([(id: 1, topic: String?.none)]) == [.task(1)])
     }
 
@@ -30,7 +31,19 @@ import ScopeCore
     @Test func aTopicOfOneIsNoGroupUnlessItIsKept() {
         let tasks: [(id: Int, topic: String?)] = [(id: 1, topic: "Billing"), (id: 2, topic: nil)]
         #expect(TaskTopic.entries(tasks) == [.task(1), .task(2)])
-        #expect(TaskTopic.entries(tasks, kept: ["billing"]) == [.topic("Billing", [1]), .task(2)])
+        #expect(TaskTopic.entries(tasks, kept: ["billing"]) == [.task(2), .topic("Billing", [1])])
+    }
+
+    /// A task on its own never stands after a group, where it would read as one of its members: lone tasks and the
+    /// single task of a topic go on top, in creation order; groups (a kept topic of one included) follow.
+    @Test func tasksOnTheirOwnStandAboveEveryGroup() {
+        let tasks: [(id: Int, topic: String?)] = [
+            (id: 1, topic: "Docs"), (id: 2, topic: "Auth"), (id: 3, topic: nil), (id: 4, topic: "Release"),
+            (id: 5, topic: "auth"), (id: 6, topic: nil), (id: 7, topic: "Infra"),
+        ]
+        #expect(TaskTopic.entries(tasks, kept: ["release"]) == [
+            .task(1), .task(3), .task(6), .task(7), .topic("Auth", [2, 5]), .topic("Release", [4]),
+        ])
     }
 }
 
