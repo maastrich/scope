@@ -46,6 +46,10 @@ final class IslandController: NSObject {
     /// The shape's size as last laid out, and whether the pointer is on it.
     private var shapeSize: CGSize = .zero
     private var pointerInside = false
+    /// While the pointer is on the shape, its position is read four times a second as well: a leave the monitors
+    /// missed — the pointer jumping off on a Space switch, a screen going to sleep — must not leave the island open
+    /// and taking clicks. Nothing runs while the pointer is elsewhere.
+    private var pointerWatch: Timer?
     #if DEBUG
     /// Set by `island-command` `peek`: the hand moving elsewhere does not take it back until `unpeek`.
     private var debugPinned = false
@@ -71,6 +75,7 @@ final class IslandController: NSObject {
 
     func hide() {
         hideTask?.cancel()
+        hideTask = nil
         panel?.orderOut(nil)
         hiddenForFullScreen = false
         stopOutsideClicks()
@@ -177,8 +182,10 @@ final class IslandController: NSObject {
             if model.island.presentation != .collapsed { model.island.presentation = .collapsed }
             hiddenForFullScreen = false
             updateFollowing(false)
-            // After the fold, which the shape plays inside the window.
-            if panel.isVisible, hideTask == nil {
+            // Folded already: gone at once, the band never shows an empty count. Folding: once the fold has played.
+            if layout.stage == .collapsed {
+                hide()
+            } else if panel.isVisible, hideTask == nil {
                 hideTask = Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(450))
                     guard !Task.isCancelled, let self else { return }
@@ -223,6 +230,7 @@ final class IslandController: NSObject {
         let frame = Island.panelFrame(on: target)
         if panel.frame != frame { panel.setFrame(frame, display: true) }
         hideTask?.cancel()
+        hideTask = nil
         if !panel.isVisible { panel.orderFrontRegardless() }
         startPointer()
         updateOutsideClicks(expanded: model.island.presentation == .expanded)
@@ -282,18 +290,43 @@ final class IslandController: NSObject {
         let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
         // Global: the pointer over other apps, the island ignoring the mouse. Local: over the island itself.
         if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            MainActor.assumeIsolated {
+                #if DEBUG
+                Self.debugCount("global")
+                #endif
+                self?.pointerMoved()
+            }
         }) { pointerMonitors.append(global) }
         if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.pointerMoved() }
+            MainActor.assumeIsolated {
+                #if DEBUG
+                Self.debugCount("local")
+                #endif
+                self?.pointerMoved()
+            }
             return event
         }) { pointerMonitors.append(local) }
         pointerMoved()
     }
 
+    private func watchPointer(_ on: Bool) {
+        if on, pointerWatch == nil {
+            let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.pointerMoved() }
+            }
+            timer.tolerance = 0.05
+            RunLoop.main.add(timer, forMode: .common)
+            pointerWatch = timer
+        } else if !on {
+            pointerWatch?.invalidate()
+            pointerWatch = nil
+        }
+    }
+
     private func stopPointer() {
         pointerMonitors.forEach(NSEvent.removeMonitor)
         pointerMonitors = []
+        watchPointer(false)
         if pointerInside {
             pointerInside = false
             model?.island.hovering = false
@@ -312,13 +345,28 @@ final class IslandController: NSObject {
         let inside = Island.isOver(point, hitRect: rect, stage: layout.stage)
         guard inside != pointerInside else { return }
         pointerInside = inside
+        #if DEBUG
+        Self.debugCount(inside ? "enter" : "leave")
+        #endif
         panel.ignoresMouseEvents = !inside
+        watchPointer(inside)
         model?.island.hovering = inside
         updateStage()
         hovered(inside)
     }
 
     #if DEBUG
+    /// How many mouse events each monitor saw and how often the pointer crossed the shape, written to
+    /// `$SCOPE_HOME/island-pointer.json` every 50 events: the evidence, on a throwaway, that real movements reach them.
+    private static var debugCounts: [String: Int] = [:]
+    private static func debugCount(_ key: String) {
+        debugCounts[key, default: 0] += 1
+        guard debugCounts.values.reduce(0, +) % 50 == 0 || key == "enter" || key == "leave",
+              let home = shared.model?.env.home,
+              let data = try? JSONSerialization.data(withJSONObject: debugCounts, options: [.sortedKeys]) else { return }
+        try? data.write(to: home.appendingPathComponent("island-pointer.json"))
+    }
+
     /// `island-command` `peek` / `unpeek`: the pointer arriving or leaving, without the hand.
     func debugHover(_ inside: Bool) {
         debugPinned = inside

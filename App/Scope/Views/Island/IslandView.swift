@@ -281,8 +281,9 @@ private struct IslandNotice: View {
     var body: some View {
         let snapshot = model.island.snapshot
         VStack(alignment: .leading, spacing: 0) {
-            if alert.isRequest, let row = snapshot.requests.first(where: { $0.id == alert.thread }) {
-                IslandRequest(row: row)
+            if alert.isRequest {
+                // Answered a moment ago: the card folds with nothing in it rather than show a request as finished.
+                if let row = snapshot.requests.first(where: { $0.id == alert.thread }) { IslandRequest(row: row) }
             } else {
                 IslandTurnNotice(alert: alert, row: (snapshot.requests + snapshot.groups.flatMap(\.rows)).first { $0.id == alert.thread })
             }
