@@ -16,6 +16,21 @@ final class IslandModel {
     var presentation: Presentation = .collapsed
     /// The last request revealed: closing the list goes back to it while it still waits (`Island.respond`).
     @ObservationIgnored var heldRequest: Island.Alert?
+    /// Reveals waiting for the one on screen to go (`Island.AlertQueue`).
+    @ObservationIgnored var queue = Island.AlertQueue()
+    /// How many wait, for the notice's "2 more".
+    private(set) var queuedCount = 0
+    /// When the notice on screen folds away; `nil` while the pointer holds it, or for a request.
+    struct NoticeClock: Equatable {
+        var ends: Date
+    }
+    var noticeClock: NoticeClock?
+    /// The pointer is on the island (set by `IslandController` at once, unlike the delayed gestures).
+    @ObservationIgnored var hovering = false
+
+    func syncQueueCount() {
+        if queue.count != queuedCount { queuedCount = queue.count }
+    }
     /// The five-hour and weekly windows, as Claude Code last reported them; `nil` when it has not, or once reset.
     private(set) var fiveHour: RateLimits.Window?
     private(set) var sevenDay: RateLimits.Window?
@@ -70,17 +85,25 @@ extension AppModel {
     #if DEBUG
     /// A throwaway instance driven from a terminal has no pointer on the island and no Accessibility to click it: it
     /// writes one word to `$SCOPE_HOME/island-command` instead — `expanded`, `collapsed`, `widen` (the first request,
-    /// as its reveal would), `allow`, `deny` (the first request, through the same path as the buttons) — read twice a
-    /// second, then removed.
+    /// as its reveal would), `allow`, `deny` (the first request, through the same path as the buttons), `peek` /
+    /// `unpeek` (the pointer on it or not, without the delayed opening), `finished` / `compact` (a turn's notice for the
+    /// first thread listed, as a card or in the band) — read twice a second, then removed.
     private func startIslandDebugCommands() {
         let file = env.home.appendingPathComponent("island-command")
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let word = try? String(contentsOf: file, encoding: .utf8) else { return }
                 try? FileManager.default.removeItem(at: file)
-                switch word.trimmingCharacters(in: .whitespacesAndNewlines) {
+                let command = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                switch command {
                 case "expanded": self.island.presentation = .expanded
                 case "collapsed": self.island.presentation = .collapsed
+                case "peek": IslandController.shared.debugHover(true)
+                case "unpeek": IslandController.shared.debugHover(false)
+                case "finished", "compact":
+                    guard let row = self.island.snapshot.groups.flatMap(\.rows).first else { return }
+                    self.play(Island.Alert(key: "debug-\(Date.now.timeIntervalSince1970)", kind: .finished, thread: row.id,
+                                           title: row.thread.title, line: row.line, style: command == "compact" ? .compact : .card))
                 case "widen":
                     guard let row = self.island.snapshot.requests.first else { return }
                     let alert = Island.Alert(
@@ -143,7 +166,11 @@ extension AppModel {
         let snapshot = Island.snapshot(reading.inputs, now: reading.now)
         island.publish(snapshot, fiveHour: reading.fiveHour, sevenDay: reading.sevenDay)
         let settled = Island.settle(island.presentation, snapshot: snapshot)
-        if settled != island.presentation { island.presentation = settled }
+        if settled != island.presentation {
+            // A request answered anywhere: the next reveal waiting, if any, takes its place.
+            island.presentation = settled
+            if settled == .collapsed { endNotice() }
+        }
         island.quiet.refreshActivity()
         let alerts = Island.alerts(from: island.inputs, to: reading.inputs, settings: reading.settings,
                                    quiet: island.quiet.current, memory: &island.memory)
@@ -159,7 +186,12 @@ extension AppModel {
         // Only once the island shows: asking for the Focus status is a system prompt nobody with it off should see.
         island.quiet.start()
         IslandController.shared.show(model: self)
-        if let alert = alerts.last { play(alert, sound: reading.settings.playsSound) }
+        // Every reveal, one after the other; one sound for the burst, the most urgent's.
+        if reading.settings.playsSound,
+           let loudest = alerts.first(where: \.isRequest) ?? alerts.first(where: { $0.kind == .failed }) ?? alerts.first {
+            IslandSound.play(loudest.kind)
+        }
+        alerts.forEach(play)
     }
 
     private func islandInput(_ session: ThreadSession, foreground: ThreadID?, now: Date) -> Island.ThreadInput {
@@ -173,7 +205,12 @@ extension AppModel {
         }
         let heard = [activity.lastTool?.at, activity.turnStartedAt, activity.saying?.at, activity.lastReply?.at]
             .compactMap { $0 }.max()
-        let background = session.runningSubagents(now: now) > 0 || !session.claude.background.running(at: now).isEmpty
+        let agents = session.runningSubagents(now: now)
+        let background = agents > 0 || !session.claude.background.running(at: now).isEmpty
+        // The tool of the turn in progress only: the last one of a turn already over says nothing of now.
+        let tool = activity.lastTool.flatMap { tool in
+            activity.turnStartedAt.map { tool.at >= $0 } == true ? tool.name : nil
+        }
         let task = task(of: session)
         return Island.ThreadInput(
             id: session.id, scopeID: session.record.scopeID, scopeName: scope(session.record.scopeID)?.name ?? "Scope",
@@ -181,23 +218,63 @@ extension AppModel {
             activity: state.isUnreadResult ? (session.activityHeadline?.reply ?? session.activityHeadline?.text)
                 : session.activityHeadline?.text, since: since, lastEventAt: heard, hasBackgroundWork: background,
             request: request, isForeground: session.id == foreground, turn: session.turnRevision,
-            plan: activity.plan)
+            plan: activity.plan, turnLength: activity.turns.last.flatMap { turn in turn.startedAt.map { turn.endedAt.timeIntervalSince($0) } },
+            turnTools: activity.turns.last?.tools, tool: tool, agents: agents)
     }
 
-    /// A reveal: the island widens on it, unless the user has it open already. A request stays until it is answered
-    /// (`Island.settle`), a turn that ended for a few seconds.
-    private func play(_ alert: Island.Alert, sound: Bool) {
-        if sound { IslandSound.play(alert.kind) }
+    /// A reveal: it plays now, waits for the one on screen, or — the list open, which already shows it — nothing
+    /// (`Island.arrival`). A request stays until it is answered (`Island.settle`); a turn for `noticeDuration`, held
+    /// while the pointer is on it.
+    private func play(_ alert: Island.Alert) {
         if alert.isRequest { island.heldRequest = alert }
-        let next = Island.present(alert, over: island.presentation)
-        guard next != island.presentation else { return }
-        island.presentation = next
+        switch Island.arrival(of: alert, over: island.presentation, hovering: island.hovering) {
+        case .drop:
+            return
+        case .queue:
+            // A request pushing a turn's notice aside: the notice comes back after it.
+            island.queue.push(alert)
+            island.syncQueueCount()
+        case .show:
+            if case .alert(let current) = island.presentation, !current.isRequest, alert.isRequest {
+                island.queue.push(current)
+                island.syncQueueCount()
+            }
+            show(alert)
+        }
+    }
+
+    private func show(_ alert: Island.Alert) {
+        island.presentation = .alert(alert)
+        startNoticeClock(for: alert, after: nil)
+    }
+
+    /// Runs the time of the notice on screen: its own duration, or `linger` once the pointer left it.
+    private func startNoticeClock(for alert: Island.Alert, after linger: TimeInterval?) {
         island.alertEnds?.cancel()
-        guard !alert.isRequest else { return }
+        guard let duration = linger ?? Island.noticeDuration(alert) else {
+            island.noticeClock = nil
+            return
+        }
+        let seconds = duration * Double(Self.islandAlertStretch)
+        island.noticeClock = .init(ends: .now.addingTimeInterval(seconds))
         island.alertEnds = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.islandAlertDuration * Self.islandAlertStretch)
-            guard !Task.isCancelled, let self, case .alert(let shown) = self.island.presentation, shown == alert else { return }
-            self.island.presentation = .collapsed
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let self, case .alert(let shown) = self.island.presentation, shown.key == alert.key,
+                  !self.island.hovering else { return }
+            self.endNotice()
+        }
+    }
+
+    /// The notice on screen is over: the next one waiting, if it still says something true, else the band.
+    func endNotice() {
+        island.alertEnds?.cancel()
+        island.noticeClock = nil
+        let next = island.queue.next(in: island.snapshot)
+        island.syncQueueCount()
+        if let next {
+            show(next)
+        } else if case .alert = island.presentation {
+            island.presentation = .collapsed
         }
     }
 
@@ -205,9 +282,21 @@ extension AppModel {
 
     /// A pointer or a click on the island, through `Island.respond`.
     func islandGesture(_ gesture: Island.Gesture) {
-        let next = Island.respond(to: gesture, presentation: island.presentation, held: island.heldRequest,
-                                  snapshot: island.snapshot)
-        if next != island.presentation { island.presentation = next }
+        let before = island.presentation
+        let next = Island.respond(to: gesture, presentation: before, held: island.heldRequest, snapshot: island.snapshot)
+        if next != before { island.presentation = next }
+        // A turn's notice holds while the pointer is on it and lingers a moment once it left; a compact one opened on
+        // its card starts its card's time.
+        guard case .alert(let alert) = next, !alert.isRequest else { return }
+        switch gesture {
+        case .pointerIn:
+            island.alertEnds?.cancel()
+            island.noticeClock = nil
+        case .pointerOut:
+            startNoticeClock(for: alert, after: Island.lingerAfterHover)
+        case .toggle, .clickOutside:
+            break
+        }
     }
 
     /// A click on a row: Scope comes up on that thread, its terminal with the keyboard.
@@ -215,6 +304,10 @@ extension AppModel {
         Usage.click("island.open", label: "Island ▸ Open thread")
         // Taken to the thread: its request is in front of the user now, the island need not come back to it.
         if island.heldRequest?.thread == thread { island.heldRequest = nil }
+        island.queue.remove(thread: thread)
+        island.syncQueueCount()
+        island.alertEnds?.cancel()
+        island.noticeClock = nil
         island.presentation = .collapsed
         reveal(thread: thread, showDelta: false)
         AppDelegate.refocusTerminal()

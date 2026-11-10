@@ -12,12 +12,21 @@ final class IslandLayout {
     /// The collapsed height: the notch's, or a few points short of the menu bar (`Island.collapsedHeight`).
     var bandHeight: CGFloat = 20
     var onNotch: Bool { bandWidth > 0 }
+    /// What the shape is doing, and the presentation it draws: both changed together inside one animation, so a new
+    /// reveal's content and the outline's new size move as one (`IslandController.updateStage`).
+    var stage: Island.Stage = .collapsed
+    var presentation: Island.Presentation = .collapsed
 }
 
 /// The island's window: a borderless, non-activating `NSPanel` above every window, on every Space and over full-screen
 /// apps, hung from the top of the chosen screen. It never takes the keyboard — a click on it must leave the app the
-/// user is in where it was — and it is exactly as large as what it draws, so the menu bar and the windows under it
-/// keep their clicks.
+/// user is in where it was.
+///
+/// It never changes size either (`Island.panelSize`): the shape inside grows and folds on a spring, and a window resized
+/// under it either cut that short or showed it a frame late. Outside the shape it ignores the mouse, so the menu bar and
+/// the windows under it keep their clicks: the pointer is followed by event monitors — which need no permission for the
+/// mouse — and the window takes events only while the pointer is on the shape (`Island.hitRect`). The same reading
+/// drives the hover, so the island answers the hand the moment it arrives, wherever the shape is in its animation.
 @MainActor
 final class IslandController: NSObject {
     static let shared = IslandController()
@@ -31,8 +40,20 @@ final class IslandController: NSObject {
     let layout = IslandLayout()
     private weak var model: AppModel?
     private var hoverTask: Task<Void, Never>?
-    private var shrinkTask: Task<Void, Never>?
+    private var hideTask: Task<Void, Never>?
     private var outsideClicks: Any?
+    private var pointerMonitors: [Any] = []
+    /// The shape's size as last laid out, and whether the pointer is on it.
+    private var shapeSize: CGSize = .zero
+    private var pointerInside = false
+    /// While the pointer is on the shape, its position is read four times a second as well: a leave the monitors
+    /// missed — the pointer jumping off on a Space switch, a screen going to sleep — must not leave the island open
+    /// and taking clicks. Nothing runs while the pointer is elsewhere.
+    private var pointerWatch: Timer?
+    #if DEBUG
+    /// Set by `island-command` `peek`: the hand moving elsewhere does not take it back until `unpeek`.
+    private var debugPinned = false
+    #endif
     private var screenObserver: NSObjectProtocol?
     private var activationObserver: NSObjectProtocol?
     private var followTimer: Timer?
@@ -53,20 +74,30 @@ final class IslandController: NSObject {
     }
 
     func hide() {
+        hideTask?.cancel()
+        hideTask = nil
         panel?.orderOut(nil)
         hiddenForFullScreen = false
         stopOutsideClicks()
+        stopPointer()
         updateFollowing(false)
     }
 
     private func makePanel(model: AppModel) -> IslandPanel {
-        let panel = IslandPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: Island.pillHeight),
+        let panel = IslandPanel(contentRect: NSRect(origin: .zero, size: Island.panelSize),
                                 styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
                                 backing: .buffered, defer: false)
         // Over the menu bar, which is where the notch is, and under the menus and alerts. After `isFloatingPanel`,
         // which sets the level back to `.floating`.
         panel.isFloatingPanel = true
+        #if DEBUG
+        // A notch hosts one island: a Debug build's draws over the installed app's, which sits at `.statusBar`, so the
+        // one being worked on is the one seen and hovered.
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        #else
         panel.level = .statusBar
+        #endif
+        panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -75,7 +106,6 @@ final class IslandController: NSObject {
         panel.animationBehavior = .none
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         let host = IslandHostingView(rootView: AnyView(IslandView(layout: layout).environment(model)))
-        host.onHover = { [weak self] inside in self?.hovered(inside) }
         // The hosting view paints a faint ground of its own: the window's bounds would show around the shape.
         host.wantsLayer = true
         host.layer?.backgroundColor = NSColor.clear.cgColor
@@ -109,9 +139,26 @@ final class IslandController: NSObject {
             _ = model.config.preferences.island
         } onChange: {
             Task { @MainActor [weak self] in
+                self?.updateStage()
                 self?.place()
                 self?.track()
             }
+        }
+    }
+
+    /// Moves the shape to what the model and the pointer say, on the spring that suits the move (`Island.spring`).
+    private func updateStage() {
+        guard let model else { return }
+        let presentation = model.island.presentation
+        let stage = Island.stage(presentation, hovering: pointerInside)
+        guard stage != layout.stage || presentation != layout.presentation else { return }
+        let spring = Island.spring(from: layout.stage, to: stage)
+        let animation: Animation = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? .easeInOut(duration: 0.18)
+            : .spring(response: spring.response, dampingFraction: spring.damping)
+        withAnimation(animation) {
+            layout.stage = stage
+            layout.presentation = presentation
         }
     }
 
@@ -128,14 +175,24 @@ final class IslandController: NSObject {
     }
 
     private func place() {
-        guard let model, let panel, let host else { return }
+        guard let model, let panel else { return }
         let settings = model.config.preferences.island
         let snapshot = model.island.snapshot
         if snapshot.isEmpty && model.island.presentation != .expanded {
             if model.island.presentation != .collapsed { model.island.presentation = .collapsed }
-            panel.orderOut(nil)
             hiddenForFullScreen = false
             updateFollowing(false)
+            // Folded already: gone at once, the band never shows an empty count. Folding: once the fold has played.
+            if layout.stage == .collapsed {
+                hide()
+            } else if panel.isVisible, hideTask == nil {
+                hideTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(450))
+                    guard !Task.isCancelled, let self else { return }
+                    self.hideTask = nil
+                    if self.model?.island.snapshot.isEmpty == true { self.hide() }
+                }
+            }
             return
         }
         let all = screens().map(\.1)
@@ -145,7 +202,7 @@ final class IslandController: NSObject {
                                          activeWindow: activeWindow) else { return }
         // Never pulled from under the user: while open or under the pointer it stays where it is.
         if panel.isVisible,
-           model.island.presentation == .expanded || NSMouseInRect(NSEvent.mouseLocation, panel.frame, false),
+           model.island.presentation == .expanded || pointerInside,
            let current = all.first(where: { $0.frame.contains(CGPoint(x: panel.frame.midX, y: panel.frame.maxY - 1)) }) {
             target = current
         }
@@ -160,6 +217,7 @@ final class IslandController: NSObject {
             panel.orderOut(nil)
             hiddenForFullScreen = true
             stopOutsideClicks()
+            stopPointer()
             updateFollowing(following)
             return
         }
@@ -168,22 +226,13 @@ final class IslandController: NSObject {
         let height = Island.collapsedHeight(on: target)
         if layout.bandWidth != band.width { layout.bandWidth = band.width }
         if layout.bandHeight != height { layout.bandHeight = height }
-        host.layoutSubtreeIfNeeded()
-        let frame = Island.frame(for: host.fittingSize, on: target)
-        // Growing at once and shrinking once the content has folded, so the window never cuts the animation short. Both
-        // frames hang from the same top edge, centred on the same band: the content, pinned to the top, does not move.
-        shrinkTask?.cancel()
-        if panel.isVisible, panel.frame != frame, panel.frame.maxY == frame.maxY, target.frame.contains(panel.frame) {
-            panel.setFrame(frame.union(panel.frame), display: true)
-            shrinkTask = Task { @MainActor [weak panel] in
-                try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else { return }
-                panel?.setFrame(frame, display: true)
-            }
-        } else {
-            panel.setFrame(frame, display: true)
-        }
+        // The one frame for every stage: set when the island changes screen, never for an animation.
+        let frame = Island.panelFrame(on: target)
+        if panel.frame != frame { panel.setFrame(frame, display: true) }
+        hideTask?.cancel()
+        hideTask = nil
         if !panel.isVisible { panel.orderFrontRegardless() }
+        startPointer()
         updateOutsideClicks(expanded: model.island.presentation == .expanded)
         updateFollowing(following)
     }
@@ -226,6 +275,106 @@ final class IslandController: NSObject {
         return (Island.frontWindow(of: app.processIdentifier, in: windows).map(flip),
                 Island.documentWindows(of: app.processIdentifier, in: windows).map(flip))
     }
+
+    // MARK: The pointer
+
+    /// The shape laid out at a new size: the pointer may be on it, or off it, without having moved.
+    func shapeChanged(_ size: CGSize) {
+        guard size != shapeSize else { return }
+        shapeSize = size
+        pointerMoved()
+    }
+
+    private func startPointer() {
+        guard pointerMonitors.isEmpty else { return }
+        let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+        // Global: the pointer over other apps, the island ignoring the mouse. Local: over the island itself.
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] _ in
+            MainActor.assumeIsolated {
+                #if DEBUG
+                Self.debugCount("global")
+                #endif
+                self?.pointerMoved()
+            }
+        }) { pointerMonitors.append(global) }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
+            MainActor.assumeIsolated {
+                #if DEBUG
+                Self.debugCount("local")
+                #endif
+                self?.pointerMoved()
+            }
+            return event
+        }) { pointerMonitors.append(local) }
+        pointerMoved()
+    }
+
+    private func watchPointer(_ on: Bool) {
+        if on, pointerWatch == nil {
+            let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.pointerMoved() }
+            }
+            timer.tolerance = 0.05
+            RunLoop.main.add(timer, forMode: .common)
+            pointerWatch = timer
+        } else if !on {
+            pointerWatch?.invalidate()
+            pointerWatch = nil
+        }
+    }
+
+    private func stopPointer() {
+        pointerMonitors.forEach(NSEvent.removeMonitor)
+        pointerMonitors = []
+        watchPointer(false)
+        if pointerInside {
+            pointerInside = false
+            model?.island.hovering = false
+            hoverTask?.cancel()
+        }
+        panel?.ignoresMouseEvents = true
+    }
+
+    /// One rectangle test per mouse event; anything more happens only when the pointer crosses the shape's edge.
+    private func pointerMoved(at point: CGPoint = NSEvent.mouseLocation) {
+        guard let panel, panel.isVisible else { return }
+        #if DEBUG
+        if debugPinned { return }
+        #endif
+        let rect = Island.hitRect(shape: shapeSize, in: panel.frame, bandMidX: panel.frame.midX)
+        let inside = Island.isOver(point, hitRect: rect, stage: layout.stage)
+        guard inside != pointerInside else { return }
+        pointerInside = inside
+        #if DEBUG
+        Self.debugCount(inside ? "enter" : "leave")
+        #endif
+        panel.ignoresMouseEvents = !inside
+        watchPointer(inside)
+        model?.island.hovering = inside
+        updateStage()
+        hovered(inside)
+    }
+
+    #if DEBUG
+    /// How many mouse events each monitor saw and how often the pointer crossed the shape, written to
+    /// `$SCOPE_HOME/island-pointer.json` every 50 events: the evidence, on a throwaway, that real movements reach them.
+    private static var debugCounts: [String: Int] = [:]
+    private static func debugCount(_ key: String) {
+        debugCounts[key, default: 0] += 1
+        guard debugCounts.values.reduce(0, +) % 50 == 0 || key == "enter" || key == "leave",
+              let home = shared.model?.env.home,
+              let data = try? JSONSerialization.data(withJSONObject: debugCounts, options: [.sortedKeys]) else { return }
+        try? data.write(to: home.appendingPathComponent("island-pointer.json"))
+    }
+
+    /// `island-command` `peek` / `unpeek`: the pointer arriving or leaving, without the hand.
+    func debugHover(_ inside: Bool) {
+        debugPinned = inside
+        pointerInside = inside
+        model?.island.hovering = inside
+        updateStage()
+    }
+    #endif
 
     // MARK: Opening
 
@@ -272,29 +421,7 @@ final class IslandPanel: NSPanel {
 }
 
 /// A hosting view that takes the first click — the panel is never key, and without this the first click on a button
-/// only woke the window — and reports the pointer coming in and going, whatever app is active.
+/// only woke the window.
 final class IslandHostingView: NSHostingView<AnyView> {
-    var onHover: ((Bool) -> Void)?
-    private var area: NSTrackingArea?
-
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let area { removeTrackingArea(area) }
-        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-                                  owner: self, userInfo: nil)
-        addTrackingArea(area)
-        self.area = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        super.mouseEntered(with: event)
-        onHover?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        super.mouseExited(with: event)
-        onHover?(false)
-    }
 }

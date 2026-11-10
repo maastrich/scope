@@ -147,3 +147,27 @@ attente de Vibe Island n'a pas été observé. Tant que les deux tournent, mettr
   (Debug), qui appelle le même chemin que les boutons.
 - Hooks perdus : #101 a corrigé la perte au niveau de la socket, pas la réconciliation d'état. Un `Stop` perdu sans
   réponse dans le transcript laisse un thread « running » ; l'îlot l'affiche « No news », sans le solder.
+
+## Novembre 2026 : l'écart avec Vibe Island, mesuré
+
+Observé sur un MacBook Pro à encoche (1728 × 1117 pt, encoche de 185 × 32 pt, 120 Hz), Vibe Island 1.0.53 lancée le
+temps des mesures, vidéos `screencapture -v` lues image par image à 60 i/s. Retour de l'utilisateur : ce n'est pas tant
+le dessin que **l'interactivité, la qualité des notifications et la transition ouvert / fermé** ; l'intégration à
+l'encoche est fragile ; l'animation de Vibe Island est « ultra-smooth, aucun glitch » ; l'UI de Scope est trop simple.
+
+| | Vibe Island | Scope avant | Scope maintenant |
+|---|---|---|---|
+| Fenêtre | 680 × 580 fixe, niveau 27 | redimensionnée à chaque état (grandir tout de suite, rétrécir 400 ms après) | 620 × 700 fixe, jamais redimensionnée ; hors de la forme elle ignore la souris |
+| Ouverture | une seule forme noire qui s'élargit depuis l'encoche (~0,15 s), le contenu révélé par le masque, sans mise à l'échelle | la capsule reste, une carte séparée apparaît 8 pt dessous (`scale 0.9` + fondu) | une seule forme qui grandit sur un ressort (0,38 s, amorti 0,78), contenu en fondu décalé de 60 ms |
+| Fermeture | la forme replie hauteur et largeur, sans rebond (~0,45 s) | le contenu disparaît d'un coup ; 4 images perdues pendant le `setFrame` | ressort sans dépassement (0,36 s) ; la forme replie, le contenu s'efface en 0,1 s |
+| Encoche | ailes larges collées à l'encoche, coins carrés en haut | ailes collées, capsule arrondie (rayon 14) posée sur la barre | rayon du bas de l'encoche (10), épaules concaves qui fondent la forme dans le bord de l'écran |
+| Survol | les ailes s'élargissent tout de suite (« Running », « 10 sessions »), puis la liste | rien pendant 150 ms, puis la carte | la forme grossit tout de suite (aperçu), la liste à 150 ms ; zone de survol = la forme, plus 4 pt de marge sur les côtés |
+| Replié | nom de la session en cours, « Working… », lutin animé | points d'état, compteur, anneau 5 h | inchangé (rien ne bouge au repos) ; une fin de tour pendant la frappe nomme le thread dans les ailes 3,5 s |
+| Fin de tour | la liste s'ouvre seule ~5 s, réponse de l'agent visible | carte de 5 s titre + ligne ; survolée, elle devenait la liste ; clic → liste ; une rafale n'en montrait qu'une | carte : pastille, task · scope · durée · outils, réponse sur 3 lignes, filet de temps restant ; tenue sous le pointeur, clic → le thread ; rafale en file (« 2 more ») |
+| Pendant la frappe | ouverture quand même | rien (le point change) | bande élargie qui nomme le thread, sans carte |
+| Liste | en-tête usage 5 h / 7 j, lignes agent + puces + « You: … » + réponse | point, titre, ligne grise, limites en pied | en-tête : compte par état + limites ; pastille par thread (outil en cours), puce sous-agents, réponse sur 2 lignes, flèche au survol |
+| Demande | Allow / Always / Deny, diff | Allow / Deny / options / Open | idem, avec pastille et `$` devant la commande ; une demande passe devant une notice, qui revient après |
+| CPU au repos (replié, 3 threads) | — | 0,37 % (0,22 s en 60 s) | voir la PR |
+
+Reste : raccourcis clavier globaux (approuver / refuser sans souris), aile gauche qui dit en direct ce que fait le
+thread au premier rang, aperçu du diff d'une édition.
