@@ -11,6 +11,14 @@ Entries are generated from [Conventional Commits](https://www.conventionalcommit
 Changes merged to `main` but not released yet: `git cliff --unreleased`.
 `scripts/release.sh` inserts the next version section below this one.
 
+## [0.37.0](https://github.com/maastrich/scope/releases/tag/v0.37.0) - 2026-11-10
+
+### Added
+
+- **island:** one shape out of the notch, richer cards, notices that queue ([#132](https://github.com/maastrich/scope/pull/132)) by @maastrich
+
+**Full Changelog**: https://github.com/maastrich/scope/compare/v0.36.0...v0.37.0
+
 ## [0.36.0](https://github.com/maastrich/scope/releases/tag/v0.36.0) - 2026-11-04
 
 ### Added
