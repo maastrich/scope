@@ -616,11 +616,14 @@ alike: on a screen without a notch, a small capsule hanging from the top edge, a
 a coloured dot per thread (green running, orange waiting for you, blue finished unread, red failed; waiting is a
 square and failed a diamond, so the dots read without their colour), the count (<i>3 threads</i>) and a ring for the
 5-hour limit, orange from 80&nbsp;%. Around a notch nothing is drawn under the notch itself: the dots sit in a black wing
-on its left, the count and the ring in one on its right, and the black runs on from the notch. It shows only while a
-thread works, waits or finished unread. Rest the pointer on it (or click it, a setting) and a card opens under it:
-the requests waiting for you first, then the threads by task, each with what it is doing and for how long — with its
-todo list under the row you rest on, or under the thread selected in Scope — and the 5-hour and weekly limits with
-their reset at the foot. A thread that says it is running but has not been heard from for ten minutes says so, rather
+on its left, the count and the ring in one on its right, and the black runs on from the notch, its top corners
+flaring into the screen's edge. It shows only while a thread works, waits or finished unread. It is one shape
+throughout: it swells a little as the pointer reaches it, and resting there (or clicking it, a setting) opens it on a
+spring into the list — the same black growing down from the notch, its band now counting the threads in each state
+and showing the 5-hour and weekly limits. The list puts the requests waiting for you first, then the threads by task,
+each with a badge for what it is doing (running a command, editing, searching, thinking, waiting for you), its
+sub-agents, what it said last and for how long — with its todo list under the row you rest on, or under the thread
+selected in Scope. A thread that says it is running but has not been heard from for ten minutes says so, rather
 than look busy.</p>
 <p>From there, <b>Allow</b> or <b>Deny</b> a permission, pick a question's option, or <b>Open</b> the thread in Scope.
 Allow is offered only when the island shows the whole command; a plan, a form or a multiple choice opens the thread.
@@ -628,7 +631,9 @@ The answer is typed only if the terminal shows that very dialog, as from the req
 stops, closes or archives anything.</p>
 <p>When a thread asks something — a permission, a question, a plan — the island widens on its own (around a notch, it
 grows down from it) to show which thread, the command and its buttons, and stays so until the request is answered,
-from the island or anywhere else; then it folds back. A turn that ends or fails widens it for five seconds. Either can
+from the island or anywhere else; then it folds back. A turn that ends or fails drops a card with the thread, how long it
+ran and what the agent said, for a few seconds: the pointer on it holds it, a click opens the thread, and several turns
+ending together come one after the other. Either can
 play a system sound — never for the thread you are looking at in Scope, and never during a Focus or while the screen
 is locked. With Reduce Motion, it fades instead of springing open.</p>
 <p>The island sits on the screen of the window you are working in — the frontmost window of the active app, whatever
@@ -636,8 +641,9 @@ the app, on the screen that holds most of it — and moves there when you switch
 screen, never while it is open or under the pointer. With no window in front (Finder over the desktop), it goes to the
 screen with the pointer.</p>
 <p>It stays out of your way while you work: as long as you are typing or moving the pointer, a finished or failed turn
-only changes its thread's dot; only an agent waiting on you — a question, a permission, a plan — makes it grow
-(<b>Interrupt while I work</b>: never, only when an agent is waiting, or always). Over an app in full screen it
+only widens the band to name its thread, without a card over what you are reading; only an agent waiting on you — a
+question, a permission, a plan — drops a card (<b>Interrupt while I work</b>: never, cards only for an agent waiting,
+or always). Over an app in full screen it
 disappears unless an agent is waiting. Settings › General › Island turns it off, picks the screen (the active window's, the main one,
 the one with the pointer, or a named one), how it opens and which events it shows. It is on by default, and off in a
 Debug build.</p>
