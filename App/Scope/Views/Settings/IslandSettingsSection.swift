@@ -45,7 +45,7 @@ struct IslandSettingsSection: View {
             Toggle("Reveal a failed turn", isOn: island(\.alertsOnFailure)).toggleStyle(.scope)
             Toggle("Reveal a question, a permission or a plan", isOn: island(\.alertsOnRequest)).toggleStyle(.scope)
             Toggle("Play a sound with each reveal", isOn: island(\.playsSound)).toggleStyle(.scope)
-            Text("The island shows the Claude Code threads at work, a dot per thread, their count and the 5-hour limit; a request widens it until it is answered, and open, it lists the threads by task with their todo lists and opens one in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. It sits on the screen of the window you are working in, whatever the app, and moves when you switch, never while it is open. While you type or move the pointer, only an agent waiting on you makes it grow (Interrupt while I work); a finished turn just changes its dot. Over a full-screen app it stays away unless an agent is waiting. Black in light and dark alike: a capsule hanging from the top edge, or two wings either side of a notch, never under it. Off by default in a Debug build.")
+            Text("The island shows the Claude Code threads at work, a dot per thread, their count and the 5-hour limit; a request widens it until it is answered, and open, it lists the threads by task with their todo lists and opens one in Scope. A reveal never shows for the thread you are looking at, nor while a Focus is on (\(focusStatus)) or the screen is locked. It sits on the screen of the window you are working in, whatever the app, and moves when you switch, never while it is open. While you type or move the pointer, only an agent waiting on you drops a card (Interrupt while I work); a finished turn only widens the band to name the thread. A notice holds while the pointer is on it, a click opens its thread, and several come one after the other. Over a full-screen app it stays away unless an agent is waiting. Black in light and dark alike: a capsule hanging from the top edge, or two wings either side of a notch, never under it. Off by default in a Debug build.")
                 .font(.scopeCaption)
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -70,7 +70,7 @@ struct IslandSettingsSection: View {
     private func title(_ interruptions: IslandSettings.Interruptions) -> String {
         switch interruptions {
         case .never: "Never"
-        case .requests: "Only when an agent is waiting"
+        case .requests: "Cards only for an agent waiting"
         case .always: "Always"
         }
     }

@@ -220,10 +220,16 @@ private func plan() -> ClaudePendingRequest {
         // On its way to Allow, the pointer leaves the buttons where they are.
         #expect(Island.respond(to: .pointerIn, presentation: widened, held: request, snapshot: asking) == widened)
         #expect(Island.respond(to: .pointerOut, presentation: widened, held: request, snapshot: asking) == widened)
-        // A turn's reveal and the collapsed island open on the pointer, as before.
+        // A turn's notice holds under the pointer, to be read or clicked; the collapsed island opens.
         let finished = Island.Presentation.alert(reveal(.finished, request: nil))
-        #expect(Island.respond(to: .pointerIn, presentation: finished, held: nil, snapshot: asking) == .expanded)
+        #expect(Island.respond(to: .pointerIn, presentation: finished, held: nil, snapshot: asking) == finished)
         #expect(Island.respond(to: .pointerIn, presentation: .collapsed, held: nil, snapshot: asking) == .expanded)
+        // The band widened on a turn opens on its card.
+        var compact = reveal(.finished, request: nil)
+        compact.style = .compact
+        var card = compact
+        card.style = .card
+        #expect(Island.respond(to: .pointerIn, presentation: .alert(compact), held: nil, snapshot: asking) == .alert(card))
     }
 
     @Test func closingTheListGoesBackToTheRequestStillWaitingElseCollapses() {
@@ -330,7 +336,7 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.Quiet(screenLocked: true).isQuiet)
     }
 
-    @Test func atWorkOnlyARequestInterruptsByDefault() {
+    @Test func atWorkOnlyARequestTakesACardByDefault() {
         let before = (1...3).map { thread("aaaaaaaaaaa\($0)", .running) }
         let after = [
             thread("aaaaaaaaaaa1", .done, turn: 1),
@@ -339,7 +345,10 @@ private func plan() -> ClaudePendingRequest {
         ]
         let atWork = Island.Quiet(userActive: true)
         var memory = Island.AlertMemory()
-        #expect(alerts(before, after, quiet: atWork, memory: &memory).map(\.kind) == [.permission])
+        // The turns that ended only widen the band: seen, not in the way.
+        let played = alerts(before, after, quiet: atWork, memory: &memory)
+        #expect(played.filter { $0.style == .card }.map(\.kind) == [.permission])
+        #expect(played.filter { $0.style == .compact }.map(\.kind) == [.finished, .failed])
         // Held back, not deferred: the turn that ended does not reveal once the user stops typing.
         #expect(alerts(before, after, memory: &memory).isEmpty)
 
@@ -389,11 +398,15 @@ private func plan() -> ClaudePendingRequest {
         #expect(external.notch == nil)
     }
 
-    @Test func theCollapsedIslandWrapsTheNotchElseHangsCentredAsHighAsTheMenuBar() {
-        let onNotch = Island.frame(for: CGSize(width: 300, height: 32), on: notched)
-        #expect(onNotch == CGRect(x: 606, y: 950, width: 300, height: 32))
-        let pill = Island.frame(for: CGSize(width: 160, height: 25), on: external)
-        #expect(pill == CGRect(x: 1512 + 880, y: 1055, width: 160, height: 25))
+    @Test func theWindowIsOneFixedFrameHungFromTheTopCentredOnTheBand() {
+        // Never resized for an animation: as large as the open island and its shadow.
+        let onNotch = Island.panelFrame(on: notched)
+        #expect(onNotch.size == Island.panelSize)
+        #expect(onNotch.midX == notched.notch?.midX)
+        #expect(onNotch.maxY == notched.frame.maxY)
+        let pill = Island.panelFrame(on: external)
+        #expect(pill.midX == external.frame.midX)
+        #expect(pill.maxY == external.frame.maxY)
         var hidden = external
         hidden.menuBarHeight = 0
         #expect(Island.band(on: hidden).height == Island.pillHeight)
@@ -416,9 +429,10 @@ private func plan() -> ClaudePendingRequest {
         #expect(wings.left == CGRect(x: 596, y: 950, width: 70, height: 32))
         #expect(wings.right == CGRect(x: 846, y: 950, width: 70, height: 32))
         #expect(!wings.left.intersects(notch) && !wings.right.intersects(notch))
-        // Laid out as left wing, notch, right wing, the content is centred on the notch, so the panel's frame is too.
-        let frame = Island.frame(for: CGSize(width: 70 + notch.width + 70, height: 32), on: notched)
-        #expect(frame == wings.left.union(notch).union(wings.right))
+        // Laid out as left wing, notch, right wing, the shape is centred on the notch, and so is what takes the pointer.
+        let panel = Island.panelFrame(on: notched)
+        let hit = Island.hitRect(shape: CGSize(width: 70 + notch.width + 70, height: 32), in: panel, bandMidX: notch.midX)
+        #expect(hit == wings.left.union(notch).union(wings.right))
     }
 
     @Test func bothWingsTakeTheWiderContentPlusPadding() {
@@ -433,11 +447,26 @@ private func plan() -> ClaudePendingRequest {
         #expect(Island.wingWidth(nine, hasRing: true) == 105)
     }
 
-    @Test func theOpenIslandStaysOnItsScreen() {
-        let wide = Island.frame(for: CGSize(width: 4000, height: 400), on: external)
-        #expect(wide.minX == external.frame.minX)
-        #expect(wide.width == external.frame.width)
-        #expect(wide.maxY == external.frame.maxY)
+    @Test func theWindowStaysOnASmallScreen() {
+        let small = Island.Screen(name: "Sidecar", frame: CGRect(x: -500, y: 0, width: 500, height: 400), menuBarHeight: 24)
+        let frame = Island.panelFrame(on: small)
+        #expect(frame.minX == small.frame.minX)
+        #expect(frame.width == small.frame.width)
+        #expect(frame.height == small.frame.height)
+        #expect(frame.maxY == small.frame.maxY)
+    }
+
+    @Test func onlyTheShapeTakesThePointerWithALittleSlopWhileCollapsed() {
+        let panel = Island.panelFrame(on: notched)
+        let hit = Island.hitRect(shape: CGSize(width: 300, height: 32), in: panel, bandMidX: 756)
+        #expect(hit == CGRect(x: 606, y: 950, width: 300, height: 32))
+        // The pointer stops a point under the top edge, and at speed lands a little wide.
+        #expect(Island.isOver(CGPoint(x: 756, y: 981.5), hitRect: hit, stage: .collapsed))
+        #expect(Island.isOver(CGPoint(x: 603, y: 960), hitRect: hit, stage: .collapsed))
+        #expect(!Island.isOver(CGPoint(x: 603, y: 960), hitRect: hit, stage: .open))
+        // The empty window under the shape — the menu bar's neighbours, the windows below — is not the island.
+        #expect(!Island.isOver(CGPoint(x: 756, y: 900), hitRect: hit, stage: .collapsed))
+        #expect(!Island.isOver(CGPoint(x: 1000, y: 975), hitRect: hit, stage: .collapsed))
     }
 
     @Test func theScreenIsTheNamedOneTheOneUnderThePointerElseTheMain() {
@@ -644,5 +673,129 @@ private func plan() -> ClaudePendingRequest {
         #expect(try JSONDecoder().decode(Preferences.self, from: data).island.placement == .main)
         let stamped = #"{"island":{"placement":"main","placementRevision":2}}"#
         #expect(try JSONDecoder().decode(Preferences.self, from: Data(stamped.utf8)).island.placement == .main)
+    }
+}
+
+@Suite struct IslandMotionTests {
+    private func alert(_ kind: Island.AlertKind, thread id: String = "aaaaaaaaaaa1", style: Island.AlertStyle = .card,
+                       line: String = "done") -> Island.Alert {
+        Island.Alert(key: "\(id)|\(kind)", kind: kind, thread: ThreadID(rawValue: id)!, title: "t", line: line,
+                     requestID: kind == .finished || kind == .failed ? nil : "p1", style: style)
+    }
+
+    @Test func everyPresentationIsAStageOfTheOneShape() {
+        #expect(Island.stage(.collapsed, hovering: false) == .collapsed)
+        #expect(Island.stage(.collapsed, hovering: true) == .peek)
+        #expect(Island.stage(.expanded, hovering: false) == .open)
+        #expect(Island.stage(.alert(alert(.finished)), hovering: true) == .notice)
+        #expect(Island.stage(.alert(alert(.finished, style: .compact)), hovering: false) == .compact)
+        #expect(Island.stage(.alert(alert(.finished, style: .compact)), hovering: true) == .peek)
+    }
+
+    @Test func theWingsTakeTheNotchsRadiusAndEveryStageFlaresIntoTheEdge() {
+        #expect(Island.corners(.collapsed, bandHeight: 32, onNotch: true).bottom == Island.notchRadius)
+        #expect(Island.corners(.collapsed, bandHeight: 24, onNotch: false).bottom == 12)
+        for stage in [Island.Stage.collapsed, .peek, .compact, .notice, .open] {
+            #expect(Island.corners(stage, bandHeight: 32, onNotch: true).shoulder > 0)
+        }
+        // Larger shapes, rounder corners.
+        #expect(Island.corners(.open, bandHeight: 32, onNotch: true).bottom > Island.corners(.notice, bandHeight: 32, onNotch: true).bottom)
+    }
+
+    @Test func growingLandsWithAHintOfBounceAndFoldingNeverOvershoots() {
+        #expect(Island.spring(from: .collapsed, to: .open) == Island.Motion.open)
+        #expect(Island.spring(from: .peek, to: .open) == Island.Motion.open)
+        #expect(Island.spring(from: .collapsed, to: .notice) == Island.Motion.notice)
+        for (from, to) in [(Island.Stage.open, Island.Stage.collapsed), (.notice, .collapsed), (.open, .notice), (.peek, .collapsed)] {
+            #expect(Island.spring(from: from, to: to).damping == 1)
+        }
+        #expect(Island.Motion.open.damping < 1)
+    }
+
+    @Test func aNoticeStaysLongEnoughToReadAndARequestUntilAnswered() {
+        #expect(Island.noticeDuration(alert(.permission)) == nil)
+        #expect(Island.noticeDuration(alert(.finished)) == 6)
+        #expect(Island.noticeDuration(alert(.failed)) == 7)
+        #expect(Island.noticeDuration(alert(.finished, line: String(repeating: "a", count: 240))) == 9)
+        #expect(Island.noticeDuration(alert(.finished, line: String(repeating: "a", count: 2000))) == 10)
+        #expect(Island.noticeDuration(alert(.finished, style: .compact)) == 3.5)
+    }
+
+    @Test func revealsQueueRequestsFirstOneSlotPerThread() {
+        var queue = Island.AlertQueue()
+        queue.push(alert(.finished, thread: "aaaaaaaaaaa1"))
+        queue.push(alert(.failed, thread: "aaaaaaaaaaa2"))
+        queue.push(alert(.permission, thread: "aaaaaaaaaaa3"))
+        queue.push(alert(.finished, thread: "aaaaaaaaaaa1", line: "again"))
+        #expect(queue.pending.map(\.thread.rawValue) == ["aaaaaaaaaaa3", "aaaaaaaaaaa2", "aaaaaaaaaaa1"])
+        #expect(queue.pending.last?.line == "again")
+        queue.remove(thread: ThreadID(rawValue: "aaaaaaaaaaa2")!)
+        #expect(queue.count == 2)
+    }
+
+    @Test func aQueuedRevealNoLongerTrueIsSkipped() {
+        var queue = Island.AlertQueue()
+        queue.push(alert(.permission, thread: "aaaaaaaaaaa1"))
+        queue.push(alert(.finished, thread: "aaaaaaaaaaa2"))
+        queue.push(alert(.finished, thread: "aaaaaaaaaaa3"))
+        // The permission was answered, the second thread went back to work; the third is still done.
+        let snapshot = Island.snapshot([thread("aaaaaaaaaaa1", .running), thread("aaaaaaaaaaa2", .running),
+                                        thread("aaaaaaaaaaa3", .done)], now: t0)
+        #expect(queue.next(in: snapshot)?.thread.rawValue == "aaaaaaaaaaa3")
+        #expect(queue.next(in: snapshot) == nil)
+    }
+
+    @Test func aNewRevealWaitsForTheOneBeingReadAndTheOpenListSwallowsIt() {
+        let card = Island.Presentation.alert(alert(.finished))
+        let compact = Island.Presentation.alert(alert(.finished, style: .compact))
+        let request = Island.Presentation.alert(alert(.permission))
+        #expect(Island.arrival(of: alert(.finished, thread: "aaaaaaaaaaa2"), over: .collapsed, hovering: false) == .show)
+        #expect(Island.arrival(of: alert(.finished, thread: "aaaaaaaaaaa2"), over: .expanded, hovering: false) == .drop)
+        #expect(Island.arrival(of: alert(.finished, thread: "aaaaaaaaaaa2"), over: card, hovering: false) == .queue)
+        #expect(Island.arrival(of: alert(.finished, thread: "aaaaaaaaaaa2"), over: compact, hovering: false) == .show)
+        #expect(Island.arrival(of: alert(.finished, thread: "aaaaaaaaaaa2"), over: request, hovering: false) == .queue)
+        // A request pushes a turn's notice aside, unless the user is reading it.
+        #expect(Island.arrival(of: alert(.permission, thread: "aaaaaaaaaaa2"), over: card, hovering: false) == .show)
+        #expect(Island.arrival(of: alert(.permission, thread: "aaaaaaaaaaa2"), over: card, hovering: true) == .queue)
+    }
+
+    @Test func atWorkATurnThatEndedOnlyWidensTheBand() {
+        let atWork = Island.Quiet(userActive: true)
+        #expect(atWork.style(.finished, .requests) == .compact)
+        #expect(atWork.style(.failed, .requests) == .compact)
+        #expect(atWork.style(.permission, .requests) == .card)
+        #expect(atWork.style(.finished, .never) == nil)
+        #expect(atWork.style(.finished, .always) == .card)
+        #expect(Island.Quiet().style(.finished, .requests) == .card)
+    }
+
+    @Test func theBadgeSaysWhatTheThreadDoesOrWaitsFor() {
+        var running = thread("aaaaaaaaaaa1", .running)
+        #expect(Island.symbol(running) == "sparkles")
+        running.tool = "Bash"
+        #expect(Island.symbol(running) == "terminal.fill")
+        running.tool = "MultiEdit"
+        #expect(Island.symbol(running) == "pencil")
+        running.tool = "mcp__scope__scope_list"
+        #expect(Island.symbol(running) == "puzzlepiece.extension.fill")
+        #expect(Island.symbol(thread("aaaaaaaaaaa2", .waiting(reason: .input), request: question())) == "questionmark.bubble.fill")
+        #expect(Island.symbol(thread("aaaaaaaaaaa2", .waiting(reason: .permission))) == "hand.raised.fill")
+        #expect(Island.symbol(thread("aaaaaaaaaaa3", .failed)) == "exclamationmark.triangle.fill")
+    }
+
+    @Test func theHeaderCountsEachStateMostUrgentFirst() {
+        let snapshot = Island.snapshot([thread("aaaaaaaaaaa1", .running), thread("aaaaaaaaaaa2", .running),
+                                        thread("aaaaaaaaaaa3", .waiting(reason: .input)),
+                                        thread("aaaaaaaaaaa4", .waiting(reason: .permission)), thread("aaaaaaaaaaa5", .done)], now: t0)
+        let counts = Island.stateCounts(snapshot)
+        #expect(counts.map(\.count) == [2, 2, 1])
+        #expect(counts.first?.state.needsAttention == true)
+        #expect(Island.stateCounts(.empty).isEmpty)
+    }
+
+    @Test func aFinishedTurnSaysHowLongAndHowManyTools() {
+        #expect(Island.turnSummary(length: 250, tools: 12) == "4 min · 12 tools")
+        #expect(Island.turnSummary(length: nil, tools: 1) == "1 tool")
+        #expect(Island.turnSummary(length: 0, tools: 0) == nil)
     }
 }

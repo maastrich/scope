@@ -6,99 +6,396 @@ import SwiftUI
 /// The island at the top of the screen (spec §7), black whatever the appearance: it hangs from the top edge like the
 /// notch does, and on a screen with one it reads as the notch itself.
 ///
-/// Collapsed, a capsule centred under the edge — a dot per thread, `3 threads`, the five-hour ring — or, around a
-/// notch, two wings either side of it, nothing ever under the notch. A request widens it unasked until it is answered;
-/// a turn that ended widens it for a few seconds. Open, a card under it lists the requests, then the threads by task,
-/// then the limits.
+/// One shape, always: the capsule — or two wings either side of the notch, nothing ever under it — grows a little under
+/// the pointer, widens to name a turn that ended, drops a card for a reveal, and opens on the list, each time by
+/// resizing the same black outline on a spring. What it shows sits inside and is revealed as the outline grows, so the
+/// content never scales and nothing pops in beside it. The band at the top — dots, counter, ring — stays where it is
+/// through all of it.
 struct IslandView: View {
     let layout: IslandLayout
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private typealias Metrics = Island.Metrics
-    /// Room around a card for its shadow inside the window, which would otherwise cut it off in a hard edge. None while
-    /// collapsed: the window is exactly the capsule, and the menu bar beside it keeps its clicks.
-    static let shadowRoom: CGFloat = 24
-
-    private var presentation: IslandModel.Presentation { model.island.presentation }
 
     var body: some View {
+        let stage = layout.stage
+        let corners = Island.corners(stage, bandHeight: layout.bandHeight, onNotch: layout.onNotch)
+        let outline = IslandOutline(bottom: corners.bottom, shoulder: corners.shoulder)
         VStack(spacing: 0) {
-            switch presentation {
-            case .collapsed:
-                collapsed
-            case .expanded:
-                collapsed
+            IslandBand(layout: layout)
+            switch stage {
+            case .notice:
+                if case .alert(let alert) = layout.presentation {
+                    IslandNotice(alert: alert)
+                        .id(alert.key)
+                        .transition(Self.content)
+                }
+            case .open:
                 IslandList()
-                    .padding(.top, 8)
-                    .padding(.horizontal, Self.shadowRoom)
-                    .padding(.bottom, Self.shadowRoom)
-                    .transition(transition)
-            case .alert(let alert):
-                IslandWidened(alert: alert, layout: layout)
-                    .padding(.horizontal, Self.shadowRoom)
-                    .padding(.bottom, Self.shadowRoom)
-                    .transition(transition)
+                    .transition(Self.content)
+            case .collapsed, .peek, .compact:
+                EmptyView()
             }
         }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .animation(reduceMotion ? .easeInOut(duration: 0.18) : .spring(response: 0.3, dampingFraction: 0.8), value: presentation)
+        .padding(.horizontal, corners.shoulder)
+        .clipShape(outline)
+        .background {
+            outline
+                .fill(Color.black)
+                .shadow(color: .black.opacity(stage == .open || stage == .notice ? 0.45 : 0), radius: 18, y: 8)
+        }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            IslandController.shared.shapeChanged(size)
+        }
+        .contentShape(outline)
+        // A row coming or going in the open list, a counter changing: the outline follows, smoothly.
+        .animation(.smooth(duration: 0.28), value: model.island.snapshot)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
     }
 
-    private var transition: AnyTransition {
-        reduceMotion ? .opacity : .scale(scale: 0.9, anchor: .top).combined(with: .opacity)
+    /// The content of a card or the list: in once the outline has started to grow, out at once as it folds. The outline
+    /// does the moving; the content only fades, with a short drop so it seems to come down with it.
+    private static let content: AnyTransition = .asymmetric(
+        insertion: .opacity.combined(with: .offset(y: -8)).animation(.easeOut(duration: 0.24).delay(0.06)),
+        removal: .opacity.animation(.easeIn(duration: 0.1)))
+}
+
+/// The island's outline: flat on top where it meets the screen's edge, its two top corners flaring outwards the way the
+/// notch meets the bezel, rounded below. The shoulders lie inside the frame, `shoulder` each side of the body, so the
+/// content is padded by as much. Both radii animate: the shape changes size and character in one move.
+struct IslandOutline: Shape {
+    var bottom: CGFloat
+    var shoulder: CGFloat
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(bottom, shoulder) }
+        set {
+            bottom = newValue.first
+            shoulder = newValue.second
+        }
     }
 
-    /// The capsule, or the wings around the notch: a button that opens the list, read by VoiceOver as one summary.
-    private var collapsed: some View {
+    func path(in rect: CGRect) -> Path {
+        let s = min(shoulder, rect.width / 4, rect.height / 2)
+        let left = rect.minX + s, right = rect.maxX - s
+        let r = min(bottom, (right - left) / 2, max(0, rect.height - s))
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: right, y: rect.minY + s), control: CGPoint(x: right, y: rect.minY))
+        path.addLine(to: CGPoint(x: right, y: rect.maxY - r))
+        path.addQuadCurve(to: CGPoint(x: right - r, y: rect.maxY), control: CGPoint(x: right, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left + r, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: left, y: rect.maxY - r), control: CGPoint(x: left, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left, y: rect.minY + s))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The band at the top of the outline: the dots, the counter and the ring — around a notch, in two wings either side of
+/// it — or, on a compact reveal, the thread that ended and how. It keeps its place whatever the outline does below it;
+/// a click on it opens or closes the list.
+private struct IslandBand: View {
+    let layout: IslandLayout
+    @Environment(AppModel.self) private var model
+    private typealias Metrics = Island.Metrics
+
+    var body: some View {
         let snapshot = model.island.snapshot
         let percentage = model.island.fiveHourPercentage
-        return Button { IslandController.shared.toggle() } label: {
+        let compact = compactAlert
+        let peek = layout.stage == .peek
+        Button { IslandController.shared.toggle() } label: {
             Group {
-                if layout.onNotch {
-                    let wing = Island.wingWidth(snapshot, hasRing: percentage != nil)
+                if layout.stage == .open {
+                    IslandHeader(layout: layout)
+                        .transition(.opacity)
+                } else if layout.onNotch {
+                    let wing = compact == nil ? Island.wingWidth(snapshot, hasRing: percentage != nil) : Metrics.compactText
                     HStack(spacing: 0) {
-                        IslandDots(snapshot: snapshot).frame(width: wing)
+                        Group {
+                            if let compact { compactTitle(compact) } else { IslandDots(snapshot: snapshot) }
+                        }
+                        .frame(width: wing)
                         Color.clear.frame(width: layout.bandWidth)
-                        HStack(spacing: Metrics.gap) {
-                            counter(snapshot, onNotch: true)
-                            if let percentage { IslandRing(percentage: percentage) }
+                        Group {
+                            if let compact {
+                                compactOutcome(compact)
+                            } else {
+                                HStack(spacing: Metrics.gap) {
+                                    counter(snapshot)
+                                    if let percentage { IslandRing(percentage: percentage) }
+                                }
+                            }
                         }
                         .frame(width: wing)
                     }
                 } else {
                     HStack(spacing: Metrics.gap) {
-                        IslandDots(snapshot: snapshot)
-                        counter(snapshot, onNotch: false)
-                        if let percentage { IslandRing(percentage: percentage) }
+                        if let compact {
+                            compactTitle(compact)
+                            compactOutcome(compact)
+                        } else {
+                            IslandDots(snapshot: snapshot)
+                            counter(snapshot)
+                            if let percentage { IslandRing(percentage: percentage) }
+                        }
                     }
                     .padding(.horizontal, Metrics.padding)
                 }
             }
-            .frame(height: layout.bandHeight)
-            .background(Color.black, in: IslandShape.hanging(radius: min(Metrics.collapsedRadius, layout.bandHeight / 2)))
+            .padding(.horizontal, peek ? Metrics.peekGrowth.width / 2 : 0)
+            .frame(height: rowHeight, alignment: .center)
+            .padding(.bottom, peek && layout.onNotch ? Metrics.peekGrowth.height : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Island.accessibilitySummary(snapshot, fiveHour: percentage))
-        .accessibilityHint(presentation == .expanded ? "Closes the list" : "Opens the list of threads")
+        .accessibilityHint(model.island.presentation == .expanded ? "Closes the list" : "Opens the list of threads")
     }
 
-    private func counter(_ snapshot: Island.Snapshot, onNotch: Bool) -> some View {
-        Text(Island.counter(snapshot, onNotch: onNotch))
+    /// The capsule's own height, a little more under the pointer or as the open island's header.
+    private var rowHeight: CGFloat {
+        if layout.onNotch { return layout.bandHeight }
+        if layout.stage == .open { return max(layout.bandHeight, 30) }
+        return layout.bandHeight + (layout.stage == .peek ? Metrics.peekGrowth.height : 0)
+    }
+
+    /// The reveal the band names, when it is a compact one.
+    private var compactAlert: Island.Alert? {
+        guard layout.stage == .compact, case .alert(let alert) = layout.presentation else { return nil }
+        return alert
+    }
+
+    private func counter(_ snapshot: Island.Snapshot) -> some View {
+        Text(Island.counter(snapshot, onNotch: layout.onNotch))
             .font(.system(size: 12, weight: .semibold).monospacedDigit())
             .foregroundStyle(IslandInk.primary)
             .lineLimit(1)
             .fixedSize()
+            .contentTransition(.numericText())
+    }
+
+    private func compactTitle(_ alert: Island.Alert) -> some View {
+        HStack(spacing: 6) {
+            IslandDot(state: alert.kind == .failed ? .failed : .done, size: 7)
+            Text(alert.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(IslandInk.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: layout.onNotch ? .trailing : .leading)
+        .padding(.horizontal, layout.onNotch ? 10 : 0)
+        .transition(.opacity)
+    }
+
+    private func compactOutcome(_ alert: Island.Alert) -> some View {
+        Text(alert.kind == .failed ? "failed" : "finished")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(alert.kind == .failed ? IslandInk.failed : IslandInk.secondary)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(maxWidth: layout.onNotch ? .infinity : nil, alignment: .leading)
+            .padding(.horizontal, layout.onNotch ? 10 : 0)
+            .transition(.opacity)
     }
 }
 
-/// Flat on top, where it meets the edge of the screen; rounded below.
-enum IslandShape {
-    static func hanging(radius: CGFloat) -> UnevenRoundedRectangle {
-        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
-                               topTrailingRadius: 0, style: .continuous)
+/// The band of the open island: how many threads in each state on one side, the five-hour and weekly limits on the
+/// other — either side of the notch, or across the capsule.
+private struct IslandHeader: View {
+    let layout: IslandLayout
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let width = Island.Metrics.openWidth
+        if layout.onNotch {
+            let side = (width - layout.bandWidth) / 2
+            HStack(spacing: 0) {
+                counts.frame(width: side - 16, alignment: .leading).padding(.leading, 16)
+                Color.clear.frame(width: layout.bandWidth)
+                limits.frame(width: side - 16, alignment: .trailing).padding(.trailing, 16)
+            }
+        } else {
+            HStack {
+                counts
+                Spacer(minLength: 12)
+                limits
+            }
+            .padding(.horizontal, 16)
+            .frame(width: width)
+        }
+    }
+
+    private var counts: some View {
+        HStack(spacing: 10) {
+            let counts = Island.stateCounts(model.island.snapshot)
+            if counts.isEmpty {
+                Text("Nothing running").font(.system(size: 11.5)).foregroundStyle(IslandInk.tertiary)
+            }
+            ForEach(counts, id: \.state) { entry in
+                HStack(spacing: 4) {
+                    IslandDot(state: entry.state, size: 7)
+                    Text("\(entry.count)")
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(IslandInk.primary)
+                        .contentTransition(.numericText())
+                }
+                .help("\(entry.count) \(entry.state.needsAttention ? "waiting for you" : entry.state.displayLabel.lowercased())")
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var limits: some View {
+        HStack(spacing: 10) {
+            ForEach([("5h", model.island.fiveHour), ("7d", model.island.sevenDay)], id: \.0) { label, window in
+                if let window {
+                    HStack(spacing: 4) {
+                        IslandRing(percentage: window.usedPercentage, size: 12, label: window.label)
+                        Text(label)
+                            .foregroundStyle(IslandInk.tertiary)
+                        Text(RateLimitText.percent(window.usedPercentage))
+                            .foregroundStyle(IslandInk.limit(window.usedPercentage))
+                    }
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .help(window.resetsAt.map { "\(window.label): resets in " + RateLimitText.remaining(until: $0, now: .now) } ?? window.label)
+                }
+            }
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+// MARK: Notices
+
+/// A reveal's card under the band: a request with what it asks and its buttons, until it is answered; a turn that ended,
+/// for a few seconds — held while the pointer is on it, a click taking Scope to the thread.
+private struct IslandNotice: View {
+    let alert: Island.Alert
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let snapshot = model.island.snapshot
+        VStack(alignment: .leading, spacing: 0) {
+            if alert.isRequest, let row = snapshot.requests.first(where: { $0.id == alert.thread }) {
+                IslandRequest(row: row)
+            } else {
+                IslandTurnNotice(alert: alert, row: (snapshot.requests + snapshot.groups.flatMap(\.rows)).first { $0.id == alert.thread })
+            }
+            if model.island.queuedCount > 0 {
+                Text(model.island.queuedCount == 1 ? "1 more" : "\(model.island.queuedCount) more")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(IslandInk.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, 6)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+        .frame(width: Island.Metrics.widenedWidth)
+    }
+}
+
+/// A turn that finished or failed: the thread, where it lives, how long it ran, what the agent said — enough to know
+/// whether to go and look — and a hairline that runs out with the time left. A click opens the thread.
+private struct IslandTurnNotice: View {
+    let alert: Island.Alert
+    let row: Island.Row?
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { model.openFromIsland(alert.thread) } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 10) {
+                    IslandBadge(thread: badgeThread, size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(alert.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(IslandInk.primary)
+                            .lineLimit(1)
+                        Text(context)
+                            .font(.system(size: 11))
+                            .foregroundStyle(IslandInk.tertiary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    Text(alert.kind == .failed ? "Failed" : "Finished")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(alert.kind == .failed ? IslandInk.failed : IslandInk.of(.done))
+                }
+                if !alert.line.isEmpty {
+                    Text(alert.line)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(IslandInk.secondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 38)
+                }
+                IslandCountdown()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(IslandPressStyle())
+        .accessibilityHint("Opens the thread in Scope")
+    }
+
+    /// The row's thread, else one standing for the turn's outcome.
+    private var badgeThread: Island.ThreadInput {
+        if let row { return row.thread }
+        return Island.ThreadInput(id: alert.thread, scopeID: ScopeID(rawValue: ""), scopeName: "", title: alert.title,
+                                  state: alert.kind == .failed ? .failed : .done)
+    }
+
+    /// `task · scope · 4 min · 12 tools`.
+    private var context: String {
+        var parts: [String] = []
+        if let row {
+            if let task = row.thread.taskName { parts.append(task) }
+            parts.append(row.thread.scopeName)
+            if let summary = Island.turnSummary(length: row.thread.turnLength, tools: row.thread.turnTools) { parts.append(summary) }
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// The time a notice has left, as a hairline running out; full while the pointer holds the notice.
+private struct IslandCountdown: View {
+    @Environment(AppModel.self) private var model
+    @State private var left: CGFloat = 1
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(IslandInk.track)
+                .frame(width: proxy.size.width * left)
+        }
+        .frame(height: 2)
+        .padding(.leading, 38)
+        .onAppear { run(model.island.noticeClock) }
+        .onChange(of: model.island.noticeClock) { _, clock in run(clock) }
+        .accessibilityHidden(true)
+    }
+
+    private func run(_ clock: IslandModel.NoticeClock?) {
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) { left = 1 }
+        guard let clock else { return }
+        let remaining = max(0, clock.ends.timeIntervalSinceNow)
+        withAnimation(.linear(duration: remaining)) { left = 0 }
+    }
+}
+
+/// Dims what is pressed, nothing else: the island's plain buttons answer the hand.
+private struct IslandPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
@@ -178,6 +475,8 @@ private struct IslandDots: View {
 /// The five-hour ring: a dark track, the share used in light, orange from 80 %, red once used up.
 private struct IslandRing: View {
     let percentage: Double
+    var size: CGFloat = Island.Metrics.ring
+    var label = "5-hour"
 
     var body: some View {
         let fraction = min(1, max(0, percentage / 100))
@@ -188,71 +487,52 @@ private struct IslandRing: View {
                 .stroke(IslandInk.limit(percentage), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
-        .frame(width: Island.Metrics.ring, height: Island.Metrics.ring)
-        .help("5-hour limit: \(RateLimitText.percent(percentage)) used")
+        .frame(width: size, height: size)
+        .help("\(label) limit: \(RateLimitText.percent(percentage)) used")
     }
 }
 
-// MARK: Widened
-
-/// The island widened on one reveal: a request with what it asks and its buttons, until it is answered; a turn that
-/// ended, for a few seconds. Around a notch it grows down from it, the wings kept in the band.
-private struct IslandWidened: View {
-    let alert: Island.Alert
-    let layout: IslandLayout
-    @Environment(AppModel.self) private var model
+/// A thread's badge in the open island and on its cards: the state's colour, tinted, and a symbol for what it does
+/// or waits for (`Island.symbol`). The dots stay for the collapsed band, where room is a few points.
+struct IslandBadge: View {
+    let thread: Island.ThreadInput
+    var quiet = false
+    var size: CGFloat = 26
 
     var body: some View {
-        let snapshot = model.island.snapshot
-        VStack(alignment: .leading, spacing: 0) {
-            if layout.onNotch {
-                Color.clear.frame(height: layout.bandHeight)
-            }
-            Group {
-                if alert.isRequest, let row = snapshot.requests.first(where: { $0.id == alert.thread }) {
-                    IslandRequest(row: row)
-                } else {
-                    turn
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, layout.onNotch ? 4 : 10)
-            .padding(.bottom, 12)
+        let tint = quiet ? IslandInk.waiting : IslandInk.of(thread.state)
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                .fill(tint.opacity(0.18))
+            RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                .strokeBorder(tint.opacity(0.28), lineWidth: 0.5)
+            Image(systemName: quiet ? "moon.zzz.fill" : Island.symbol(thread))
+                .font(.system(size: size * 0.44, weight: .semibold))
+                .foregroundStyle(tint)
+                .contentTransition(.symbolEffect(.replace))
         }
-        .frame(width: max(Island.Metrics.widenedWidth,
-                          layout.bandWidth + 2 * Island.wingWidth(snapshot, hasRing: model.island.fiveHourPercentage != nil)))
-        .background(Color.black, in: IslandShape.hanging(radius: 18))
-        .shadow(color: .black.opacity(0.35), radius: 12, y: 6)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
+}
 
-    /// A turn that finished or failed: a click opens the list.
-    private var turn: some View {
-        Button { model.island.presentation = .expanded } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                IslandDot(state: alert.kind == .failed ? .failed : .done, size: 8)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(alert.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(IslandInk.primary)
-                        Text("· " + (alert.kind == .failed ? "failed" : "finished"))
-                            .font(.system(size: 12))
-                            .foregroundStyle(IslandInk.secondary)
-                    }
-                    .lineLimit(1)
-                    if !alert.line.isEmpty {
-                        Text(alert.line)
-                            .font(.system(size: 12))
-                            .foregroundStyle(IslandInk.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
+/// A small rounded label on black: a count of sub-agents, a task.
+struct IslandChip: View {
+    let text: String
+    var symbol: String?
+    var tint: Color = IslandInk.secondary
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 9, weight: .semibold)) }
+            Text(text).font(.system(size: 10.5, weight: .medium))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens the list of threads")
+        .foregroundStyle(tint)
+        .lineLimit(1)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.white.opacity(0.07), in: Capsule())
+        .fixedSize()
     }
 }
 
@@ -267,17 +547,18 @@ private struct IslandRequest: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                IslandDot(state: row.thread.state, size: 8)
-                Text(row.thread.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(IslandInk.primary)
-                    .lineLimit(1)
-                Text("· " + verb)
-                    .font(.system(size: 12))
-                    .foregroundStyle(IslandInk.secondary)
-                    .lineLimit(1)
-                    .layoutPriority(-1)
+            HStack(spacing: 10) {
+                IslandBadge(thread: row.thread, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(row.thread.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(IslandInk.primary)
+                        .lineLimit(1)
+                    Text(verb.prefix(1).uppercased() + verb.dropFirst() + " · " + (row.thread.taskName ?? row.thread.scopeName))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(IslandInk.waiting.opacity(0.9))
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 8)
                 IslandElapsed(since: row.thread.since)
             }
@@ -313,7 +594,7 @@ private struct IslandRequest: View {
         let request = row.thread.request
         if request?.kind == .permission, let shown = request?.command ?? request?.filePath ?? request?.url {
             let whole = Island.showsCommandWhole(row)
-            Text(shown)
+            (Text(request?.command == nil ? "" : "$ ").foregroundStyle(IslandInk.tertiary) + Text(shown))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(IslandInk.primary)
                 .lineLimit(whole ? nil : 1)
@@ -427,12 +708,11 @@ private struct IslandList: View {
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: 460)
             .fixedSize(horizontal: false, vertical: true)
-            limits
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
         .frame(width: Island.Metrics.openWidth)
-        .background(Color.black, in: RoundedRectangle(cornerRadius: Island.Metrics.openRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.5), radius: 18, y: 10)
     }
 
     private func header(_ group: Island.Group) -> some View {
@@ -463,56 +743,6 @@ private struct IslandList: View {
             focused = thread
         }
     }
-
-    @ViewBuilder private var limits: some View {
-        let windows = [("5 h", model.island.fiveHour), ("7 d", model.island.sevenDay)].compactMap { label, window in
-            window.map { (label, $0) }
-        }
-        if !windows.isEmpty {
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(windows, id: \.0) { label, window in IslandLimit(label: label, window: window) }
-            }
-            .padding(.horizontal, 6)
-            .padding(.top, 2)
-        }
-    }
-}
-
-/// One limit at the foot of the open island: `5 h`, `12% · reset 3 h 07`, and its bar.
-private struct IslandLimit: View {
-    let label: String
-    let window: RateLimits.Window
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { context in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(label)
-                    Spacer(minLength: 6)
-                    Text(detail(now: context.date)).monospacedDigit()
-                }
-                .font(.system(size: 11))
-                .foregroundStyle(IslandInk.secondary)
-                .lineLimit(1)
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(IslandInk.limit(window.usedPercentage))
-                        .frame(width: proxy.size.width * min(1, max(0, window.usedPercentage / 100)))
-                }
-                .frame(height: 4)
-                .background(IslandInk.track, in: Capsule())
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(window.label) limit: \(detail(now: context.date))")
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func detail(now: Date) -> String {
-        var text = RateLimitText.percent(window.usedPercentage)
-        if let resetsAt = window.resetsAt { text += " · reset " + RateLimitText.remaining(until: resetsAt, now: now) }
-        return text
-    }
 }
 
 /// One thread: its dot, title, what it does in grey, how long; a click opens it in Scope. Its todo list under it when
@@ -527,22 +757,37 @@ private struct IslandThreadRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { model.openFromIsland(row.id) } label: {
-                HStack(spacing: 10) {
-                    IslandDot(state: row.isQuiet ? .idle : row.thread.state, size: 8)
+                HStack(alignment: .top, spacing: 10) {
+                    IslandBadge(thread: row.thread, quiet: row.isQuiet)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(row.thread.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(IslandInk.primary)
+                        HStack(spacing: 6) {
+                            Text(row.thread.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(IslandInk.primary)
+                                .lineLimit(1)
+                            if row.thread.agents > 0 {
+                                IslandChip(text: "\(row.thread.agents)", symbol: "person.2.fill")
+                                    .help(row.thread.agents == 1 ? "1 sub-agent running" : "\(row.thread.agents) sub-agents running")
+                            }
+                            Spacer(minLength: 6)
+                            if hovering {
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(IslandInk.secondary)
+                                    .transition(.opacity)
+                            } else {
+                                IslandElapsed(since: row.thread.since)
+                            }
+                        }
                         Text(row.line)
                             .font(.system(size: 12))
                             .foregroundStyle(row.isQuiet ? IslandInk.waiting : IslandInk.secondary)
+                            .lineLimit(row.thread.state == .done || row.thread.state == .failed ? 2 : 1)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    Spacer(minLength: 8)
-                    IslandElapsed(since: row.thread.since)
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 7)
                 .contentShape(Rectangle())
             }
@@ -550,14 +795,14 @@ private struct IslandThreadRow: View {
             .accessibilityHint("Opens the thread in Scope")
             if showsPlan, let plan = row.thread.plan, plan.total > 0 {
                 IslandTodos(plan: plan)
-                    .padding(.leading, 24)
+                    .padding(.leading, 44)
                     .padding(.trailing, 6)
                     .padding(.bottom, 8)
             }
         }
         .background(hovering ? IslandInk.raised : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onHover { inside in
-            hovering = inside
+            withAnimation(.easeOut(duration: 0.12)) { hovering = inside }
             onHover(inside)
         }
     }

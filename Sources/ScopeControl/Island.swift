@@ -41,11 +41,19 @@ public enum Island {
         public var turn: Int
         /// The agent's todo list or plan, shown under its row in the open island.
         public var plan: AgentPlan?
+        /// The last turn's length and tool calls, for a finished turn's notice.
+        public var turnLength: TimeInterval?
+        public var turnTools: Int?
+        /// The tool the turn in progress last called (`Bash`, `Edit`, …), for the row's badge.
+        public var tool: String?
+        /// Sub-agents running for it.
+        public var agents: Int
 
         public init(id: ThreadID, scopeID: ScopeID, scopeName: String, taskID: String? = nil, taskName: String? = nil,
                     title: String, state: ThreadState, activity: String? = nil, since: Date? = nil,
                     lastEventAt: Date? = nil, hasBackgroundWork: Bool = false, request: ClaudePendingRequest? = nil,
-                    isForeground: Bool = false, turn: Int = 0, plan: AgentPlan? = nil) {
+                    isForeground: Bool = false, turn: Int = 0, plan: AgentPlan? = nil, turnLength: TimeInterval? = nil,
+                    turnTools: Int? = nil, tool: String? = nil, agents: Int = 0) {
             self.id = id
             self.scopeID = scopeID
             self.scopeName = scopeName
@@ -61,6 +69,10 @@ public enum Island {
             self.isForeground = isForeground
             self.turn = turn
             self.plan = plan
+            self.turnLength = turnLength
+            self.turnTools = turnTools
+            self.tool = tool
+            self.agents = agents
         }
     }
 
@@ -250,14 +262,18 @@ extension Island {
         /// The request revealed, for a question, a permission or a plan: the island stays widened on it until it is
         /// answered.
         public var requestID: String?
+        /// A card, or the band widened to name the thread (`AlertStyle`).
+        public var style: AlertStyle
 
-        public init(key: String, kind: AlertKind, thread: ThreadID, title: String, line: String, requestID: String? = nil) {
+        public init(key: String, kind: AlertKind, thread: ThreadID, title: String, line: String, requestID: String? = nil,
+                    style: AlertStyle = .card) {
             self.key = key
             self.kind = kind
             self.thread = thread
             self.title = title
             self.line = line
             self.requestID = requestID
+            self.style = style
         }
 
         /// An agent blocked on the user, as opposed to a turn that ended.
@@ -283,6 +299,13 @@ extension Island {
         /// How recent the last input must be for the user to count as at work: long enough to cover a pause to read,
         /// short enough that a reveal is not lost on someone who stepped back to wait.
         public static let recentInput: TimeInterval = 30
+
+        /// How a reveal of `kind` plays now: as a card, as the band widened to name it — a turn that ended while the user
+        /// works, which `.requests` keeps from covering what they look at — or not at all.
+        public func style(_ kind: AlertKind, _ interruptions: IslandSettings.Interruptions) -> AlertStyle? {
+            if allows(kind, interruptions) { return .card }
+            return interruptions == .requests ? .compact : nil
+        }
 
         /// Whether a reveal of `kind` may interrupt now.
         public func allows(_ kind: AlertKind, _ interruptions: IslandSettings.Interruptions) -> Bool {
@@ -326,10 +349,10 @@ extension Island {
                   !memory.contains(key) else { continue }
             memory.insert(key)
             guard !quiet.isQuiet, !thread.isForeground, wants(kind, settings),
-                  quiet.allows(kind, settings.interruptions) else { continue }
+                  let style = quiet.style(kind, settings.interruptions) else { continue }
             let line = thread.request.map(\.headline) ?? thread.activity ?? thread.state.label
             alerts.append(Alert(key: key, kind: kind, thread: thread.id, title: thread.title, line: line,
-                                requestID: thread.state.needsAttention ? thread.request?.id : nil))
+                                requestID: thread.state.needsAttention ? thread.request?.id : nil, style: style))
         }
         return alerts
     }
@@ -517,16 +540,6 @@ extension Island {
         let height = screen.menuBarHeight > 0 ? screen.menuBarHeight : pillHeight
         return CGRect(x: screen.frame.midX, y: screen.frame.maxY - height, width: 0, height: height)
     }
-
-    /// The panel's frame for content of `size`, hung from the top of the screen and centred on the band, kept inside
-    /// the screen. The panel is exactly the content: a larger transparent window would take the clicks meant for the
-    /// menu bar and the windows under it.
-    public static func frame(for size: CGSize, on screen: Screen) -> CGRect {
-        let band = band(on: screen)
-        let width = min(size.width, screen.frame.width)
-        let x = min(max(band.midX - width / 2, screen.frame.minX), screen.frame.maxX - width)
-        return CGRect(x: x, y: screen.frame.maxY - size.height, width: width, height: size.height)
-    }
 }
 
 // MARK: How it looks
@@ -583,8 +596,14 @@ extension Island {
         let folded = held.map { settle(.alert($0), snapshot: snapshot) } ?? .collapsed
         switch gesture {
         case .pointerIn:
-            if case .alert(let alert) = presentation, alert.isRequest { return presentation }
-            return .expanded
+            guard case .alert(var alert) = presentation else { return .expanded }
+            // A notice holds still under the pointer, to be read or clicked; the band widened on a turn opens on its
+            // card. Neither turns into the list on the way.
+            if alert.style == .compact {
+                alert.style = .card
+                return .alert(alert)
+            }
+            return presentation
         case .pointerOut, .clickOutside:
             return presentation == .expanded ? folded : presentation
         case .toggle:
@@ -676,8 +695,12 @@ extension Island {
         public static let digit: CGFloat = 7.5
         public static let collapsedRadius: CGFloat = 14
         public static let openRadius: CGFloat = 22
-        public static let openWidth: CGFloat = 440
+        public static let openWidth: CGFloat = 480
         public static let widenedWidth: CGFloat = 460
+        /// What the collapsed shape gains under the pointer.
+        public static let peekGrowth = CGSize(width: 16, height: 4)
+        /// The width of a compact reveal's wing text, either side of a notch or in the capsule.
+        public static let compactText: CGFloat = 150
     }
 
     /// The width of the dots and their `+N`, as the collapsed content lays them out.

@@ -30,7 +30,8 @@ public struct IslandSettings: Codable, Sendable, Equatable {
     public enum Interruptions: String, Codable, Sendable, CaseIterable {
         /// None: the island only grows when the user has been idle a moment.
         case never
-        /// A question, a permission or a plan — an agent blocked on the user — but not a finished or failed turn.
+        /// A question, a permission or a plan — an agent blocked on the user — as a card; a finished or failed turn only
+        /// widens the band to name its thread.
         case requests
         /// Every reveal the settings below allow, as before.
         case always
