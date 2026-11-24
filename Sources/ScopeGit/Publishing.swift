@@ -157,6 +157,33 @@ public struct GhClient: Sendable {
             .sorted { $0.number > $1.number }
     }
 
+    /// `prsForBranch` for every lookup at once: one `gh api graphql` (`PullRequestBatch`) instead of one `gh pr list`
+    /// per branch. A repository that cannot be resolved fails its own lookups and leaves the others answered; the
+    /// call throws only when nothing answered (offline, a refused token, a rate limit).
+    public func prsForBranches(_ lookups: [PullRequestBatch.Lookup]) async throws -> PullRequestBatch.Answer {
+        var answer = PullRequestBatch.Answer()
+        for chunk in PullRequestBatch.chunks(lookups) {
+            let result = try await gh(
+                arguments: ["api", "graphql", "-f", "query=" + PullRequestBatch.query(for: chunk)],
+                environment: mergedEnvironment, timeout: .seconds(60)
+            )
+            // `gh` exits 1 on a GraphQL error and still prints the answer: what it holds is read first.
+            let message = result.stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
+            do {
+                answer.outcomes.merge(try PullRequestBatch.parse(json: result.stdout, lookups: chunk).outcomes) { $1 }
+            } catch let error as GhError where result.succeeded || message.isEmpty {
+                throw error
+            } catch {
+                guard !result.succeeded else {
+                    throw GhError.invalidJSON(command: PullRequestBatch.command, message: String(describing: error))
+                }
+                if message.lowercased().contains("gh auth login") { throw GhError.notAuthenticated(message: message) }
+                throw GhError.failed(command: PullRequestBatch.command, message: message)
+            }
+        }
+        return answer
+    }
+
     /// The open pull request whose head is `branch`, `nil` when there is none (`gh pr list --head <branch>`).
     public func prForBranch(_ branch: String, in checkout: URL, repo: String? = nil) async throws -> PullRequest? {
         var arguments = ["pr", "list", "--state", "open", "--head", branch, "--limit", "1", "--json", PullRequest.jsonFields]

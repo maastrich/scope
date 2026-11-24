@@ -8,8 +8,8 @@ import ScopeTasks
 ///
 /// `PullRequestRefreshSchedule` decides who is due (every 5 minutes while someone looks at Scope, up to an hour when
 /// nobody does, staggered, backing off on failures); `PullRequestRefreshGate` decides whether anything goes out at all
-/// (asleep, offline, an outage). This asks `gh` for the due ones two at a time. Skipped while Low Power Mode is on:
-/// nothing here is urgent.
+/// (asleep, offline, an outage). This asks `gh` about the due ones in one query per pass, a task whose pull requests
+/// are all merged or closed only once it was pushed again. Skipped while Low Power Mode is on: nothing here is urgent.
 extension AppModel {
     /// How often the background pass looks for due tasks; the schedule decides which.
     static let pullRequestRefreshTick: Duration = .seconds(30)
@@ -62,31 +62,27 @@ extension AppModel {
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         updatePullRequestPacing(now: now)
         guard pullRequestGate.allows(at: now) else { return }
-        let due = pullRequestSchedule.due(at: now).compactMap { task($0) }
+        // One query for the whole pass: the due tasks, and those close enough to due to come along for free.
+        let due = pullRequestSchedule.batch(at: now).compactMap { task($0) }.filter { !$0.isArchived }
         guard !due.isEmpty else { return }
-        // Handed out one by one, and only while the gate stays open: once a call says GitHub is out of reach, the
-        // tasks still queued wait for the gate rather than fail the same way. The pass is awaited before the next
-        // tick, so a queued task cannot be picked twice.
+        await refreshPullRequests(of: due, unlessUnchanged: true)
+        // What follows a refresh is per task and mostly git: a few at a time. The pass is awaited before the next
+        // tick, so a task cannot be picked twice.
         var queue = due.makeIterator()
-        func next() -> TaskState? {
-            guard pullRequestGate.allows(at: .now), let task = queue.next() else { return nil }
-            return task
-        }
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<max(1, pullRequestSchedule.concurrency) {
-                guard let task = next() else { break }
-                group.addTask { await self.refreshInBackground(task) }
+                guard let task = queue.next() else { break }
+                group.addTask { await self.followUpInBackground(task) }
             }
             while await group.next() != nil {
-                guard let task = next() else { continue }
-                group.addTask { await self.refreshInBackground(task) }
+                guard let task = queue.next() else { continue }
+                group.addTask { await self.followUpInBackground(task) }
             }
         }
     }
 
-    private func refreshInBackground(_ task: TaskState) async {
+    private func followUpInBackground(_ task: TaskState) async {
         guard !task.isArchived else { return }
-        await refreshTaskPullRequest(task)
         await archiveIfMerged(task)
         // Failed checks and reviews wake the task's thread (`AppModel+ActingPullRequests`).
         await actOnPullRequests(of: task)
@@ -102,7 +98,7 @@ extension AppModel {
         updatePullRequestPacing(now: now)
         pullRequestSchedule.include(task.id, now: now)
         guard pullRequestSchedule.foregroundDue(task.id, at: now) else { return }
-        await refreshTaskPullRequest(task, gated: true)
+        await refreshTaskPullRequest(task, gated: true, unlessUnchanged: true)
     }
 
     /// A task bound to a pull request, or whose branch carries commits a pull request could be made of. One with

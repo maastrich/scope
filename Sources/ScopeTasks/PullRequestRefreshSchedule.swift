@@ -7,7 +7,14 @@ import ScopeGit
 /// The app's background pass asks this schedule which tasks are due, refreshes them a few at a time and reports back;
 /// the inspector asks it whether the task on screen is due (`foregroundDue`). A task is due one interval after its last
 /// attempt; a failed attempt doubles the wait, up to `maximumBackoff`, so a task whose repository is gone stops costing
-/// a `gh` call every pass. A pull request already merged or closed changes rarely: `settledInterval`.
+/// a `gh` call every pass.
+///
+/// One pass is one query (`PullRequestBatch`), so a pass that goes out takes along every task close to due (`batch`):
+/// the fleet ends up asked about together, once per interval, instead of one task at a time.
+///
+/// A task whose pull requests are all merged or closed is not asked about again: every `settledInterval` its
+/// branches are looked at locally, and GitHub is asked only once one of them was pushed (`isUnchanged`). A restored
+/// task joins as new, and is asked.
 ///
 /// The intervals stretch with `attention` — nobody reads a pull request's checks at 3 a.m. — except for a task whose
 /// thread is at work (`Entry.busy`): an agent working unattended still needs its failed check or its review noticed.
@@ -54,6 +61,9 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         public var failures: Int
         /// The pull request was last seen merged or closed.
         public var settled: Bool
+        /// Where the remotes had the task's branches when it was last asked about (`GitClient.remoteHeads`): what a
+        /// settled task's next look is compared with.
+        public var heads: String?
         /// When the task joined the schedule: what a never-attempted task's stagger counts from.
         public var addedAt: Date
         /// Its open pull request is likely to get a review soon — just opened, review requested, a batch of comments
@@ -139,6 +149,38 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         return due.map(\.id)
     }
 
+    /// How far into its wait a task joins a pass that goes out anyway: asking about it then costs no call, and it
+    /// is what brings the fleet into step.
+    public static let joinFraction = 0.5
+
+    /// The tasks one pass takes: none while none is due; otherwise the due ones, the longest overdue first, then
+    /// those never attempted and those past `joinFraction` of their wait. A settled task only when due itself: it
+    /// costs a look at its branches, which nothing makes cheaper to share.
+    public func batch(at now: Date) -> [TaskID] {
+        let due = due(at: now)
+        guard !due.isEmpty else { return [] }
+        let taken = Set(due)
+        let joining = entries.filter { id, entry in
+            guard !taken.contains(id), !entry.settled else { return false }
+            guard let last = entry.lastAttempt else { return true }
+            return now >= last.addingTimeInterval(wait(entry, base: baseInterval(entry)) * Self.joinFraction)
+        }
+        return due + joining.keys.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    /// Whether an automatic refresh may leave GitHub alone: the task's pull requests were all merged or closed when
+    /// last read, and its branches are where they were then (`heads`). A push, a new branch or a restore ends it.
+    public func isUnchanged(_ id: TaskID, heads: String?) -> Bool {
+        guard let entry = entries[id], entry.settled, entry.lastAttempt != nil else { return false }
+        return entry.heads == heads
+    }
+
+    /// The task was restored, or something else says its pull requests may have moved: it is asked about as new.
+    public mutating func reset(_ id: TaskID, now: Date) {
+        guard entries[id] != nil else { return }
+        entries[id] = Entry(addedAt: now)
+    }
+
     /// Whether the task on screen is due for the inspector's faster refresh: only while Scope is in front, one
     /// `foregroundInterval` after any attempt (the background pass's included), backing off on failures like the rest.
     /// A task not in the schedule is never due: `include` it first.
@@ -152,10 +194,12 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
         entries[id]?.lastAttempt = now
     }
 
-    /// The refresh answered; `settled` when the pull request is merged or closed.
-    public mutating func succeeded(_ id: TaskID, settled: Bool) {
+    /// The refresh answered; `settled` when the pull request is merged or closed, `heads` where the task's branches
+    /// were on the remotes when it was asked.
+    public mutating func succeeded(_ id: TaskID, settled: Bool, heads: String? = nil) {
         entries[id]?.failures = 0
         entries[id]?.settled = settled
+        entries[id]?.heads = heads
     }
 
     public mutating func setEager(_ id: TaskID, _ eager: Bool) {
@@ -164,6 +208,11 @@ public struct PullRequestRefreshSchedule: Sendable, Equatable {
 
     public mutating func setBusy(_ id: TaskID, _ busy: Bool) {
         entries[id]?.busy = busy
+    }
+
+    /// The pass never reached GitHub (offline, a rate limit): the task stays due, for the pass the gate lets out next.
+    public mutating func held(_ id: TaskID) {
+        entries[id]?.lastAttempt = nil
     }
 
     public mutating func failed(_ id: TaskID) {
