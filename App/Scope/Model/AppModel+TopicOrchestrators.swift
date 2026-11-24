@@ -6,7 +6,8 @@ import ScopeTasks
 
 /// One orchestrator thread per topic, opened on demand (`TopicOrchestration`): an ordinary agent thread at the scope
 /// root whose record names the topic, filed under the topic's row, told about the topic's milestones through the
-/// acting triggers' gate, and closed by Scope once the topic has no open task left.
+/// acting triggers' gate, and put away by Scope once the topic has no open task left and the user is done with it
+/// (`TopicOrchestration.hold`). A closed one is kept (`RetiredOrchestrators`): opening it again resumes it.
 extension AppModel {
     /// The orchestrator of `topic` in `scope`, whatever the topic's spelling.
     func topicOrchestrator(_ topic: String, in scope: ScopeID) -> ThreadSession? {
@@ -24,8 +25,15 @@ extension AppModel {
         Set(topicOrchestrators(in: scope).compactMap(\.placement.topicKey))
     }
 
-    /// The topic row's *Open Orchestrator*: selects the topic's orchestrator, starting it when it is stopped, or creates
-    /// it with the topic's tasks in its opening prompt. The driver is the scope orchestrator's (Settings ▸ General ▸
+    /// The same topics by name: one whose tasks are all gone still gets a row for its orchestrator
+    /// (`TaskTopic.entries`).
+    func orchestratedTopicNames(in scope: ScopeID) -> [String] {
+        topicOrchestrators(in: scope).compactMap(\.record.topic)
+    }
+
+    /// The topic row's *Open Orchestrator*: selects the topic's orchestrator, starting it when it is stopped, brings
+    /// back the one that was closed with its conversation (`RetiredOrchestrators`), or creates it with the topic's
+    /// tasks in its opening prompt. The driver is the scope orchestrator's (Settings ▸ General ▸
     /// Threads ▸ Orchestrator driver).
     @discardableResult
     func openTopicOrchestrator(_ topic: String, in scopeID: ScopeID) async -> ThreadSession? {
@@ -38,6 +46,7 @@ extension AppModel {
             }
             return existing
         }
+        if let resumed = await resumeRetiredOrchestrator(topic, in: scopeID) { return resumed }
         guard let scope = scope(scopeID), let profile = residentProfile(for: .orchestrator) else {
             problems.error("No agent to orchestrate “\(topic)”", detail: "Install a driver profile that runs an agent.", scope: scopeID)
             return nil
@@ -68,29 +77,107 @@ extension AppModel {
         }
     }
 
-    /// The topic changed name: its orchestrator follows, title included.
+    /// The topic changed name: its orchestrator follows, title included — the closed one too.
     func renameTopicOrchestrator(_ topic: String, to newName: String, in scope: ScopeID) {
+        updateRetiredOrchestrators { $0.rename(topic: topic, to: newName, title: TopicOrchestration.title(for: newName), scope: scope) }
         guard let session = topicOrchestrator(topic, in: scope) else { return }
         session.setTopic(newName, title: TopicOrchestration.title(for: newName))
         let record = session.record
         Task { await env.threadRecords.save(record) }
     }
 
-    /// Closes the orchestrators whose topic has no open task left — archived, closed, or filed elsewhere. Nothing is
-    /// lost: the tasks keep the topic for `scope summary`, and opening it again starts a fresh one. One at work or
-    /// waiting on the user is left to finish — the last merge's notice may be what it is answering — and closed at the
-    /// end of that turn (`actingSaw`).
-    func closeIdleTopicOrchestrators(in scope: ScopeID) async {
+    // MARK: Putting away, and back
+
+    /// Puts away the orchestrators whose topic has no open task left — archived, closed, or filed elsewhere — once
+    /// the user is done with them (`TopicOrchestration.hold`): never one at work, waiting on an answer, with an
+    /// unread report, on screen, or touched in the last half hour. Looked at again when a task goes, when a turn of
+    /// the orchestrator ends, and every `orchestratorSweepInterval`, so one that was held gets its turn later.
+    /// Nothing is lost: `close` keeps its record, and opening the topic's orchestrator again resumes it.
+    func closeIdleTopicOrchestrators(in scope: ScopeID, now: Date = .now) async {
         for session in topicOrchestrators(in: scope) {
-            guard let topic = session.record.topic,
-                  TopicOrchestration.shouldClose(openTasks: tasks(inTopic: topic, scope: scope).count) else { continue }
+            guard let topic = session.record.topic else { continue }
             let waiting = if case .waiting = session.displayState { true } else { false }
-            guard !session.isWorking, !waiting, (pendingDeliveries[session.id] ?? []).isEmpty else { continue }
-            // The last task went with its merge: the notices it brought are told first, and answered before it closes.
-            guard !noticeTopicMilestones(topic, in: scope) else { continue }
-            Log.app.notice("closing the orchestrator of \(topic, privacy: .public): no open task left")
+            let record = session.record
+            let lastActivity = [session.lastHumanInputAt, session.activity.turns.last?.endedAt, record.lastLaunchedAt, record.createdAt]
+                .compactMap { $0 }.max() ?? record.createdAt
+            let standing = TopicOrchestration.Standing(
+                openTasks: tasks(inTopic: topic, scope: scope).count, working: session.isWorking, waitingOnUser: waiting,
+                pendingMessages: !(pendingDeliveries[session.id] ?? []).isEmpty,
+                unread: session.displayState.isUnreadResult, watched: selectedThreadID == session.id,
+                lastActivity: lastActivity)
+            // The notices a merge brought are told first, whatever holds the thread open: they are its last report.
+            guard standing.openTasks == 0, !standing.working, !standing.waitingOnUser, !standing.pendingMessages,
+                  !noticeTopicMilestones(topic, in: scope) else { continue }
+            guard TopicOrchestration.hold(standing, now: now) == nil else { continue }
+            Log.app.notice("closing the orchestrator of \(topic, privacy: .public): no open task left, quiet since \(lastActivity, privacy: .public)")
             await close(session.id, force: true, by: .automatic("topic “\(topic)” has no open task left"))
         }
+    }
+
+    static let orchestratorSweepInterval: Duration = .seconds(10 * 60)
+
+    /// The periodic look: an orchestrator held at the last archive (unread, waiting, just used) has nothing else to
+    /// bring it back up once its topic is empty.
+    func startTopicOrchestratorSweep() {
+        topicOrchestratorSweep?.cancel()
+        topicOrchestratorSweep = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: AppModel.orchestratorSweepInterval)
+                guard !Task.isCancelled, let self else { return }
+                for scope in Set(self.threads.filter { $0.placement.topicKey != nil }.map(\.record.scopeID)) {
+                    await self.closeIdleTopicOrchestrators(in: scope)
+                }
+            }
+        }
+    }
+
+    /// A closed orchestrator keeps its record, so its conversation can be resumed (`close`).
+    func retireOrchestrator(_ record: ThreadRecord) {
+        updateRetiredOrchestrators { $0.keep(record) }
+    }
+
+    /// The orchestrator is open again (Undo): nothing left to bring back.
+    func forgetRetiredOrchestrator(_ record: ThreadRecord) {
+        guard let topic = record.topic else { return }
+        updateRetiredOrchestrators { $0.remove(topic: topic, scope: record.scopeID) }
+    }
+
+    /// The topics of `scope` whose closed orchestrator can be brought back (the palette's *Reopen Orchestrator*).
+    func retiredOrchestratorTopics(in scope: ScopeID) -> [String] {
+        RetiredOrchestrators.load(home: env.home).records.reversed()
+            .filter { $0.scopeID == scope && session($0.id) == nil }.compactMap(\.topic)
+            .filter { topicOrchestrator($0, in: scope) == nil }
+    }
+
+    /// Read, changed and written back in one go: the list is small and changes at a close or a reopen only.
+    private func updateRetiredOrchestrators(_ change: (inout RetiredOrchestrators) -> Void) {
+        let before = RetiredOrchestrators.load(home: env.home)
+        var after = before
+        change(&after)
+        guard after != before else { return }
+        do {
+            try after.save(home: env.home)
+        } catch {
+            Log.app.error("closed orchestrators not saved: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The closed orchestrator of `topic`, back in its row and resuming its driver session. `nil` when there is none,
+    /// or when its driver is gone — a fresh one then starts.
+    private func resumeRetiredOrchestrator(_ topic: String, in scopeID: ScopeID) async -> ThreadSession? {
+        guard scope(scopeID) != nil,
+              let record = RetiredOrchestrators.load(home: env.home).record(topic: topic, scope: scopeID),
+              session(record.id) == nil, let profile = profile(id: record.driverID), profile.canResume else { return nil }
+        forgetRetiredOrchestrator(record)
+        forgetUndo(id: "thread:\(record.id.rawValue)")
+        let session = ThreadSession(record: record, profile: profile)
+        register(session)
+        await env.threadRecords.save(record)
+        selection = .thread(session.id)
+        selectedThreadID = session.id
+        Log.app.notice("resuming the orchestrator of \(topic, privacy: .public)")
+        await launch(session, mode: .relaunch(profile: profile, resumeID: record.resumeID))
+        return session
     }
 
     /// A refresh of `task`'s pull requests: what its topic's orchestrator, if one runs, should hear about.

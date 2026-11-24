@@ -373,7 +373,8 @@ struct SidebarView: View {
     @ViewBuilder
     private func taskTree(_ scope: ScopeState, tasks: [TaskState]) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
-        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: model.orchestratedTopics(in: scope.id))
+        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: model.orchestratedTopics(in: scope.id),
+                                        empty: isFiltering ? [] : model.orchestratedTopicNames(in: scope.id))
         ForEach(entries, id: \.self) { entry in
             switch entry {
             case .task(let id):

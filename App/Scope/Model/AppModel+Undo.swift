@@ -131,6 +131,7 @@ extension AppModel {
     /// gone or the thread is somehow back already.
     private func reopen(_ closed: ClosedThread) async {
         guard scope(closed.record.scopeID) != nil, session(closed.id) == nil else { return }
+        forgetRetiredOrchestrator(closed.record)
         let session = ThreadSession(record: closed.record, profile: closed.profile)
         register(session, activity: closed.activity)
         await env.threadRecords.save(closed.record)

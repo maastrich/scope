@@ -127,8 +127,10 @@ branch, pull requests and their checks, threads, the opening of each brief. It t
 <code>scope thread send</code>, and a task it creates lands in the topic. It is never created on its own, so a topic
 nobody opens costs nothing. Once open, it hears from Scope only about the topic's milestones — a pull request merged,
 every task delivered — through the <b>Topic milestone</b> automatic action, with its hourly cap; never about each turn
-of each task. A topic keeps its row while its orchestrator is open, even with one task; when the topic has no open
-task left, the orchestrator is closed at the end of its turn. One per topic: opening it again shows the same thread.</p>
+of each task. A topic keeps its row while its orchestrator is open, even with no task left. Once the topic has no
+open task, Scope puts the orchestrator away — never while it works, waits for you, has a report you have not read, is
+on screen, or was used in the last half hour. Nothing is lost: <b>Open Orchestrator</b> (or <b>Reopen Orchestrator</b>
+in the palette, when the topic's row is gone) resumes the same conversation, as it does after you close it yourself.</p>
 
 <h3 id="attempts">Several attempts at one brief</h3>
 <p>When the best approach is uncertain, run the brief more than once. The <b>Attempts</b> stepper of the New Task

@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ScopeCore
+import ScopeTasks
 import ScopeDrivers
 
 /// One row of the command palette. `run` performs it; `path` is what ⌥↩ copies (editor, thread and file rows).
@@ -155,6 +156,15 @@ enum PaletteModel {
             }
             items.append(PaletteItem(id: "rename-thread", section: .actions, icon: "pencil", label: "Rename Thread…",
                                      hint: thread.title) { model.promptRenameThread(thread.id) })
+        }
+        if let scope = model.currentScopeID {
+            // A closed orchestrator whose topic has no task left has no row to reopen it from.
+            for topic in model.retiredOrchestratorTopics(in: scope) {
+                items.append(PaletteItem(id: "reopen-orchestrator:\(TaskTopic.key(topic))", section: .actions,
+                                         icon: "arrow.uturn.backward.circle", label: "Reopen Orchestrator", hint: topic) {
+                    Task { await model.openTopicOrchestrator(topic, in: scope) }
+                })
+            }
         }
         if model.canUndoCloseThread {
             items.append(PaletteItem(id: "undo-close", section: .actions, icon: "arrow.uturn.backward.circle", label: "Undo Close Thread",
