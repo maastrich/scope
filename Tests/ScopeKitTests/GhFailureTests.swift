@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import ScopeCore
 @testable import ScopeGit
+import ScopeTasks
 
 @Suite struct GhFailureTests {
     // What `gh` 2.x prints, cut from real runs; repository names and branches are made up.
@@ -40,12 +41,20 @@ import ScopeCore
         #expect(GhFailure.classify(error: SubprocessError.launchFailed("The file “sandbox” couldn’t be opened.")) == .missingCheckout)
         #expect(GhFailure.classify(error: GhError.notAuthenticated(message: "")) == .auth)
         #expect(GhFailure.classify(error: GhError.failed(command: "gh pr list", message: "error connecting to api.github.com")) == .offline)
-        #expect(GhFailure.classify(error: GhError.invalidJSON(command: "gh pr list", message: "x")) == .other)
+        #expect(GhFailure.classify(error: GhError.invalidJSON(command: "gh pr list", message: "x")) == .invalidJSON)
+        #expect(GhFailure.classify(error: GhError.noURL) == .invalidJSON)
+        #expect(GhFailure.classify(error: GhError.notInstalled) == .notInstalled)
+        #expect(GhFailure.classify(error: SubprocessError.launchFailed("The operation couldn’t be completed. Permission denied")) == .launchFailed)
+        #expect(GhFailure.classify(error: CancellationError()) == .cancelled)
+        #expect(GhFailure.classify(error: GhError.failed(command: "gh pr list", message: "unknown flag: --frobnicate")) == .other)
     }
 
     @Test func onlyFailuresThatSayNothingOfOneTaskAreGlobal() {
         #expect(GhFailure.offline.isGlobal && GhFailure.auth.isGlobal && GhFailure.rateLimit.isGlobal)
         #expect(!GhFailure.notFound.isGlobal && !GhFailure.missingCheckout.isGlobal && !GhFailure.noRemote.isGlobal)
+        // Without `gh` every call fails the same way; a cancellation is no failure at all.
+        #expect(GhFailure.notInstalled.isGlobal)
+        #expect(!GhFailure.cancelled.isGlobal && !GhFailure.launchFailed.isGlobal && !GhFailure.invalidJSON.isGlobal)
     }
 
     /// The journal keeps the value as it is: every cause is a token, none is redacted.
@@ -77,5 +86,44 @@ import ScopeCore
         } catch {
             #expect(GhFailure.classify(error: error) == .missingCheckout)
         }
+    }
+}
+
+/// 168 of the 257 `gh … failed other` of 03/11–18/11 lasted 0.00 s: the inspector's refresh loop is cancelled at every
+/// task switch, and what `Subprocess.run` throws then is no failure of `gh`.
+@Suite struct GhCancellationTests {
+    /// What a `gh` call throws when the task running it is cancelled, mid-run or before it started.
+    private func cancelledRun(alreadyCancelled: Bool) async -> any Error {
+        let task = Task {
+            if alreadyCancelled { try? await Task.sleep(for: .seconds(30)) }
+            return try await Subprocess.run(executable: "/bin/sleep", arguments: ["30"], timeout: .seconds(60))
+        }
+        if !alreadyCancelled { try? await Task.sleep(for: .milliseconds(200)) }
+        task.cancel()
+        do {
+            _ = try await task.value
+            return SubprocessError.launchFailed("expected the run to throw")
+        } catch {
+            return error
+        }
+    }
+
+    /// Before the fix both came out `.other`, journaled `failed`, and counted against the task's backoff.
+    @Test(arguments: [false, true])
+    func aCancelledRunIsSkippedNotFailed(alreadyCancelled: Bool) async {
+        let error = await cancelledRun(alreadyCancelled: alreadyCancelled)
+        #expect(error is CancellationError)
+        #expect(GhFailure.classify(error: error) == .cancelled)
+        let journaled = GhClient.journalOutcome(.failure(error))
+        #expect(journaled.outcome == "skipped" && journaled.cause == .cancelled)
+    }
+
+    /// A cancelled pass never closes the gate, even repeated.
+    @Test func aCancellationNeverBacksTheRefreshOff() {
+        var gate = PullRequestRefreshGate()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        for _ in 0..<5 { gate.failed(.cancelled, at: now) }
+        #expect(gate.allows(at: now))
+        #expect(gate.lastCause == nil)
     }
 }

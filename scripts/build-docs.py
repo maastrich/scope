@@ -1227,7 +1227,8 @@ per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
   suites it touched one at a time, push without forcing and reply when mergeable. Once per move of main: no repeat
   until main moves again. A branch behind without conflicts is left to the agent — unless main touched files the task
   changed while its pull request waits and no thread is at work: then the thread is asked to merge main in before it
-  conflicts (<a href="adapters.html#triggers">Base branch moved</a>).</li>
+  conflicts (<a href="adapters.html#triggers">Base branch moved</a>) — once per set of overlapping files, so main
+  moving again over the same files asks nothing, and at most once every 4 hours per task.</li>
   <li><b>Rebase when clean</b>: behind without conflicts and no thread at work in the task, Scope runs
   <code>git rebase origin/&lt;default&gt;</code> in the sandbox itself and pushes with
   <code>--force-with-lease</code> when the branch is published and its pull request open. A rebase that stops is
@@ -1858,8 +1859,9 @@ it, each trigger on its own switch in <b>Settings ▸ General ▸ Automatic acti
   <li><b>Usage limit reached</b> (2 an hour): a turn stopped by the 5-hour or weekly limit is resumed when the window
   resets — read from the limits the status line reported, else from the error's own words, else after 15, 30, then 60
   minutes — on the same model. A server asking clients to slow down is retried after a minute.</li>
-  <li><b>Pull request conflicts</b> (2 an hour) and <b>Base branch moved</b> (1 an hour): see
-  <a href="review.html#follow-main">A task follows main</a>.</li>
+  <li><b>Pull request conflicts</b> (2 an hour) and <b>Base branch moved</b> (1 an hour, and at most once every
+  4 hours per task — its own setting): see <a href="review.html#follow-main">A task follows main</a>. Base branch
+  moved is preventive: past its cap it leaves a note on the thread, with no problem raised and no notification.</li>
   <li><b>Checks failed</b> (2 an hour): a task's pull request fails its checks while its thread is idle; the thread gets
   each failed job with its link and is asked to rerun a flaky one once, or fix the cause. Once per head commit; a job
   cancelled for a newer run never counts, the newer run's own failure does.</li>

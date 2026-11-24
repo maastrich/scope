@@ -106,10 +106,12 @@ extension AppModel {
     }
 
     /// Tells the task's thread that main moved — conflicts (`ActingTrigger.conflicts`), or main touching the task's
-    /// files before it conflicts (`.baseMoved`) — through the acting triggers' gate: once per head of main, never
-    /// mid-turn or while the user types, under the trigger's hourly cap. A held message is not remembered against the
-    /// head, so the next pass asks again. With no agent in the task, the user is notified instead. The message merges
-    /// main in rather than rebasing: a thread's permissions refuse force pushes.
+    /// files before it conflicts (`.baseMoved`) — through the acting triggers' gate: once per head of main for
+    /// conflicts, once per set of overlapping files for the preventive update (`TaskLag.overlapKey`) and no more
+    /// often than its minimum interval per task, never mid-turn or while the user types, under the trigger's hourly
+    /// cap. A held message is not remembered against the head, so the next pass asks again. With no agent in the
+    /// task, the user is notified instead. The message merges main in rather than rebasing: a thread's permissions
+    /// refuse force pushes.
     private func askAgentToFollowMain(_ task: TaskState, lag: TaskLag, preventive: Bool = false,
                                       rebaseStopped: Bool = false) async -> String {
         let open = pullRequestStates(for: task).compactMap(\.live).filter { $0.state == .open }
@@ -123,13 +125,16 @@ extension AppModel {
         guard preference(trigger).enabled else { return "nothing to do for \(task.record.slug): \(trigger.title) is off" }
         if let thread = actingThread(in: task.id) {
             let heads = open.compactMap(\.headRefOid).sorted().joined(separator: ",")
-            let key = preventive ? "base@\(lag.upstreamHead)" : "conflict@\(lag.upstreamHead)@\(heads)"
+            let key = preventive ? lag.overlapKey : "conflict@\(lag.upstreamHead)@\(heads)"
             let verdict = fire(ActingTriggers.Proposal(trigger: trigger, thread: thread.id, key: key, action: .send(text),
-                                                       cause: rebaseStopped ? "rebase-stopped" : (preventive ? "overlap" : "conflicting")))
+                                                       cause: rebaseStopped ? "rebase-stopped" : (preventive ? "overlap" : "conflicting"),
+                                                       task: task.id.rawValue))
             switch verdict {
             case .act:
                 await noteFollowedMain(task, head: lag.upstreamHead)
                 return "asked \(displayTitle(for: thread)) to bring \(lag.upstream) into \(task.branch)"
+            case .hold("interval"):
+                return "will ask \(displayTitle(for: thread)) about \(lag.upstream) later: \(trigger.title.lowercased()) already asked this task recently"
             case .hold(let why):
                 return "will ask \(displayTitle(for: thread)) about \(lag.upstream) once it is free (\(why))"
             case .skip(let why):
@@ -137,7 +142,7 @@ extension AppModel {
                 return "nothing to do for \(task.record.slug): \(why)"
             case .capped:
                 await noteFollowedMain(task, head: lag.upstreamHead)
-                return "\(trigger.title) reached its hourly cap on \(displayTitle(for: thread)); the user is told"
+                return "\(trigger.title) reached its hourly cap on \(displayTitle(for: thread))" + (trigger.isPreventive ? "" : "; the user is told")
             }
         }
         // No agent left in the task to ask: the user is told, once per head of main. A preventive update is not

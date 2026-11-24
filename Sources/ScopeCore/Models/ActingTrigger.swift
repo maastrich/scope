@@ -26,6 +26,10 @@ public enum ActingTrigger: String, Codable, Sendable, CaseIterable, Identifiable
 
     public var id: String { rawValue }
 
+    /// Acts before anything is wrong, to spare a later conflict. Nothing is lost when Scope stops there, so its cap
+    /// leaves a note on the thread and says nothing more: no problem, no notification.
+    public var isPreventive: Bool { self == .baseMoved }
+
     public var title: String {
         switch self {
         case .connectionLost: "Connection lost"
@@ -49,24 +53,38 @@ public enum ActingTrigger: String, Codable, Sendable, CaseIterable, Identifiable
         case .conflicts: "The task's thread is asked to bring in the base branch and resolve the conflicts."
         case .ciFailed: "An idle task's thread gets the failed jobs and is asked to rerun a flaky one or fix it."
         case .review: "The task's thread gets new review comments, Copilot's included, to address."
-        case .baseMoved: "An idle task with an open pull request is asked to update when the base touches its files."
+        case .baseMoved: "An idle task with an open pull request is asked to update when the base touches more of its files."
         case .stuck: "A turn the assistant reads as going in circles is interrupted and asked to change approach."
         case .topic: "An open topic orchestrator is told when a pull request of its topic merges and when every task is delivered."
         }
     }
 }
 
-/// One trigger's preference: whether it runs, and how many times per hour it may act on one thread.
+/// One trigger's preference: whether it runs, how many times per hour it may act on one thread, and how long it
+/// leaves a task alone after acting on it.
 public struct ActingTriggerPreference: Codable, Sendable, Equatable {
     public var enabled: Bool
     public var hourlyCap: Int
-
-    public init(enabled: Bool, hourlyCap: Int) {
-        self.enabled = enabled
-        self.hourlyCap = min(max(hourlyCap, Self.capRange.lowerBound), Self.capRange.upperBound)
+    /// Hours between two acts of the trigger on one task, whatever the thread and the key; `0` for none. The hourly
+    /// cap bounds a loop, this spaces out a trigger whose every occasion is real but not worth a turn each.
+    public var minimumHours: Int {
+        didSet { minimumHours = Self.clamp(minimumHours, to: Self.hoursRange) }
     }
 
+    public init(enabled: Bool, hourlyCap: Int, minimumHours: Int = 0) {
+        self.enabled = enabled
+        self.hourlyCap = Self.clamp(hourlyCap, to: Self.capRange)
+        self.minimumHours = Self.clamp(minimumHours, to: Self.hoursRange)
+    }
+
+    public var minimumInterval: TimeInterval { TimeInterval(minimumHours) * 3600 }
+
     public static let capRange = 1...10
+    public static let hoursRange = 0...24
+
+    private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
 }
 
 /// Every trigger's preference. Stored as `{"connection-lost": {"enabled": true, "hourlyCap": 3}, …}`; a trigger
@@ -88,7 +106,8 @@ public struct ActingTriggerPreferences: Codable, Sendable, Equatable {
         case .conflicts: .init(enabled: true, hourlyCap: 2)
         case .ciFailed: .init(enabled: true, hourlyCap: 2)
         case .review: .init(enabled: true, hourlyCap: 3)
-        case .baseMoved: .init(enabled: true, hourlyCap: 1)
+        // Main moves several times an hour on a busy repository: one update per task every few hours is plenty.
+        case .baseMoved: .init(enabled: true, hourlyCap: 1, minimumHours: 4)
         case .stuck: .init(enabled: true, hourlyCap: 2)
         case .topic: .init(enabled: true, hourlyCap: 3)
         }
@@ -100,11 +119,15 @@ public struct ActingTriggerPreferences: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: any Decoder) throws {
-        let raw = (try? decoder.singleValueContainer().decode([String: ActingTriggerPreference].self)) ?? [:]
+        let raw = (try? decoder.singleValueContainer().decode([String: Stored].self)) ?? [:]
         var overrides: [ActingTrigger: ActingTriggerPreference] = [:]
         for (key, value) in raw {
             guard let trigger = ActingTrigger(rawValue: key) else { continue }
-            overrides[trigger] = value
+            // An override written before the interval existed keeps the trigger's own default for it.
+            let preference = ActingTriggerPreference(
+                enabled: value.enabled ?? true, hourlyCap: value.hourlyCap ?? 2,
+                minimumHours: value.minimumHours ?? Self.defaultPreference(trigger).minimumHours)
+            if preference != Self.defaultPreference(trigger) { overrides[trigger] = preference }
         }
         self.overrides = overrides
     }
@@ -113,6 +136,22 @@ public struct ActingTriggerPreferences: Codable, Sendable, Equatable {
         var container = encoder.singleValueContainer()
         try container.encode(Dictionary(uniqueKeysWithValues: overrides.map { ($0.key.rawValue, $0.value) }))
     }
+
+    /// One override as `config.json` holds it: every field optional, so each missing one takes its default.
+    private struct Stored: Decodable {
+        var enabled: Bool?
+        var hourlyCap: Int?
+        var minimumHours: Int?
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = (try? container.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil
+            hourlyCap = (try? container.decodeIfPresent(Int.self, forKey: .hourlyCap)) ?? nil
+            minimumHours = (try? container.decodeIfPresent(Int.self, forKey: .minimumHours)) ?? nil
+        }
+
+        enum CodingKeys: String, CodingKey { case enabled, hourlyCap, minimumHours }
+    }
 }
 
 extension ActingTriggerPreference {
@@ -120,6 +159,7 @@ extension ActingTriggerPreference {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let enabled = (try? container.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
         let cap = (try? container.decodeIfPresent(Int.self, forKey: .hourlyCap)) ?? 2
-        self.init(enabled: enabled, hourlyCap: cap)
+        let hours = (try? container.decodeIfPresent(Int.self, forKey: .minimumHours)) ?? 0
+        self.init(enabled: enabled, hourlyCap: cap, minimumHours: hours)
     }
 }

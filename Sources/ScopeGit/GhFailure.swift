@@ -23,6 +23,15 @@ public enum GhFailure: String, Sendable, Equatable, CaseIterable {
     case timeout
     /// The directory `gh` was to run in is gone: an archived task's sandbox, a checkout moved away.
     case missingCheckout = "missing-checkout"
+    /// `gh` is not on this machine: no call can run until it is.
+    case notInstalled = "not-installed"
+    /// `gh` could not be started, for another reason than a directory that is gone.
+    case launchFailed = "launch-failed"
+    /// `gh` answered, with something that is not the JSON asked for (or no pull request URL after a create).
+    case invalidJSON = "invalid-json"
+    /// Not a failure of `gh`: the task that ran it was cancelled (the inspector moved to another task, the app is
+    /// quitting). Journaled as `skipped`, and never counted against the task or the gate.
+    case cancelled
     /// Anything else.
     case other
 
@@ -30,8 +39,8 @@ public enum GhFailure: String, Sendable, Equatable, CaseIterable {
     /// way. A refresh pass stops at the first one, and the whole refresh backs off rather than each task in turn.
     public var isGlobal: Bool {
         switch self {
-        case .offline, .auth, .rateLimit, .server, .timeout: true
-        case .notFound, .noRemote, .missingCheckout, .other: false
+        case .offline, .auth, .rateLimit, .server, .timeout, .notInstalled: true
+        case .notFound, .noRemote, .missingCheckout, .launchFailed, .invalidJSON, .cancelled, .other: false
         }
     }
 
@@ -68,19 +77,21 @@ public enum GhFailure: String, Sendable, Equatable, CaseIterable {
     /// What `GhClient` throws, without launching anything, when the directory it was to run in is gone.
     static let missingDirectory = "working directory does not exist"
 
-    /// From what a `gh` call threw: `GhError`, or the `SubprocessError` of a call that never ran or ran too long.
+    /// From what a `gh` call threw: `GhError`, the `SubprocessError` of a call that never ran or ran too long, or the
+    /// `CancellationError` of one whose task was cancelled.
     public static func classify(error: any Error) -> GhFailure {
         switch error {
         case GhError.notAuthenticated: return .auth
-        case GhError.notInstalled: return .other
+        case is CancellationError: return .cancelled
+        case GhError.notInstalled: return .notInstalled
         case GhError.failed(_, let message): return classify(message: message) ?? .other
-        case GhError.invalidJSON, GhError.noURL: return .other
+        case GhError.invalidJSON, GhError.noURL: return .invalidJSON
         case SubprocessError.timedOut: return .timeout
         case SubprocessError.launchFailed(let message):
             // `Process.run()` refuses a working directory that does not exist before `gh` even starts.
             let text = message.lowercased()
             return [missingDirectory, "no such file", "doesn’t exist", "doesn't exist", "couldn’t be opened", "couldn't be opened"]
-                .contains(where: text.contains) ? .missingCheckout : .other
+                .contains(where: text.contains) ? .missingCheckout : .launchFailed
         default: return .other
         }
     }

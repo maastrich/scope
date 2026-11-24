@@ -63,7 +63,7 @@ extension AppModel {
         do {
             images = try await (left, right)
         } catch {
-            return .failure(.failed("could not capture both sides", detail: String(describing: error)))
+            return .failure(.failed("could not capture both sides", error: error))
         }
         let width = Int(Self.compareSize.width), height = Int(Self.compareSize.height)
         guard let a = Self.rgba(images.0, width: width, height: height), let b = Self.rgba(images.1, width: width, height: height) else {
@@ -85,7 +85,7 @@ extension AppModel {
             }
             try data.write(to: sideFile)
         } catch {
-            return .failure(.failed("could not write the comparison", detail: String(describing: error)))
+            return .failure(.failed("could not write the comparison", error: error))
         }
         let worktreeLabel: (Int) -> String? = { port in
             guard let key = task.portWorktrees[port], let scope = self.scope(task.scopeID) else { return task.portWorktrees[port] }

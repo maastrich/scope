@@ -63,7 +63,8 @@ extension AppModel {
     /// other call would fail the same way. When it is the query itself, the tasks stay due for the pass the gate
     /// lets out next. A link of a repository whose branch lookup already failed is not asked about either. The
     /// schedule and the gate learn the outcome, whoever asked; a `gated` pass (the automatic ones) does not run at
-    /// all while the gate is closed.
+    /// all while the gate is closed. A pass whose caller is cancelled stops there, `skipped`: no failure for the
+    /// schedule, none for the gate, no error on the task.
     @discardableResult
     func refreshPullRequests(of tasks: [TaskState], gated: Bool = false,
                              unlessUnchanged: Bool = false) async -> [TaskID: PullRequestRefreshOutcome] {
@@ -92,6 +93,11 @@ extension AppModel {
             } catch {
                 batchFailure = GhFailure.classify(error: error)
             }
+        }
+        // The caller went away (the inspector moved to another task): nothing failed, nothing to count.
+        if batchFailure == .cancelled {
+            for task in asked { pullRequestSchedule.held(task.id) }
+            return outcomes
         }
         if let batchFailure, batchFailure.isGlobal {
             for task in asked {
@@ -155,6 +161,8 @@ extension AppModel {
                         live.append(pr)
                     }
                 case .failed(let cause):
+                    // The caller went away (the inspector moved to another task): nothing failed, nothing to count.
+                    if cause == .cancelled { return cancelled(task) }
                     failure = failure ?? cause
                     unreachable.insert(TaskRepo.normalize(repo.repoRelativePath))
                     if cause.isGlobal { break sandboxes }
@@ -173,8 +181,10 @@ extension AppModel {
                 found.append(link.refreshed(with: pr))
                 live.append(pr)
             } catch {
+                let cause = GhFailure.classify(error: error)
+                if cause == .cancelled { return cancelled(task) }
                 pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
-                failure = failure ?? GhFailure.classify(error: error)
+                failure = failure ?? cause
             }
         }
         // An archived task keeps what it had: nothing new is bound to it, its sandboxes are gone.
@@ -200,6 +210,12 @@ extension AppModel {
         }
         pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)), heads: plan.heads)
         return .answered
+    }
+
+    /// A refresh whose caller was cancelled: `skipped`, the task still due, no failure for the schedule or the gate.
+    private func cancelled(_ task: TaskState) -> PullRequestRefreshOutcome {
+        pullRequestSchedule.held(task.id)
+        return .skipped
     }
 
     /// What a pass asks for `task`: per sandbox, the repository on GitHub, its branch and the branches it visited,

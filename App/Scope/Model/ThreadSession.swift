@@ -587,6 +587,8 @@ final class ThreadSession: Identifiable {
         // A new prompt while a turn is open closes it as interrupted: one Scope typed is a message sent mid-turn.
         if promptPending { closeCause = "sent" }
         setActivity(activity.apply(event, promptPending: promptPending))
+        // After the activity: the prompt that closes an open turn is not what came before the cut.
+        if let name = TurnInterruption.hookName(of: event) { lastHookName = name }
         // The last background sub-agent reported between turns: the driver is about to open a turn on its result.
         // Expected like a prompt, so a wait does not slip through the gap — but not a prompt: the last answer stays
         // the answer it is, and `startGrace` lets the thread go if no turn follows.
@@ -711,6 +713,9 @@ final class ThreadSession: Identifiable {
 
     /// Why the next turn closed as interrupted, when the session knows: set just before the `setActivity` that closes it.
     @ObservationIgnored private var closeCause: String?
+    /// The last hook this thread reported (`TurnInterruption.hookName`), not counting the event being applied: what
+    /// an interruption nothing else explains is journaled after.
+    @ObservationIgnored private var lastHookName: String?
     /// Set by the quit before it hangs the thread up: the turn the exit cuts short is journaled by the quit.
     @ObservationIgnored var stoppingForQuit = false
 
@@ -746,9 +751,10 @@ final class ThreadSession: Identifiable {
             let cause: String
             switch turn.outcome {
             case .interrupted:
-                // Not Scope's message nor Esc: the user typed a prompt of their own, or nothing said why.
+                // Not Scope's message nor Esc: the user typed a prompt of their own, or nothing said why — then
+                // the last hook seen before the cut is the best lead there is.
                 let typed = lastUserInputAt.map { $0 >= (turn.startedAt ?? .distantFuture) } ?? false
-                cause = closeCause ?? (typed ? "typed" : "unknown")
+                cause = TurnInterruption.cause(known: closeCause, typed: typed, lastHook: lastHookName)
             case .exited:
                 // Cut by the quit: `terminateNow` journaled it as `restart` already.
                 guard !stoppingForQuit else { continue }

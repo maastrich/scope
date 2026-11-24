@@ -584,7 +584,7 @@ extension AppModel {
             journalTask(.taskSetup, outcome: failed ? "failed" : runCommands ? "ok" : "copied", task: task.id, scope: task.scopeID,
                         since: started, cause: failed ? ProblemCause.classify(record.setup?.log) : nil, count: record.repos.count)
             guard failed else { return }
-            problems.error("The setup of \(task.name) failed", detail: SetupLog.tail(record.setup?.log ?? "", lines: 60),
+            problems.error("The setup of \(task.name) failed", detail: SetupLog.redact(SetupLog.tail(record.setup?.log ?? "", lines: 60)),
                            scope: task.scopeID,
                            actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue)),
                                      .reveal(record.threadCwd.path, title: "Reveal Sandbox")])
@@ -892,7 +892,7 @@ extension AppModel {
             switch notice {
             case .teardownFailed(let repo, let summary, let log):
                 problems.warn("The teardown of \(task.name) failed; its sandboxes were removed anyway",
-                              detail: "\(repo): \(summary)\n\n\(SetupLog.tail(log, lines: 60))", scope: task.scopeID)
+                              detail: "\(repo): \(summary)\n\n\(SetupLog.redact(SetupLog.tail(log, lines: 60)))", scope: task.scopeID)
             case .processesSurvived(let names):
                 problems.error("\(names.count) \(names.count == 1 ? "process" : "processes") of \(task.name) would not stop",
                                detail: names.joined(separator: "\n"), scope: task.scopeID)

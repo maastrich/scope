@@ -1,5 +1,6 @@
 import Foundation
 import ScopeCore
+import ScopeTasks
 import Testing
 @testable import ScopeControl
 
@@ -221,6 +222,34 @@ import Testing
         let service = ServiceDouble(answer: .failure(.notFound("no task “secret-plan” in /Users/me/work")))
         _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.ping)), service: service, progress: { _ in })
         #expect(service.outcomes.map(\.outcome) == [ControlOutcome(status: .error, cause: "not_found")])
+    }
+
+    /// `thread.send`, `task.branch.add` and `task.new` were journaled `failed` and nothing else: the agent got the
+    /// whole message, the journal could not tell a refused branch name from a thread that was not running.
+    @Test func anAppFailureThatKnowsWhyIsReportedWithItsCause() async throws {
+        let cases: [(ControlError, String)] = [
+            (.failed("thread th_1 is not running", cause: .notRunning), "failed:not-running"),
+            (.failed("could not add x to y", error: TaskError.invalidBranch("scope/x")), "failed:invalid"),
+            (.failed("could not add x to y", error: TaskError.branchAlreadyCheckedOut(repo: "api", branch: "x", path: "/p")), "failed:busy"),
+            (.failed("Scope could not create the task", error: SubprocessError.timedOut(after: .seconds(5))), "failed:timeout"),
+            (.failed("the cleanup did not run"), "failed"),
+            // Only a failure carries a cause: the other codes already say what went wrong.
+            (ControlError(.notFound, "no such thread", cause: .missing), "not_found"),
+        ]
+        for (error, expected) in cases {
+            let service = ServiceDouble(answer: .failure(error))
+            _ = await ControlDispatch.run(ControlRequest.decode(try Self.body(.ping)), service: service, progress: { _ in })
+            #expect(service.outcomes.map(\.outcome) == [ControlOutcome(status: .error, cause: expected)])
+            #expect(JournalEvent.token(expected) == expected)
+        }
+    }
+
+    @Test func theCauseOfAFailureNeverTravelsOnTheWire() throws {
+        let error = ControlError.failed("could not add x to y", error: TaskError.invalidBranch("scope/x"))
+        let wire = String(decoding: try JSONEncoder().encode(error), as: UTF8.self)
+        #expect(!wire.contains("cause"))
+        #expect(try JSONDecoder().decode(ControlError.self, from: Data(wire.utf8)).cause == nil)
+        #expect(error.detail == String(describing: TaskError.invalidBranch("scope/x")))
     }
 
     @Test func theRefusalRuleNeverTravelsOnTheWire() throws {
