@@ -2,7 +2,7 @@ import ScopeCore
 import SwiftUI
 
 /// Settings ▸ Automatic actions: each trigger that acts on a thread, on or off, with how many times per hour it may
-/// act on one thread before Scope stops and tells you.
+/// act on one thread before Scope stops and tells you, and — for Base branch moved — how long it leaves a task alone.
 struct ActingTriggersSettingsSection: View {
     @Environment(AppModel.self) private var model
 
@@ -37,7 +37,9 @@ struct ActingTriggersSettingsSection: View {
                     get: { model.config.preferences.actingTriggers[trigger].hourlyCap },
                     set: { value in
                         model.updatePreferences {
-                            $0.actingTriggers[trigger] = ActingTriggerPreference(enabled: $0.actingTriggers[trigger].enabled, hourlyCap: value)
+                            let current = $0.actingTriggers[trigger]
+                            $0.actingTriggers[trigger] = ActingTriggerPreference(enabled: current.enabled, hourlyCap: value,
+                                                                                 minimumHours: current.minimumHours)
                         }
                     }
                 ), in: ActingTriggerPreference.capRange) {
@@ -47,6 +49,23 @@ struct ActingTriggersSettingsSection: View {
                         .foregroundStyle(Ink.secondary)
                 }
                 .disabled(!model.config.preferences.actingTriggers[trigger].enabled)
+            }
+            // Only a trigger that ships with an interval shows one: for the others it would be a knob with no use.
+            if ActingTriggerPreferences.defaultPreference(trigger).minimumHours > 0 {
+                HStack {
+                    Spacer()
+                    Stepper(value: Binding(
+                        get: { model.config.preferences.actingTriggers[trigger].minimumHours },
+                        set: { value in model.updatePreferences { $0.actingTriggers[trigger].minimumHours = value } }
+                    ), in: ActingTriggerPreference.hoursRange) {
+                        let hours = model.config.preferences.actingTriggers[trigger].minimumHours
+                        Text(hours == 0 ? "no minimum between two" : "at most once every \(hours) h per task")
+                            .font(.scopeCaption)
+                            .monospacedDigit()
+                            .foregroundStyle(Ink.secondary)
+                    }
+                    .disabled(!model.config.preferences.actingTriggers[trigger].enabled)
+                }
             }
             Text(trigger.summary)
                 .font(.scopeCaption)

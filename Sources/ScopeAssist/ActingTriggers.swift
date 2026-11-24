@@ -42,13 +42,17 @@ public enum ActingTriggers {
         public var action: Action
         /// A journal token for what was read (`network`, `rate-limit`, `failing`, …).
         public var cause: String
+        /// The task the occasion belongs to, when it has one: what the trigger's minimum interval is counted on, so
+        /// a task told through one thread is not told again through another.
+        public var task: String?
 
-        public init(trigger: ActingTrigger, thread: ThreadID, key: String, action: Action, cause: String) {
+        public init(trigger: ActingTrigger, thread: ThreadID, key: String, action: Action, cause: String, task: String? = nil) {
             self.trigger = trigger
             self.thread = thread
             self.key = key
             self.action = action
             self.cause = cause
+            self.task = task
         }
     }
 
@@ -82,7 +86,8 @@ public enum ActingTriggers {
 
     public enum Verdict: Sendable, Equatable {
         case act
-        /// Not now; the same proposal may come back and pass later (`busy`, `typing`, `debounce`, `waiting`).
+        /// Not now; the same proposal may come back and pass later (`busy`, `typing`, `debounce`, `interval`,
+        /// `waiting`).
         case hold(String)
         /// Never for this key (`off`, `done`, `no-thread`, `own-turn`).
         case skip(String)
@@ -127,8 +132,8 @@ public enum ActingTriggers {
 
     /// The gate. In order: the preference; once per key; a thread to act on (a dead one only for a restart); not
     /// while it waits on the user; not mid-turn unless the action is to interrupt it; not while the user types; the
-    /// debounce; the hourly cap. A trigger never fires on a turn its own message opened when it judges that turn
-    /// (`stuck`): its answer would be its own question again.
+    /// debounce; the trigger's minimum interval on the task; the hourly cap. A trigger never fires on a turn its own
+    /// message opened when it judges that turn (`stuck`): its answer would be its own question again.
     public static func decide(_ proposal: Proposal, thread: ThreadFacts?, preference: ActingTriggerPreference,
                               ledger: ActingLedger, now: Date = .now) -> Verdict {
         guard preference.enabled else { return .skip("off") }
@@ -145,6 +150,9 @@ public enum ActingTriggers {
         if let typed = thread.lastUserInputAt, now.timeIntervalSince(typed) < typingGrace { return .hold("typing") }
         if let last = ledger.lastAct(proposal.trigger, on: proposal.thread),
            now.timeIntervalSince(last) < debounce(proposal.trigger) { return .hold("debounce") }
+        if preference.minimumHours > 0,
+           let last = ledger.lastAct(proposal.trigger, on: proposal.thread, orIn: proposal.task),
+           now.timeIntervalSince(last) < preference.minimumInterval { return .hold("interval") }
         if ledger.acts(proposal.trigger, on: proposal.thread, since: now.addingTimeInterval(-3600)) >= preference.hourlyCap {
             return .capped
         }
@@ -160,12 +168,15 @@ public struct ActingLedger: Codable, Sendable, Equatable {
         public var thread: String
         public var key: String
         public var at: Date
+        /// The task the act was for. Optional on disk: an entry written before it existed decodes.
+        public var task: String?
 
-        public init(trigger: ActingTrigger, thread: String, key: String, at: Date) {
+        public init(trigger: ActingTrigger, thread: String, key: String, at: Date, task: String? = nil) {
             self.trigger = trigger
             self.thread = thread
             self.key = key
             self.at = at
+            self.task = task
         }
     }
 
@@ -204,6 +215,12 @@ public struct ActingLedger: Codable, Sendable, Equatable {
         acts.filter { $0.trigger == trigger && $0.thread == thread.rawValue }.map(\.at).max()
     }
 
+    /// The last act of `trigger` on `thread` or, through any thread, on `task`.
+    public func lastAct(_ trigger: ActingTrigger, on thread: ThreadID, orIn task: String?) -> Date? {
+        acts.filter { $0.trigger == trigger && ($0.thread == thread.rawValue || (task != nil && $0.task == task)) }
+            .map(\.at).max()
+    }
+
     public func acts(_ trigger: ActingTrigger, on thread: ThreadID, since: Date) -> Int {
         acts.count { $0.trigger == trigger && $0.thread == thread.rawValue && $0.at >= since }
     }
@@ -213,8 +230,8 @@ public struct ActingLedger: Codable, Sendable, Equatable {
         acts.filter { $0.thread == thread.rawValue && $0.at >= since }
     }
 
-    public mutating func recordAct(_ trigger: ActingTrigger, on thread: ThreadID, key: String, at: Date) {
-        acts.append(Entry(trigger: trigger, thread: thread.rawValue, key: key, at: at))
+    public mutating func recordAct(_ trigger: ActingTrigger, on thread: ThreadID, key: String, at: Date, task: String? = nil) {
+        acts.append(Entry(trigger: trigger, thread: thread.rawValue, key: key, at: at, task: task))
         prune(now: at)
     }
 
