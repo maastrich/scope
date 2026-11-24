@@ -271,8 +271,8 @@ public struct GhClient: Sendable {
         }
     }
 
-    /// `ok`, `none` (`gh pr view` on a branch without one: an answer, not a failure), or `failed` / `auth` /
-    /// `timeout` with the `GhFailure` behind it.
+    /// `ok`, `none` (`gh pr view` on a branch without one: an answer, not a failure), `skipped` (the caller was
+    /// cancelled: nothing failed), or `failed` / `auth` / `timeout` with the `GhFailure` behind it.
     static func journalOutcome(_ result: Result<ProcessResult, any Error>) -> (outcome: String, cause: GhFailure?) {
         switch result {
         case .success(let process) where process.succeeded:
@@ -284,7 +284,7 @@ public struct GhClient: Sendable {
             return (cause == .auth ? "auth" : "failed", cause)
         case .failure(let error):
             let cause = GhFailure.classify(error: error)
-            return (cause == .timeout ? "timeout" : "failed", cause)
+            return (cause == .timeout ? "timeout" : cause == .cancelled ? "skipped" : "failed", cause)
         }
     }
 
