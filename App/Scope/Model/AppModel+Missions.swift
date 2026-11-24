@@ -29,7 +29,7 @@ extension AppModel {
         do {
             try await saveMission(record, of: mission)
         } catch {
-            return .failure(.failed("could not save the milestone", detail: String(describing: error)))
+            return .failure(.failed("could not save the milestone", error: error))
         }
         return .success(milestone)
     }
@@ -52,7 +52,7 @@ extension AppModel {
         do {
             try await saveMission(record, of: mission)
         } catch {
-            return .failure(.failed("could not save the milestone", detail: String(describing: error)))
+            return .failure(.failed("could not save the milestone", error: error))
         }
         let milestone = record.milestones[index]
         guard let command = milestone.validation else { return .success(milestone) }
@@ -74,7 +74,7 @@ extension AppModel {
         do {
             try await saveMission(latest, of: mission)
         } catch {
-            return .failure(.failed("could not record the validation", detail: String(describing: error)))
+            return .failure(.failed("could not record the validation", error: error))
         }
         let verdict = latest.milestones[current]
         if verdict.state == .failed {
