@@ -190,6 +190,9 @@ public struct ControlError: Codable, Sendable, Equatable, Error {
     /// Longer text: the git error, the list of scopes to choose from, …
     public var detail: String?
     public var rule: Rule?
+    /// Why a `failed` request failed, for the app's event journal (`failed:busy`), read from the error behind it
+    /// (`ProblemCause.of`) or said by the call site. Like the rule, it stays in the app.
+    public var cause: ProblemCause?
 
     private enum CodingKeys: String, CodingKey { case code, message, detail }
 
@@ -198,11 +201,12 @@ public struct ControlError: Codable, Sendable, Equatable, Error {
         lhs.code == rhs.code && lhs.message == rhs.message && lhs.detail == rhs.detail
     }
 
-    public init(_ code: Code, _ message: String, detail: String? = nil, rule: Rule? = nil) {
+    public init(_ code: Code, _ message: String, detail: String? = nil, rule: Rule? = nil, cause: ProblemCause? = nil) {
         self.code = code
         self.message = message
         self.detail = detail
         self.rule = rule
+        self.cause = cause
     }
 
     public static func badRequest(_ message: String, detail: String? = nil) -> ControlError { .init(.badRequest, message, detail: detail) }
@@ -210,7 +214,14 @@ public struct ControlError: Codable, Sendable, Equatable, Error {
     public static func denied(_ message: String, detail: String? = nil, rule: Rule = .other) -> ControlError {
         .init(.denied, message, detail: detail, rule: rule)
     }
-    public static func failed(_ message: String, detail: String? = nil) -> ControlError { .init(.failed, message, detail: detail) }
+    public static func failed(_ message: String, detail: String? = nil, cause: ProblemCause? = nil) -> ControlError {
+        .init(.failed, message, detail: detail, cause: cause)
+    }
+    /// A failure that came from a thrown error: its description is the detail the client reads, its type the cause
+    /// the journal keeps.
+    public static func failed(_ message: String, error: any Error) -> ControlError {
+        .init(.failed, message, detail: String(describing: error), cause: ProblemCause.of(error))
+    }
 }
 
 extension ControlError: CustomStringConvertible, LocalizedError {

@@ -97,7 +97,7 @@ final class AppControlService: ControlService {
             return await newTask(params, from: origin, caller: caller, progress: progress)
         case .threadStop(let params):
             return act(on: params.thread, from: origin) { session in
-                guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running")) }
+                guard session.isAlive else { return .failure(.failed("thread \(session.id.rawValue) is not running", cause: .notRunning)) }
                 model.stop(session.id)
                 return .success(.action(ActionResult(message: "stopped \(session.id.rawValue) — \(session.title)",
                                                      thread: session.id.rawValue), .threadStop))
@@ -111,7 +111,7 @@ final class AppControlService: ControlService {
                 if let role = session.record.resident {
                     return .failure(.failed("thread \(session.id.rawValue) is the \(role.rawValue) of its scope: Scope keeps it "
                                             + "while the scope is declared. Stop it instead (`scope thread stop`); it stays "
-                                            + "stopped until someone relaunches it or Scope opens again."))
+                                            + "stopped until someone relaunches it or Scope opens again.", cause: .invalid))
                 }
                 // Asked for explicitly: no "close a running thread?" sheet for the caller to wait on. The user can
                 // still take it back: the toast names the agent.
@@ -129,9 +129,9 @@ final class AppControlService: ControlService {
                     if session.record.resident != nil, model.residentHolds[session.id] == nil {
                         model.startResidents(in: session.record.scopeID)
                         return .failure(.failed("thread \(session.id.rawValue) was not running; Scope is starting it. "
-                                                + "Send again once `scope thread wait \(session.id.rawValue)` returns."))
+                                                + "Send again once `scope thread wait \(session.id.rawValue)` returns.", cause: .busy))
                     }
-                    return .failure(.failed("thread \(session.id.rawValue) is not running"))
+                    return .failure(.failed("thread \(session.id.rawValue) is not running", cause: .notRunning))
                 }
                 // A message from an agent says who sent it; keystrokes (no ↩), a driver command and the user's own
                 // typing go as they are.
@@ -308,7 +308,7 @@ final class AppControlService: ControlService {
                 + "\nscope thread new --task \(slug) --branch \(name) opens a thread in it"
             return .success(.action(ActionResult(message: line, task: task.record.id.rawValue), .taskBranchAdd))
         } catch {
-            return .failure(.failed("could not add \(branch) to \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not add \(branch) to \(slug)", error: error))
         }
     }
 
@@ -356,7 +356,7 @@ final class AppControlService: ControlService {
             }
             return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskBranchRemove))
         } catch {
-            return .failure(.failed("could not remove \(params.branch) from \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not remove \(params.branch) from \(slug)", error: error))
         }
     }
 
@@ -397,7 +397,7 @@ final class AppControlService: ControlService {
                 lines += Self.savedLines(notices)
                 return done(lines.joined(separator: "\n"))
             } catch {
-                return .failure(.failed("could not remove \(target) from \(slug)", detail: String(describing: error)))
+                return .failure(.failed("could not remove \(target) from \(slug)", error: error))
             }
         case .pullRequest:
             let matches = Self.pullRequests(matching: target, repo: params.repo, in: task.record)
@@ -413,7 +413,7 @@ final class AppControlService: ControlService {
                 try await model.forgetPullRequest(link.url, of: task.id, by: requester)
                 return done("forgot \(link.label) on \(slug): out of the task, and never bound again; it is still \(link.state ?? "open") on GitHub")
             } catch {
-                return .failure(.failed("could not forget \(link.label)", detail: String(describing: error)))
+                return .failure(.failed("could not forget \(link.label)", error: error))
             }
         case .issue:
             guard let issue = task.record.issue else { return .failure(.notFound("\(slug) names no issue")) }
@@ -421,7 +421,7 @@ final class AppControlService: ControlService {
                 try await model.unlinkIssue(of: task.id, by: requester)
                 return done("\(slug) no longer names issue \(issue.label); the brief keeps what it said")
             } catch {
-                return .failure(.failed("could not unlink the issue of \(slug)", detail: String(describing: error)))
+                return .failure(.failed("could not unlink the issue of \(slug)", error: error))
             }
         case .topic:
             guard let topic = task.record.topic else { return .failure(.notFound("\(slug) is under no topic")) }
@@ -437,7 +437,7 @@ final class AppControlService: ControlService {
                 let removed = try await model.removeMilestone(target, of: mission, by: requester)
                 return done("removed the milestone “\(removed.title)” from \(mission.record.slug)\n\(mission.record.mission?.caption ?? "")")
             } catch {
-                return .failure(.failed("could not remove the milestone \(target)", detail: String(describing: error)))
+                return .failure(.failed("could not remove the milestone \(target)", error: error))
             }
         }
     }
@@ -483,7 +483,7 @@ final class AppControlService: ControlService {
                 return done((["undid the last sweep of \(slug): worktrees, branch tips, uncommitted changes and pull requests are back"] + notes)
                     .joined(separator: "\n"))
             } catch {
-                return .failure(.failed("could not undo the sweep of \(slug)", detail: String(describing: error)))
+                return .failure(.failed("could not undo the sweep of \(slug)", error: error))
             }
         }
         let options = TaskSweepOptions(resetBranches: params.resetBranches, closePullRequests: params.closePullRequests,
@@ -492,7 +492,7 @@ final class AppControlService: ControlService {
         if params.dryRun {
             let plan: TaskSweepPlan
             do { plan = try await model.env.tasks.planSweep(task.id, options: options) } catch {
-                return .failure(.failed("could not plan the sweep of \(slug)", detail: String(describing: error)))
+                return .failure(.failed("could not plan the sweep of \(slug)", error: error))
             }
             var lines = ["sweeping \(slug) would:"]
             let items = plan.lines(scopeName: task.record.scopeName)
@@ -512,7 +512,7 @@ final class AppControlService: ControlService {
             lines.append("`scope task sweep \(slug) --undo` takes it back")
             return done(lines.joined(separator: "\n"))
         } catch {
-            return .failure(.failed("could not sweep \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not sweep \(slug)", error: error))
         }
     }
 
@@ -580,7 +580,7 @@ final class AppControlService: ControlService {
         }
         guard let run = model.fireSchedule(schedule, in: home) else {
             return .failure(.failed("the schedule “\(schedule.name)” is already running",
-                                    detail: "Its reply will land in the Inbox; `scope thread wait` on its thread to read it sooner."))
+                                    detail: "Its reply will land in the Inbox; `scope thread wait` on its thread to read it sooner.", cause: .busy))
         }
         guard run.outcome != .failed else { return .failure(.failed("the schedule “\(schedule.name)” did not run", detail: run.summary)) }
         let where_ = switch schedule.target.kind {
@@ -830,7 +830,7 @@ final class AppControlService: ControlService {
         do {
             changed = try await model.refile([task.id], underTopic: topic, withChildren: params.children)
         } catch {
-            return .failure(.failed("could not change the topic of \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not change the topic of \(slug)", error: error))
         }
         var lines: [String]
         if !changed.contains(where: { $0.id == task.id }) {
@@ -857,7 +857,7 @@ final class AppControlService: ControlService {
         // task manager would hand the record back as it is; say why instead of reporting a restore that did nothing.
         guard task.record.cleanup == nil, !task.isDismantling else {
             return .failure(.failed("\(slug) is still being archived",
-                                    detail: "Its last archive did not finish. `scope task archive \(slug)` runs it again; restore it after."))
+                                    detail: "Its last archive did not finish. `scope task archive \(slug)` runs it again; restore it after.", cause: .busy))
         }
         guard task.record.isArchived else {
             return .failure(.badRequest("\(slug) is not archived", detail: "It is open already: `scope list tasks` shows its sandboxes."))
@@ -867,7 +867,7 @@ final class AppControlService: ControlService {
         do {
             try await model.restoreTask(task.id)
         } catch {
-            return .failure(.failed("could not restore the task \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not restore the task \(slug)", error: error))
         }
         var lines = ["restored the task \(slug) on its branch \(task.branch)"]
         for repo in salvaged {
@@ -933,7 +933,7 @@ final class AppControlService: ControlService {
             default: return .failure(.badRequest(String(describing: failure)))
             }
         } catch {
-            return .failure(.failed(String(describing: error)))
+            return .failure(.failed(String(describing: error), cause: ProblemCause.of(error)))
         }
     }
 
@@ -1064,7 +1064,7 @@ final class AppControlService: ControlService {
             }
             return .success(.action(ActionResult(message: lines.joined(separator: "\n"), task: task.record.id.rawValue), .taskRestoreCheckpoint))
         } catch {
-            return .failure(.failed("could not restore checkpoint \(params.number) of \(slug)", detail: String(describing: error)))
+            return .failure(.failed("could not restore checkpoint \(params.number) of \(slug)", error: error))
         }
     }
 
@@ -1082,8 +1082,7 @@ final class AppControlService: ControlService {
         do {
             outcome = try await model.dismantleTask(task.id, mode, by: requester(origin))
         } catch {
-            return .failure(.failed("could not \(mode == .archive ? "archive" : "close") the task \(slug)",
-                                    detail: String(describing: error)))
+            return .failure(.failed("could not \(mode == .archive ? "archive" : "close") the task \(slug)", error: error))
         }
         var lines = [done.replacingOccurrences(of: "%@", with: slug)]
         if !outcome.stoppedProcesses.isEmpty {
@@ -1559,7 +1558,7 @@ final class AppControlService: ControlService {
                                                         threadOrigin: threadOrigin, createdBy: caller.client, parentTask: parentTask?.id,
                                                         deliverable: params.deliverable, issue: request.issue, model: requestedModel)
             } catch {
-                return .failure(.failed("Scope could not create the attempts", detail: String(describing: error)))
+                return .failure(.failed("Scope could not create the attempts", error: error))
             }
             NSApp.requestUserAttention(.informationalRequest)
             let first = states[0].record
@@ -1589,7 +1588,7 @@ final class AppControlService: ControlService {
                                                topic: topic, parentTask: parentTask?.id, deliverable: params.deliverable,
                                                model: requestedModel, issue: request.issue, mission: params.mission)
         } catch {
-            return .failure(.failed("Scope could not create the task", detail: String(describing: error)))
+            return .failure(.failed("Scope could not create the task", error: error))
         }
         NSApp.requestUserAttention(.informationalRequest)
         let record = state.record
@@ -1691,7 +1690,7 @@ extension AppControlService {
                                                  + "Scope tells the new session to carry on", thread: id.rawValue), .threadRestart))
         case .refuseMidTurn:
             return .failure(.failed("thread \(id.rawValue) is in the middle of a turn",
-                                    detail: "Restarting cuts it short. Wait for it (`scope thread wait \(id.rawValue)`), or pass --force (force: true)."))
+                                    detail: "Restarting cuts it short. Wait for it (`scope thread wait \(id.rawValue)`), or pass --force (force: true).", cause: .busy))
         case .restart:
             break
         }
