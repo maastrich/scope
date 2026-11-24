@@ -104,6 +104,12 @@ public enum ScopeHome {
         home.appending(path: "ui-state.json", directoryHint: .notDirectory)
     }
 
+    /// `<home>/setup-memory.json` — how the last setup of each repository failed (`SetupMemory`), said again before
+    /// the next task's setup runs.
+    public static func setupMemoryURL(home: URL) -> URL {
+        home.appending(path: "setup-memory.json", directoryHint: .notDirectory)
+    }
+
     /// `<home>/scope-visits.json` — when each scope was last looked at, for the "since your last visit" strip.
     public static func scopeVisitsURL(home: URL) -> URL {
         home.appending(path: "scope-visits.json", directoryHint: .notDirectory)

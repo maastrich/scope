@@ -45,6 +45,8 @@ struct NewTaskSheet: View {
     @State private var proposing: Task<Void, Never>?
     @State private var isCreating = false
     @State private var runSetup = true
+    /// The selected repositories whose last setup was refused its credentials (`SetupMemory`).
+    @State private var setupReminders: [SetupReminder] = []
     /// How many ways to run the brief: 1 is a task, more is a family of sibling tasks to compare (`TaskAttempts`).
     @State private var attempts = 1
     @State private var mission = false
@@ -91,6 +93,7 @@ struct NewTaskSheet: View {
                 selectedRepos = [only.id]
             }
         }
+        .task(id: repos) { setupReminders = await model.setupReminders(in: scope, repos: repos) }
         .onDisappear { proposing?.cancel() }
     }
 
@@ -252,6 +255,17 @@ struct NewTaskSheet: View {
             Toggle("Run setup", isOn: $runSetup)
                 .toggleStyle(.checkbox)
                 .font(.scopeBody)
+            // Before the setup runs again, not after it failed the same way: the registry's login is refreshed
+            // outside Scope.
+            if runSetup {
+                ForEach(setupReminders, id: \.repo) { reminder in
+                    Label(reminder.summary + " Refresh that login first.", systemImage: "exclamationmark.triangle")
+                        .font(.scopeCaption)
+                        .foregroundStyle(PullRequestStyle.failing)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
 
         SheetGroup(caption: attemptsCaption) {
