@@ -57,8 +57,9 @@ public actor TaskManager {
 
     /// Loads every record from disk into the manager. Call once at startup.
     ///
-    /// A setup still marked running was cut short by a quit and is reported as failed; a live task written before
-    /// ports were handed out gets its block now. Both are saved at once so the answer never changes.
+    /// A setup still marked running was cut short by a quit and is reported as failed; a setup log holding a
+    /// credential is masked; a live task written before ports were handed out gets its block now. All are saved
+    /// at once so the answer never changes.
     public func loadAll() async -> [StoreProblem] {
         let loaded = await store.loadAll()
         loadProblems = loaded.problems.count
@@ -473,9 +474,12 @@ public actor TaskManager {
             let client = try? await baseClient(for: repo.repoRelativePath, task: record)
             let environment = SandboxEnvironment.variables(task: record, repo: repo, basePath: base.filesystemPath,
                                                            defaultBranch: await client?.defaultBranch())
-            log += "[\(name)] $ \(command)\n"
+            // The command is masked too: a token written into the Setup field is as secret as one it prints.
+            log += "[\(name)] $ \(SetupLog.redact(command))\n"
             let outcome = await runner.run(command, in: repo.sandboxURL, environment: environment, timeout: timeout)
-            if !outcome.output.isEmpty { log += outcome.output.hasSuffix("\n") ? outcome.output : outcome.output + "\n" }
+            // Masked before the log is cut, so a cut never leaves the second half of a secret unrecognisable.
+            let output = SetupLog.redact(outcome.output)
+            if !output.isEmpty { log += output.hasSuffix("\n") ? output : output + "\n" }
             log += "[\(name)] \(outcome.succeeded ? "done" : "failed: \(outcome.summary)")\n"
             failed = failed || !outcome.succeeded
             log = SetupLog.bounded(log)
@@ -519,7 +523,7 @@ public actor TaskManager {
             let outcome = await teardown.runner.run(command, in: repo.sandboxURL, environment: environment, timeout: teardown.timeout)
             if !outcome.succeeded {
                 notices.append(.teardownFailed(repo: repo.sandboxKey, summary: outcome.summary,
-                                               log: SetupLog.bounded("$ \(command)\n" + outcome.output)))
+                                               log: SetupLog.bounded(SetupLog.redact("$ \(command)\n" + outcome.output))))
             }
         }
         return notices

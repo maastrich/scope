@@ -32,12 +32,14 @@ public struct TaskSetupRecord: Codable, Sendable, Equatable {
         self.finishedAt = finishedAt
     }
 
-    /// See `SetupState.normalizedAfterRestart`; the log says why.
+    /// See `SetupState.normalizedAfterRestart`; the log says why. The log is masked on the way (`SetupLog.redact`):
+    /// records written before setup output was masked are cleaned the first time they are loaded.
     public var normalizedAfterRestart: TaskSetupRecord {
-        guard state == .running else { return self }
         var record = self
+        record.log = SetupLog.redact(log)
+        guard state == .running else { return record }
         record.state = .failed
-        record.log = SetupLog.append("\n[interrupted: Scope quit while the setup was running]\n", to: log)
+        record.log = SetupLog.append("\n[interrupted: Scope quit while the setup was running]\n", to: record.log)
         return record
     }
 }
