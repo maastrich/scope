@@ -41,6 +41,22 @@ public struct TaskLag: Sendable, Equatable {
         }
     }
 
+    /// What makes one occasion of `ActingTrigger.baseMoved`: the set of overlapping paths, not the head of main. Main
+    /// moving again over the same files says nothing the thread was not already told; only another set of files
+    /// does. FNV-1a over the sorted paths, so the key is the same across launches — unlike `Hasher`.
+    public var overlapKey: String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for path in Set(overlappingPaths).sorted() {
+            for byte in path.utf8 {
+                hash ^= UInt64(byte)
+                hash &*= 0x0000_0100_0000_01b3
+            }
+            hash ^= 0x0a
+            hash &*= 0x0000_0100_0000_01b3
+        }
+        return "base@" + String(hash, radix: 16)
+    }
+
     /// The conflicted paths, prefixed by the repository when the task has several.
     public var conflictedPaths: [String] {
         repos.sorted { $0.key < $1.key }.flatMap { repo, lag in
