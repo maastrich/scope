@@ -69,8 +69,10 @@ public enum TaskTopic {
     /// right after a group read as one of its members. A topic left with a single task is no group: the task stands
     /// flat, like any task on its own — a row spent on a group of one says nothing. It keeps the label (`scope summary`
     /// groups by it, and the next sibling regroups under it), and a topic in `kept` (one whose orchestrator thread is
-    /// open) keeps its row whatever its size.
-    public static func entries<ID: Hashable>(_ tasks: [(id: ID, topic: String?)], kept: Set<String> = []) -> [Entry<ID>] {
+    /// open) keeps its row whatever its size. `empty` names the kept topics that may have no task left at all: their
+    /// row comes last, with nothing under it but the orchestrator, which would otherwise have no place in the tree.
+    public static func entries<ID: Hashable>(_ tasks: [(id: ID, topic: String?)], kept: Set<String> = [],
+                                             empty: [String] = []) -> [Entry<ID>] {
         var order: [String] = []
         var names: [String: String] = [:]
         var members: [String: [ID]] = [:]
@@ -95,7 +97,12 @@ public enum TaskTopic {
             entries[slot[key]!] = ids.count > 1 || kept.contains(key) ? .topic(names[key]!, ids) : .task(ids[0])
         }
         let all = entries.compactMap { $0 }
-        return all.filter(\.isTask) + all.filter { !$0.isTask }
+        var orphans: [Entry<ID>] = []
+        for topic in empty.compactMap(normalize) where members[key(topic)] == nil {
+            members[key(topic)] = []
+            orphans.append(.topic(topic, []))
+        }
+        return all.filter(\.isTask) + all.filter { !$0.isTask } + orphans
     }
 
     /// The distinct topics of `topics`, first spelling kept, sorted for a menu.

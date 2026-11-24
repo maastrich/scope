@@ -85,9 +85,120 @@ import ScopeCore
         #expect(TopicOrchestration.Milestone.delivered(tasks: ["b", "a"]).key == "delivered:a,b")
     }
 
-    @Test func itClosesWithTheLastOpenTask() {
-        #expect(TopicOrchestration.shouldClose(openTasks: 0))
-        #expect(!TopicOrchestration.shouldClose(openTasks: 1))
+    // MARK: Putting away
+
+    static let quiet = TopicOrchestration.quietBeforeClosing
+
+    static func standing(openTasks: Int = 0, working: Bool = false, waitingOnUser: Bool = false, pendingMessages: Bool = false,
+                         unread: Bool = false, watched: Bool = false, idleFor: TimeInterval = quiet) -> TopicOrchestration.Standing {
+        .init(openTasks: openTasks, working: working, waitingOnUser: waitingOnUser, pendingMessages: pendingMessages,
+              unread: unread, watched: watched, lastActivity: opened.addingTimeInterval(-idleFor))
+    }
+
+    @Test func itGoesOnceItsTopicIsEmptyAndTheUserIsDoneWithIt() {
+        #expect(TopicOrchestration.hold(Self.standing(), now: Self.opened) == nil)
+        #expect(TopicOrchestration.hold(Self.standing(openTasks: 1), now: Self.opened) == .openTasks)
+    }
+
+    @Test func workAndOwedAnswersHoldIt() {
+        #expect(TopicOrchestration.hold(Self.standing(working: true), now: Self.opened) == .working)
+        #expect(TopicOrchestration.hold(Self.standing(waitingOnUser: true), now: Self.opened) == .waitingOnUser)
+        #expect(TopicOrchestration.hold(Self.standing(pendingMessages: true), now: Self.opened) == .pendingMessages)
+    }
+
+    /// The incident: the last task archived, the orchestrator answered Scope's last notice, and was closed within a
+    /// second of that answer. The turn that just ended holds it — unread, and too recent — however long ago a person typed.
+    @Test func theReportOfTheLastMergeIsNotClosedUnderTheReader() {
+        #expect(TopicOrchestration.hold(Self.standing(unread: true, idleFor: 0.6), now: Self.opened) == .unread)
+        #expect(TopicOrchestration.hold(Self.standing(idleFor: 0.6), now: Self.opened) == .recentActivity)
+        // Unread stays unread: a day later it is still there to be read.
+        #expect(TopicOrchestration.hold(Self.standing(unread: true, idleFor: 86_400), now: Self.opened) == .unread)
+    }
+
+    /// The user goes on talking to it after the last archive: neither while it is on screen nor between two messages.
+    @Test func aConversationWithTheUserHoldsIt() {
+        #expect(TopicOrchestration.hold(Self.standing(watched: true, idleFor: 86_400), now: Self.opened) == .watched)
+        #expect(TopicOrchestration.hold(Self.standing(idleFor: Self.quiet - 1), now: Self.opened) == .recentActivity)
+        #expect(TopicOrchestration.hold(Self.standing(idleFor: Self.quiet), now: Self.opened) == nil)
+    }
+
+    /// One that waited on the user at the last archive is looked at again later: answered, read and left alone, it goes.
+    @Test func oneThatWaitedGoesOnceAnsweredAndLeftAlone() {
+        var standing = Self.standing(waitingOnUser: true, idleFor: 3 * Self.quiet)
+        #expect(TopicOrchestration.hold(standing, now: Self.opened) == .waitingOnUser)
+        standing.waitingOnUser = false
+        standing.lastActivity = Self.opened
+        #expect(TopicOrchestration.hold(standing, now: Self.opened.addingTimeInterval(60)) == .recentActivity)
+        #expect(TopicOrchestration.hold(standing, now: Self.opened.addingTimeInterval(Self.quiet)) == nil)
+    }
+
+    // MARK: Closed orchestrators
+
+    static let scope = ScopeID(rawValue: "s1")
+
+    static func orchestrator(_ topic: String?, resumeID: String? = "session-1", scope: ScopeID = scope) -> ThreadRecord {
+        var record = ThreadRecord(scopeID: scope, scopeRoot: "/acme", driverID: "claude-code", title: "Topic · \(topic ?? "-")",
+                                  cwd: "/acme", cwdKind: .scopeRoot, createdAt: opened, topic: topic)
+        record.resumeID = resumeID
+        return record
+    }
+
+    @Test func aClosedOrchestratorIsFoundAgainByItsTopic() {
+        var retired = RetiredOrchestrators()
+        let record = Self.orchestrator("Auth rework")
+        retired.keep(record)
+        #expect(retired.record(topic: "auth  rework", scope: Self.scope) == record)
+        #expect(retired.record(topic: "auth rework", scope: ScopeID(rawValue: "other")) == nil)
+        #expect(retired.remove(topic: "AUTH REWORK", scope: Self.scope) == record)
+        #expect(retired.records.isEmpty)
+    }
+
+    @Test func onlyWhatCanBeResumedIsKept() {
+        var retired = RetiredOrchestrators()
+        retired.keep(Self.orchestrator("auth", resumeID: nil))
+        retired.keep(Self.orchestrator(nil))
+        #expect(retired.records.isEmpty)
+    }
+
+    @Test func theLatestCloseOfATopicReplacesTheOlder() {
+        var retired = RetiredOrchestrators()
+        retired.keep(Self.orchestrator("auth", resumeID: "old"))
+        retired.keep(Self.orchestrator("billing"))
+        retired.keep(Self.orchestrator("Auth", resumeID: "new"))
+        #expect(retired.records.count == 2)
+        #expect(retired.record(topic: "auth", scope: Self.scope)?.resumeID == "new")
+    }
+
+    @Test func theOldestGoFirstPastTheLimit() {
+        var retired = RetiredOrchestrators()
+        for index in 0...RetiredOrchestrators.limit { retired.keep(Self.orchestrator("topic \(index)")) }
+        #expect(retired.records.count == RetiredOrchestrators.limit)
+        #expect(retired.record(topic: "topic 0", scope: Self.scope) == nil)
+        #expect(retired.record(topic: "topic \(RetiredOrchestrators.limit)", scope: Self.scope) != nil)
+    }
+
+    @Test func aRenamedTopicStillFindsItsClosedOrchestrator() {
+        var retired = RetiredOrchestrators()
+        retired.keep(Self.orchestrator("auth"))
+        retired.rename(topic: "Auth", to: "Login", title: "Topic · Login", scope: Self.scope)
+        #expect(retired.record(topic: "auth", scope: Self.scope) == nil)
+        #expect(retired.record(topic: "login", scope: Self.scope)?.title == "Topic · Login")
+    }
+
+    @Test func theListSurvivesARestart() throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: "scope-retired-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: home) }
+        #expect(RetiredOrchestrators.load(home: home).records.isEmpty)
+        var retired = RetiredOrchestrators()
+        retired.keep(Self.orchestrator("auth"))
+        try retired.save(home: home)
+        #expect(RetiredOrchestrators.load(home: home) == retired)
+        #expect(RetiredOrchestrators.load(home: home).record(topic: "auth", scope: Self.scope)?.resumeID == "session-1")
+    }
+
+    @Test func theBriefSaysTheConversationComesBack() {
+        let brief = TopicOrchestration.brief(topic: "auth", scope: "acme", tasks: [])
+        #expect(brief.contains("resumes this conversation"))
     }
 
     @Test func theTopicTriggerIsOnWithACap() {

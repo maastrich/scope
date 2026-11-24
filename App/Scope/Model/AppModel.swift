@@ -228,6 +228,7 @@ final class AppModel {
     @ObservationIgnored var setupRuns: [TaskID: (token: UUID, run: Task<Void, Never>)] = [:]
     /// The 30-minute garbage collection loop (`startGarbageCollection`).
     @ObservationIgnored var garbageCollector: Task<Void, Never>?
+    @ObservationIgnored var topicOrchestratorSweep: Task<Void, Never>?
     /// The checkpoint waiting to be taken for a task, after a turn ended (`AppModel+Checkpoints`); a turn ending in
     /// the meantime replaces it.
     @ObservationIgnored var checkpointJobs: [TaskID: Task<Void, Never>] = [:]
@@ -731,6 +732,7 @@ final class AppModel {
         await autoRelaunchThreads(orphans: restore.orphans, skippedOnce: skipAutoRelaunch)
         startFollowingVibeIsland()
         startGarbageCollection()
+        startTopicOrchestratorSweep()
         startPullRequestRefresh()
         startSchedules()
         startPortScanning()
@@ -1365,6 +1367,8 @@ final class AppModel {
         session.onClaudePullRequests = nil
         await keepTimeline(of: session.record, activity: session.activity)
         await forget(id: id, scopeID: session.record.scopeID, profile: session.profile)
+        // A topic's orchestrator holds the topic's whole story: whoever closed it, opening it again resumes it.
+        retireOrchestrator(session.record)
         // A thread hung up by its task's archive or close comes back with the task, not on its own: its worktree is gone.
         if undoable {
             remember(.closedThread(ClosedThread(record: session.record, profile: session.profile, activity: session.activity,
@@ -1548,7 +1552,8 @@ final class AppModel {
                 + scopeLevelThreads(in: scope)
         }
         var orchestrators = topicOrchestrators(in: scope)
-        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: orchestratedTopics(in: scope))
+        let entries = TaskTopic.entries(tasks.map { (id: $0.id, topic: $0.record.topic) }, kept: orchestratedTopics(in: scope),
+                                        empty: orchestratedTopicNames(in: scope))
         let work = entries.flatMap { entry -> [ThreadSession] in
             switch entry {
             case .task(let id):
@@ -1560,7 +1565,6 @@ final class AppModel {
                 return own + ids.flatMap { threads(in: $0) }
             }
         }
-        // An orchestrator whose topic has no row left (closing at the end of its turn) still has to be reachable.
         return residents(in: scope) + scopeLevelThreads(in: scope) + work + orchestrators
     }
 

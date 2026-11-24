@@ -1,4 +1,5 @@
 import Foundation
+import ScopeCore
 
 /// A topic's own orchestrator: one thread per topic, at the scope root, that knows the topic's tasks, talks to their
 /// threads, opens new tasks in the topic and says where the topic stands.
@@ -53,7 +54,8 @@ public enum TopicOrchestration {
         - New work in the topic: `scope task new "<brief>" --topic "\(topic)"`.
         - Scope tells you when a pull request of the topic merges and when every task is delivered — nothing else; \
         do not poll. Answer the user when they ask, and act on those notices when there is something to do.
-        - When the topic has no open task left, Scope closes this thread.
+        - Once the topic has no open task left and the user is done with this thread, Scope puts it away; \
+        opening the topic's orchestrator again resumes this conversation.
 
         \(report(topic: topic, tasks: tasks))
         """
@@ -143,6 +145,121 @@ public enum TopicOrchestration {
         return result
     }
 
-    /// The orchestrator goes when its topic has no open task left: archived, closed, or filed elsewhere.
-    public static func shouldClose(openTasks: Int) -> Bool { openTasks == 0 }
+    // MARK: Putting away
+
+    /// What Scope looks at before putting an orchestrator away.
+    public struct Standing: Sendable, Equatable {
+        /// The open tasks of its topic.
+        public var openTasks: Int
+        /// A turn is in progress.
+        public var working: Bool
+        /// It asked the user something and has no answer yet.
+        public var waitingOnUser: Bool
+        /// Messages are queued for it.
+        public var pendingMessages: Bool
+        /// Its last turn ended and the user has not looked at the result.
+        public var unread: Bool
+        /// The user has it on screen.
+        public var watched: Bool
+        /// The latest sign of life: a person typing in it, the end of a turn, a launch.
+        public var lastActivity: Date
+
+        public init(openTasks: Int, working: Bool = false, waitingOnUser: Bool = false, pendingMessages: Bool = false,
+                    unread: Bool = false, watched: Bool = false, lastActivity: Date) {
+            self.openTasks = openTasks
+            self.working = working
+            self.waitingOnUser = waitingOnUser
+            self.pendingMessages = pendingMessages
+            self.unread = unread
+            self.watched = watched
+            self.lastActivity = lastActivity
+        }
+    }
+
+    /// Why an orchestrator stays.
+    public enum Hold: String, Sendable, Equatable {
+        case openTasks, working, waitingOnUser, pendingMessages, unread, watched, recentActivity
+    }
+
+    /// How long an orchestrator without tasks must have been left alone before Scope puts it away. The end of a turn
+    /// counts as activity, so its last report — the recap of a delivered topic — is never closed under the reader.
+    public static let quietBeforeClosing: TimeInterval = 30 * 60
+
+    /// Why the orchestrator stays, or `nil` when Scope may put it away: its topic has no open task left (archived,
+    /// closed, or filed elsewhere), it is doing nothing and owes nothing, the user has read its last answer, is not
+    /// looking at it, and nobody — person or turn — touched it for `quiet`. Closing at the end of the turn that
+    /// answered the last merge threw away a report nobody had read, and a conversation the user was still having.
+    public static func hold(_ standing: Standing, now: Date, quiet: TimeInterval = quietBeforeClosing) -> Hold? {
+        if standing.openTasks > 0 { return .openTasks }
+        if standing.working { return .working }
+        if standing.waitingOnUser { return .waitingOnUser }
+        if standing.pendingMessages { return .pendingMessages }
+        if standing.unread { return .unread }
+        if standing.watched { return .watched }
+        if now.timeIntervalSince(standing.lastActivity) < quiet { return .recentActivity }
+        return nil
+    }
+}
+
+/// The orchestrators that were closed, kept so that opening a topic's orchestrator again resumes its conversation
+/// instead of starting a blank one: the record carries the driver session to resume. One per topic of a scope, the
+/// newest `limit` only — a driver does not keep its sessions forever either.
+public struct RetiredOrchestrators: Codable, Sendable, Equatable {
+    public private(set) var records: [ThreadRecord]
+
+    public static let limit = 50
+
+    public init(records: [ThreadRecord] = []) {
+        self.records = records
+    }
+
+    /// Keeps `record` as the closed orchestrator of its topic, replacing an older one. Ignored when it orchestrates
+    /// nothing or has no session to resume: reopening that one could only start over.
+    public mutating func keep(_ record: ThreadRecord) {
+        guard let topic = record.topic, record.resumeID != nil else { return }
+        remove(topic: topic, scope: record.scopeID)
+        records.append(record)
+        if records.count > Self.limit { records.removeFirst(records.count - Self.limit) }
+    }
+
+    /// The closed orchestrator of `topic`, whatever the topic's spelling.
+    public func record(topic: String, scope: ScopeID) -> ThreadRecord? {
+        let key = TaskTopic.key(topic)
+        return records.last { $0.scopeID == scope && $0.topic.map(TaskTopic.key) == key }
+    }
+
+    /// Takes the closed orchestrator of `topic` out: it is open again, or gone for good.
+    @discardableResult
+    public mutating func remove(topic: String, scope: ScopeID) -> ThreadRecord? {
+        let found = record(topic: topic, scope: scope)
+        let key = TaskTopic.key(topic)
+        records.removeAll { $0.scopeID == scope && $0.topic.map(TaskTopic.key) == key }
+        return found
+    }
+
+    /// The topic changed name: its closed orchestrator follows, so the new name still finds it.
+    public mutating func rename(topic: String, to newName: String, title: String, scope: ScopeID) {
+        let key = TaskTopic.key(topic)
+        for index in records.indices where records[index].scopeID == scope && records[index].topic.map(TaskTopic.key) == key {
+            records[index].topic = newName
+            records[index].title = title
+        }
+    }
+
+    // MARK: Disk
+
+    /// `<home>/retired-orchestrators.json`
+    public static func url(home: URL) -> URL {
+        home.appending(path: "retired-orchestrators.json", directoryHint: .notDirectory)
+    }
+
+    /// What is on disk; empty when the file is missing or unreadable — a lost list costs a resumed conversation, not
+    /// a launch.
+    public static func load(home: URL) -> RetiredOrchestrators {
+        (try? JSONStore.load(RetiredOrchestrators.self, from: url(home: home), fractionalSeconds: true)) ?? RetiredOrchestrators()
+    }
+
+    public func save(home: URL) throws {
+        try JSONStore.save(self, to: Self.url(home: home), fractionalSeconds: true)
+    }
 }

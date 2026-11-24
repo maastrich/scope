@@ -231,4 +231,13 @@ import ScopeCore
         #expect(policy.decide(.topicsRegroup(TopicsRegroupParams()), from: .thread(thread, depth: 1)) == .allow)
         #expect(policy.decide(.topicsRegroup(TopicsRegroupParams(apply: true)), from: .thread(thread, depth: 1)) != .allow)
     }
+
+    /// An orchestrator whose topic lost its last task keeps a row to sit under, after the others; a topic that
+    /// still has tasks is not listed twice.
+    @Test func aKeptTopicWithoutTasksStillHasARow() {
+        let entries = TaskTopic.entries([(id: 1, topic: nil), (id: 2, topic: "Auth")], kept: ["auth", "billing"],
+                                        empty: ["auth", "Billing"])
+        #expect(entries == [.task(1), .topic("Auth", [2]), .topic("Billing", [])])
+        #expect(TaskTopic.entries([(id: Int, topic: String?)](), empty: ["Billing"]) == [.topic("Billing", [])])
+    }
 }
