@@ -173,7 +173,8 @@ extension AppModel {
 
     private func setupLogContent(of task: TaskState) -> ReadingContent {
         let setup = task.record.setup
-        let log = setup?.log.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Masked again here: a record reloaded after a change on disk is taken as it is (`reloadExternalChanges`).
+        let log = SetupLog.redact(setup?.log.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
         let markdown: String
         switch setup?.state {
         case .none, .notRun: markdown = "_The setup has not run yet._"
