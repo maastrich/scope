@@ -342,7 +342,7 @@ extension AppModel {
     }
 
     /// One proposal through the gate, and what passes carried out. Journaled whatever the verdict (a hold once per
-    /// cause); a cap reached tells the user once per hour.
+    /// cause); a cap reached tells the user once per hour — a preventive trigger's only leaves its note.
     @discardableResult
     func fire(_ proposal: ActingTriggers.Proposal, now: Date = .now) -> ActingTriggers.Verdict {
         let engine = acting
@@ -352,7 +352,7 @@ extension AppModel {
         guard let session else { return verdict }
         switch verdict {
         case .act:
-            engine.ledger.recordAct(proposal.trigger, on: proposal.thread, key: proposal.key, at: now)
+            engine.ledger.recordAct(proposal.trigger, on: proposal.thread, key: proposal.key, at: now, task: proposal.task)
             saveActingLedger()
             perform(proposal, on: session)
             journalTrigger(proposal.trigger, session: session, outcome: proposal.action.outcome, cause: proposal.cause)
@@ -410,10 +410,12 @@ extension AppModel {
         saveActingLedger()
         journalTrigger(trigger, session: session, outcome: "capped", cause: "hourly-cap")
         let cap = preference(trigger).hourlyCap
+        session.setActingNote("Scope stopped — \(trigger.title.lowercased()), \(cap)× this hour")
+        // Nothing is wrong when a preventive trigger stops: the note on the thread says it, nothing asks for a look.
+        guard !trigger.isPreventive else { return }
         let body = "\(trigger.title): Scope acted \(cap) time\(cap == 1 ? "" : "s") on this thread in the last hour and stops here. Have a look."
         problems.warn("Scope stopped acting on a thread: \(trigger.title.lowercased())", detail: "“\(session.title)” — \(body)",
                       scope: session.record.scopeID)
-        session.setActingNote("Scope stopped — \(trigger.title.lowercased()), \(cap)× this hour")
         post(trigger, about: session, body: body)
     }
 

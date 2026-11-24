@@ -211,7 +211,8 @@ per <b>Settings ▸ General ▸ Tasks ▸ When main moves</b>:</p>
   suites it touched one at a time, push without forcing and reply when mergeable. Once per move of main: no repeat
   until main moves again. A branch behind without conflicts is left to the agent — unless main touched files the task
   changed while its pull request waits and no thread is at work: then the thread is asked to merge main in before it
-  conflicts (<a href="adapters.html#triggers">Base branch moved</a>).</li>
+  conflicts (<a href="adapters.html#triggers">Base branch moved</a>) — once per set of overlapping files, so main
+  moving again over the same files asks nothing, and at most once every 4 hours per task.</li>
   <li><b>Rebase when clean</b>: behind without conflicts and no thread at work in the task, Scope runs
   <code>git rebase origin/&lt;default&gt;</code> in the sandbox itself and pushes with
   <code>--force-with-lease</code> when the branch is published and its pull request open. A rebase that stops is

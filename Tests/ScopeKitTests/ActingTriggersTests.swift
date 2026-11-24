@@ -2,6 +2,8 @@ import Foundation
 import Testing
 import ScopeAdapters
 import ScopeCore
+import ScopeGit
+import ScopeTasks
 @testable import ScopeAssist
 
 /// The gate every acting trigger goes through: preference, once per key, never mid-turn or over the user's typing,
@@ -146,6 +148,93 @@ import ScopeCore
         await store.save(ledger)
         let again = await ActingLedgerStore(home: home).load()
         #expect(again.hasActed(.ciFailed, on: a, key: "ci@abc"))
+    }
+    // MARK: Base branch moved
+
+    func lag(head: String, overlaps: [String]) -> TaskLag {
+        TaskLag(repos: [".": BranchLag(upstream: "origin/main", upstreamHead: head, behind: 3, overlaps: overlaps)])
+    }
+
+    /// What `AppModel.fire` does with a base-moved proposal, on the package's own pieces: gate, then ledger.
+    func baseMoved(_ lag: TaskLag, thread: ThreadID? = nil, task: String? = "task-1", ledger: inout ActingLedger, at date: Date,
+                   preference: ActingTriggerPreference = ActingTriggerPreferences.defaultPreference(.baseMoved)) -> ActingTriggers.Verdict {
+        let thread = thread ?? a
+        let p = ActingTriggers.Proposal(trigger: .baseMoved, thread: thread, key: lag.overlapKey, action: .send("update"),
+                                        cause: "overlap", task: task)
+        let verdict = ActingTriggers.decide(p, thread: .init(id: thread), preference: preference, ledger: ledger, now: date)
+        if verdict == .act { ledger.recordAct(.baseMoved, on: thread, key: p.key, at: date, task: task) }
+        return verdict
+    }
+
+    /// Main moving again and again over the same files is one occasion: the thread is told once, whatever the heads
+    /// and however long it lasts.
+    @Test func theSameOverlapUnderDifferentHeadsIsToldOnce() {
+        var ledger = ActingLedger()
+        var sent = 0
+        for push in 0..<30 {
+            // The same files, listed in whatever order git gave them.
+            let files = push.isMultiple(of: 2) ? ["a.swift", "b.swift"] : ["b.swift", "a.swift"]
+            let verdict = baseMoved(lag(head: "sha\(push)", overlaps: files), ledger: &ledger,
+                                    at: now.addingTimeInterval(TimeInterval(push) * 6 * 3600))
+            if verdict == .act { sent += 1 } else { #expect(verdict == .skip("done")) }
+        }
+        #expect(sent == 1)
+    }
+
+    @Test func theOverlapKeyNamesTheFilesNotTheHead() {
+        #expect(lag(head: "one", overlaps: ["a.swift"]).overlapKey == lag(head: "two", overlaps: ["a.swift"]).overlapKey)
+        #expect(lag(head: "one", overlaps: ["a.swift"]).overlapKey != lag(head: "one", overlaps: ["a.swift", "b.swift"]).overlapKey)
+        #expect(lag(head: "one", overlaps: ["a.swift"]).overlapKey.hasPrefix("base@"))
+        #expect(lag(head: "one", overlaps: ["ab", "c"]).overlapKey != lag(head: "one", overlaps: ["a", "bc"]).overlapKey)
+    }
+
+    /// An overlap that grew is a new occasion, but not within the task's minimum interval — and the interval is the
+    /// task's, whichever thread was told.
+    @Test func aLargerOverlapWaitsForTheTasksMinimumInterval() {
+        var ledger = ActingLedger()
+        let b = ThreadID(rawValue: "bbbbbbbbbbbb")!
+        #expect(baseMoved(lag(head: "h1", overlaps: ["a.swift"]), ledger: &ledger, at: now) == .act)
+        let grown = lag(head: "h2", overlaps: ["a.swift", "b.swift"])
+        #expect(baseMoved(grown, ledger: &ledger, at: now.addingTimeInterval(2 * 3600)) == .hold("interval"))
+        #expect(baseMoved(grown, thread: b, ledger: &ledger, at: now.addingTimeInterval(2 * 3600)) == .hold("interval"))
+        // Another task's thread is not held by this one's.
+        #expect(baseMoved(grown, thread: b, task: "task-2", ledger: &ledger, at: now.addingTimeInterval(2 * 3600)) == .act)
+        #expect(baseMoved(grown, ledger: &ledger, at: now.addingTimeInterval(4 * 3600)) == .act)
+        #expect(ledger.acts(.baseMoved, on: a, since: .distantPast) == 2)
+    }
+
+    @Test func theMinimumIntervalIsAPreference() {
+        var ledger = ActingLedger()
+        let none = ActingTriggerPreference(enabled: true, hourlyCap: 1, minimumHours: 0)
+        #expect(baseMoved(lag(head: "h1", overlaps: ["a.swift"]), ledger: &ledger, at: now, preference: none) == .act)
+        // Without an interval the debounce, then the hourly cap, are what is left.
+        let grown = lag(head: "h2", overlaps: ["a.swift", "b.swift"])
+        #expect(baseMoved(grown, ledger: &ledger, at: now.addingTimeInterval(40 * 60), preference: none) == .capped)
+        #expect(baseMoved(grown, ledger: &ledger, at: now.addingTimeInterval(3601), preference: none) == .act)
+
+        #expect(ActingTriggerPreferences.defaultPreference(.baseMoved).minimumHours == 4)
+        for trigger in ActingTrigger.allCases where trigger != .baseMoved {
+            #expect(ActingTriggerPreferences.defaultPreference(trigger).minimumHours == 0)
+            #expect(!trigger.isPreventive)
+        }
+        #expect(ActingTrigger.baseMoved.isPreventive)
+        #expect(ActingTriggerPreference(enabled: true, hourlyCap: 1, minimumHours: 99).minimumHours == ActingTriggerPreference.hoursRange.upperBound)
+    }
+
+    @Test func theMinimumIntervalSurvivesTheConfigAndAnOlderOne() throws {
+        // An override written before the interval existed keeps the default interval.
+        let older = try JSONDecoder().decode(ActingTriggerPreferences.self,
+                                             from: Data(#"{"base-moved":{"enabled":true,"hourlyCap":2},"review":{"enabled":false,"hourlyCap":3}}"#.utf8))
+        #expect(older[.baseMoved] == ActingTriggerPreference(enabled: true, hourlyCap: 2, minimumHours: 4))
+        #expect(older[.review] == ActingTriggerPreference(enabled: false, hourlyCap: 3))
+        var changed = ActingTriggerPreferences()
+        changed[.baseMoved].minimumHours = 12
+        let back = try JSONDecoder().decode(ActingTriggerPreferences.self, from: JSONEncoder().encode(changed))
+        #expect(back[.baseMoved] == ActingTriggerPreference(enabled: true, hourlyCap: 1, minimumHours: 12))
+        // A ledger written before acts carried their task still decodes.
+        let ledger = try ActingLedgerStore.decoder.decode(
+            ActingLedger.self, from: Data(#"{"acts":[{"trigger":"base-moved","thread":"aaaaaaaaaaaa","key":"base@x","at":"2026-11-01T10:00:00Z"}],"notices":[]}"#.utf8))
+        #expect(ledger.acts.first?.task == nil)
     }
 
     // MARK: Preferences
