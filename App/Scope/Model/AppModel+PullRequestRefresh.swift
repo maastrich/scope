@@ -57,7 +57,7 @@ extension AppModel {
         let candidates = tasks.filter { !$0.isArchived && mayHavePullRequest($0) }
         pullRequestSchedule.sync(candidates.map(\.id), now: now)
         // Already known merged, held by a running thread: no `gh` call needed to archive it once the thread stops,
-        // rather than at the next refresh of a settled pull request, half an hour later. Offline and asleep included.
+        // rather than at the next look at a settled task, half an hour later. Offline and asleep included.
         for task in candidates where task.record.pullRequestState == "merged" { await archiveIfMerged(task) }
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         updatePullRequestPacing(now: now)
