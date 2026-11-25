@@ -443,6 +443,8 @@ public actor TaskManager {
         var log = ""
         var ran = false
         var failed = false
+        // How each repository's command ended, for `SetupMemory`: the last worktree of a repository has the last word.
+        var ended: [(key: String, failure: SetupFailure?)] = []
         for repo in repos {
             let repoCommands = commands[repo.repoRelativePath] ?? SandboxCommands()
             let base = Self.baseURL(scopeRoot: record.scopeRoot, repoRelativePath: repo.repoRelativePath)
@@ -482,7 +484,16 @@ public actor TaskManager {
             if !output.isEmpty { log += output.hasSuffix("\n") ? output : output + "\n" }
             log += "[\(name)] \(outcome.succeeded ? "done" : "failed: \(outcome.summary)")\n"
             failed = failed || !outcome.succeeded
+            ended.append((SetupMemory.key(scopeRoot: record.scopeRoot, repo: repo.repoRelativePath),
+                          outcome.succeeded ? nil : SetupFailure(repo: name, command: command, summary: outcome.summary, output: output)))
             log = SetupLog.bounded(log)
+        }
+        if !ended.isEmpty {
+            let store = SetupMemoryStore(home: home)
+            var memory = store.load()
+            let before = memory
+            for (key, failure) in ended { memory.record(failure, key: key, task: record.name) }
+            if memory != before { store.save(memory) }
         }
 
         // The task may have been closed or archived while the commands ran.
@@ -494,6 +505,11 @@ public actor TaskManager {
         let current = try await mutate(id) { $0.setup = finished }
         await onChange(current)
         return current
+    }
+
+    /// What to say before a new task's setup runs in `repos` (`SetupMemory.reminders`).
+    public func setupReminders(scopeRoot: String, repos: [String]) -> [SetupReminder] {
+        SetupMemoryStore(home: home).load().reminders(scopeRoot: scopeRoot, repos: repos)
     }
 
     /// How the sandboxes of a task are torn down before they are removed.

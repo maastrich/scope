@@ -277,6 +277,13 @@ extension AppModel {
         tasks.append(state)
         state.startWatching()
         state.refresh()
+        // Said before the commands run: a registry that refused the last setup of a repository refuses this one too.
+        if runSetup {
+            for reminder in await setupReminders(in: scope, repos: record.repos.map(\.repoRelativePath)) {
+                problems.warn("The last setup of \(reminder.repo) was refused its credentials", detail: reminder.detail,
+                              cause: .auth, scope: scopeID)
+            }
+        }
         startSetup(for: state, runCommands: runSetup)
         refreshDiskUsage(of: state)
         if takesSelection(threadOrigin, in: scopeID) { selection = .task(record.id) }
@@ -530,6 +537,12 @@ extension AppModel {
         return ShellCommandRunner(shell: shell.shell, baseEnvironment: shell.variables)
     }
 
+    /// The repositories among `repos` whose last setup was refused its credentials (`SetupMemory`): what the New
+    /// Task sheet and `createTask` say before the setup runs again.
+    func setupReminders(in scope: ScopeState, repos: [String]) async -> [SetupReminder] {
+        await env.tasks.setupReminders(scopeRoot: scope.declaration.path, repos: repos)
+    }
+
     /// Prepares a task's sandboxes in the background (`TaskManager.runSetup`). Its threads wait for this before
     /// they launch; a setup asked for while another runs goes after it.
     func startSetup(for task: TaskState, runCommands: Bool, only: [String]? = nil) {
@@ -580,11 +593,13 @@ extension AppModel {
                               scope: task.scopeID,
                               actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue))])
             }
-            let failed = record.setupState == .failed
-            journalTask(.taskSetup, outcome: failed ? "failed" : runCommands ? "ok" : "copied", task: task.id, scope: task.scopeID,
-                        since: started, cause: failed ? ProblemCause.classify(record.setup?.log) : nil, count: record.repos.count)
-            guard failed else { return }
-            problems.error("The setup of \(task.name) failed", detail: SetupLog.redact(SetupLog.tail(record.setup?.log ?? "", lines: 60)),
+            // Read command by command (`SetupDiagnosis`): the journal and the problem keep the same cause, the one of
+            // the command that failed, and the problem opens on the line that carries it.
+            let diagnosis = record.setupState == .failed ? SetupDiagnosis(log: record.setup?.log ?? "") : nil
+            journalTask(.taskSetup, outcome: diagnosis != nil ? "failed" : runCommands ? "ok" : "copied", task: task.id, scope: task.scopeID,
+                        since: started, cause: diagnosis?.cause, count: record.repos.count)
+            guard let diagnosis else { return }
+            problems.error("The setup of \(task.name) failed", detail: diagnosis.detail, cause: diagnosis.cause,
                            scope: task.scopeID,
                            actions: [ProblemAction(title: "Run Setup Again", kind: .rerunTaskSetup(task.id.rawValue)),
                                      .reveal(record.threadCwd.path, title: "Reveal Sandbox")])
