@@ -721,6 +721,8 @@ extension AppModel {
         task.update(record: record)
         task.startWatching()
         refreshDiskUsage(of: task)
+        // A restored task is asked about again, merged or not.
+        pullRequestSchedule.reset(taskID, now: .now)
         if let scope = scope(task.scopeID) { await refreshContextFiles(of: scope) }
         scope(task.scopeID)?.refreshFacts()
         return record

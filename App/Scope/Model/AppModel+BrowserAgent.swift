@@ -122,7 +122,7 @@ extension AppModel {
                 answer.page = page.render()
                 return .success(answer)
             } catch {
-                return .failure(.failed("could not read the page", detail: String(describing: error)))
+                return .failure(.failed("could not read the page", error: error))
             }
         case .screenshot:
             do {
@@ -139,7 +139,7 @@ extension AppModel {
                 answer.height = shot.height
                 return .success(answer)
             } catch {
-                return .failure(.failed("could not take the screenshot", detail: String(describing: error)))
+                return .failure(.failed("could not take the screenshot", error: error))
             }
         case .console:
             let lines = session.consoleForAgent(all: params.all ?? false)
@@ -164,7 +164,7 @@ extension AppModel {
                 }
                 return await settle("clicked \(ref)")
             } catch {
-                return .failure(.failed("could not click \(ref)", detail: String(describing: error)))
+                return .failure(.failed("could not click \(ref)", error: error))
             }
         case .type:
             guard let ref = params.ref?.trimmingCharacters(in: .whitespaces), !ref.isEmpty, let text = params.text else {
@@ -180,7 +180,7 @@ extension AppModel {
                 if answer["submitted"] as? Bool == true { return await settle("typed into \(ref) and submitted") }
                 return .success(result("typed into \(ref)"))
             } catch {
-                return .failure(.failed("could not type into \(ref)", detail: String(describing: error)))
+                return .failure(.failed("could not type into \(ref)", error: error))
             }
         case .wait:
             let found = await session.waitFor(selector: params.selector, text: params.text, timeout: .seconds(params.waitSeconds))

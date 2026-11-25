@@ -23,24 +23,114 @@ extension AppModel {
         return PullRequestTarget(gh: gh, link: link, checkout: checkout, repo: PullRequest.repository(fromURL: link.url))
     }
 
-    /// Keeps the task and its pull requests in step. Every sandbox is asked about the pull requests of its branch
-    /// and of the branches it visited (`VisitedBranches`: a docs branch, the next of a stack) — the thread ran
-    /// `gh pr create`, or one was opened on GitHub — and every link not covered by that gets `gh pr view`. What
-    /// comes back refreshes the record (title, state, dates: once the task is archived nobody asks GitHub again)
-    /// and the live state (checks, mergeability).
+    /// What one task asks GitHub about, read from its sandboxes with git alone.
+    private struct PullRequestPlan: Sendable {
+        struct Sandbox: Sendable {
+            let repo: TaskRepo
+            /// The repository on github.com its branches are asked about in the pass's one query; `nil` when only
+            /// `gh` knows where the checkout points (GitHub Enterprise, an ssh alias, no remote, the folder gone).
+            let repository: GitHubRepository?
+            /// The sandbox's branch first, then the branches its reflog says it was on, the default branch left out.
+            let branches: [String]
+        }
+        var sandboxes: [Sandbox] = []
+        /// Where the remotes have those branches (`GitClient.remoteHeads`), sandbox by sandbox: a push changes it.
+        var heads = ""
+
+        var lookups: [PullRequestBatch.Lookup] {
+            sandboxes.flatMap { sandbox in
+                sandbox.repository.map { repository in sandbox.branches.map { PullRequestBatch.Lookup(repository: repository, branch: $0) } } ?? []
+            }
+        }
+    }
+
+    /// Keeps the task and its pull requests in step: a pass of one (`refreshPullRequests`).
     ///
-    /// The first failure that is not about this task (`GhFailure.isGlobal`: offline, auth, a rate limit) ends the
-    /// refresh: every other call would fail the same way. A link of a repository whose branch lookup already failed
-    /// is not asked about either. The schedule and the gate learn the outcome, whoever asked; `gated` refreshes (the
-    /// automatic ones) do not run at all while the gate is closed.
+    /// `unlessUnchanged` is for the refreshes nobody asked for (the background pass, the inspector's loop): a task
+    /// whose pull requests are all merged or closed is then left alone until one of its branches is pushed.
     @discardableResult
-    func refreshTaskPullRequest(_ task: TaskState, gated: Bool = false) async -> PullRequestRefreshOutcome {
-        guard let gh = pullRequests.gh else { return .skipped }
+    func refreshTaskPullRequest(_ task: TaskState, gated: Bool = false, unlessUnchanged: Bool = false) async -> PullRequestRefreshOutcome {
+        await refreshPullRequests(of: [task], gated: gated, unlessUnchanged: unlessUnchanged)[task.id] ?? .skipped
+    }
+
+    /// One pass over `tasks`. Every sandbox is asked about the pull requests of its branch and of the branches it
+    /// visited (`VisitedBranches`: a docs branch, the next of a stack) — the thread ran `gh pr create`, or one was
+    /// opened on GitHub — all of them in one `gh api graphql` (`PullRequestBatch`), whatever the number of tasks;
+    /// every link not covered by that gets `gh pr view`. What comes back refreshes the records (title, state, dates:
+    /// once a task is archived nobody asks GitHub again) and the live state (checks, mergeability).
+    ///
+    /// A failure that is not about one task (`GhFailure.isGlobal`: offline, auth, a rate limit) ends the pass: every
+    /// other call would fail the same way. When it is the query itself, the tasks stay due for the pass the gate
+    /// lets out next. A link of a repository whose branch lookup already failed is not asked about either. The
+    /// schedule and the gate learn the outcome, whoever asked; a `gated` pass (the automatic ones) does not run at
+    /// all while the gate is closed. A pass whose caller is cancelled stops there, `skipped`: no failure for the
+    /// schedule, none for the gate, no error on the task.
+    @discardableResult
+    func refreshPullRequests(of tasks: [TaskState], gated: Bool = false,
+                             unlessUnchanged: Bool = false) async -> [TaskID: PullRequestRefreshOutcome] {
+        guard let gh = pullRequests.gh, !tasks.isEmpty else { return [:] }
         if gated {
             updatePullRequestPacing()
-            guard pullRequestGate.allows(at: .now) else { return .skipped }
+            guard pullRequestGate.allows(at: .now) else { return [:] }
         }
-        pullRequestSchedule.started(task.id, at: .now)
+        for task in tasks { pullRequestSchedule.started(task.id, at: .now) }
+        var plans: [TaskID: PullRequestPlan] = [:]
+        await withTaskGroup(of: (TaskID, PullRequestPlan).self) { group in
+            for task in tasks { group.addTask { (task.id, await self.pullRequestPlan(of: task)) } }
+            for await (id, plan) in group { plans[id] = plan }
+        }
+        var outcomes: [TaskID: PullRequestRefreshOutcome] = [:]
+        // Merged or closed, and nothing pushed since: GitHub has nothing new to say.
+        let asked = tasks.filter { task in
+            !(unlessUnchanged && pullRequestSchedule.isUnchanged(task.id, heads: plans[task.id]?.heads))
+        }
+        let lookups = asked.flatMap { plans[$0.id]?.lookups ?? [] }
+        var answer = PullRequestBatch.Answer()
+        var batchFailure: GhFailure?
+        if !lookups.isEmpty {
+            do {
+                answer = try await gh.prsForBranches(lookups)
+            } catch {
+                batchFailure = GhFailure.classify(error: error)
+            }
+        }
+        // The caller went away (the inspector moved to another task): nothing failed, nothing to count.
+        if batchFailure == .cancelled {
+            for task in asked { pullRequestSchedule.held(task.id) }
+            return outcomes
+        }
+        if let batchFailure, batchFailure.isGlobal {
+            for task in asked {
+                pullRequestSchedule.held(task.id)
+                outcomes[task.id] = .failed(batchFailure)
+            }
+            pullRequestGate.failed(batchFailure, at: .now)
+            return outcomes
+        }
+        var global: GhFailure?
+        for task in asked {
+            guard global == nil else {
+                // The pass ended on an earlier task: this one is asked about when the gate opens again.
+                pullRequestSchedule.held(task.id)
+                continue
+            }
+            let outcome = await bindPullRequests(answer, batchFailure: batchFailure, plan: plans[task.id] ?? PullRequestPlan(), to: task, gh: gh)
+            outcomes[task.id] = outcome
+            if case .failed(let cause) = outcome, cause.isGlobal { global = cause }
+        }
+        // Once per pass: a streak counts passes, not the tasks one outage caught together.
+        if let global {
+            pullRequestGate.failed(global, at: .now)
+        } else if outcomes.values.contains(.answered) {
+            pullRequestGate.succeeded()
+        }
+        return outcomes
+    }
+
+    /// One task's share of a pass: what the query found for its branches, `gh pr view` for the links no branch
+    /// names, and the record, the live state and the schedule brought up to date.
+    private func bindPullRequests(_ answer: PullRequestBatch.Answer, batchFailure: GhFailure?, plan: PullRequestPlan,
+                                  to task: TaskState, gh: GhClient) async -> PullRequestRefreshOutcome {
         var found: [LinkedPullRequest] = []
         var live: [PullRequest] = []
         var failure: GhFailure?
@@ -50,16 +140,29 @@ extension AppModel {
         // never shows in the primary sandbox's reflog — then the branches its reflog says it visited. A branch two
         // worktrees of one repository both name is asked about once.
         var asked = Set<String>()
-        sandboxes: for repo in task.record.activeSandboxes {
-            let seen = await visitedBranches(of: repo, in: task)
-            for branch in seen where asked.insert("\(repo.repoRelativePath)\0\(branch)").inserted {
-                do {
-                    for pr in try await gh.prsForBranch(branch, in: repo.sandboxURL) {
+        sandboxes: for sandbox in plan.sandboxes {
+            let repo = sandbox.repo
+            for branch in sandbox.branches where asked.insert("\(repo.repoRelativePath)\0\(branch)").inserted {
+                let outcome: PullRequestBatch.Outcome
+                if let repository = sandbox.repository {
+                    outcome = answer[PullRequestBatch.Lookup(repository: repository, branch: branch)] ?? .failed(batchFailure ?? .other)
+                } else {
+                    // Not a checkout the query can name: `gh` resolves it its own way, branch by branch.
+                    do {
+                        outcome = .found(try await gh.prsForBranch(branch, in: repo.sandboxURL))
+                    } catch {
+                        outcome = .failed(GhFailure.classify(error: error))
+                    }
+                }
+                switch outcome {
+                case .found(let prs):
+                    for pr in prs {
                         found.append(LinkedPullRequest(pr, repo: repo.repoRelativePath))
                         live.append(pr)
                     }
-                } catch {
-                    let cause = GhFailure.classify(error: error)
+                case .failed(let cause):
+                    // The caller went away (the inspector moved to another task): nothing failed, nothing to count.
+                    if cause == .cancelled { return cancelled(task) }
                     failure = failure ?? cause
                     unreachable.insert(TaskRepo.normalize(repo.repoRelativePath))
                     if cause.isGlobal { break sandboxes }
@@ -78,8 +181,10 @@ extension AppModel {
                 found.append(link.refreshed(with: pr))
                 live.append(pr)
             } catch {
+                let cause = GhFailure.classify(error: error)
+                if cause == .cancelled { return cancelled(task) }
                 pullRequests.setTaskPullRequestError(String(describing: error), for: task.id)
-                failure = failure ?? GhFailure.classify(error: error)
+                failure = failure ?? cause
             }
         }
         // An archived task keeps what it had: nothing new is bound to it, its sandboxes are gone.
@@ -101,27 +206,40 @@ extension AppModel {
         for pr in live { await recordChecks(of: pr, for: task) }
         if let failure {
             pullRequestSchedule.failed(task.id)
-            pullRequestGate.failed(failure, at: .now)
             return .failed(failure)
         }
-        pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)))
-        pullRequestGate.succeeded()
+        pullRequestSchedule.succeeded(task.id, settled: PullRequestSet.isSettled(task.record.pullRequests.map(\.state)), heads: plan.heads)
         return .answered
     }
 
-    /// The sandbox's branch first, then the branches its reflog says it was on, the default branch left out.
-    private func visitedBranches(of repo: TaskRepo, in task: TaskState) async -> [String] {
+    /// A refresh whose caller was cancelled: `skipped`, the task still due, no failure for the schedule or the gate.
+    private func cancelled(_ task: TaskState) -> PullRequestRefreshOutcome {
+        pullRequestSchedule.held(task.id)
+        return .skipped
+    }
+
+    /// What a pass asks for `task`: per sandbox, the repository on GitHub, its branch and the branches it visited,
+    /// and where the remotes have them. Git only, off the main actor.
+    private func pullRequestPlan(of task: TaskState) async -> PullRequestPlan {
         let git = env.git
-        let base = task.baseURL(for: repo)
-        let sandbox = repo.sandboxURL
-        return await Task.detached(priority: .utility) { () -> [String] in
-            let client = await git.client(for: base)
-            let current = (try? await client.output(["-C", sandbox.path(percentEncoded: false), "rev-parse", "--abbrev-ref", "HEAD"], timeout: .seconds(10)))
-                .flatMap { $0 == "HEAD" ? nil : $0 } ?? repo.branch
-            var excluding: Set<String> = ["HEAD"]
-            if let main = await client.defaultBranch() { excluding.insert(main) }
-            let visited = (try? await client.visitedBranches(at: sandbox, current: current, excluding: excluding)) ?? []
-            return [current] + visited
+        let sandboxes = task.record.activeSandboxes.map { (repo: $0, base: task.baseURL(for: $0)) }
+        return await Task.detached(priority: .utility) { () -> PullRequestPlan in
+            var plan = PullRequestPlan()
+            var heads: [String] = []
+            for (repo, base) in sandboxes {
+                let client = await git.client(for: base)
+                let sandbox = repo.sandboxURL
+                let current = (try? await client.output(["-C", sandbox.path(percentEncoded: false), "rev-parse", "--abbrev-ref", "HEAD"], timeout: .seconds(10)))
+                    .flatMap { $0 == "HEAD" ? nil : $0 } ?? repo.branch
+                var excluding: Set<String> = ["HEAD"]
+                if let main = await client.defaultBranch() { excluding.insert(main) }
+                let visited = (try? await client.visitedBranches(at: sandbox, current: current, excluding: excluding)) ?? []
+                let branches = [current] + visited
+                plan.sandboxes.append(.init(repo: repo, repository: await client.gitHubRepository(at: sandbox), branches: branches))
+                heads.append("\(repo.sandboxKey) \(branches.joined(separator: " "))\n\(await client.remoteHeads(at: sandbox, branches: branches))")
+            }
+            plan.heads = heads.joined(separator: "\n\n")
+            return plan
         }.value
     }
 

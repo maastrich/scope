@@ -30,14 +30,15 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// A turn that did not end on its own. `cause` `esc`, `sent` (Scope typed a message in mid-turn), `typed` (the
         /// user submitted a prompt of their own), `exit` (the process went away), `restart` (Scope quit with it open),
         /// `session-restart` (Restart Session cut it), `sweep` (the task was swept),
-        /// `crash` (Scope died with it open) or `unknown`.
+        /// `crash` (Scope died with it open), `after:<hook>` (none of those: the last hook the thread reported before
+        /// the cut, `after:stop-failure`, `after:permission-denied`) or `unknown` (no hook ever came).
         case turnInterrupted = "turn.interrupted"
         /// A permission `claude agents` had confirmed early was decided by another hook.
         case permissionDecidedElsewhere = "permission.decided-elsewhere"
         /// A hook message dropped on arrival. `cause` (`HookDropCause`).
         case hookDropped = "hook.dropped"
         /// A CLI or MCP request. `name` the method, `outcome` `ok` / `refused` / `error`, `cause` the refusal rule or
-        /// the error code, `source` `agent` / `user` / `stranger`, `client` `cli` / `mcp` / `other`, `seconds` how long it took.
+        /// the error code (`failed:<ProblemCause>` when the failure knows why), `source` `agent` / `user` / `stranger`, `client` `cli` / `mcp` / `other`, `seconds` how long it took.
         case control
         /// Task operations: `outcome` `ok` / `failed` / `cancelled`, `seconds`, `count` repositories or items.
         case taskCreate = "task.create"
@@ -53,8 +54,9 @@ public struct JournalEvent: Codable, Sendable, Equatable {
         /// One garbage-collection pass. `count` what it removed or stopped.
         case taskGC = "task.gc"
         /// A `gh` call. `name` its first two words (`pr.list`), `outcome` `ok` / `none` (no pull request) / `failed` /
-        /// `auth` / `timeout`, `cause` on a failure (`GhFailure`: `offline`, `auth`, `rate-limit`, `not-found`,
-        /// `no-remote`, `server`, `timeout`, `missing-checkout`, `other`).
+        /// `auth` / `timeout` / `skipped` (the caller was cancelled, `cause` `cancelled`), `cause` on a failure
+        /// (`GhFailure`: `offline`, `auth`, `rate-limit`, `not-found`, `no-remote`, `server`, `timeout`,
+        /// `missing-checkout`, `not-installed`, `launch-failed`, `invalid-json`, `other`).
         case gh
         /// A trigger that acts on a thread (`ActingTrigger`) fired or held back. `name` the trigger, `outcome` `sent` /
         /// `restarted` / `interrupted` / `waiting` (held until the network or the reset) / `skipped` / `capped` /
@@ -221,6 +223,8 @@ public enum ProblemCause: String, Codable, Sendable, CaseIterable {
     case missing
     /// The task is archived: what was asked needs it open.
     case archived
+    /// The thread asked to do something has no process running.
+    case notRunning = "not-running"
     /// The same thing is already under way, or holds what was asked for (a branch checked out elsewhere).
     case busy
     /// The request itself does not hold: a name refused, a repository already there.

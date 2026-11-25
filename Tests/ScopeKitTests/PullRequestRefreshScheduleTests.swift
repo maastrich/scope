@@ -135,4 +135,95 @@ import ScopeCore
         #expect(merged([]) == .keep)
         #expect(merged(["merged", "merged"], threads: [.running]) == .hold(.threadBusy))
     }
+
+    // MARK: One query per pass
+
+    @Test func aPassTakesAlongWhatIsCloseToDue() {
+        var schedule = PullRequestRefreshSchedule(interval: 300)
+        let c = TaskID.generate()
+        schedule.sync([a, b, c], now: start)
+        // Nothing due, nothing asked.
+        schedule.started(a, at: start)
+        schedule.succeeded(a, settled: false)
+        schedule.started(b, at: start.addingTimeInterval(200))
+        schedule.succeeded(b, settled: false)
+        schedule.started(c, at: start.addingTimeInterval(120))
+        schedule.succeeded(c, settled: false)
+        #expect(schedule.batch(at: start.addingTimeInterval(250)).isEmpty)
+        // `a` is due: `c`, past half its wait, comes along; `b`, asked 100 s ago, does not.
+        #expect(schedule.batch(at: start.addingTimeInterval(300)) == [a, c])
+    }
+
+    @Test func aTaskNeverAskedAboutJoinsTheFirstPass() {
+        var schedule = PullRequestRefreshSchedule(interval: 300)
+        schedule.sync([a, b], now: start)
+        let first = [a, b].compactMap { id in schedule.nextDue(id).map { (id, $0) } }.min { $0.1 < $1.1 }!
+        #expect(schedule.batch(at: first.1.addingTimeInterval(-1)).isEmpty)
+        #expect(Set(schedule.batch(at: first.1)) == [a, b])
+        #expect(schedule.batch(at: first.1).first == first.0)
+    }
+
+    @Test func aFleetAskedTogetherStaysTogether() {
+        var schedule = PullRequestRefreshSchedule(interval: 300)
+        let fleet = (0..<15).map { _ in TaskID.generate() }
+        schedule.sync(fleet, now: start)
+        var passes = 0
+        var now = start
+        while now < start.addingTimeInterval(3600) {
+            let batch = schedule.batch(at: now)
+            if !batch.isEmpty {
+                passes += 1
+                for id in batch {
+                    schedule.started(id, at: now)
+                    schedule.succeeded(id, settled: false)
+                }
+            }
+            now.addTimeInterval(30)
+        }
+        // One query every five minutes for fifteen tasks, where each used to cost its own calls.
+        #expect(passes <= 13, "\(passes) passes in an hour")
+    }
+
+    @Test func aSettledTaskIsLeftAloneUntilItIsPushed() {
+        var schedule = PullRequestRefreshSchedule(interval: 300, settledInterval: 1800)
+        schedule.sync([a, b], now: start)
+        // Not settled, or never read: asked.
+        #expect(!schedule.isUnchanged(a, heads: "refs/remotes/origin/feat 1111"))
+        schedule.started(a, at: start)
+        schedule.succeeded(a, settled: true, heads: "refs/remotes/origin/feat 1111")
+        schedule.started(b, at: start)
+        schedule.succeeded(b, settled: false, heads: "refs/remotes/origin/fix 3333")
+        #expect(schedule.isUnchanged(a, heads: "refs/remotes/origin/feat 1111"))
+        #expect(!schedule.isUnchanged(b, heads: "refs/remotes/origin/fix 3333"))
+        // A push, a branch gone from the remote, a new branch: asked again.
+        #expect(!schedule.isUnchanged(a, heads: "refs/remotes/origin/feat 2222"))
+        #expect(!schedule.isUnchanged(a, heads: ""))
+        #expect(!schedule.isUnchanged(TaskID.generate(), heads: nil))
+        // A settled task does not ride along with the others' passes.
+        #expect(schedule.batch(at: start.addingTimeInterval(300)) == [b])
+        #expect(schedule.batch(at: start.addingTimeInterval(1800)).contains(a))
+    }
+
+    @Test func aRestoredTaskIsAskedAgain() {
+        var schedule = PullRequestRefreshSchedule()
+        schedule.sync([a], now: start)
+        schedule.started(a, at: start)
+        schedule.succeeded(a, settled: true, heads: "h")
+        schedule.reset(a, now: start.addingTimeInterval(60))
+        #expect(!schedule.isUnchanged(a, heads: "h"))
+        #expect(schedule.entries[a]?.settled == false && schedule.entries[a]?.lastAttempt == nil)
+        schedule.reset(b, now: start)
+        #expect(schedule.entries[b] == nil)
+    }
+
+    @Test func aPassThatNeverReachedGitHubLeavesItsTasksDue() {
+        var schedule = PullRequestRefreshSchedule()
+        schedule.sync([a], now: start)
+        let later = start.addingTimeInterval(schedule.interval)
+        schedule.started(a, at: later)
+        #expect(schedule.due(at: later.addingTimeInterval(60)).isEmpty)
+        schedule.held(a)
+        #expect(schedule.due(at: later.addingTimeInterval(60)) == [a])
+        #expect(schedule.entries[a]?.failures == 0)
+    }
 }

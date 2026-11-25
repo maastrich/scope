@@ -40,7 +40,8 @@ public struct ControlOutcome: Sendable, Equatable {
     }
 
     public var status: Status
-    /// The refusal rule (`ControlError.Rule`) or the error code; `nil` when it went through.
+    /// The refusal rule (`ControlError.Rule`) or the error code — `failed:<ProblemCause>` for a failure that knows
+    /// why (`failed:busy`, `failed:invalid`); `nil` when it went through.
     public var cause: String?
 
     public init(status: Status, cause: String? = nil) {
@@ -60,6 +61,8 @@ public struct ControlOutcome: Sendable, Equatable {
     public init(_ error: ControlError) {
         if error.code == .denied {
             self.init(status: .refused, cause: (error.rule ?? .other).rawValue)
+        } else if error.code == .failed, let cause = error.cause {
+            self.init(status: .error, cause: "\(error.code.rawValue):\(cause.rawValue)")
         } else {
             self.init(status: .error, cause: error.code.rawValue)
         }

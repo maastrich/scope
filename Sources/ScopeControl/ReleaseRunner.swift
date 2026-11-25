@@ -277,7 +277,7 @@ public struct ReleaseRunner: Sendable {
             do {
                 try fileManager.createDirectory(at: checkout.deletingLastPathComponent(), withIntermediateDirectories: true)
             } catch {
-                return .failure(.failed("could not create \(checkout.deletingLastPathComponent().path)", detail: String(describing: error)))
+                return .failure(.failed("could not create \(checkout.deletingLastPathComponent().path)", error: error))
             }
         }
         for step in steps {
